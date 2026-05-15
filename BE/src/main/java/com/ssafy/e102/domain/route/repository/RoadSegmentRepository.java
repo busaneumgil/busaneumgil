@@ -21,12 +21,15 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
 			)
 		order by rs.edge_id asc
+		limit :limit
 		""", nativeQuery = true)
 	List<RoadSegment> findAllIntersectingArea(
 		@Param("gu")
 		String gu,
 		@Param("dong")
-		String dong);
+		String dong,
+		@Param("limit")
+		int limit);
 
 	@Query(value = """
 		select distinct rs.*
@@ -39,15 +42,12 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
 			)
 		order by rs.edge_id asc
-		limit :limit
 		""", nativeQuery = true)
 	List<RoadSegment> findAllIntersectingArea(
 		@Param("gu")
 		String gu,
 		@Param("dong")
-		String dong,
-		@Param("limit")
-		int limit);
+		String dong);
 
 	@Query(value = """
 		select count(distinct rs.edge_id)

@@ -7,6 +7,7 @@ import {
   fetchAdminAreas,
   fetchAdminFacilityPayload,
   fetchAdminPlaceDetail,
+  fetchAdminRoadNetworkBridges,
   fetchAdminRoadNetworkPayload,
   fetchAdminRoadNetworkEditJob,
   fetchAdminHazardReports,
@@ -232,6 +233,13 @@ function AdminApp() {
     retry: false,
   });
 
+  const bridgeQuery = useQuery({
+    queryKey: ["admin-road-network-bridges", selectedGu, selectedDong, accessToken],
+    queryFn: () => fetchAdminRoadNetworkBridges({ gu: selectedGu, dong: selectedDong, accessToken }),
+    enabled: page === "network" && Boolean(selectedGu && selectedDong) && isAdminAuthenticated,
+    retry: false,
+  });
+
   const facilityQuery = useQuery({
     queryKey: ["admin-facilities", selectedGu, selectedDong, accessToken],
     queryFn: () => fetchAdminFacilityPayload({ gu: selectedGu, dong: selectedDong, accessToken }),
@@ -340,8 +348,7 @@ function AdminApp() {
     setSelectedSegment(null);
     setActiveRoadEditJobId(null);
     queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
-    queryClient.invalidateQueries({ queryKey: ["admin-areas"] });
-    queryClient.invalidateQueries({ queryKey: ["admin-area-assignments"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-road-network-bridges"] });
   }, [activeRoadEditJob, clearDraftForAssignment]);
 
   const filteredDongs = useMemo(() => {
@@ -436,7 +443,7 @@ function AdminApp() {
         </nav>
       </aside>
 
-      <main className="workspace">
+      <main className={`workspace ${page === "network" || page === "routeTuning" || page === "facilities" ? "workspace-map-page" : ""}`}>
         <header className="topbar">
           <div>
             <h1>{pageMeta[page].label}</h1>
@@ -570,6 +577,7 @@ function AdminApp() {
           <div className="editor-layout">
             <SegmentMap
               payload={payloadQuery.data}
+              bridgePayload={bridgeQuery.data}
               loading={payloadQuery.isLoading}
               error={payloadQuery.error}
               draftEdits={draftEdits}
@@ -616,6 +624,9 @@ function AdminApp() {
                   <Metric label="현재 edits" value={draftEdits.length} />
                   <Metric label="visible" value={payloadQuery.data?.summary?.visibleSegmentCount ?? "-"} />
                   <Metric label="전체" value={payloadQuery.data?.summary?.segmentCount ?? "-"} />
+                  <Metric label="components" value={bridgeQuery.data?.summary?.componentCount ?? "-"} />
+                  <Metric label="endpoints" value={bridgeQuery.data?.summary?.endpointCount ?? "-"} />
+                  <Metric label="bridges" value={bridgeQuery.data?.summary?.visibleBridgeCandidateCount ?? "-"} />
                 </div>
                 <p className="muted">Undo / Clear는 지도 상단 toolbar에서 처리합니다. 상세 목록은 DB 반영 전 최종 확인이 필요할 때만 별도 검토합니다.</p>
               </section>

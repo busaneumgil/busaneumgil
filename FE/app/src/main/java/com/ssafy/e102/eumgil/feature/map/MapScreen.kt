@@ -1002,8 +1002,8 @@ private fun mapRecentDestinationBottomSheetState(uiState: MapUiState): RecentDes
                     placeId = destination.placeId,
                     title = destination.name,
                     address = destination.address.orEmpty(),
-                    tags = tagLabels.take(3),
-                    overflowTagCount = (tagLabels.size - 3).coerceAtLeast(0),
+                    tags = tagLabels.take(MAX_RECENT_DESTINATION_VISIBLE_TAGS),
+                    overflowTagCount = (tagLabels.size - MAX_RECENT_DESTINATION_VISIBLE_TAGS).coerceAtLeast(0),
                     iconRes = recentDestinationIcon(destination.category),
                 )
             },
@@ -1746,6 +1746,7 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEGREES_TO_RADIANS = PI / 180.0
+private const val MAX_RECENT_DESTINATION_VISIBLE_TAGS = 2
 private const val MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS = 3
 private val MapActionLabelDefaultFontSize = 14.sp
 private val MapActionLabelMinFontSize = 12.sp

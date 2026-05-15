@@ -504,6 +504,8 @@ private fun RecentDestinationTagChip(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
                 color = contentColor,
+                maxLines = 1,
+                softWrap = false,
             )
         }
     }

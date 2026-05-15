@@ -74,4 +74,13 @@ class RecentDestinationBottomSheetShellPolicyTest {
                 source.contains("map_recent_destination_sheet_restore"),
         )
     }
+
+    @Test
+    fun `recent destination tags stay on one line in the compact home sheet`() {
+        assertTrue(
+            "Recent destination tag text should not wrap vertically on narrow devices.",
+            source.contains("maxLines = 1") &&
+                source.contains("softWrap = false"),
+        )
+    }
 }

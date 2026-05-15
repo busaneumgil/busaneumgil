@@ -532,4 +532,17 @@ class MapFacilityDetailSheetConfigurationTest {
             source.contains("\"elevator\" -> \"엘리베이터\""),
         )
     }
+
+    @Test
+    fun `recent destination sheet limits visible accessibility chips`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+
+        assertTrue(
+            "Recent destination summary should cap visible tags and collapse remaining tags into the overflow count.",
+            source.contains("private const val MAX_RECENT_DESTINATION_VISIBLE_TAGS = 2") &&
+                source.contains("tagLabels.take(MAX_RECENT_DESTINATION_VISIBLE_TAGS)") &&
+                source.contains("tagLabels.size - MAX_RECENT_DESTINATION_VISIBLE_TAGS"),
+        )
+    }
 }

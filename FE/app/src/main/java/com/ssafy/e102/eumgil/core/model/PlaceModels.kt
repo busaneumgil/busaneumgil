@@ -87,6 +87,15 @@ data class MapPlaceDetailRequest(
     val nameHint: String? = null,
 )
 
+data class PlaceTransitArrival(
+    val transitType: String,
+    val routeName: String,
+    val direction: String? = null,
+    val remainingMinute: Int? = null,
+    val isLowFloor: Boolean? = null,
+    val source: String? = null,
+)
+
 data class MapTappedPlaceDetail(
     val bookmarkTargetId: String,
     val detailType: MapPlaceDetailType,
@@ -103,6 +112,7 @@ data class MapTappedPlaceDetail(
     val isBookmarked: Boolean = false,
     val accessibilityTags: List<String> = emptyList(),
     val phoneNumber: String? = null,
+    val transitArrivals: List<PlaceTransitArrival> = emptyList(),
     val description: String? = null,
 )
 

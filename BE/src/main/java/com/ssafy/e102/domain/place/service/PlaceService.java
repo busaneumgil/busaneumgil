@@ -1,6 +1,9 @@
 package com.ssafy.e102.domain.place.service;
 
 import java.nio.charset.StandardCharsets;
+import java.time.DayOfWeek;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -13,6 +16,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -27,6 +31,7 @@ import com.ssafy.e102.domain.place.dto.response.PlaceMarkerResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchItemResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceTransitArrivalResponse;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.exception.PlaceErrorCode;
 import com.ssafy.e102.domain.place.exception.PlaceException;
@@ -38,8 +43,13 @@ import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.place.type.PlaceClickType;
 import com.ssafy.e102.domain.place.type.PlaceDetailType;
 import com.ssafy.e102.domain.route.entity.SubwayStation;
+import com.ssafy.e102.domain.route.entity.SubwayTimetable;
+import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
 import com.ssafy.e102.domain.route.service.BusStopMasterService;
 import com.ssafy.e102.domain.route.service.SubwayStationMasterService;
+import com.ssafy.e102.domain.route.type.SubwayServiceDayType;
+import com.ssafy.e102.global.external.bims.BusanBimsArrival;
+import com.ssafy.e102.global.external.bims.BusanBimsClient;
 import com.ssafy.e102.global.external.kakao.KakaoAddressDocument;
 import com.ssafy.e102.global.external.kakao.KakaoLocalClient;
 import com.ssafy.e102.global.external.kakao.KakaoPlaceDocument;
@@ -78,6 +88,10 @@ public class PlaceService {
 	private static final String SUBWAY_STATION_PROVIDER = "SUBWAY_STATION";
 	private static final String SUBWAY_STATION_PROVIDER_CATEGORY_PREFIX = "교통,수송 > 지하철,전철";
 	private static final double SUBWAY_STATION_MATCH_MAX_DISTANCE_METER = 300.0;
+	private static final double SUBWAY_STATION_ADDRESS_MATCH_MAX_DISTANCE_METER = 60.0;
+	private static final int TRANSIT_ARRIVAL_PREVIEW_LIMIT = 3;
+	private static final int DAY_SECONDS = 24 * 60 * 60;
+	private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
 	private static final String SEARCH_SORT_RELEVANCE = "relevance";
 	private static final String KAKAO_SEARCH_SORT_ACCURACY = "accuracy";
 	private static final String KAKAO_SEARCH_SORT_DISTANCE = "distance";
@@ -87,6 +101,8 @@ public class PlaceService {
 	private final KakaoLocalClient kakaoLocalClient;
 	private final BusStopMasterService busStopMasterService;
 	private final SubwayStationMasterService subwayStationMasterService;
+	private final BusanBimsClient busanBimsClient;
+	private final SubwayTimetableRepository subwayTimetableRepository;
 	private final GeoPointConverter geoPointConverter;
 
 	public PlaceService(
@@ -95,12 +111,16 @@ public class PlaceService {
 		KakaoLocalClient kakaoLocalClient,
 		BusStopMasterService busStopMasterService,
 		SubwayStationMasterService subwayStationMasterService,
+		BusanBimsClient busanBimsClient,
+		SubwayTimetableRepository subwayTimetableRepository,
 		GeoPointConverter geoPointConverter) {
 		this.placeRepository = placeRepository;
 		this.bookmarkRepository = bookmarkRepository;
 		this.kakaoLocalClient = kakaoLocalClient;
 		this.busStopMasterService = busStopMasterService;
 		this.subwayStationMasterService = subwayStationMasterService;
+		this.busanBimsClient = busanBimsClient;
+		this.subwayTimetableRepository = subwayTimetableRepository;
 		this.geoPointConverter = geoPointConverter;
 	}
 
@@ -294,6 +314,14 @@ public class PlaceService {
 		}
 		if (request.clickType() == PlaceClickType.POI) {
 			return getExternalPoiDetailOrAddressFallback(userId, request);
+		}
+		Optional<SubwayStationMasterService.SubwayStationPlaceDetail> nearbySubwayStation = subwayStationMasterService
+			.findNearestPlaceDetail(
+				request.lat(),
+				request.lng(),
+				SUBWAY_STATION_ADDRESS_MATCH_MAX_DISTANCE_METER);
+		if (nearbySubwayStation.isPresent()) {
+			return toExternalSubwayStationDetailResponse(userId, request, nearbySubwayStation.get());
 		}
 		return getExternalAddressDetail(userId, request);
 	}
@@ -491,7 +519,11 @@ public class PlaceService {
 		log.debug("지도 클릭 POI를 버스정류장으로 식별해 정류장 POI로 반환합니다. providerPlaceId={}",
 			request.providerPlaceId());
 		KakaoAddressDocument addressDocument = getAddressDocumentOrNull(request);
-		String displayName = resolveBusStopDisplayName(request, addressDocument);
+		Optional<BusStopMasterService.BusStopMatch> busStopMatch = busStopMasterService.findNearest(
+			request.lat(),
+			request.lng(),
+			BUS_STOP_MATCH_MAX_DISTANCE_METER);
+		String displayName = resolveBusStopDisplayName(request, addressDocument, busStopMatch);
 		String provider = normalizeProvider(request.provider(), request.providerPlaceId());
 		String providerPlaceId = request.providerPlaceId()
 			.trim();
@@ -515,24 +547,53 @@ public class PlaceService {
 			geoPointConverter
 				.toResponse(geoPointConverter.toPoint(new GeoPointRequest(request.lat(), request.lng()))),
 			List.of(),
+			busStopMatch
+				.map(this::busStopTransitArrivals)
+				.orElse(List.of()),
 			bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(userId, bookmarkTargetId));
 	}
 
-	private String resolveBusStopDisplayName(PlaceClickDetailRequest request, KakaoAddressDocument addressDocument) {
+	private String resolveBusStopDisplayName(
+		PlaceClickDetailRequest request,
+		KakaoAddressDocument addressDocument,
+		Optional<BusStopMasterService.BusStopMatch> busStopMatch) {
 		if (hasSpecificBusStopNameHint(request.nameHint())) {
 			return request.nameHint()
 				.trim();
 		}
-		return busStopMasterService.findNearest(
-			request.lat(),
-			request.lng(),
-			BUS_STOP_MATCH_MAX_DISTANCE_METER)
+		return busStopMatch
 			.map(BusStopMasterService.BusStopMatch::stopName)
 			.or(() -> busStopBuildingName(addressDocument))
 			.orElseGet(() -> StringUtils.hasText(request.nameHint())
 				? request.nameHint()
 					.trim()
 				: BUS_STOP_FALLBACK_KEYWORD);
+	}
+
+	private List<PlaceTransitArrivalResponse> busStopTransitArrivals(BusStopMasterService.BusStopMatch busStopMatch) {
+		try {
+			return busanBimsClient.findArrivalsByStopId(busStopMatch.stopId())
+				.stream()
+				.filter(arrival -> arrival.remainingMinute() != null)
+				.limit(TRANSIT_ARRIVAL_PREVIEW_LIMIT)
+				.map(this::toBusTransitArrival)
+				.toList();
+		} catch (RuntimeException exception) {
+			log.warn("버스정류장 도착 정보를 조회할 수 없어 상세 시간 표시를 생략합니다. stopId={}",
+				busStopMatch.stopId(),
+				exception);
+			return List.of();
+		}
+	}
+
+	private PlaceTransitArrivalResponse toBusTransitArrival(BusanBimsArrival arrival) {
+		return new PlaceTransitArrivalResponse(
+			"BUS",
+			arrival.routeNo(),
+			null,
+			arrival.remainingMinute(),
+			arrival.isLowFloor(),
+			"REALTIME");
 	}
 
 	private boolean hasSpecificBusStopNameHint(String nameHint) {
@@ -560,10 +621,10 @@ public class PlaceService {
 			SUBWAY_STATION_MATCH_MAX_DISTANCE_METER)
 			.map(detail -> toExternalSubwayStationDetailResponse(userId, request, detail))
 			.orElseGet(() -> {
-				log.debug("지도 클릭 POI 지하철역 마스터 매칭 실패로 주소 상세를 반환합니다. nameHint={}, providerPlaceId={}",
+				log.debug("지도 클릭 POI 지하철역 마스터 매칭 실패로 일반 POI 상세 fallback을 사용합니다. nameHint={}, providerPlaceId={}",
 					request.nameHint(),
 					request.providerPlaceId());
-				return getExternalAddressDetail(userId, request);
+				return getExternalPoiDetailOrAddressFallback(userId, request);
 			});
 	}
 
@@ -597,7 +658,91 @@ public class PlaceService {
 				.stream()
 				.map(feature -> new PlaceAccessibilityFeatureResponse(feature.featureType(), feature.isAvailable()))
 				.toList(),
+			subwayTransitArrivals(detail),
 			bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(userId, bookmarkTargetId));
+	}
+
+	private List<PlaceTransitArrivalResponse> subwayTransitArrivals(
+		SubwayStationMasterService.SubwayStationPlaceDetail detail) {
+		LocalDateTime now = LocalDateTime.now(SEOUL_ZONE_ID);
+		int secondOfDay = now.toLocalTime()
+			.toSecondOfDay();
+		SubwayServiceDayType serviceDayType = serviceDayType(now.getDayOfWeek());
+		SubwayServiceDayType nextServiceDayType = serviceDayType(now.toLocalDate()
+			.plusDays(1)
+			.getDayOfWeek());
+		try {
+			return detail.stationGroup()
+				.stream()
+				.flatMap(
+					station -> nextSubwayDepartures(station, serviceDayType, nextServiceDayType, secondOfDay).stream()
+						.map(departure -> toSubwayTransitArrival(station, departure, secondOfDay)))
+				.sorted(Comparator.comparing(PlaceTransitArrivalResponse::remainingMinute,
+					Comparator.nullsLast(Integer::compareTo)))
+				.limit(TRANSIT_ARRIVAL_PREVIEW_LIMIT)
+				.toList();
+		} catch (RuntimeException exception) {
+			log.warn("지하철역 시간표 정보를 조회할 수 없어 상세 시간 표시를 생략합니다. providerPlaceId={}",
+				detail.groupProviderPlaceId(),
+				exception);
+			return List.of();
+		}
+	}
+
+	private List<SubwayTimetable> nextSubwayDepartures(
+		SubwayStation station,
+		SubwayServiceDayType serviceDayType,
+		SubwayServiceDayType nextServiceDayType,
+		int secondOfDay) {
+		List<SubwayTimetable> departures = new ArrayList<>();
+		for (int wayCode : List.of(1, 2)) {
+			List<SubwayTimetable> nextDepartures = subwayTimetableRepository.findNextDepartures(
+				station.getOdsayStationId(),
+				serviceDayType,
+				wayCode,
+				secondOfDay,
+				PageRequest.of(0, 1));
+			if (nextDepartures.isEmpty()) {
+				nextDepartures = subwayTimetableRepository.findFirstDepartures(
+					station.getOdsayStationId(),
+					nextServiceDayType,
+					wayCode,
+					PageRequest.of(0, 1));
+			}
+			departures.addAll(nextDepartures);
+		}
+		return departures;
+	}
+
+	private PlaceTransitArrivalResponse toSubwayTransitArrival(
+		SubwayStation station,
+		SubwayTimetable departure,
+		int secondOfDay) {
+		return new PlaceTransitArrivalResponse(
+			"SUBWAY",
+			station.getLineName(),
+			departure.getEndStationName() + "행",
+			remainingMinute(secondOfDay, departure.getDepartureSecondOfDay()),
+			null,
+			"TIMETABLE");
+	}
+
+	private int remainingMinute(int nowSecondOfDay, int departureSecondOfDay) {
+		int remainSecond = departureSecondOfDay - nowSecondOfDay;
+		if (remainSecond < 0) {
+			remainSecond += DAY_SECONDS;
+		}
+		return Math.max(0, (int)Math.ceil(remainSecond / 60.0));
+	}
+
+	private SubwayServiceDayType serviceDayType(DayOfWeek dayOfWeek) {
+		if (dayOfWeek == DayOfWeek.SATURDAY) {
+			return SubwayServiceDayType.SATURDAY;
+		}
+		if (dayOfWeek == DayOfWeek.SUNDAY) {
+			return SubwayServiceDayType.HOLIDAY;
+		}
+		return SubwayServiceDayType.WEEKDAY;
 	}
 
 	private String subwayStationDisplayName(SubwayStation station) {

@@ -4,14 +4,11 @@ import androidx.annotation.StringRes
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.SearchResult
 
-private const val MAX_SEARCH_RESULT_ACCESSIBILITY_TAGS = 3
-
 internal data class SearchResultAccessibilityTagUiState(
     @StringRes val labelResIds: List<Int>,
-    val overflowCount: Int,
 ) {
     val hasLabels: Boolean
-        get() = labelResIds.isNotEmpty() || overflowCount > 0
+        get() = labelResIds.isNotEmpty()
 }
 
 private data class SearchResultAccessibilityTagSpec(
@@ -43,11 +40,8 @@ internal fun resolveSearchResultAccessibilityTagUiState(
             .distinctBy { spec -> spec.labelResId }
             .sortedBy { spec -> spec.priority }
 
-    val visibleLabels = resolvedLabels.take(MAX_SEARCH_RESULT_ACCESSIBILITY_TAGS)
-
     return SearchResultAccessibilityTagUiState(
-        labelResIds = visibleLabels.map { spec -> spec.labelResId },
-        overflowCount = (resolvedLabels.size - visibleLabels.size).coerceAtLeast(0),
+        labelResIds = resolvedLabels.map { spec -> spec.labelResId },
     )
 }
 

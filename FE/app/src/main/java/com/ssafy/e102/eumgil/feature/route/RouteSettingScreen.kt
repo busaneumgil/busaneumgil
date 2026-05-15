@@ -120,6 +120,7 @@ import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelStepRow
 import com.ssafy.e102.eumgil.feature.guidance.component.resolveGuideRailPromotedItemIndex
 import com.ssafy.e102.eumgil.feature.guidance.component.shouldHideGuideRailItemForTopCard
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
+import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayTone
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointKind
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointOverlay
@@ -129,6 +130,7 @@ import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarker
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarkerKind
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarkerLeg
 import com.ssafy.e102.eumgil.feature.map.component.createRoutePreviewViewportOverlayState
+import com.ssafy.e102.eumgil.feature.map.component.rememberMapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.navigation.NavigationGuidanceAction
 import java.util.Locale
@@ -301,6 +303,7 @@ fun RouteDetailScreen(
                 selectedRoute?.previewPoints
                     ?.takeIf { it.size >= 2 }
                     ?: uiState.routePreviewMap.polyline
+            val mapControlState = rememberMapOverlayViewportControlState()
 
             var focusedDetailStepIndex by remember(selectedRoute?.routeOption, selectedRoute?.detailSteps) { mutableStateOf<Int?>(null) }
             val guidanceMarkers =
@@ -317,6 +320,7 @@ fun RouteDetailScreen(
                     routePath = detailRoutePath,
                     detailPolylines = selectedRoute?.detailPolylines.orEmpty(),
                     guidanceMarkers = guidanceMarkers,
+                    controlState = mapControlState,
                     onMarkerClick = { markerId ->
                     focusedDetailStepIndex = markerId.routeDetailStepMarkerIndexOrNull()
                     if (focusedDetailStepIndex != null) {
@@ -327,6 +331,9 @@ fun RouteDetailScreen(
             )
 
             RouteMapControls(
+                onActionClick = { mapControlState.recenter() },
+                onZoomInClick = { mapControlState.zoomIn() },
+                onZoomOutClick = { mapControlState.zoomOut() },
                 modifier =
                     Modifier
                         .align(Alignment.CenterEnd)
@@ -514,9 +521,12 @@ private fun RouteDetailCollapsedGuideCard(
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
             if (targetStep != null && targetStep.kind.isTransitStep()) {
-                RouteDetailCollapsedTransitGuideCardContent(
+                RouteDetailTransitGuideCardContent(
                     step = targetStep,
                     modifier = Modifier.weight(1f),
+                    contentColor = Color.White,
+                    secondaryContentColor = Color.White.copy(alpha = 0.82f),
+                    iconTint = Color.White,
                 )
             } else {
             Icon(
@@ -551,21 +561,27 @@ private fun RouteDetailCollapsedGuideCard(
 }
 
 @Composable
-private fun RouteDetailCollapsedTransitGuideCardContent(
+private fun RouteDetailTransitGuideCardContent(
     step: RouteDetailStepUiState,
     modifier: Modifier = Modifier,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    secondaryContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    showIcon: Boolean = true,
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            painter = painterResource(id = routeDetailStepIconRes(step.kind)),
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(RouteDetailCollapsedGuideIconSize),
-        )
+        if (showIcon) {
+            Icon(
+                painter = painterResource(id = routeDetailStepIconRes(step.kind)),
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(RouteDetailCollapsedGuideIconSize),
+            )
+        }
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(5.dp),
@@ -577,7 +593,7 @@ private fun RouteDetailCollapsedTransitGuideCardContent(
                 Text(
                     text = step.transitStartName ?: step.title,
                     style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
+                    color = contentColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -585,12 +601,12 @@ private fun RouteDetailCollapsedTransitGuideCardContent(
                 Text(
                     text = "->",
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.82f),
+                    color = secondaryContentColor,
                 )
                 Text(
                     text = step.transitEndName ?: step.description,
                     style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
+                    color = contentColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -599,7 +615,7 @@ private fun RouteDetailCollapsedTransitGuideCardContent(
                     Text(
                         text = duration,
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White,
+                        color = contentColor,
                         maxLines = 1,
                     )
                 }
@@ -1006,8 +1022,7 @@ private fun RouteDetailIconRail(
     BoxWithConstraints(
         modifier =
             modifier
-                .fillMaxWidth()
-                .padding(vertical = EumSpacing.small),
+                .fillMaxWidth(),
     ) {
         val routeDetailCollapsedRailEndSnapPadding =
             (maxHeight - RouteDetailCollapsedRailItemSize).coerceAtLeast(0.dp)
@@ -1775,7 +1790,13 @@ private fun RouteDetailStepRow(
                 )
             }
             if (step.kind == RouteDetailStepKind.BUS || step.kind == RouteDetailStepKind.SUBWAY) {
-                RouteDetailTransitTagRow(step = step)
+                RouteDetailTransitGuideCardContent(
+                    step = step,
+                    showIcon = false,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    secondaryContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         },
     )
@@ -2903,6 +2924,7 @@ private fun RouteMapStage(
 ) {
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
+    val mapControlState = rememberMapOverlayViewportControlState()
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(RouteMapStageCornerRadius),
@@ -2924,6 +2946,7 @@ private fun RouteMapStage(
                     } else {
                         emptyList()
                     },
+                controlState = mapControlState,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -2940,6 +2963,9 @@ private fun RouteMapStage(
             }
 
             RouteMapControls(
+                onActionClick = { mapControlState.recenter() },
+                onZoomInClick = { mapControlState.zoomIn() },
+                onZoomOutClick = { mapControlState.zoomOut() },
                 modifier =
                     Modifier
                         .align(Alignment.CenterEnd)
@@ -3157,6 +3183,9 @@ private fun RouteWalkPreviewBadgeRow(
 
 @Composable
 private fun RouteMapControls(
+    onActionClick: () -> Unit = {},
+    onZoomInClick: () -> Unit = {},
+    onZoomOutClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     EumMapFloatingControls(
@@ -3167,10 +3196,10 @@ private fun RouteMapControls(
                 contentDescription = stringResource(id = R.string.route_setting_map_control_recenter),
                 enabled = true,
             ),
-        onActionClick = {},
+        onActionClick = onActionClick,
         modifier = modifier,
-        onZoomInClick = {},
-        onZoomOutClick = {},
+        onZoomInClick = onZoomInClick,
+        onZoomOutClick = onZoomOutClick,
     )
 }
 
@@ -4005,6 +4034,7 @@ private fun RouteMapBackdrop(
     routePath: List<GeoCoordinate>,
     detailPolylines: List<RouteDetailPolylineUiState> = emptyList(),
     guidanceMarkers: List<MapViewportPointOverlay> = emptyList(),
+    controlState: MapOverlayViewportControlState? = null,
     onMarkerClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -4036,6 +4066,7 @@ private fun RouteMapBackdrop(
         modifier = modifier,
         contentDescription = mapDescription,
         onMarkerClick = onMarkerClick,
+        controlState = controlState,
     )
 }
 

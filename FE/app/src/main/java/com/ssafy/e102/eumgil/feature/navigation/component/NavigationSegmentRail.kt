@@ -59,8 +59,6 @@ fun NavigationSegmentRail(
     uiState: NavigationSegmentSyncUiState,
     onSegmentTapped: (Int) -> Unit,
     onTopVisibleSegmentChanged: (Int) -> Unit = {},
-    onRouteDetailClick: () -> Unit,
-    isRouteDetailEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
@@ -124,6 +122,7 @@ fun NavigationSegmentRail(
 
     LaunchedEffect(uiState.focusedSegmentIndex, railFocusItems.size) {
         if (railFocusItems.isEmpty()) return@LaunchedEffect
+        if (uiState.isInspectingSegments || listState.isScrollInProgress) return@LaunchedEffect
         val targetItemPosition =
             railFocusItems.indexOfFirst { item -> item.index == uiState.focusedSegmentIndex }
                 .takeIf { position -> position >= 0 }
@@ -209,11 +208,6 @@ fun NavigationSegmentRail(
                     }
                 }
             }
-            NavigationSegmentRailDetailAction(
-                enabled = isRouteDetailEnabled,
-                dividerColor = dividerColor,
-                onClick = onRouteDetailClick,
-            )
         }
 
         Box(
@@ -351,50 +345,6 @@ private fun NavigationSegmentRailTopAction(
     }
 }
 
-@Composable
-private fun NavigationSegmentRailDetailAction(
-    enabled: Boolean,
-    dividerColor: Color,
-    onClick: () -> Unit,
-) {
-    val detailLabel = stringResource(id = R.string.navigation_detail_button_label)
-    val iconAlpha = if (enabled) 0.86f else 0.34f
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .semantics {
-                        contentDescription = detailLabel
-                        if (!enabled) {
-                            disabled()
-                        }
-                    }
-                    .clickable(
-                        enabled = enabled,
-                        role = Role.Button,
-                        onClick = onClick,
-                    ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_navigation_detail_more),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier =
-                    Modifier
-                        .size(30.dp)
-                        .alpha(iconAlpha),
-            )
-        }
-        HorizontalDivider(color = dividerColor)
-    }
-}
-
 internal data class NavigationSegmentRailSlots(
     val originItem: NavigationSegmentRailItemUiState? = null,
     val intermediateItems: List<NavigationSegmentRailItemUiState> = emptyList(),
@@ -453,4 +403,4 @@ private data class NavigationRailPromotionSnapshot(
             (firstVisibleItemScrollOffset > 0 || firstVisibleItemIndex != promotedItemPosition)
 }
 
-private val NavigationSegmentRailItemHeight = 84.dp
+private val NavigationSegmentRailItemHeight = 96.dp

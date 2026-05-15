@@ -242,6 +242,39 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route search and detail map controls are wired to the overlay viewport controller`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val mapStageSection =
+            source
+                .substringAfter("private fun RouteMapStage(")
+                .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
+        val detailScreenSection =
+            source
+                .substringAfter("fun RouteDetailScreen(")
+                .substringBefore("@Composable\nprivate fun RouteDetailMapBottomSheet")
+        val mapControlsSection =
+            source
+                .substringAfter("private fun RouteMapControls(")
+                .substringBefore("@Composable\nprivate fun RouteSettingRouteSheet")
+        val routeMapBackdropSection =
+            source
+                .substringAfter("private fun RouteMapBackdrop(")
+                .substringBefore("private fun List<RouteDetailPolylineUiState>.toRouteDetailPolylineOverlays")
+
+        assertTrue(mapStageSection.contains("rememberMapOverlayViewportControlState()"))
+        assertTrue(detailScreenSection.contains("rememberMapOverlayViewportControlState()"))
+        assertTrue(source.contains("mapControlState.zoomIn()"))
+        assertTrue(source.contains("mapControlState.zoomOut()"))
+        assertTrue(source.contains("mapControlState.recenter()"))
+        assertTrue(mapControlsSection.contains("onActionClick = onActionClick"))
+        assertTrue(mapControlsSection.contains("onZoomInClick = onZoomInClick"))
+        assertTrue(mapControlsSection.contains("onZoomOutClick = onZoomOutClick"))
+        assertTrue(routeMapBackdropSection.contains("controlState = controlState"))
+    }
+
+    @Test
     fun `walk preview and route sheet cards use smaller metrics with shared accessibility labels`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -890,7 +923,7 @@ class RouteSettingLayoutPolicyTest {
         val collapsedCardSection =
             source
                 .substringAfter("private fun RouteDetailCollapsedGuideCard(")
-                .substringBefore("@Composable\nprivate fun RouteDetailCollapsedTransitGuideCardContent")
+                .substringBefore("@Composable\nprivate fun RouteDetailTransitGuideCardContent")
 
         assertTrue(
             "The open detail side panel must reserve bottom clearance so the arrival row is not hidden by the fixed CTA.",
@@ -1029,6 +1062,24 @@ class RouteSettingLayoutPolicyTest {
             source.contains("RouteDetailPanelBottomActionTopPadding = 24.dp") &&
                 source.contains("RouteDetailScrollTopActionVerticalPadding = 0.dp"),
         )
+    }
+
+    @Test
+    fun `route detail transit top and rail cards share the same content renderer`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val collapsedCardSection =
+            source
+                .substringAfter("private fun RouteDetailCollapsedGuideCard(")
+                .substringBefore("@Composable\nprivate fun RouteDetailTransitGuideCardContent")
+        val stepRowSection =
+            source
+                .substringAfter("private fun RouteDetailStepRow(")
+                .substringBefore("@Composable\nprivate fun RouteDetailArrivalInfoChip")
+
+        assertTrue(collapsedCardSection.contains("RouteDetailTransitGuideCardContent("))
+        assertTrue(stepRowSection.contains("RouteDetailTransitGuideCardContent("))
     }
 
     @Test

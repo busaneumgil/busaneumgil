@@ -54,10 +54,10 @@ class GuideSidePanelPolicyTest {
                 navigation.contains("GuideSidePanelStepRow("),
         )
         assertTrue(
-            "Navigation collapsed rail should use the shared collapsed rail primitive while keeping its top/detail actions local.",
+            "Navigation collapsed rail should use the shared collapsed rail primitive while keeping only the scroll-top action local.",
             rail.contains("GuideCollapsedRailItem(") &&
                 rail.contains("NavigationSegmentRailTopAction(") &&
-                rail.contains("NavigationSegmentRailDetailAction("),
+                !rail.contains("NavigationSegmentRailDetailAction("),
         )
         assertFalse(
             "Route detail should no longer own a private side-panel icon implementation.",

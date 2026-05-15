@@ -129,6 +129,7 @@ data class NavigationSegmentRailItemUiState(
     val isFocused: Boolean = false,
     val isCompleted: Boolean = false,
     val isRiskUpcoming: Boolean = false,
+    val transitInfo: NavigationTransitInfoUiState? = null,
 )
 
 data class NavigationFocusedSegmentCardUiState(

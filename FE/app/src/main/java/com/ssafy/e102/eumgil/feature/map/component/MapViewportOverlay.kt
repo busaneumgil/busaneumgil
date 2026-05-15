@@ -22,6 +22,7 @@ internal data class MapViewportOverlayState(
     val points: List<MapViewportPointOverlay> = emptyList(),
     val polylines: List<MapViewportPolylineOverlay> = emptyList(),
     val shouldAnimateCameraTransition: Boolean = true,
+    val fitToProjection: Boolean = true,
 )
 
 @Immutable

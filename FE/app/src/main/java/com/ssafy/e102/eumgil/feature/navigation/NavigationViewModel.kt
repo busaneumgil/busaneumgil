@@ -573,6 +573,7 @@ class NavigationViewModel(
                         isInspectingSegments = isInspectingSegments,
                         hasPendingActiveChange = hasPendingActiveChange,
                         mapFocusMode = mapFocusMode,
+                        transitPresentation = latestTransitPresentation,
                     ),
                 focusedSegmentCard =
                     runtimeRequest.toFocusedSegmentCardUiState(
@@ -1738,6 +1739,7 @@ private fun RouteNavigationRequest.toSegmentSyncUiState(
     isInspectingSegments: Boolean,
     hasPendingActiveChange: Boolean,
     mapFocusMode: NavigationMapFocusMode,
+    transitPresentation: NavigationTransitPresentation?,
 ): NavigationSegmentSyncUiState =
     NavigationSegmentSyncUiState(
         activeSegmentIndex = activeSegmentIndex,
@@ -1758,6 +1760,7 @@ private fun RouteNavigationRequest.toSegmentSyncUiState(
                     isFocused = index == focusedSegmentIndex,
                     isCompleted = index < activeSegmentIndex,
                     isRiskUpcoming = index > activeSegmentIndex && segment.riskLevel != RouteRiskLevel.LOW,
+                    transitInfo = selectedRoute.resolveFocusedSegmentTransitInfo(segment, transitPresentation),
                 )
             },
     )

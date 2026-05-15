@@ -1,11 +1,20 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.ssafy.e102.eumgil.BuildConfig
+import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MAX_ZOOM_LEVEL
+import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MIN_ZOOM_LEVEL
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
@@ -20,6 +29,7 @@ internal fun MapOverlayViewport(
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     onMarkerClick: (String) -> Unit = {},
+    controlState: MapOverlayViewportControlState? = null,
 ) {
     val describedModifier =
         if (contentDescription != null) {
@@ -32,7 +42,17 @@ internal fun MapOverlayViewport(
             hasNativeAppKey = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank(),
             isInspectionMode = LocalInspectionMode.current,
         )
-    val cameraTarget = overlayState.toMapCameraTarget()
+    val baseCameraTarget = overlayState.toMapCameraTarget()
+    SideEffect {
+        controlState?.updateBaseCameraTarget(baseCameraTarget)
+    }
+    val cameraTarget = controlState?.cameraTargetFor(baseCameraTarget) ?: baseCameraTarget
+    val renderedOverlayState =
+        if (controlState?.shouldFitProjection == false) {
+            overlayState.copy(fitToProjection = false)
+        } else {
+            overlayState
+        }
 
     when (integrationState) {
         is MapIntegrationState.Bound ->
@@ -45,7 +65,7 @@ internal fun MapOverlayViewport(
                         selectedDestinationCoordinate = null,
                         selectedDestinationName = null,
                         markerOverlayState = MapMarkerOverlayState(loadStatus = MapMarkerLoadStatus.READY),
-                        overlayState = overlayState,
+                        overlayState = renderedOverlayState,
                         selectedMarkerId = null,
                         selectedMapPinCoordinate = null,
                         regionLabel = "",
@@ -55,20 +75,125 @@ internal fun MapOverlayViewport(
                         supportingText = "",
                     ),
                 onMarkerClick = onMarkerClick,
-                onCameraMoveEnd = { _, _, _, _ -> },
+                onCameraMoveEnd = { center, zoomLevel, isUserGesture, _ ->
+                    controlState?.onCameraMoveEnd(
+                        center = center,
+                        zoomLevel = zoomLevel,
+                        isUserGesture = isUserGesture,
+                    )
+                },
                 onMapClick = {},
                 modifier = describedModifier,
             )
 
         MapIntegrationState.Unbound ->
             MapViewportOverlayBackdrop(
-                overlayState = overlayState,
+                overlayState = renderedOverlayState,
                 zoomLevel = cameraTarget.resolvedZoomLevel(),
                 modifier = describedModifier,
                 onPointClick = onMarkerClick,
             )
     }
 }
+
+@Composable
+internal fun rememberMapOverlayViewportControlState(): MapOverlayViewportControlState =
+    remember { MapOverlayViewportControlState() }
+
+@Stable
+internal class MapOverlayViewportControlState {
+    private var baseCameraTarget: MapCameraTarget? by mutableStateOf(null)
+    private var manualCameraTarget: MapCameraTarget? by mutableStateOf(null)
+    private var latestObservedCamera: MapOverlayObservedCamera? by mutableStateOf(null)
+    private var recenterCameraTarget: MapCameraTarget? by mutableStateOf(null)
+    private var nextRequestId by mutableLongStateOf(MAP_OVERLAY_CONTROL_REQUEST_ID_START)
+
+    val shouldFitProjection: Boolean
+        get() = manualCameraTarget == null
+
+    internal fun updateBaseCameraTarget(target: MapCameraTarget) {
+        val previous = baseCameraTarget
+        baseCameraTarget = target
+        if (previous != null && previous.requestId != target.requestId) {
+            manualCameraTarget = null
+            latestObservedCamera = null
+            recenterCameraTarget = null
+        }
+    }
+
+    internal fun cameraTargetFor(baseTarget: MapCameraTarget): MapCameraTarget =
+        manualCameraTarget ?: recenterCameraTarget ?: baseTarget
+
+    internal fun onCameraMoveEnd(
+        center: MapCoordinate,
+        zoomLevel: Int,
+        isUserGesture: Boolean,
+    ) {
+        latestObservedCamera =
+            MapOverlayObservedCamera(
+                center = center,
+                zoomLevel = zoomLevel.coerceIn(KAKAO_MAP_MIN_ZOOM_LEVEL, KAKAO_MAP_MAX_ZOOM_LEVEL),
+            )
+        if (isUserGesture) {
+            manualCameraTarget =
+                (baseCameraTarget ?: MapCameraTarget.DefaultBusan).copy(
+                    center = center,
+                    zoomLevel = zoomLevel.coerceIn(KAKAO_MAP_MIN_ZOOM_LEVEL, KAKAO_MAP_MAX_ZOOM_LEVEL),
+                    requestId = nextControlRequestId(),
+                    shouldAnimateTransition = false,
+                )
+            recenterCameraTarget = null
+        }
+    }
+
+    fun zoomIn() {
+        zoomBy(1)
+    }
+
+    fun zoomOut() {
+        zoomBy(-1)
+    }
+
+    fun recenter() {
+        val baseTarget = baseCameraTarget ?: return
+        manualCameraTarget = null
+        latestObservedCamera = null
+        recenterCameraTarget =
+            baseTarget.copy(
+                requestId = nextControlRequestId(),
+                shouldAnimateTransition = true,
+            )
+    }
+
+    private fun zoomBy(delta: Int) {
+        val baseTarget = baseCameraTarget ?: MapCameraTarget.DefaultBusan
+        val currentTarget = manualCameraTarget ?: baseTarget
+        val observedCamera = latestObservedCamera
+        val currentZoomLevel = observedCamera?.zoomLevel ?: currentTarget.resolvedZoomLevel()
+        val nextZoomLevel =
+            (currentZoomLevel + delta)
+                .coerceIn(KAKAO_MAP_MIN_ZOOM_LEVEL, KAKAO_MAP_MAX_ZOOM_LEVEL)
+        if (nextZoomLevel == currentZoomLevel) return
+        manualCameraTarget =
+            currentTarget.copy(
+                center = observedCamera?.center ?: currentTarget.center,
+                zoomLevel = nextZoomLevel,
+                requestId = nextControlRequestId(),
+                shouldAnimateTransition = true,
+            )
+        recenterCameraTarget = null
+    }
+
+    private fun nextControlRequestId(): Long {
+        nextRequestId += 1
+        return nextRequestId
+    }
+}
+
+private data class MapOverlayObservedCamera(
+    val center: MapCoordinate,
+    val zoomLevel: Int,
+)
 
 private fun MapViewportOverlayState.toMapCameraTarget(): MapCameraTarget {
     val points = projectionCoordinates()
@@ -131,3 +256,5 @@ private fun approximateZoomLevel(
         in 0.0720..0.1440 -> 13
         else -> 12
     }
+
+private const val MAP_OVERLAY_CONTROL_REQUEST_ID_START = 1_000_000L

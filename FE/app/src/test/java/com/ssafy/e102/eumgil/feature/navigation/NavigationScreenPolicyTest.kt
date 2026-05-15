@@ -71,7 +71,7 @@ class NavigationScreenPolicyTest {
     }
 
     @Test
-    fun `screen policy keeps rail visible when detail action must remain reachable`() {
+    fun `screen policy does not show an empty rail only for the removed detail action`() {
         val policy =
             navigationScreenPolicy(
                 NavigationUiState(
@@ -80,7 +80,7 @@ class NavigationScreenPolicyTest {
                 ),
             )
 
-        assertTrue(policy.showSegmentRail)
+        assertFalse(policy.showSegmentRail)
     }
 
     @Test
@@ -184,6 +184,35 @@ class NavigationScreenPolicyTest {
                 .contains("ic_map_current_location"),
         )
         assertFalse(sidePanelPolicy.showsProgressHeader)
+    }
+
+    @Test
+    fun `navigation map controls and expanded rail top action are wired`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val mapStageSection =
+            source
+                .substringAfter("private fun NavigationMapStage(")
+                .substringBefore("@Composable\nprivate fun NavigationMapBackdrop")
+        val mapControlsSection =
+            source
+                .substringAfter("private fun NavigationMapControls(")
+                .substringBefore("@Composable\nprivate fun NavigationBottomBar")
+        val expandedPanelSection =
+            source
+                .substringAfter("private fun NavigationExpandedSidePanel(")
+                .substringBefore("@Composable\nprivate fun NavigationSidePanelRow")
+
+        assertTrue(mapStageSection.contains("rememberMapOverlayViewportControlState()"))
+        assertTrue(mapStageSection.contains("mapControlState.zoomIn()"))
+        assertTrue(mapStageSection.contains("mapControlState.zoomOut()"))
+        assertTrue(mapStageSection.contains("mapControlState.recenter()"))
+        assertTrue(mapControlsSection.contains("onActionClick = onActionClick"))
+        assertTrue(mapControlsSection.contains("onZoomInClick = onZoomInClick"))
+        assertTrue(mapControlsSection.contains("onZoomOutClick = onZoomOutClick"))
+        assertTrue(expandedPanelSection.contains("scrollState.animateScrollTo(0)"))
+        assertTrue(expandedPanelSection.contains("NavigationExpandedSidePanelScrollTopAction("))
     }
 
     @Test
@@ -294,6 +323,24 @@ class NavigationScreenPolicyTest {
             "The active step transit summary must not pin the top card during normal entry or inspection.",
             heroSection.contains("uiState.stepCard.transitInfo"),
         )
+    }
+
+    @Test
+    fun `navigation transit rail cards reuse the same transit info model as the top card`() {
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val viewModelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationViewModel.kt")
+                .readText()
+        val contractSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationContract.kt")
+                .readText()
+
+        assertTrue(contractSource.contains("val transitInfo: NavigationTransitInfoUiState? = null"))
+        assertTrue(viewModelSource.contains("transitInfo = selectedRoute.resolveFocusedSegmentTransitInfo(segment, transitPresentation)"))
+        assertTrue(screenSource.contains("NavigationTransitSidePanelContent("))
+        assertTrue(screenSource.contains("item.transitInfo"))
     }
 
     @Test

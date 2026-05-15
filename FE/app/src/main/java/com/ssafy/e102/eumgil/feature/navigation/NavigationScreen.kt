@@ -48,9 +48,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -81,9 +83,12 @@ import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelShell
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelStepRow
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
+import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.component.createNavigationViewportOverlayState
+import com.ssafy.e102.eumgil.feature.map.component.rememberMapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.navigation.component.NavigationSegmentRail
 import com.ssafy.e102.eumgil.feature.route.RouteTransitOptionLabelUiState
+import kotlinx.coroutines.launch
 
 @Composable
 fun NavigationScreen(
@@ -178,8 +183,6 @@ fun NavigationScreen(
                                     onTopVisibleSegmentChanged = { index ->
                                         onAction(NavigationUiAction.SegmentTapped(index = index))
                                     },
-                                    onRouteDetailClick = { onAction(NavigationUiAction.RouteDetailClicked) },
-                                    isRouteDetailEnabled = uiState.canOpenRouteDetail,
                                     modifier =
                                         Modifier
                                             .width(railWidth)
@@ -321,7 +324,7 @@ internal data class NavigationBottomBarChromePolicy(
 
 internal fun navigationScreenPolicy(uiState: NavigationUiState): NavigationScreenPolicy =
     NavigationScreenPolicy(
-        showSegmentRail = uiState.segmentSync.railItems.isNotEmpty() || uiState.canOpenRouteDetail,
+        showSegmentRail = uiState.segmentSync.railItems.isNotEmpty(),
         showFocusedSegmentCard = false,
         showReturnToActiveAction = uiState.segmentSync.isInspectingSegments,
     )
@@ -404,6 +407,8 @@ private fun NavigationExpandedSidePanel(
     onSegmentTapped: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
     GuideSidePanelShell(
         isExpanded = true,
         onExpandedChange = { expanded ->
@@ -419,7 +424,7 @@ private fun NavigationExpandedSidePanel(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(scrollState),
         ) {
             uiState.segmentSync.railItems.forEachIndexed { index, item ->
                 NavigationSidePanelRow(
@@ -427,6 +432,58 @@ private fun NavigationExpandedSidePanel(
                     isFirst = index == 0,
                     isLast = index == uiState.segmentSync.railItems.lastIndex,
                     onClick = { onSegmentTapped(item.index) },
+                )
+            }
+            NavigationExpandedSidePanelScrollTopAction(
+                enabled = uiState.segmentSync.railItems.isNotEmpty(),
+                onClick = {
+                    coroutineScope.launch {
+                        scrollState.animateScrollTo(0)
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun NavigationExpandedSidePanelScrollTopAction(
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val label = stringResource(id = R.string.navigation_rail_scroll_to_top_label)
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .semantics {
+                    contentDescription = label
+                }
+                .clickable(
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier.size(36.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)),
+            shadowElevation = 0.dp,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_control_previous),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier
+                            .size(22.dp)
+                            .rotate(90f),
                 )
             }
         }
@@ -441,6 +498,7 @@ private fun NavigationSidePanelRow(
     onClick: () -> Unit,
 ) {
     val isSelected = item.isFocused || item.isActive
+    val transitInfo = item.transitInfo
     val stateLabel =
         when {
             item.isFocused -> "Selected segment"
@@ -451,9 +509,11 @@ private fun NavigationSidePanelRow(
 
     Column {
         GuideSidePanelStepRow(
-            title = item.instruction,
-            description = item.distanceLabel,
-            action = item.guidanceAction,
+            title =
+                transitInfo?.let { info -> "${info.startName} -> ${info.endName}" }
+                    ?: item.instruction,
+            description = transitInfo?.durationLabel ?: item.distanceLabel,
+            action = transitInfo?.guidanceAction ?: item.guidanceAction,
             isOrigin = isFirst,
             isDestination = isLast,
             isActive = item.isActive,
@@ -462,8 +522,13 @@ private fun NavigationSidePanelRow(
             contentDescription = "${item.instruction} ${item.distanceLabel}",
             stateDescription = stateLabel,
             onClick = onClick,
+            supportingContent = {
+                transitInfo?.let { info ->
+                    NavigationTransitSidePanelContent(transitInfo = info)
+                }
+            },
             trailingContent = {
-                item.distanceLabel.takeIf(String::isNotBlank)?.let { distance ->
+                if (transitInfo == null) item.distanceLabel.takeIf(String::isNotBlank)?.let { distance ->
                     Text(
                         text = distance,
                         style = MaterialTheme.typography.bodyMedium,
@@ -476,6 +541,11 @@ private fun NavigationSidePanelRow(
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.84f))
     }
+}
+
+@Composable
+private fun NavigationTransitSidePanelContent(transitInfo: NavigationTransitInfoUiState) {
+    NavigationTransitOptionSummary(optionLabels = transitInfo.optionLabels)
 }
 
 private fun navigationRouteSummary(uiState: NavigationUiState): String =
@@ -784,12 +854,14 @@ private fun NavigationMapStage(
     onSegmentTapped: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val mapControlState = rememberMapOverlayViewportControlState()
     Box(
         modifier = modifier.fillMaxWidth(),
     ) {
         NavigationMapBackdrop(
             mapOverlay = uiState.mapOverlay,
             onSegmentTapped = onSegmentTapped,
+            controlState = mapControlState,
             modifier = Modifier.fillMaxSize(),
         )
         if (uiState.mapOverlay.shouldUsePlaceholder) {
@@ -803,6 +875,9 @@ private fun NavigationMapStage(
             )
         }
         NavigationMapControls(
+            onActionClick = { mapControlState.recenter() },
+            onZoomInClick = { mapControlState.zoomIn() },
+            onZoomOutClick = { mapControlState.zoomOut() },
             modifier =
                 Modifier
                     .align(Alignment.CenterEnd)
@@ -815,6 +890,7 @@ private fun NavigationMapStage(
 private fun NavigationMapBackdrop(
     mapOverlay: NavigationMapOverlayUiState,
     onSegmentTapped: (Int) -> Unit,
+    controlState: MapOverlayViewportControlState? = null,
     modifier: Modifier = Modifier,
 ) {
     val mapDescription = stringResource(id = R.string.navigation_map_section_title)
@@ -827,6 +903,7 @@ private fun NavigationMapBackdrop(
                 onSegmentTapped(segmentIndex)
             }
         },
+        controlState = controlState,
     )
 }
 
@@ -887,6 +964,9 @@ private fun NavigationMapMessageCard(
 
 @Composable
 private fun NavigationMapControls(
+    onActionClick: () -> Unit = {},
+    onZoomInClick: () -> Unit = {},
+    onZoomOutClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     EumMapFloatingControls(
@@ -897,10 +977,10 @@ private fun NavigationMapControls(
                 contentDescription = stringResource(id = R.string.navigation_return_to_active_segment_label),
                 enabled = true,
             ),
-        onActionClick = {},
+        onActionClick = onActionClick,
         modifier = modifier,
-        onZoomInClick = {},
-        onZoomOutClick = {},
+        onZoomInClick = onZoomInClick,
+        onZoomOutClick = onZoomOutClick,
         zoomInLabel = stringResource(id = R.string.navigation_map_control_zoom_in),
         zoomOutLabel = stringResource(id = R.string.navigation_map_control_zoom_out),
     )

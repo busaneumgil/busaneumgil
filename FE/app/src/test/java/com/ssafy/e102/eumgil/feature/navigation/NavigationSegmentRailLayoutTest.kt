@@ -92,6 +92,20 @@ class NavigationSegmentRailLayoutTest {
     }
 
     @Test
+    fun `rail removes the bottom route detail more action`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+        val railSection =
+            source
+                .substringAfter("fun NavigationSegmentRail(")
+                .substringBefore("@Composable\nprivate fun NavigationSegmentRailWaypoint")
+
+        assertFalse(railSection.contains("NavigationSegmentRailDetailAction("))
+        assertFalse(source.contains("ic_navigation_detail_more"))
+    }
+
+    @Test
     fun `rail source snaps the promoted segment to the top`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
@@ -102,6 +116,7 @@ class NavigationSegmentRailLayoutTest {
         assertTrue(source.contains("contentPadding = PaddingValues(bottom = navigationRailEndSnapPadding)"))
         assertTrue(source.contains("listState.animateScrollToItem(position, scrollOffset = 0)"))
         assertTrue(source.contains("listState.scrollToItem(position, scrollOffset = 0)"))
+        assertTrue(source.contains("NavigationSegmentRailItemHeight = 96.dp"))
     }
 }
 

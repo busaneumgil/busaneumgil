@@ -209,6 +209,26 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
+    fun `manual overlay camera disables projection fit so map controls are not overridden`() {
+        val overlayState =
+            createRoutePreviewViewportOverlayState(
+                previewMap =
+                    RoutePreviewMapUiState(
+                        status = RoutePreviewMapStatus.READY,
+                        originCoordinate = GeoCoordinate(latitude = 35.17, longitude = 129.05),
+                        destinationCoordinate = GeoCoordinate(latitude = 35.18, longitude = 129.07),
+                        polyline =
+                            listOf(
+                                GeoCoordinate(latitude = 35.17, longitude = 129.05),
+                                GeoCoordinate(latitude = 35.18, longitude = 129.07),
+                            ),
+                    ),
+            ).copy(fitToProjection = false)
+
+        assertEquals(null, createKakaoRouteCameraRenderState(overlayState))
+    }
+
+    @Test
     fun `route waypoint markers share side panel pin assets and colors`() {
         val backdropSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")

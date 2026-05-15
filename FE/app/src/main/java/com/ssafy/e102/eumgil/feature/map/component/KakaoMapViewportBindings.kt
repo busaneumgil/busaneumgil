@@ -588,6 +588,8 @@ internal fun createKakaoRouteLineRenderStates(
 internal fun createKakaoRouteCameraRenderState(
     overlayState: MapViewportOverlayState,
 ): KakaoRouteCameraRenderState? {
+    if (!overlayState.fitToProjection) return null
+
     val projectionPoints =
         buildList {
             overlayState.polylines

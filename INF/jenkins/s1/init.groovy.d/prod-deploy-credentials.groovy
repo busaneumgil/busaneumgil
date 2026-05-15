@@ -41,6 +41,36 @@ def upsertStringCredential = { String id, String description, String value ->
     println("[e102] upserted string credential ${id}")
 }
 
+def readFirstTextFile = { List<String> paths ->
+    for (String path : paths.findAll { it != null && !it.trim().isEmpty() }) {
+        File file = new File(path.trim())
+        if (!file.isFile()) {
+            continue
+        }
+
+        String value = file.text.trim()
+        if (!value.isEmpty()) {
+            println("[e102] loaded credential value from ${file.path}")
+            return value
+        }
+    }
+    return null
+}
+
+def envOrFile = { String envName, List<String> paths, String fallback ->
+    String value = System.getenv(envName)
+    if (value != null && !value.trim().isEmpty()) {
+        return value.trim()
+    }
+
+    String fileValue = readFirstTextFile(paths)
+    if (fileValue != null && !fileValue.trim().isEmpty()) {
+        return fileValue.trim()
+    }
+
+    return fallback
+}
+
 def upsertSshKeyCredential = { String id, String description, String username, String keyPath ->
     File key = new File(keyPath)
     if (!key.isFile()) {
@@ -66,13 +96,31 @@ println('[e102] env file credentials are managed in Jenkins Credentials and are 
 upsertStringCredential(
     'e102-s2-host',
     'E102 S2 production SSH host',
-    System.getenv('E102_S2_HOST') ?: '43.201.198.214'
+    envOrFile(
+        'E102_S2_HOST',
+        [
+            System.getenv('E102_S2_HOST_FILE'),
+            '/var/jenkins_home/prod-secrets/e102-s2-host',
+            '/var/jenkins_home/prod-secrets/s2-host',
+            '/var/jenkins_home/prod-secrets/E102_S2_HOST'
+        ],
+        '43.201.198.214'
+    )
 )
 
 upsertSshKeyCredential(
     'e102-s2-ssh-key',
     'E102 S2 production SSH private key',
-    System.getenv('E102_S2_USER') ?: 'ubuntu',
+    envOrFile(
+        'E102_S2_USER',
+        [
+            System.getenv('E102_S2_USER_FILE'),
+            '/var/jenkins_home/prod-secrets/e102-s2-user',
+            '/var/jenkins_home/prod-secrets/s2-user',
+            '/var/jenkins_home/prod-secrets/E102_S2_USER'
+        ],
+        'ubuntu'
+    ),
     '/var/jenkins_home/prod-secrets/busan-eumgil-S2.pem'
 )
 
@@ -80,6 +128,24 @@ upsertStringCredential(
     'e102-mattermost-webhook-url',
     'E102 Mattermost incoming webhook URL',
     System.getenv('MATTERMOST_WEBHOOK_URL')
+)
+
+upsertStringCredential(
+    'e102-log-analysis-webhook-url',
+    'E102 shared log analysis Mattermost incoming webhook URL',
+    System.getenv('LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL')
+)
+
+upsertStringCredential(
+    'e102-dev-log-analysis-webhook-url',
+    'E102 DEV log analysis Mattermost incoming webhook URL',
+    System.getenv('DEV_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL') ?: System.getenv('LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL')
+)
+
+upsertStringCredential(
+    'e102-prod-log-analysis-webhook-url',
+    'E102 PROD log analysis Mattermost incoming webhook URL',
+    System.getenv('PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL') ?: System.getenv('LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL')
 )
 
 SystemCredentialsProvider.getInstance().save()

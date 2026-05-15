@@ -25,6 +25,7 @@ data class RouteBookmarkDraft(
     val routeOption: RouteOption,
     val distanceMeters: Int? = null,
     val durationMinutes: Int? = null,
+    val routeSnapshot: RouteCandidate? = null,
 ) {
     val defaultRouteName: String
         get() = "${startLabel.orDefaultStartLabel()}-${endLabel.orDefaultEndLabel()}"
@@ -40,6 +41,7 @@ data class RouteBookmarkDraft(
             routeOption = routeOption,
             distanceMeters = distanceMeters,
             durationMinutes = durationMinutes,
+            routeSnapshot = routeSnapshot,
         )
 }
 
@@ -53,6 +55,19 @@ data class RouteBookmarkSaveRequest(
     val routeOption: RouteOption,
     val distanceMeters: Int? = null,
     val durationMinutes: Int? = null,
+    val routeSnapshot: RouteCandidate? = null,
+)
+
+data class RouteBookmarkDetail(
+    val bookmarkId: String,
+    val routeName: String,
+    val startLabel: String,
+    val endLabel: String,
+    val startPoint: GeoCoordinate,
+    val endPoint: GeoCoordinate,
+    val transportMode: String? = null,
+    val routeOptionLabel: String? = null,
+    val route: RouteCandidate? = null,
 )
 
 private fun String.orDefaultStartLabel(): String = trim().ifBlank { DEFAULT_ROUTE_BOOKMARK_START_LABEL }

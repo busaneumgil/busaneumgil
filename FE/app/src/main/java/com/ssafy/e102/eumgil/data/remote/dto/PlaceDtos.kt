@@ -23,6 +23,7 @@ data class PlaceDetailDto(
     val providerPlaceId: String?,
     val accessibilityFeatures: List<PlaceAccessibilityFeatureDto>,
     val isBookmarked: Boolean,
+    val phone: String? = null,
     val description: String?,
 )
 
@@ -39,6 +40,7 @@ data class MapPlaceDetailDto(
     val point: PlacePointDto,
     val accessibilityFeatures: List<PlaceAccessibilityFeatureDto>,
     val isBookmarked: Boolean,
+    val phone: String? = null,
     val description: String?,
 )
 

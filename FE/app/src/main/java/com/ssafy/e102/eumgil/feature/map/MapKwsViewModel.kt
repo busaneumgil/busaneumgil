@@ -1,12 +1,10 @@
 package com.ssafy.e102.eumgil.feature.map
 
-import android.Manifest
 import android.app.Application
-import android.content.pm.PackageManager
 import android.util.Log
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.permission.hasGrantedMicrophonePermission
 import com.ssafy.e102.eumgil.core.stt.KeywordSpottingManager
 import com.ssafy.e102.eumgil.core.stt.SherpaManager
 import kotlinx.coroutines.Dispatchers
@@ -44,25 +42,7 @@ class MapKwsViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val context = getApplication<Application>()
-                SherpaManager.ensureKwsModelsExtracted(context)
-
-                if (ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.RECORD_AUDIO,
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    Log.w(TAG, "RECORD_AUDIO 권한 없음 — 웨이크워드 감지 비활성화")
-                    return@launch
-                }
-
-                if (!SherpaManager.kwsModelsExist(context)) {
-                    Log.e(TAG, "KWS 모델 없음 — 웨이크워드 감지 비활성화")
-                    return@launch
-                }
-
-                kwsManager = KeywordSpottingManager(context)
-                Log.d(TAG, "KWS 초기화 완료 — 웨이크워드 청취 시작")
-                startSpotting()
+                initializeKeywordSpotting(context)
             } catch (e: Exception) {
                 Log.e(TAG, "KWS 초기화 실패: ${e.message}", e)
             }
@@ -82,11 +62,7 @@ class MapKwsViewModel(application: Application) : AndroidViewModel(application) 
     fun resumeSpotting() {
         if (kwsJob?.isActive == true) return
         val context = getApplication<Application>()
-        if (ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO,
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!context.hasGrantedMicrophonePermission()) {
             Log.w(TAG, "RECORD_AUDIO 권한 없음 — KWS 재시작 스킵")
             return
         }
@@ -94,13 +70,7 @@ class MapKwsViewModel(application: Application) : AndroidViewModel(application) 
             Log.d(TAG, "kwsManager null — 초기화 후 KWS 시작")
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    SherpaManager.ensureKwsModelsExtracted(context)
-                    if (!SherpaManager.kwsModelsExist(context)) {
-                        Log.e(TAG, "KWS 모델 없음 — 재시작 스킵")
-                        return@launch
-                    }
-                    kwsManager = KeywordSpottingManager(context)
-                    startSpotting()
+                    initializeKeywordSpotting(context)
                 } catch (e: Exception) {
                     Log.e(TAG, "KWS 재초기화 실패: ${e.message}", e)
                 }
@@ -115,6 +85,24 @@ class MapKwsViewModel(application: Application) : AndroidViewModel(application) 
         kwsJob?.cancel()
         kwsManager?.stop()
         Log.d(TAG, "KWS 일시정지")
+    }
+
+    private suspend fun initializeKeywordSpotting(context: Application) {
+        SherpaManager.ensureKwsModelsExtracted(context)
+
+        if (!context.hasGrantedMicrophonePermission()) {
+            Log.w(TAG, "RECORD_AUDIO 권한 없음 — 웨이크워드 감지 비활성화")
+            return
+        }
+
+        if (!SherpaManager.kwsModelsExist(context)) {
+            Log.e(TAG, "KWS 모델 없음 — 웨이크워드 감지 비활성화")
+            return
+        }
+
+        kwsManager = KeywordSpottingManager(context)
+        Log.d(TAG, "KWS 초기화 완료 — 웨이크워드 청취 시작")
+        startSpotting()
     }
 
     override fun onCleared() {

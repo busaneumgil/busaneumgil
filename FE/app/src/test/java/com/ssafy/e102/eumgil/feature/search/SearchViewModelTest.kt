@@ -1,5 +1,9 @@
 package com.ssafy.e102.eumgil.feature.search
 
+import com.ssafy.e102.eumgil.core.location.ANDROID_GEOCODER_PROVIDER
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.RecentDestination
@@ -7,6 +11,7 @@ import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchPage
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
 import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
 import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
@@ -24,6 +29,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -132,6 +138,214 @@ class SearchViewModelTest {
             assertEquals(listOf(firstResult, secondResult), successState.results)
             assertEquals(false, successState.hasNext)
             assertEquals(listOf(null, "cursor-2"), searchRepository.searchPageCursors)
+        }
+
+    @Test
+    fun `search submit with fresh current location passes origin preserves server order and attaches distance`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1000, longitude = 129.0000)
+            val farResult =
+                SearchResult(
+                    placeId = "far-place",
+                    title = "Far Emart",
+                    subtitle = "far address",
+                    latitude = 35.1500,
+                    longitude = 129.0000,
+                )
+            val nearResult =
+                SearchResult(
+                    placeId = "near-place",
+                    title = "Near Emart",
+                    subtitle = "near address",
+                    latitude = 35.1010,
+                    longitude = 129.0000,
+                )
+            val searchRepository = FakeSearchRepository(searchResults = listOf(farResult, nearResult))
+            val locationManager = FakeCurrentLocationManager(initialLocation = currentLocation)
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    currentLocationManager = locationManager,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "이마트"))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+
+            val requestedQuery = searchRepository.searchPageQueries.single()
+            assertEquals(currentLocation.latitude, requestedQuery.latitude ?: -1.0, 0.0)
+            assertEquals(currentLocation.longitude, requestedQuery.longitude ?: -1.0, 0.0)
+            assertEquals(SearchSortOption.RELEVANCE, requestedQuery.sortOption)
+            assertEquals(1, locationManager.refreshLatestLocationCallCount)
+
+            val resultState = viewModel.uiState.value.resultState
+            assertTrue(resultState is SearchResultUiState.Success)
+            val results = (resultState as SearchResultUiState.Success).results
+            assertEquals(listOf("far-place", "near-place"), results.map(SearchResult::placeId))
+            assertTrue(checkNotNull(results[0].distanceMeters) > checkNotNull(results[1].distanceMeters))
+        }
+
+    @Test
+    fun `search submit with stale current location keeps repository order without origin query`() =
+        runTest {
+            val staleLocation =
+                testLocationSnapshot(
+                    latitude = 35.1000,
+                    longitude = 129.0000,
+                    recordedAtEpochMillis = 1L,
+                )
+            val firstResult =
+                SearchResult(
+                    placeId = "first-place",
+                    title = "First Emart",
+                    subtitle = "first address",
+                    latitude = 35.1500,
+                    longitude = 129.0000,
+                )
+            val secondResult =
+                SearchResult(
+                    placeId = "second-place",
+                    title = "Second Emart",
+                    subtitle = "second address",
+                    latitude = 35.1010,
+                    longitude = 129.0000,
+                )
+            val searchRepository = FakeSearchRepository(searchResults = listOf(firstResult, secondResult))
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    currentLocationManager = FakeCurrentLocationManager(initialLocation = staleLocation),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "이마트"))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+
+            val requestedQuery = searchRepository.searchPageQueries.single()
+            assertEquals(null, requestedQuery.latitude)
+            assertEquals(null, requestedQuery.longitude)
+            assertEquals(SearchSortOption.RELEVANCE, requestedQuery.sortOption)
+
+            val resultState = viewModel.uiState.value.resultState
+            assertTrue(resultState is SearchResultUiState.Success)
+            assertEquals(
+                listOf("first-place", "second-place"),
+                (resultState as SearchResultUiState.Success).results.map(SearchResult::placeId),
+            )
+        }
+
+    @Test
+    fun `load next page keeps current location origin and preserves merged server order`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1000, longitude = 129.0000)
+            val farResult =
+                SearchResult(
+                    placeId = "far-place",
+                    title = "Far Emart",
+                    subtitle = "far address",
+                    latitude = 35.1600,
+                    longitude = 129.0000,
+                )
+            val nearResult =
+                SearchResult(
+                    placeId = "near-place",
+                    title = "Near Emart",
+                    subtitle = "near address",
+                    latitude = 35.1010,
+                    longitude = 129.0000,
+                )
+            val searchRepository =
+                FakeSearchRepository(
+                    searchPagesByCursor =
+                        mapOf(
+                            null to SearchPage(results = listOf(farResult), nextCursor = "cursor-2", hasNext = true),
+                            "cursor-2" to SearchPage(results = listOf(nearResult), nextCursor = null, hasNext = false),
+                        ),
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    currentLocationManager = FakeCurrentLocationManager(initialLocation = currentLocation),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "이마트"))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+            viewModel.onAction(SearchUiAction.LoadNextPageClicked)
+            advanceUntilIdle()
+
+            assertEquals(listOf(null, "cursor-2"), searchRepository.searchPageCursors)
+            assertEquals(
+                listOf(currentLocation.latitude, currentLocation.latitude),
+                searchRepository.searchPageQueries.map { query -> query.latitude },
+            )
+            assertEquals(
+                listOf(currentLocation.longitude, currentLocation.longitude),
+                searchRepository.searchPageQueries.map { query -> query.longitude },
+            )
+            assertEquals(
+                listOf(SearchSortOption.RELEVANCE, SearchSortOption.RELEVANCE),
+                searchRepository.searchPageQueries.map { query -> query.sortOption },
+            )
+
+            val resultState = viewModel.uiState.value.resultState
+            assertTrue(resultState is SearchResultUiState.Success)
+            assertEquals(
+                listOf("far-place", "near-place"),
+                (resultState as SearchResultUiState.Success).results.map(SearchResult::placeId),
+            )
+        }
+
+    @Test
+    fun `sort option change refreshes current result query with selected sort`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1000, longitude = 129.0000)
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "이마트",
+                    subtitle = "부산",
+                    latitude = 35.1010,
+                    longitude = 129.0000,
+                )
+            val searchRepository = FakeSearchRepository(searchResults = listOf(result))
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = searchRepository,
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    currentLocationManager = FakeCurrentLocationManager(initialLocation = currentLocation),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "이마트"))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+            viewModel.onAction(SearchUiAction.SortOptionSelected(sortOption = SearchSortOption.DISTANCE))
+            advanceUntilIdle()
+
+            assertEquals(SearchSortOption.DISTANCE, viewModel.uiState.value.sortOption)
+            assertEquals(
+                listOf(SearchSortOption.RELEVANCE, SearchSortOption.DISTANCE),
+                searchRepository.searchPageQueries.map { query -> query.sortOption },
+            )
+            assertEquals(
+                listOf(currentLocation.latitude, currentLocation.latitude),
+                searchRepository.searchPageQueries.map { query -> query.latitude },
+            )
         }
 
     @Test
@@ -510,7 +724,7 @@ class SearchViewModelTest {
 
             advanceUntilIdle()
             val startEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
-            viewModel.onAction(SearchUiAction.VoiceRouteEntered)
+            viewModel.onAction(SearchUiAction.VoiceCaptureButtonClicked)
             advanceUntilIdle()
             assertEquals(SearchUiEvent.StartVoiceCapture, startEvent.await())
 
@@ -577,6 +791,47 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `address fallback preview click keeps external address preview metadata`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "external-address:35.1797,129.0750",
+                    title = "Busan City Hall Road Address",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    serverPlaceId = null,
+                    provider = ANDROID_GEOCODER_PROVIDER,
+                    providerPlaceId = null,
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            val preview = destinationPreviewRepository.pendingPreview.value
+            assertEquals(result.toPlaceDestination(), preview?.destination)
+            assertEquals(MapPlaceDetailType.EXTERNAL_ADDRESS, preview?.detailType)
+            assertEquals("KAKAO", preview?.provider)
+            assertEquals(null, preview?.providerPlaceId)
+            assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
+        }
+
+    @Test
     fun `search result briefing click stores selected destination and emits route briefing navigation`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -604,6 +859,36 @@ class SearchViewModelTest {
 
             assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
             assertEquals(SearchUiEvent.NavigateToRouteBriefing, uiEvent.await())
+        }
+
+    @Test
+    fun `search result click stores selected destination and emits route setting navigation`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
+            assertEquals(SearchUiEvent.NavigateToRouteSetting, uiEvent.await())
         }
 
     @Test
@@ -679,9 +964,10 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `provider only search result click stores destination but does not enrich recent destination`() =
+    fun `provider only search result click selects destination but does not enrich recent destination`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             val searchRepository = FakeSearchRepository()
             val placesRepository = FakePlacesRepository()
             val viewModel =
@@ -689,6 +975,7 @@ class SearchViewModelTest {
                     searchRepository = searchRepository,
                     bookmarkRepository = FakeBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
                     placesRepository = placesRepository,
                 )
             val result =
@@ -712,6 +999,7 @@ class SearchViewModelTest {
 
             assertEquals("provider:kakao:987654321", destinationSelectionRepository.selectedDestination.value?.placeId)
             assertEquals("Provider Only Cafe", destinationSelectionRepository.selectedDestination.value?.name)
+            assertEquals(null, destinationPreviewRepository.pendingPreview.value)
             assertTrue(placesRepository.detailRequests.isEmpty())
             assertTrue(searchRepository.savedRecentDestinations.isEmpty())
         }
@@ -816,6 +1104,51 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `address fallback bookmark toggle saves supported external address snapshot`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+            val result =
+                SearchResult(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    serverPlaceId = null,
+                    provider = ANDROID_GEOCODER_PROVIDER,
+                    providerPlaceId = "35.179700,129.075000",
+                    title = "123 Jungang-daero, Busan",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SearchUiAction.BookmarkToggleClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(
+                BookmarkData(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    placeName = "123 Jungang-daero, Busan",
+                    address = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    provider = "KAKAO",
+                    providerPlaceId = null,
+                    providerCategory = null,
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
+        }
+
+    @Test
     fun `bookmark toggle saves unbookmarked search result`() =
         runTest {
             val bookmarkRepository = FakeBookmarkRepository()
@@ -848,6 +1181,7 @@ class SearchViewModelTest {
                     latitude = 35.1797,
                     longitude = 129.0750,
                     category = "TOURIST_ATTRACTION",
+                    providerCategory = "TOURIST_ATTRACTION",
                 ),
                 bookmarkRepository.bookmarks.value.single(),
             )
@@ -901,6 +1235,53 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `address fallback low vision bookmark save stores supported external address snapshot`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = bookmarkRepository,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+            val result =
+                SearchResult(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    serverPlaceId = null,
+                    provider = ANDROID_GEOCODER_PROVIDER,
+                    providerPlaceId = "35.179700,129.075000",
+                    title = "123 Jungang-daero, Busan",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    matched = false,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.LowVisionBookmarkSaveClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(
+                BookmarkData(
+                    placeId = "provider:android_geocoder:35.179700,129.075000",
+                    placeName = "123 Jungang-daero, Busan",
+                    address = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = null,
+                    provider = "KAKAO",
+                    providerPlaceId = null,
+                    providerCategory = null,
+                ),
+                bookmarkRepository.bookmarks.value.single(),
+            )
+            assertEquals(SearchUiEvent.NavigateToLowVisionBookmark, uiEvent.await())
+        }
+
+    @Test
     fun `low vision bookmark save always saves result and navigates to low vision bookmark`() =
         runTest {
             val bookmarkRepository = FakeBookmarkRepository()
@@ -934,6 +1315,7 @@ class SearchViewModelTest {
                     latitude = 35.1797,
                     longitude = 129.0750,
                     category = "TOURIST_ATTRACTION",
+                    providerCategory = "TOURIST_ATTRACTION",
                 ),
                 bookmarkRepository.bookmarks.value.single(),
             )
@@ -992,6 +1374,7 @@ private class FakeSearchRepository(
     val voiceAnalysisRequests = mutableListOf<Pair<String, SearchVoiceMode>>()
     val deletedRecentSearchKeywords = mutableListOf<String>()
     val searchPageCursors = mutableListOf<String?>()
+    val searchPageQueries = mutableListOf<SearchQuery>()
     var clearRecentSearchesCallCount = 0
     private val recentSearches = MutableStateFlow(recentSearches)
 
@@ -999,6 +1382,7 @@ private class FakeSearchRepository(
 
     override suspend fun searchPage(query: SearchQuery): SearchPage {
         searchPageCursors += query.cursor
+        searchPageQueries += query
         return searchPagesByCursor[query.cursor] ?: SearchPage(results = searchResults)
     }
 
@@ -1050,6 +1434,36 @@ private class FakePlacesRepository(
         detailRequests += placeId
         return placeDetailsById[placeId]
     }
+}
+
+private fun testLocationSnapshot(
+    latitude: Double,
+    longitude: Double,
+    recordedAtEpochMillis: Long = System.currentTimeMillis(),
+): LocationSnapshot =
+    LocationSnapshot(
+        latitude = latitude,
+        longitude = longitude,
+        accuracyMeters = 5f,
+        recordedAtEpochMillis = recordedAtEpochMillis,
+    )
+
+private class FakeCurrentLocationManager(
+    initialLocation: LocationSnapshot? = null,
+) : CurrentLocationManager {
+    private val mutableLatestLocation = MutableStateFlow(initialLocation)
+    var refreshLatestLocationCallCount: Int = 0
+        private set
+
+    override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation
+
+    override fun refreshLatestLocation() {
+        refreshLatestLocationCallCount += 1
+    }
+
+    override fun startLocationUpdates() = Unit
+
+    override fun stopLocationUpdates() = Unit
 }
 
 private class FakeBookmarkRepository(

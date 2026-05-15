@@ -14,6 +14,9 @@ import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.ReissueResponseDto
+import com.ssafy.e102.eumgil.data.route.DefaultRouteGeometryParser
+import com.ssafy.e102.eumgil.data.route.RouteGeometryParseResult
+import com.ssafy.e102.eumgil.data.route.RouteGeometryParser
 import com.ssafy.e102.eumgil.data.route.RouteDto
 import com.ssafy.e102.eumgil.data.route.RouteGuidanceEventDto
 import com.ssafy.e102.eumgil.data.route.RouteLegDto
@@ -25,20 +28,78 @@ import com.ssafy.e102.eumgil.data.route.RouteRerouteResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSelectRequestDto
+import com.ssafy.e102.eumgil.data.route.RouteSelectResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteSessionResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitArrivalDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitLaneOptionDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitRefreshResponseDto
 import com.ssafy.e102.eumgil.data.route.RouteTransitStopDto
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RouteRepositoryTest {
+    @Test
+    fun `getRouteSearchData defers route mapping to background dispatcher and skips cache update when cancelled early`() =
+        runTest {
+            val localDataSource = RouteLocalDataSource()
+            val query = routeQuery(requestedOptions = listOf(RouteOption.SAFE))
+            val mappingDispatcher = StandardTestDispatcher(testScheduler)
+            var walkCallCount = 0
+            var parseCallCount = 0
+            val countingParser =
+                object : RouteGeometryParser {
+                    private val delegate = DefaultRouteGeometryParser()
+
+                    override fun parse(geometry: String?): RouteGeometryParseResult {
+                        parseCallCount += 1
+                        return delegate.parse(geometry)
+                    }
+                }
+            val repository =
+                DefaultRouteRepository(
+                    localDataSource = localDataSource,
+                    remoteDataSource =
+                        remoteDataSource(
+                            searchWalkResponse = {
+                                walkCallCount += 1
+                                walkSearchResponse()
+                            },
+                        ),
+                    geometryParser = countingParser,
+                    routeMappingDispatcher = mappingDispatcher,
+                )
+
+            val deferred =
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    repository.getRouteSearchData(query)
+                }
+
+            assertEquals(1, walkCallCount)
+            assertEquals(0, parseCallCount)
+            assertFalse(deferred.isCompleted)
+            assertNull(localDataSource.getCachedSearchData(query))
+
+            deferred.cancel()
+            advanceUntilIdle()
+
+            assertTrue(deferred.isCancelled)
+            assertEquals(0, parseCallCount)
+            assertNull(localDataSource.getCachedSearchData(query))
+        }
+
     @Test
     fun `getRouteSearchData returns cached walk search data after first remote load`() =
         runBlocking {
@@ -69,6 +130,37 @@ class RouteRepositoryTest {
             assertEquals("walk_rt_safe_001", first.routes.single().routeId)
             assertEquals(RouteTransportMode.WALK, first.routes.single().transportMode)
             assertEquals(first, localDataSource.getCachedSearchData(query))
+        }
+
+    @Test
+    fun `getFreshRouteSearchData bypasses cached walk search ids before select`() =
+        runBlocking {
+            val localDataSource = RouteLocalDataSource()
+            var walkCallCount = 0
+            val repository =
+                DefaultRouteRepository(
+                    localDataSource = localDataSource,
+                    remoteDataSource =
+                        remoteDataSource(
+                            searchWalkResponse = {
+                                walkCallCount += 1
+                                walkSearchResponse(
+                                    searchId = "rs_walk_server_$walkCallCount",
+                                    routeId = "walk_rt_safe_$walkCallCount",
+                                )
+                            },
+                        ),
+                )
+            val query = routeQuery(requestedOptions = listOf(RouteOption.SAFE))
+
+            val cached = repository.getRouteSearchData(query)
+            val fresh = repository.getFreshRouteSearchData(query)
+
+            assertEquals(2, walkCallCount)
+            assertEquals("rs_walk_server_1", cached.result.searchId)
+            assertEquals("rs_walk_server_2", fresh.result.searchId)
+            assertEquals("walk_rt_safe_2", fresh.routes.single().routeId)
+            assertEquals(fresh, localDataSource.getCachedSearchData(query))
         }
 
     @Test
@@ -119,7 +211,11 @@ class RouteRepositoryTest {
                             selectResponse = { routeId, request ->
                                 assertEquals("route-1", routeId)
                                 assertEquals("search-1", request.searchId)
-                                RouteSessionResponseDto(sessionId = "session-select-1")
+                                RouteSelectResponseDto(
+                                    sessionId = "session-select-1",
+                                    totalDistanceMeter = 950.0,
+                                    totalDurationSecond = 960,
+                                )
                             },
                             refreshResponse = { routeId, request ->
                                 assertEquals("route-1", routeId)
@@ -190,6 +286,8 @@ class RouteRepositoryTest {
             val rated = repository.rateRoute(sessionId = ended.sessionId, score = 5)
 
             assertEquals("session-select-1", selected.sessionId)
+            assertEquals(950, selected.totalDistanceMeters)
+            assertEquals(960, selected.totalDurationSeconds)
             assertEquals("BUS", refreshed.type)
             assertEquals("ARRIVING_SOON", refreshed.arrivalStatus)
             assertEquals("100", refreshed.transits.single().routeNo)
@@ -228,7 +326,7 @@ class RouteRepositoryTest {
                                             message = "Authentication required.",
                                         )
 
-                                    2 -> RouteSessionResponseDto(sessionId = "session-select-1")
+                                    2 -> RouteSelectResponseDto(sessionId = "session-select-1")
 
                                     else -> error("Unexpected select retry count: $requestCount")
                                 }
@@ -279,8 +377,8 @@ class RouteRepositoryTest {
                         remoteDataSource(
                             selectResponse = { _, _ ->
                                 throw RouteApiException(
-                                    httpStatusCode = 403,
-                                    status = "AUTH_403",
+                                    httpStatusCode = 401,
+                                    status = "AUTH_401",
                                     message = "Authentication required.",
                                 )
                             },
@@ -304,6 +402,47 @@ class RouteRepositoryTest {
             assertEquals("ROUTE_AUTHENTICATION_FAILED", failure.status)
             assertNull(authSessionRepository.getAuthGateState().authSession)
         }
+
+    @Test
+    fun `selectRoute surfaces forbidden response without clearing auth session`() =
+        runBlocking {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "access-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val repository =
+                DefaultRouteRepository(
+                    localDataSource = RouteLocalDataSource(),
+                    remoteDataSource =
+                        remoteDataSource(
+                            selectResponse = { _, _ ->
+                                throw RouteApiException(
+                                    httpStatusCode = 403,
+                                    status = "FR4030",
+                                    message = "Forbidden.",
+                                )
+                            },
+                        ),
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource = AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")),
+                )
+
+            val failure =
+                runCatching {
+                    repository.selectRoute(routeId = "route-1", searchId = "search-1")
+                }.exceptionOrNull() as? RouteApiException
+
+            requireNotNull(failure)
+            assertEquals(403, failure.httpStatusCode)
+            assertEquals("FR4030", failure.status)
+            assertEquals("Forbidden.", failure.message)
+            assertEquals("access-token", authSessionRepository.getAuthGateState().authSession?.accessToken)
+            assertEquals("refresh-token", authSessionRepository.getAuthGateState().authSession?.refreshToken)
+        }
 }
 
 private fun remoteDataSource(
@@ -313,7 +452,7 @@ private fun remoteDataSource(
     searchTransitResponse: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto = {
         error("searchTransitRoutes was not expected")
     },
-    selectResponse: suspend (String, RouteSelectRequestDto) -> RouteSessionResponseDto = { _, _ ->
+    selectResponse: suspend (String, RouteSelectRequestDto) -> RouteSelectResponseDto = { _, _ ->
         error("selectRoute was not expected")
     },
     refreshResponse: suspend (String, RouteTransitRefreshRequestDto) -> RouteTransitRefreshResponseDto = { _, _ ->
@@ -343,7 +482,7 @@ private fun remoteDataSource(
         override suspend fun selectRoute(
             routeId: String,
             request: RouteSelectRequestDto,
-        ): RouteSessionResponseDto = selectResponse(routeId, request)
+        ): RouteSelectResponseDto = selectResponse(routeId, request)
 
         override suspend fun refreshTransit(
             routeId: String,
@@ -374,13 +513,16 @@ private fun routeQuery(requestedOptions: List<RouteOption>): RouteSearchQuery =
         requestedOptions = requestedOptions,
     )
 
-private fun walkSearchResponse(): RouteSearchResponseDto =
+private fun walkSearchResponse(
+    searchId: String = "rs_walk_server_001",
+    routeId: String = "walk_rt_safe_001",
+): RouteSearchResponseDto =
     RouteSearchResponseDto(
-        searchId = "rs_walk_server_001",
+        searchId = searchId,
         routes =
             listOf(
                 RouteDto(
-                    routeId = "walk_rt_safe_001",
+                    routeId = routeId,
                     transportMode = "WALK",
                     routeOption = "SAFE",
                     routeOptions = listOf("SAFE"),

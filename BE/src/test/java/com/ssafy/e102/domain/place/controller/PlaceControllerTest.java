@@ -54,7 +54,14 @@ class PlaceControllerTest {
 	@Test
 	@DisplayName("장소 검색은 query parameter를 서비스에 전달한다")
 	void searchPlaces() throws Exception {
-		when(placeService.searchPlaces("부산시민공원", "35.1686", "129.0576", "1000", "next-cursor", "10"))
+		when(placeService.searchPlaces(
+			"부산시민공원",
+			"35.1686",
+			"129.0576",
+			"1000",
+			"next-cursor",
+			"distance",
+			"10"))
 			.thenReturn(new PlaceSearchResponse(List.of(), null, 10, 0, false));
 
 		mockMvc.perform(get("/places/search")
@@ -63,6 +70,7 @@ class PlaceControllerTest {
 			.param("lng", "129.0576")
 			.param("radius", "1000")
 			.param("cursor", "next-cursor")
+			.param("sort", "distance")
 			.param("size", "10"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
@@ -177,6 +185,7 @@ class PlaceControllerTest {
 				"부산시민공원",
 				null,
 				"여행 > 관광,명소 > 공원",
+				"051-123-4567",
 				"부산광역시 부산진구 시민공원로 73",
 				new GeoPointResponse(35.1686, 129.0576),
 				List.of(),
@@ -199,7 +208,8 @@ class PlaceControllerTest {
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.bookmarkTargetId").value("tgt_9d13f0b44d68abcd"))
 			.andExpect(jsonPath("$.data.detailType").value("EXTERNAL_POI"))
-			.andExpect(jsonPath("$.data.name").value("부산시민공원"));
+			.andExpect(jsonPath("$.data.name").value("부산시민공원"))
+			.andExpect(jsonPath("$.data.phone").value("051-123-4567"));
 
 		verify(placeService).getPlaceDetail(userId, request);
 		SecurityContextHolder.clearContext();

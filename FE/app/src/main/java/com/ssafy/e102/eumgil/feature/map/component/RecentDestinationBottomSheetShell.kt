@@ -11,12 +11,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.DraggableState
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,14 +34,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,9 +50,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -91,11 +94,14 @@ fun RecentDestinationBottomSheetShell(
     val dragSettleVelocityThresholdPx = with(density) { 320.dp.toPx() }
     val dismissThresholdMinPx = with(density) { 72.dp.toPx() }
     val handleInteractionSource = remember { MutableInteractionSource() }
+    val restoreHandleInteractionSource = remember { MutableInteractionSource() }
     var isDismissedByUser by remember(state.items) { mutableStateOf(false) }
     var sheetHeightPx by remember(state.items, state.isVisible) { mutableIntStateOf(0) }
     var sheetOffsetPx by remember(state.items, state.isVisible) { mutableFloatStateOf(0f) }
     var isDragging by remember(state.items, state.isVisible) { mutableStateOf(false) }
     val isSheetVisible = state.isVisible && !isDismissedByUser
+    val isRestoreHandleVisible = state.isVisible && isDismissedByUser
+    val restoreHandleDescription = stringResource(id = R.string.map_recent_destination_sheet_restore)
 
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
@@ -120,6 +126,13 @@ fun RecentDestinationBottomSheetShell(
             rememberDraggableState { delta ->
                 isDragging = true
                 sheetOffsetPx = (sheetOffsetPx + delta).coerceIn(0f, maxSheetOffsetPx)
+            }
+        val restoreDragState =
+            rememberDraggableState { delta ->
+                if (delta < 0f) {
+                    isDismissedByUser = false
+                    sheetOffsetPx = 0f
+                }
             }
 
         LaunchedEffect(isSheetVisible, maxSheetOffsetPx) {
@@ -152,7 +165,7 @@ fun RecentDestinationBottomSheetShell(
                         .offset { IntOffset(x = 0, y = animatedSheetOffsetPx.roundToInt()) },
                 handleModifier =
                     Modifier
-                        .height(24.dp)
+                        .height(MapBottomSheetHandleHeight)
                         .semantics {
                             role = Role.Button
                             contentDescription = "최근 목적지 시트 닫기"
@@ -189,15 +202,25 @@ fun RecentDestinationBottomSheetShell(
                 ) {
                     Text(
                         text = state.title,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-                    TextButton(onClick = onViewAllClick) {
-                        Text(
-                            text = "전체보기",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    RecentDestinationViewAllAction(onClick = onViewAllClick) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "전체보기",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                            Text(
+                                text = ">",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                        }
                     }
                 }
 
@@ -216,6 +239,80 @@ fun RecentDestinationBottomSheetShell(
                 }
             }
         }
+
+        AnimatedVisibility(
+            visible = isRestoreHandleVisible,
+            enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut(),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+        ) {
+            RecentDestinationRestoreHandle(
+                contentDescription = restoreHandleDescription,
+                interactionSource = restoreHandleInteractionSource,
+                dragState = restoreDragState,
+                onClick = {
+                    isDismissedByUser = false
+                    sheetOffsetPx = 0f
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentDestinationRestoreHandle(
+    contentDescription: String,
+    interactionSource: MutableInteractionSource,
+    dragState: DraggableState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(RecentDestinationRestoreHandleHeight),
+        shape =
+            RoundedCornerShape(
+                topStart = 24.dp,
+                topEnd = 24.dp,
+            ),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)),
+        shadowElevation = 12.dp,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onClick,
+                    )
+                    .draggable(
+                        state = dragState,
+                        orientation = Orientation.Vertical,
+                    )
+                    .semantics {
+                        role = Role.Button
+                        this.contentDescription = contentDescription
+                    }
+                    .padding(horizontal = 20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .width(42.dp)
+                        .height(4.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(999.dp)),
+            )
+        }
     }
 }
 
@@ -229,20 +326,15 @@ private fun RecentDestinationRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f),
-        ) {
-            Icon(
-                painter = painterResource(id = state.iconRes),
-                contentDescription = null,
-                modifier =
-                    Modifier
-                        .padding(10.dp)
-                        .size(20.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        }
+        Icon(
+            painter = painterResource(id = state.iconRes),
+            contentDescription = null,
+            modifier =
+                Modifier
+                    .padding(top = 2.dp)
+                    .size(36.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
 
         Column(
             modifier = Modifier.weight(1f),
@@ -283,14 +375,11 @@ private fun RecentDestinationRow(
             }
         }
 
-        Button(
+        RecentDestinationRouteButton(
             onClick = onRouteClick,
             shape = RoundedCornerShape(12.dp),
-            colors =
-                ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         ) {
             Icon(
@@ -308,10 +397,69 @@ private fun RecentDestinationRow(
 }
 
 @Composable
+private fun RecentDestinationViewAllAction(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier =
+            modifier
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onClick,
+                )
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun RecentDestinationRouteButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(12.dp),
+    containerColor: Color = MaterialTheme.colorScheme.primary,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    content: @Composable () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Surface(
+        modifier = modifier,
+        shape = shape,
+        color = containerColor,
+        contentColor = contentColor,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onClick,
+                    )
+                    .padding(contentPadding),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
 private fun RecentDestinationTagChip(
     label: String,
     isOverflow: Boolean,
 ) {
+    val iconRes = recentDestinationTagIconRes(label = label, isOverflow = isOverflow)
     val containerColor =
         if (isOverflow) {
             MaterialTheme.colorScheme.surfaceVariant
@@ -339,11 +487,77 @@ private fun RecentDestinationTagChip(
                     },
             ),
     ) {
-        Text(
-            text = label,
+        Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = contentColor,
-        )
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            iconRes?.let { resId ->
+                Icon(
+                    painter = painterResource(id = resId),
+                    contentDescription = null,
+                    modifier = Modifier.size(recentDestinationTagIconSizeDp(resId).dp),
+                    tint = contentColor,
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor,
+            )
+        }
     }
 }
+
+@Composable
+@DrawableRes
+private fun recentDestinationTagIconRes(
+    label: String,
+    isOverflow: Boolean,
+): Int? {
+    if (isOverflow) return null
+
+    val normalizedLabel = label.trim()
+    val bareGuidanceLabel = stringResource(id = R.string.place_accessibility_label_guidance_facility).substringBeforeLast(' ')
+    return when (normalizedLabel) {
+        stringResource(id = R.string.place_accessibility_label_accessible_toilet),
+        stringResource(id = R.string.map_facility_detail_tag_accessible_toilet),
+        -> R.drawable.ic_accessibility_tag_accessible_toilet
+
+        stringResource(id = R.string.place_accessibility_label_elevator),
+        stringResource(id = R.string.map_facility_detail_tag_elevator),
+        -> R.drawable.ic_accessibility_tag_elevator
+
+        stringResource(id = R.string.place_accessibility_label_accessible_parking),
+        stringResource(id = R.string.map_facility_detail_tag_accessible_parking),
+        -> R.drawable.ic_accessibility_tag_accessible_parking
+
+        stringResource(id = R.string.place_accessibility_label_step_free),
+        stringResource(id = R.string.map_facility_detail_tag_step_free_entrance),
+        -> R.drawable.ic_accessibility_tag_step_free
+
+        stringResource(id = R.string.map_facility_detail_tag_charging_station),
+        -> R.drawable.ic_accessibility_tag_charging_station
+
+        bareGuidanceLabel,
+        stringResource(id = R.string.place_accessibility_label_guidance_facility),
+        stringResource(id = R.string.map_facility_detail_tag_guidance_facility),
+        -> R.drawable.ic_accessibility_tag_guidance_facility
+
+        stringResource(id = R.string.place_accessibility_label_accessible_room),
+        stringResource(id = R.string.map_facility_detail_tag_accessible_room),
+        -> R.drawable.ic_accessibility_tag_accessible_room
+
+        else -> null
+    }
+}
+
+private fun recentDestinationTagIconSizeDp(
+    @DrawableRes iconRes: Int,
+): Int =
+    when (iconRes) {
+        R.drawable.ic_accessibility_tag_accessible_toilet -> 14
+        else -> 12
+    }
+
+private val RecentDestinationRestoreHandleHeight = 32.dp

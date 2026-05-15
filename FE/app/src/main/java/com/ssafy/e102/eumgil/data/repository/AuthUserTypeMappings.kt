@@ -15,25 +15,48 @@ private const val SERVER_MOBILITY_SUBTYPE_MANUAL_WHEELCHAIR: String = "MANUAL_WH
 private const val SERVER_MOBILITY_SUBTYPE_OTHER: String = "OTHER_MOBILITY"
 
 internal fun String.toPrimaryUserTypeRouteValue(): String =
+    toPrimaryUserTypeRouteValueOrNull()
+        ?: throw IllegalStateException("Unsupported primary user type: $this")
+
+internal fun String.toPrimaryUserTypeRouteValueOrNull(): String? =
     when (this) {
-        SERVER_PRIMARY_USER_TYPE_LOW_VISION -> ROUTE_PRIMARY_USER_TYPE_LOW_VISION
-        SERVER_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED -> ROUTE_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED
-        else -> throw IllegalStateException("지원하지 않는 사용자 유형입니다.")
+        SERVER_PRIMARY_USER_TYPE_LOW_VISION,
+        ROUTE_PRIMARY_USER_TYPE_LOW_VISION,
+        -> ROUTE_PRIMARY_USER_TYPE_LOW_VISION
+
+        SERVER_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED,
+        ROUTE_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED,
+        -> ROUTE_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED
+
+        else -> null
     }
 
 internal fun String.toMobilitySubtypeRouteValue(): String =
+    toMobilitySubtypeRouteValueOrNull()
+        ?: throw IllegalStateException("Unsupported mobility subtype: $this")
+
+internal fun String.toMobilitySubtypeRouteValueOrNull(): String? =
     when (this) {
-        SERVER_MOBILITY_SUBTYPE_POWER_WHEELCHAIR -> ROUTE_MOBILITY_SUBTYPE_ELECTRIC_WHEELCHAIR
-        SERVER_MOBILITY_SUBTYPE_MANUAL_WHEELCHAIR -> ROUTE_MOBILITY_SUBTYPE_MANUAL_WHEELCHAIR
-        SERVER_MOBILITY_SUBTYPE_OTHER -> ROUTE_MOBILITY_SUBTYPE_OTHER
-        else -> throw IllegalStateException("지원하지 않는 보행약자 세부 유형입니다.")
+        SERVER_MOBILITY_SUBTYPE_POWER_WHEELCHAIR,
+        ROUTE_MOBILITY_SUBTYPE_ELECTRIC_WHEELCHAIR,
+        -> ROUTE_MOBILITY_SUBTYPE_ELECTRIC_WHEELCHAIR
+
+        SERVER_MOBILITY_SUBTYPE_MANUAL_WHEELCHAIR,
+        ROUTE_MOBILITY_SUBTYPE_MANUAL_WHEELCHAIR,
+        -> ROUTE_MOBILITY_SUBTYPE_MANUAL_WHEELCHAIR
+
+        SERVER_MOBILITY_SUBTYPE_OTHER,
+        ROUTE_MOBILITY_SUBTYPE_OTHER,
+        -> ROUTE_MOBILITY_SUBTYPE_OTHER
+
+        else -> null
     }
 
 internal fun String.toPrimaryUserTypeServerValue(): String =
     when (this) {
         ROUTE_PRIMARY_USER_TYPE_LOW_VISION -> SERVER_PRIMARY_USER_TYPE_LOW_VISION
         ROUTE_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED -> SERVER_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED
-        else -> throw IllegalStateException("지원하지 않는 사용자 유형입니다.")
+        else -> throw IllegalStateException("Unsupported primary user type: $this")
     }
 
 internal fun String.toMobilitySubtypeServerValue(): String =
@@ -41,7 +64,7 @@ internal fun String.toMobilitySubtypeServerValue(): String =
         ROUTE_MOBILITY_SUBTYPE_ELECTRIC_WHEELCHAIR -> SERVER_MOBILITY_SUBTYPE_POWER_WHEELCHAIR
         ROUTE_MOBILITY_SUBTYPE_MANUAL_WHEELCHAIR -> SERVER_MOBILITY_SUBTYPE_MANUAL_WHEELCHAIR
         ROUTE_MOBILITY_SUBTYPE_OTHER -> SERVER_MOBILITY_SUBTYPE_OTHER
-        else -> throw IllegalStateException("지원하지 않는 보행약자 세부 유형입니다.")
+        else -> throw IllegalStateException("Unsupported mobility subtype: $this")
     }
 
 internal suspend fun SettingsRepository.syncOnboardingStateFromServer(
@@ -52,7 +75,7 @@ internal suspend fun SettingsRepository.syncOnboardingStateFromServer(
     if (selectedPrimaryUserType == SERVER_PRIMARY_USER_TYPE_MOBILITY_IMPAIRED) {
         val mobilitySubtype =
             selectedMobilitySubtype
-                ?: throw IllegalStateException("보행약자 세부 유형을 받지 못했습니다.")
+                ?: throw IllegalStateException("Mobility impaired users require a mobility subtype.")
         saveMobilitySubtype(mobilitySubtype.toMobilitySubtypeRouteValue())
     }
     saveLowVisionFollowUpCompleted(

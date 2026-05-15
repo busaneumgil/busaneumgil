@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.search.SearchUiAction
 import com.ssafy.e102.eumgil.feature.search.SearchUiEvent
@@ -34,8 +35,12 @@ fun LowVisionSearchRoute(
             (context.applicationContext as BusanEumgilApp).appContainer
         }
     val lowVisionSearchRepository =
-        remember(appContainer.searchRepository) {
-            LowVisionSearchRepository(delegate = appContainer.searchRepository)
+        remember(appContainer.searchRepository, appContainer.placesRepository, appContainer.currentLocationManager) {
+            LowVisionSearchRepository(
+                delegate = appContainer.searchRepository,
+                placesRepository = appContainer.placesRepository,
+                currentLocationProvider = { appContainer.currentLocationManager.latestLocation.value },
+            )
         }
     val activity = remember(context) { context.findComponentActivity() }
     val viewModelFactory =
@@ -46,6 +51,7 @@ fun LowVisionSearchRoute(
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
                 destinationPreviewRepository = appContainer.destinationPreviewRepository,
                 placesRepository = appContainer.placesRepository,
+                currentLocationManager = appContainer.currentLocationManager,
             )
         }
     val viewModel =
@@ -55,8 +61,16 @@ fun LowVisionSearchRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel, initialQuery) {
+    LaunchedEffect(appContainer.currentLocationManager) {
+        appContainer.currentLocationManager.startLocationUpdates()
+        appContainer.currentLocationManager.refreshLatestLocation()
+    }
+
+    LaunchedEffect(viewModel, initialQuery, categoryLabel) {
         viewModel.onAction(SearchUiAction.EditingTargetConfigured(editingTarget = RouteEditingTarget.DESTINATION))
+        if (!categoryLabel.isNullOrBlank()) {
+            viewModel.onAction(SearchUiAction.SortOptionSelected(sortOption = SearchSortOption.DISTANCE))
+        }
         viewModel.onAction(SearchUiAction.ResultsRouteEntered(query = initialQuery))
     }
 

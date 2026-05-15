@@ -3,12 +3,59 @@ package com.ssafy.e102.eumgil.feature.search
 import com.ssafy.e102.eumgil.app.navigation.SearchRoute
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
-import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
+import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SearchScreenTest {
+    @Test
+    fun `origin editing target resolves origin specific search copy`() {
+        assertEquals(
+            SearchCopyUiState(
+                entryTitleRes = R.string.search_origin_screen_title,
+                resultsTitleRes = R.string.search_origin_results_screen_title,
+                entryHeadlineRes = R.string.search_origin_screen_entry_headline,
+                queryPlaceholderRes = R.string.search_origin_screen_query_placeholder,
+                voiceInputTitleRes = R.string.search_origin_voice_input_title,
+                voiceInputHeadlineRes = R.string.search_origin_voice_input_headline,
+                voiceInputDescriptionRes = R.string.search_origin_voice_input_description,
+                voiceInputExamplePhraseRes = R.string.search_origin_voice_input_example_phrase,
+                initialTitleRes = R.string.search_origin_screen_initial_title,
+                initialDescriptionRes = R.string.search_origin_screen_initial_description,
+                resultSummaryRes = R.string.search_origin_screen_result_summary,
+                emptyResultDescriptionRes = R.string.search_origin_screen_empty_result_description,
+                resultActionLabelRes = R.string.search_origin_screen_result_action_label,
+                resultSelectableDescriptionRes = R.string.search_origin_screen_result_selectable,
+            ),
+            resolveSearchCopyUiState(RouteEditingTarget.ORIGIN),
+        )
+    }
+
+    @Test
+    fun `destination editing target resolves destination specific search copy`() {
+        assertEquals(
+            SearchCopyUiState(
+                entryTitleRes = R.string.search_screen_title,
+                resultsTitleRes = R.string.search_results_screen_title,
+                entryHeadlineRes = R.string.search_screen_entry_headline,
+                queryPlaceholderRes = R.string.search_screen_query_placeholder,
+                voiceInputTitleRes = R.string.search_voice_input_title,
+                voiceInputHeadlineRes = R.string.search_voice_input_headline,
+                voiceInputDescriptionRes = null,
+                voiceInputExamplePhraseRes = R.string.search_voice_input_example_phrase,
+                initialTitleRes = R.string.search_screen_initial_title,
+                initialDescriptionRes = R.string.search_screen_initial_description,
+                resultSummaryRes = R.string.search_screen_result_summary,
+                emptyResultDescriptionRes = R.string.search_screen_empty_result_description,
+                resultActionLabelRes = R.string.search_screen_result_action_label,
+                resultSelectableDescriptionRes = R.string.search_screen_result_selectable,
+            ),
+            resolveSearchCopyUiState(RouteEditingTarget.DESTINATION),
+        )
+    }
+
     @Test
     fun `search screen destination exposes entry results and voice input modes`() {
         assertEquals(
@@ -90,6 +137,69 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `result list requests next page near the bottom`() {
+        assertEquals(
+            true,
+            shouldAutoRequestNextSearchPage(
+                lastVisibleItemIndex = 13,
+                totalItemsCount = 16,
+                hasNext = true,
+                isLoadingNextPage = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `result list does not request next page without next cursor state`() {
+        assertEquals(
+            false,
+            shouldAutoRequestNextSearchPage(
+                lastVisibleItemIndex = 13,
+                totalItemsCount = 16,
+                hasNext = false,
+                isLoadingNextPage = false,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldAutoRequestNextSearchPage(
+                lastVisibleItemIndex = 13,
+                totalItemsCount = 16,
+                hasNext = true,
+                isLoadingNextPage = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `search result distance uses meter label below one kilometer`() {
+        assertEquals(
+            SearchResultDistanceUiState(
+                labelResId = R.string.search_screen_result_distance_meters,
+                value = 350,
+            ),
+            resolveSearchResultDistanceUiState(distanceMeters = 350),
+        )
+    }
+
+    @Test
+    fun `search result distance uses kilometer label at one kilometer or more`() {
+        assertEquals(
+            SearchResultDistanceUiState(
+                labelResId = R.string.search_screen_result_distance_kilometers,
+                value = 1.5,
+            ),
+            resolveSearchResultDistanceUiState(distanceMeters = 1_500),
+        )
+    }
+
+    @Test
+    fun `search result distance hides negative or missing values`() {
+        assertEquals(null, resolveSearchResultDistanceUiState(distanceMeters = null))
+        assertEquals(null, resolveSearchResultDistanceUiState(distanceMeters = -1))
+    }
+
+    @Test
     fun `voice input sheet uses fe bottom sheet radius and app surface background`() {
         assertEquals(EumRadius.scaleL, searchVoiceInputSheetTopCornerRadius())
         assertEquals(BusanEumgilLightColorScheme.surface, searchVoiceInputSheetContainerColor())
@@ -138,6 +248,23 @@ class SearchScreenTest {
                     isActive = true,
                     transcript = "recognized speech",
                     status = SearchVoiceInputStatus.Recognized,
+                    guidance = SearchVoiceInputGuidance.None,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `voice input sheet keeps listening status title without extra helper copy`() {
+        assertEquals(
+            SearchVoiceInputStatusContent(
+                titleRes = R.string.search_voice_input_status_listening_title,
+                descriptionRes = null,
+            ),
+            resolveSearchVoiceInputStatusContent(
+                SearchVoiceInputUiState(
+                    isActive = true,
+                    status = SearchVoiceInputStatus.Listening,
                     guidance = SearchVoiceInputGuidance.None,
                 ),
             ),

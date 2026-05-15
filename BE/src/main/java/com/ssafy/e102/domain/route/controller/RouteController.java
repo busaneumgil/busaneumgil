@@ -12,6 +12,7 @@ import com.ssafy.e102.domain.route.dto.request.RerouteRequest;
 import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
 import com.ssafy.e102.domain.route.dto.request.TransitRefreshRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteSelectResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.dto.response.TransitRefreshResponse;
 import com.ssafy.e102.domain.route.dto.response.WalkRouteSearchResponse;
@@ -81,7 +82,7 @@ public class RouteController {
 
 	@Operation(summary = "안내 경로 선택", description = "검색 후보 중 사용자가 선택한 경로를 안내 세션으로 확정하고 세션 ID를 반환합니다.")
 	@PostMapping("/{routeId}/select")
-	public ApiResponse<RouteSessionResponse> selectRoute(
+	public ApiResponse<RouteSelectResponse> selectRoute(
 		@Parameter(hidden = true) @AuthenticationPrincipal
 		AuthPrincipal principal,
 		@Parameter(description = "선택할 경로 ID") @PathVariable

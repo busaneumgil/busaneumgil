@@ -153,6 +153,57 @@ class PlacesRepositoryTest {
         }
 
     @Test
+    fun `getPlaces does not reuse cached places across account scopes`() =
+        runBlocking {
+            val query = PlaceQuery(keyword = "scoped")
+            var currentAccountScopeKey = "account-a"
+            var shouldFailRemote = false
+            val localDataSource =
+                PlacesLocalDataSource(
+                    currentAccountScopeProvider = { currentAccountScopeKey },
+                )
+            val remotePlaces =
+                listOf(
+                    PlaceSummary(
+                        placeId = "scope-place-1",
+                        name = "Scoped Place",
+                        address = "1 Scope-ro, Busan",
+                        latitude = 35.1796,
+                        longitude = 129.0756,
+                        category = PlaceCategory.WELFARE,
+                    ),
+                )
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
+                                if (shouldFailRemote) {
+                                    throw IllegalStateException("remote places failed")
+                                }
+                                return remotePlaces
+                            }
+                        },
+                    localDataSource = localDataSource,
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy = PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                )
+
+            assertEquals(remotePlaces, repository.getPlaces(query))
+            assertEquals(remotePlaces, localDataSource.getCachedPlaces(query))
+
+            currentAccountScopeKey = "account-b"
+            shouldFailRemote = true
+
+            val failure = runCatching { repository.getPlaces(query) }.exceptionOrNull()
+
+            assertEquals("remote places failed", failure?.message)
+            assertEquals(emptyList<PlaceSummary>(), localDataSource.getCachedPlaces(query))
+        }
+
+    @Test
     fun `getPlaces retries with refreshed auth session when remote responds unauthorized`() =
         runBlocking {
             val query =
@@ -302,6 +353,61 @@ class PlacesRepositoryTest {
         }
 
     @Test
+    fun `getPlaces surfaces forbidden response without clearing auth session`() =
+        runBlocking {
+            val authSessionRepository =
+                FakeAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "access-token", refreshToken = "refresh-token"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
+                                throw PlacesApiException(
+                                    httpStatusCode = 403,
+                                    status = "A4030",
+                                    message = "Forbidden.",
+                                )
+                            }
+                        },
+                    localDataSource = PlacesLocalDataSource(),
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource = AuthRemoteDataSource(HttpJsonClient(baseUrl = "https://example.com")),
+                )
+
+            val failure =
+                runCatching {
+                    repository.getPlaces(
+                        PlaceQuery(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                        ),
+                    )
+                }.exceptionOrNull() as? PlacesApiException
+
+            requireNotNull(failure)
+            assertEquals(403, failure.httpStatusCode)
+            assertEquals("A4030", failure.status)
+            assertEquals("Forbidden.", failure.message)
+            assertEquals("access-token", authSessionRepository.getAuthGateState().authSession?.accessToken)
+            assertEquals("refresh-token", authSessionRepository.getAuthGateState().authSession?.refreshToken)
+        }
+
+    @Test
     fun `getPlaceDetail returns remote detail and caches it when remote succeeds`() =
         runBlocking {
             val localDataSource = PlacesLocalDataSource()
@@ -343,6 +449,55 @@ class PlacesRepositoryTest {
 
             assertEquals(remoteDetail, detail)
             assertEquals(detail, localDataSource.getCachedPlaceDetail("88"))
+        }
+
+    @Test
+    fun `getPlaceDetail does not reuse cached detail across account scopes`() =
+        runBlocking {
+            var currentAccountScopeKey = "account-a"
+            var shouldFailRemote = false
+            val localDataSource =
+                PlacesLocalDataSource(
+                    currentAccountScopeProvider = { currentAccountScopeKey },
+                )
+            val remoteDetail =
+                PlaceDetail(
+                    placeId = "88",
+                    name = "Scoped Detail",
+                    address = "88 Scope-ro, Busan",
+                    latitude = 35.1801,
+                    longitude = 129.0722,
+                    category = PlaceCategory.WELFARE,
+                    accessibilityTags = listOf("elevator"),
+                )
+            val repository =
+                DefaultPlacesRepository(
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaceDetail(placeId: String): PlaceDetail? {
+                                if (shouldFailRemote) {
+                                    throw IllegalStateException("remote place detail failed")
+                                }
+                                return remoteDetail
+                            }
+                        },
+                    localDataSource = localDataSource,
+                    mockDataSource = PlacesMockDataSource(),
+                    sourcePolicy = PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                )
+
+            assertEquals(remoteDetail, repository.getPlaceDetail("88"))
+            assertEquals(remoteDetail, localDataSource.getCachedPlaceDetail("88"))
+
+            currentAccountScopeKey = "account-b"
+            shouldFailRemote = true
+
+            val failure = runCatching { repository.getPlaceDetail("88") }.exceptionOrNull()
+
+            assertEquals("remote place detail failed", failure?.message)
+            assertNull(localDataSource.getCachedPlaceDetail("88"))
         }
 
     @Test

@@ -3,7 +3,7 @@ package com.ssafy.e102.eumgil.feature.arrival
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
-import androidx.compose.material3.SnackbarHostState
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -15,7 +15,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel
-import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun ArrivalRoute(
@@ -40,24 +39,22 @@ fun ArrivalRoute(
         }
     val viewModel: ArrivalViewModel = viewModel(factory = viewModelFactory)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(viewModel, onNavigateToMap, onNavigateToSearch, snackbarHostState, context) {
-        viewModel.uiEvent.collectLatest { event ->
+    BackHandler {
+        viewModel.onAction(ArrivalUiAction.HomeClicked)
+    }
+
+    LaunchedEffect(viewModel, onNavigateToMap, onNavigateToSearch) {
+        viewModel.uiEvent.collect { event ->
             when (event) {
                 ArrivalUiEvent.NavigateToMap -> onNavigateToMap()
                 ArrivalUiEvent.NavigateToSearch -> onNavigateToSearch()
-                is ArrivalUiEvent.ShowSnackbar ->
-                    snackbarHostState.showSnackbar(
-                        message = context.getString(event.messageResId),
-                    )
             }
         }
     }
 
     ArrivalScreen(
         uiState = uiState,
-        snackbarHostState = snackbarHostState,
         onAction = viewModel::onAction,
         modifier = modifier,
     )

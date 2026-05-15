@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.di
 
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
+import com.ssafy.e102.eumgil.core.location.AddressSearchResolver
+import com.ssafy.e102.eumgil.core.location.NoOpAddressSearchResolver
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
@@ -36,6 +38,8 @@ import com.ssafy.e102.eumgil.data.repository.DefaultRouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultPlacesRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultReportRepository
+import com.ssafy.e102.eumgil.data.repository.HazardReportImageUploader
+import com.ssafy.e102.eumgil.data.repository.NoOpHazardReportImageUploader
 import com.ssafy.e102.eumgil.data.repository.DefaultRouteRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
@@ -111,10 +115,20 @@ object RepositoryModule {
     fun provideAuthLogoutRepository(
         authRemoteDataSource: AuthRemoteDataSource,
         authSessionRepository: AuthSessionRepository,
+        bookmarkDao: BookmarkDao,
+        favoriteRouteDao: FavoriteRouteDao,
+        placesLocalDataSource: PlacesLocalDataSource,
+        destinationSelectionRepository: DestinationSelectionRepository,
+        destinationPreviewRepository: DestinationPreviewRepository,
     ): AuthLogoutRepository =
         provideAuthLogoutRepositoryImpl(
             authRemoteDataSource = authRemoteDataSource,
             authSessionRepository = authSessionRepository,
+            bookmarkDao = bookmarkDao,
+            favoriteRouteDao = favoriteRouteDao,
+            placesLocalDataSource = placesLocalDataSource,
+            destinationSelectionRepository = destinationSelectionRepository,
+            destinationPreviewRepository = destinationPreviewRepository,
             isMockMode = AppEnvironment.isMockMode,
         )
 
@@ -137,12 +151,14 @@ object RepositoryModule {
 
     fun provideBookmarkRepository(
         bookmarkDao: BookmarkDao,
+        authSessionRepository: AuthSessionRepository? = null,
         bookmarksRemoteDataSource: BookmarksRemoteDataSource? = null,
         accessTokenProvider: suspend () -> String? = { null },
         initialBookmarks: List<BookmarkData> = emptyList(),
     ): BookmarkRepository =
         DefaultBookmarkRepository(
             bookmarkDao = bookmarkDao,
+            authSessionRepository = authSessionRepository,
             bookmarksRemoteDataSource = bookmarksRemoteDataSource,
             accessTokenProvider = accessTokenProvider,
             initialBookmarks = initialBookmarks,
@@ -150,20 +166,24 @@ object RepositoryModule {
 
     fun provideRouteBookmarkRepository(
         favoriteRouteDao: FavoriteRouteDao,
+        authSessionRepository: AuthSessionRepository? = null,
         favoriteRoutesRemoteDataSource: FavoriteRoutesRemoteDataSource? = null,
         accessTokenProvider: suspend () -> String? = { null },
     ): RouteBookmarkRepository =
         DefaultRouteBookmarkRepository(
             favoriteRouteDao = favoriteRouteDao,
+            authSessionRepository = authSessionRepository,
             favoriteRoutesRemoteDataSource = favoriteRoutesRemoteDataSource,
             accessTokenProvider = accessTokenProvider,
         )
 
     fun provideSettingsRepository(
         initSettingsLocalDataSource: InitSettingsLocalDataSource,
+        authSessionRepository: AuthSessionRepository,
     ): SettingsRepository =
         DefaultSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
+            authSessionRepository = authSessionRepository,
         )
 
     fun provideRepositorySourcePolicy(): RepositorySourcePolicy = DefaultRepositorySourcePolicy()
@@ -214,6 +234,7 @@ object RepositoryModule {
         sourcePolicy: RepositorySourcePolicy,
         authSessionRepository: AuthSessionRepository? = null,
         authRemoteDataSource: AuthRemoteDataSource? = null,
+        addressSearchResolver: AddressSearchResolver = NoOpAddressSearchResolver,
     ): SearchRepository =
         DefaultSearchRepository(
             remoteDataSource = remoteDataSource,
@@ -222,6 +243,7 @@ object RepositoryModule {
             sourcePolicy = sourcePolicy,
             authSessionRepository = authSessionRepository,
             authRemoteDataSource = authRemoteDataSource,
+            addressSearchResolver = addressSearchResolver,
         )
 
     fun provideReportRepository(
@@ -229,12 +251,14 @@ object RepositoryModule {
         reportOutboxDao: ReportOutboxDao,
         hazardReportsRemoteDataSource: HazardReportsRemoteDataSource? = null,
         accessTokenProvider: suspend () -> String? = { null },
+        imageUploader: HazardReportImageUploader = NoOpHazardReportImageUploader,
     ): ReportRepository =
         DefaultReportRepository(
             reportDraftDao = reportDraftDao,
             reportOutboxDao = reportOutboxDao,
             hazardReportsRemoteDataSource = hazardReportsRemoteDataSource,
             accessTokenProvider = accessTokenProvider,
+            imageUploader = imageUploader,
         )
 
     fun provideVoiceAnalyzeRepository(

@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.data.remote.datasource
 
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.core.model.SearchVoiceIntent
 import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
 import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
@@ -100,6 +101,7 @@ class SearchRemoteDataSourceTest {
             assertEquals("/places/search", capturedPath)
             assertEquals("Busan", capturedQueryParams["keyword"])
             assertEquals("2", capturedQueryParams["size"])
+            assertEquals("relevance", capturedQueryParams["sort"])
             assertEquals("Bearer access-token", capturedHeaders["Authorization"])
 
             assertEquals(2, results.size)
@@ -110,6 +112,7 @@ class SearchRemoteDataSourceTest {
             assertEquals("10", matchedResult.displayPlaceId)
             assertEquals(PlaceCategory.TOURIST_SPOT, matchedResult.category)
             assertEquals(listOf("step-free-entrance"), matchedResult.accessibilityTagKeys)
+            assertEquals(350, matchedResult.distanceMeters)
             assertTrue(matchedResult.matched)
 
             val unmatchedResult = results[1]
@@ -118,6 +121,7 @@ class SearchRemoteDataSourceTest {
             assertEquals("987654321", unmatchedResult.displayPlaceId)
             assertNull(unmatchedResult.category)
             assertEquals(emptyList<String>(), unmatchedResult.accessibilityTagKeys)
+            assertEquals(120, unmatchedResult.distanceMeters)
             assertTrue(unmatchedResult.matched.not())
         }
 
@@ -199,5 +203,46 @@ class SearchRemoteDataSourceTest {
 
             assertEquals(SearchQuery.DEFAULT_LIMIT.toString(), capturedQueryParams["size"])
             assertEquals("15", capturedQueryParams["size"])
+        }
+
+    @Test
+    fun `search passes distance sort option to backend`() =
+        runBlocking {
+            var capturedQueryParams: Map<String, String> = emptyMap()
+            val dataSource =
+                SearchRemoteDataSource(
+                    getRequestExecutor = { _, queryParams, _ ->
+                        capturedQueryParams = queryParams
+                        HttpJsonResponse(
+                            statusCode = 200,
+                            body =
+                                """
+                                {
+                                  "status": "S2000",
+                                  "data": {
+                                    "places": [],
+                                    "nextCursor": null,
+                                    "size": 0,
+                                    "totalElements": 0,
+                                    "hasNext": false
+                                  },
+                                  "message": "ok"
+                                }
+                                """.trimIndent(),
+                        )
+                    },
+                    postRequestExecutor = { _, _, _ ->
+                        error("voice analyze should not be called from search()")
+                    },
+                )
+
+            dataSource.search(
+                SearchQuery(
+                    keyword = "Busan Station",
+                    sortOption = SearchSortOption.DISTANCE,
+                ),
+            )
+
+            assertEquals("distance", capturedQueryParams["sort"])
         }
 }

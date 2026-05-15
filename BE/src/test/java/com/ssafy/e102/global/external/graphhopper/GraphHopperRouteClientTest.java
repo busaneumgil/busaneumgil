@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.net.SocketTimeoutException;
 import java.time.Duration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,102 @@ class GraphHopperRouteClientTest {
 		restTemplate = new RestTemplate();
 		server = MockRestServiceServer.createServer(restTemplate);
 		client = new GraphHopperRouteClient(restTemplate, properties());
+	}
+
+	@Test
+	@DisplayName("active GraphHopper 5xx 실패 시 previous slot으로 1회 재시도한다")
+	void routeRetriesPreviousEndpointWhenActiveReturnsServerError() {
+		client = new GraphHopperRouteClient(
+			restTemplate,
+			() -> new GraphHopperEndpointSelection(
+				"http://graphhopper-green.test",
+				"http://graphhopper-blue.test",
+				"green",
+				"blue"),
+			new ObjectMapper());
+
+		String query = "/route?profile=pedestrian_safe&point=35.12,128.936&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state";
+		server.expect(requestTo("http://graphhopper-green.test" + query))
+			.andRespond(withServerError());
+		server.expect(requestTo("http://graphhopper-blue.test" + query))
+			.andRespond(withSuccess("""
+				{
+				  "paths": [
+				    {
+				      "distance": 120.0,
+				      "time": 90000,
+				      "points": {
+				        "type": "LineString",
+				        "coordinates": [[128.936,35.12],[128.8823,35.1315]]
+				      }
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		GraphHopperRoutePath path = client.route(new GraphHopperRouteRequest(
+			new GeoPointRequest(35.12, 128.936),
+			new GeoPointRequest(35.1315, 128.8823),
+			WalkRouteProfile.PEDESTRIAN_SAFE));
+
+		assertThat(path.distanceMeter()).isEqualByComparingTo(BigDecimal.valueOf(120.0));
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("active GraphHopper 설정 오류 4xx는 no-route가 아니면 previous slot으로 재시도한다")
+	void routeRetriesPreviousEndpointWhenActiveReturnsNonNoRouteClientError() {
+		client = new GraphHopperRouteClient(
+			restTemplate,
+			() -> new GraphHopperEndpointSelection(
+				"http://graphhopper-green.test",
+				"http://graphhopper-blue.test",
+				"green",
+				"blue"),
+			new ObjectMapper());
+
+		String query = "/route?profile=pedestrian_safe&point=35.12,128.936&"
+			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
+			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state";
+		server.expect(requestTo("http://graphhopper-green.test" + query))
+			.andRespond(withStatus(HttpStatus.BAD_REQUEST)
+				.contentType(MediaType.APPLICATION_JSON)
+				.body("""
+					{
+					  "message": "Cannot find profile pedestrian_safe",
+					  "hints": [
+					    {
+					      "message": "Cannot find profile pedestrian_safe",
+					      "details": "java.lang.IllegalArgumentException"
+					    }
+					  ]
+					}
+					"""));
+		server.expect(requestTo("http://graphhopper-blue.test" + query))
+			.andRespond(withSuccess("""
+				{
+				  "paths": [
+				    {
+				      "distance": 125.0,
+				      "time": 93000,
+				      "points": {
+				        "type": "LineString",
+				        "coordinates": [[128.936,35.12],[128.8823,35.1315]]
+				      }
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		GraphHopperRoutePath path = client.route(new GraphHopperRouteRequest(
+			new GeoPointRequest(35.12, 128.936),
+			new GeoPointRequest(35.1315, 128.8823),
+			WalkRouteProfile.PEDESTRIAN_SAFE));
+
+		assertThat(path.distanceMeter()).isEqualByComparingTo(BigDecimal.valueOf(125.0));
+		server.verify();
 	}
 
 	@Test
@@ -102,8 +199,8 @@ class GraphHopperRouteClientTest {
 	}
 
 	@Test
-	@DisplayName("GraphHopper snap 지점이 요청 좌표에서 10m를 초과하면 RT4040으로 매핑한다")
-	void routeMapsFarSnappedWaypointToRouteNotFound() {
+	@DisplayName("초기 경로 검색에서는 GraphHopper가 멀리 snap한 경로도 반환한다")
+	void routeAllowsFarSnappedWaypoint() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
 			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
 			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
@@ -126,13 +223,14 @@ class GraphHopperRouteClientTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
+		GraphHopperRoutePath path = client.route(new GraphHopperRouteRequest(
 			new GeoPointRequest(35.12, 128.936),
 			new GeoPointRequest(35.1315, 128.8823),
-			WalkRouteProfile.PEDESTRIAN_SAFE)))
-			.isInstanceOf(RouteException.class)
-			.extracting(exception -> ((RouteException)exception).getErrorCode())
-			.isEqualTo(RouteErrorCode.ROUTE_NOT_FOUND);
+			WalkRouteProfile.PEDESTRIAN_SAFE,
+			false));
+
+		assertThat(path.distanceMeter()).isEqualByComparingTo(BigDecimal.valueOf(950.5));
+		assertThat(path.coordinates()).hasSize(2);
 	}
 
 	@Test
@@ -258,7 +356,19 @@ class GraphHopperRouteClientTest {
 	}
 
 	private GraphHopperProperties properties() {
-		return new GraphHopperProperties("http://graphhopper.test", Duration.ofSeconds(5), Duration.ofSeconds(5));
+		return new GraphHopperProperties(
+			"http://graphhopper.test",
+			Duration.ofSeconds(5),
+			Duration.ofSeconds(5),
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null);
 	}
 
 	private static class TimeoutRestTemplate extends RestTemplate {

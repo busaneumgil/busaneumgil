@@ -1,7 +1,5 @@
 package com.ssafy.e102.eumgil.app.navigation
 
-import android.Manifest
-import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
@@ -16,7 +14,6 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
@@ -29,6 +26,9 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
+import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
+import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionAppInfoRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBookmarkRoute
@@ -73,14 +73,14 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
 
             LowVisionHomeRoute(
                 onVoiceInputClick = {
-                    val granted = ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.RECORD_AUDIO,
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) {
-                        navController.navigate(LowVisionRoute.VoiceInput.route)
-                    } else {
-                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    when (context.resolveMicrophonePermissionState()) {
+                        MicrophonePermissionState.GRANTED ->
+                            navController.navigate(LowVisionRoute.VoiceInput.route)
+
+                        MicrophonePermissionState.DENIED ->
+                            micPermissionLauncher.launch(MICROPHONE_PERMISSION)
+
+                        MicrophonePermissionState.UNAVAILABLE -> Unit
                     }
                 },
                 onCurrentLocationClick = {
@@ -136,7 +136,14 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 navController = navController,
                 backStackEntry = backStackEntry,
             )
+            val navigationViewModel = rememberNavigationGuidanceViewModel()
             LowVisionBookmarkRoute(
+                onNavigateToNavigation = { request ->
+                    navigationViewModel.bindNavigationRequest(request)
+                    navController.navigate(LowVisionRoute.Guidance.route) {
+                        launchSingleTop = true
+                    }
+                },
                 onNavigateToRouteSetting = {
                     navController.navigate(LowVisionRoute.Guidance.route)
                 },
@@ -187,7 +194,10 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 navController = navController,
                 backStackEntry = backStackEntry,
             )
-            val category = backStackEntry.arguments?.getString(LowVisionRoute.CategoryResult.ARG_CATEGORY).orEmpty()
+            val category =
+                decodeLowVisionCategoryRouteArgument(
+                    backStackEntry.arguments?.getString(LowVisionRoute.CategoryResult.ARG_CATEGORY).orEmpty(),
+                )
             LowVisionSearchResultShell(
                 navController = navController,
                 selectedTab = LowVisionBottomTab.CATEGORY,
@@ -243,7 +253,14 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                         }
                     }
                 },
-                onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+                onCompleteClick = {
+                    navController.navigate(resolveLowVisionNavigationCompleteDoneRoute()) {
+                        launchSingleTop = true
+                        popUpTo(LowVisionRoute.NavigationComplete.route) {
+                            inclusive = true
+                        }
+                    }
+                },
             )
         }
 
@@ -394,9 +411,19 @@ internal fun resolveLowVisionSearchPopUpRoute(selectedTab: LowVisionBottomTab = 
         else -> LowVisionRoute.Search.route
     }
 
-internal fun resolveNavigationCompletionRoute(): String = ArrivalRoute.Entry.route
+internal fun decodeLowVisionCategoryRouteArgument(encodedCategory: String): String =
+    URLDecoder.decode(encodedCategory, StandardCharsets.UTF_8.toString()).trim()
 
-internal fun resolveLowVisionNavigationExitRoute(): String = LowVisionRoute.Home.route
+internal fun resolveNavigationCompletionRoute(selectedPrimaryUserType: String? = null): String =
+    if (shouldUseLowVisionNavigationUi(selectedPrimaryUserType)) {
+        LowVisionRoute.NavigationComplete.route
+    } else {
+        ArrivalRoute.Entry.route
+    }
+
+internal fun resolveLowVisionNavigationExitRoute(): String = LowVisionRoute.NavigationComplete.route
+
+internal fun resolveLowVisionNavigationCompleteDoneRoute(): String = LowVisionRoute.Home.route
 
 internal fun resolveLowVisionCurrentLocationRoute(): String? = null
 

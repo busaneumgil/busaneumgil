@@ -20,17 +20,96 @@ class AppNavHostRoutingTest {
     }
 
     @Test
-    fun `search and arrival routes keep map tab active`() {
+    fun `search routes keep map tab active while arrival hides top level tab`() {
         assertEquals(TopLevelRoute.Map.route, SearchRoute.Entry.route.toCurrentTopLevelRoute())
         assertEquals(TopLevelRoute.Map.route, SearchRoute.Results.route.toCurrentTopLevelRoute())
-        assertEquals(TopLevelRoute.Map.route, ArrivalRoute.Entry.route.toCurrentTopLevelRoute())
+        assertNull(ArrivalRoute.Entry.route.toCurrentTopLevelRoute())
+    }
+
+    @Test
+    fun `map tab skips home reentry reset for bookmark while keeping other visible non-map routes`() {
+        assertEquals(
+            true,
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = SearchRoute.Entry.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = SearchRoute.Results.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = ArrivalRoute.Entry.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = TopLevelRoute.Map.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = TopLevelRoute.SavedRoute.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = ReportRoute.Report.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = TopLevelRoute.MyPage.route,
+                destination = TopLevelDestination.Map,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldNavigateToTopLevelMapForHomeEntry(
+                currentRoute = SearchRoute.Entry.route,
+                destination = TopLevelDestination.SavedRoute,
+            ),
+        )
     }
 
     @Test
     fun `guidance and route setting routes hide top level tab`() {
         assertNull(NavigationRoute.Guidance.route.toCurrentTopLevelRoute())
         assertNull(RouteSettingRoute.Setting.route.toCurrentTopLevelRoute())
+        assertNull(RouteSettingRoute.PermissionGate.route.toCurrentTopLevelRoute())
         assertNull(RouteSettingRoute.Detail.createRoute(RouteOption.SAFE).toCurrentTopLevelRoute())
+    }
+
+    @Test
+    fun `route setting routes preserve permission gate and prechecked query arguments`() {
+        assertEquals(
+            "route_setting/permission?autoStartNavigation=true&initialRouteOption=SAFE",
+            RouteSettingRoute.PermissionGate.createRoute(
+                autoStartNavigation = true,
+                initialRouteOption = RouteOption.SAFE,
+            ),
+        )
+        assertEquals(
+            "route_setting?initialRouteOption=SAFE&locationPermissionPrechecked=true",
+            RouteSettingRoute.Setting.createRoute(
+                initialRouteOption = RouteOption.SAFE,
+                locationPermissionPrechecked = true,
+            ),
+        )
     }
 
     @Test
@@ -39,10 +118,31 @@ class AppNavHostRoutingTest {
     }
 
     @Test
+    fun `arrival home return matches the active user type`() {
+        assertEquals(
+            LowVisionRoute.Home.route,
+            resolveArrivalHomeRoute(selectedPrimaryUserType = "low_vision"),
+        )
+        assertEquals(
+            TopLevelRoute.Map.route,
+            resolveArrivalHomeRoute(selectedPrimaryUserType = "mobility_impaired"),
+        )
+        assertEquals(
+            TopLevelRoute.Map.route,
+            resolveArrivalHomeRoute(selectedPrimaryUserType = null),
+        )
+    }
+
+    @Test
     fun `auth onboarding and low vision routes hide top level tab`() {
         assertNull(AuthRoute.Login.route.toCurrentTopLevelRoute())
         assertNull(OnboardingRoute.UserTypePrimary.route.toCurrentTopLevelRoute())
         assertNull(LowVisionRoute.Home.route.toCurrentTopLevelRoute())
         assertNull(LowVisionRoute.Search.route.toCurrentTopLevelRoute())
+    }
+
+    @Test
+    fun `app route changes use instant destination transitions`() {
+        assertEquals(true, shouldUseInstantAppDestinationTransitions())
     }
 }

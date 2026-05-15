@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -261,6 +262,42 @@ class RouteSessionCommandServiceTest {
 			.isInstanceOf(RouteException.class)
 			.extracting(exception -> ((RouteException)exception).getErrorCode())
 			.isEqualTo(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("route session response exposes only session id")
+	void routeSessionResponseExposesOnlySessionId() {
+		assertThat(Arrays.stream(RouteSessionResponse.class.getRecordComponents())
+			.map(component -> component.getName())
+			.toList())
+			.containsExactly("sessionId");
+	}
+
+	@Test
+	@DisplayName("route session response does not expose snapshot distance and duration as remaining metrics")
+	void saveActiveSessionResponseDoesNotExposeSnapshotMetrics() {
+		User user = user(USER_ID);
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			USER_ID, "rt_selected_001", RouteSessionStatus.ACTIVE)).thenReturn(Optional.empty());
+		when(userRepository.getReferenceById(USER_ID)).thenReturn(user);
+		when(routeSessionRepository.saveAndFlush(any(RouteSession.class))).thenAnswer(invocation -> {
+			RouteSession session = invocation.getArgument(0);
+			ReflectionTestUtils.setField(session, "sessionId", sessionId);
+			return session;
+		});
+
+		RouteSessionResponse response = service.saveActiveSessionIfAbsent(
+			USER_ID,
+			"rt_selected_001",
+			point(128.936, 35.12),
+			point(128.956, 35.14),
+			objectMapper.createObjectNode()
+				.put("routeId", "rt_selected_001")
+				.put("distanceMeter", 950)
+				.put("durationSecond", 960));
+
+		assertThat(response.sessionId()).isEqualTo(sessionId);
 	}
 
 	private Point point(double lng, double lat) {

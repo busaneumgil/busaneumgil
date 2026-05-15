@@ -67,7 +67,7 @@ public class AdminMapController {
 		String gu,
 		@Parameter(description = "동") @RequestParam(required = false)
 		String dong,
-		@Parameter(description = "조회 개수. 허용 범위는 1~20000이다.") @RequestParam(defaultValue = "10000") @Min(1) @Max(20000)
+		@Parameter(description = "구/동 미지정 전체 조회 fallback 개수. 구/동을 지정하면 해당 구/동의 모든 구간을 조회한다. 허용 범위는 1~20000이다.") @RequestParam(defaultValue = "10000") @Min(1) @Max(20000)
 		int limit) {
 		return ApiResponse.success(adminMapService.getRoadNetwork(gu, dong, limit));
 	}

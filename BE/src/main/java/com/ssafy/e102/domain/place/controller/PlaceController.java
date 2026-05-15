@@ -46,9 +46,11 @@ public class PlaceController {
 		String radius,
 		@Parameter(description = "다음 검색 결과 조회를 위한 커서") @RequestParam(required = false)
 		String cursor,
+		@Parameter(description = "검색 정렬 기준. relevance 또는 distance") @RequestParam(required = false)
+		String sort,
 		@Parameter(description = "조회 개수") @RequestParam(required = false)
 		String size) {
-		return ApiResponse.success(placeService.searchPlaces(keyword, lat, lng, radius, cursor, size));
+		return ApiResponse.success(placeService.searchPlaces(keyword, lat, lng, radius, cursor, sort, size));
 	}
 
 	@Operation(summary = "좌표 주소 변환", description = "위도와 경도를 기준으로 카카오 주소 변환 결과를 반환한다.")

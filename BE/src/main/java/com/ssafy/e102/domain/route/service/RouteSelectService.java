@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteSelectResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.exception.RouteErrorCode;
@@ -49,20 +50,22 @@ public class RouteSelectService {
 		this.objectMapper = objectMapper;
 	}
 
-	public RouteSessionResponse select(UUID userId, String routeId, SelectRouteRequest request) {
+	public RouteSelectResponse select(UUID userId, String routeId, SelectRouteRequest request) {
 		RouteSummaryResponse route = routeSearchCacheService.getOwnedRouteOrThrow(userId, request.searchId(), routeId);
 		Coordinate[] coordinates = routeCoordinates(route);
 		try {
-			return routeSessionCommandService.saveActiveSessionIfAbsent(
+			RouteSessionResponse sessionResponse = routeSessionCommandService.saveActiveSessionIfAbsent(
 				userId,
 				route.routeId(),
 				toPoint(coordinates[0]),
 				toPoint(coordinates[coordinates.length - 1]),
 				snapshot(request.searchId(), route));
+			return RouteSelectResponse.of(sessionResponse, route);
 		} catch (DataIntegrityViolationException exception) {
 			if (isActiveRouteUniqueViolation(exception)
 				&& routeSessionCommandService.hasActiveSession(userId, route.routeId())) {
-				return routeSessionCommandService.getActiveSession(userId, route.routeId());
+				return RouteSelectResponse.of(routeSessionCommandService.getActiveSession(userId, route.routeId()),
+					route);
 			}
 			throw exception;
 		}

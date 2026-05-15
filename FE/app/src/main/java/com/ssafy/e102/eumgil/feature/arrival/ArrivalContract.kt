@@ -3,16 +3,15 @@ package com.ssafy.e102.eumgil.feature.arrival
 import com.ssafy.e102.eumgil.R
 
 data class ArrivalUiState(
-    val isEvaluationSheetVisible: Boolean = true,
+    val isEvaluationSheetVisible: Boolean = false,
     val selectedRating: Int = 0,
     val selectedRatingLabel: ArrivalEvaluationLabel = ArrivalEvaluationLabel.Idle,
     val hasRatingSession: Boolean = false,
     val isEvaluationSubmitting: Boolean = false,
     val routeSaveDraft: ArrivalRouteSaveDraftUiState? = null,
-    val routeNameInput: String = "",
     val isRouteSaveSelected: Boolean = false,
+    val routeSaveBookmarkId: String? = null,
     val isRouteSaveUpdating: Boolean = false,
-    val isRouteSaveDialogVisible: Boolean = false,
 ) {
     val isEvaluationSubmitEnabled: Boolean
         get() = hasRatingSession && selectedRating > 0 && !isEvaluationSubmitting
@@ -21,10 +20,7 @@ data class ArrivalUiState(
         get() = routeSaveDraft != null
 
     val isRouteSaveEnabled: Boolean
-        get() = hasRouteSaveTarget && !isRouteSaveUpdating && !isRouteSaveSelected
-
-    val isRouteSaveConfirmEnabled: Boolean
-        get() = hasRouteSaveTarget && !isRouteSaveUpdating && routeNameInput.trim().isNotEmpty()
+        get() = hasRouteSaveTarget && !isRouteSaveUpdating
 }
 
 data class ArrivalRouteSaveDraftUiState(
@@ -54,12 +50,6 @@ sealed interface ArrivalUiAction {
 
     data object SaveRouteClicked : ArrivalUiAction
 
-    data class RouteNameChanged(val value: String) : ArrivalUiAction
-
-    data object ConfirmRouteSaveClicked : ArrivalUiAction
-
-    data object RouteSaveDialogDismissed : ArrivalUiAction
-
     data object SubmitEvaluationClicked : ArrivalUiAction
 
     data object EvaluationSheetDismissed : ArrivalUiAction
@@ -69,8 +59,4 @@ sealed interface ArrivalUiEvent {
     data object NavigateToMap : ArrivalUiEvent
 
     data object NavigateToSearch : ArrivalUiEvent
-
-    data class ShowSnackbar(
-        val messageResId: Int,
-    ) : ArrivalUiEvent
 }

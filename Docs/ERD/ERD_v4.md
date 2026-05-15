@@ -23,6 +23,7 @@
 | `route_sessions` | Redis route cache에만 선택 경로 보관 | 사용자가 실제 안내를 시작한 경로 세션과 최소 복구 가능한 route snapshot 영속 저장 |
 | `bookmarks` | `user_id`, `place_id`만 저장하는 내부 장소 전용 구조 | `bookmark_target_id`, 선택적 `place_id`, 외부 snapshot 컬럼을 갖는 hybrid 북마크 구조 |
 | `subway_stations`, `subway_timetables` | 지하철 시간표/역 정보 테이블 없음 | ODsay 역 식별자 기반 지하철 역 마스터와 시간표 저장 |
+| `odsay_load_lane` | ODsay `loadLane` 응답을 매번 외부 API에서 조회 | `map_obj` 기준 lane 전체 LineString 목록을 DB에 저장 |
 
 장소 카테고리, 장소 접근성 속성, 온보딩 저장 정책, 제보/평가 저장 정책은 2026-04-29 논의 결과를 기준으로 갱신한다. 경로 안내 세션 저장 정책은 2026-05-06 논의 결과를 기준으로 갱신한다. 카카오/공공데이터 원천 카테고리명은 전역 `places` 마스터 컬럼으로는 보존하지 않고, 외부 북마크 snapshot의 `bookmarks.provider_category`에서만 제한적으로 보존한다. 서비스 필터 기준은 항상 `places.category`와 `place_accessibility_features.feature_type`으로 둔다.
 
@@ -79,9 +80,11 @@
 - `subway_stations`
 - `subway_timetables`
 - `subway_station_elevators`
+- `odsay_load_lane`
 - Redis `routeSearch:{searchId}`는 검색 후보 묶음 임시 저장소로 사용
 - Redis `bims:arrival:{bstopid}:{lineid}`는 BUS 실시간 도착정보 TTL cache로 사용
 - ODsay 등 외부 대중교통 길찾기 API로 경로 후보 조회
+- ODsay `loadLane` 결과는 `map_obj` 기준으로 `odsay_load_lane`에 영속 저장하고, DB에 없을 때만 외부 API를 호출
 - 부산광역시_부산버스정보시스템 OpenAPI로 버스 실시간 도착/저상버스 여부 조회
 - 부산교통공사 공공데이터로 지하철 시간표/역 접근성 정보 보강
 - 저상버스 예약은 백엔드 API 없이 프론트에서 부산시버스정보시스템 외부 화면 직접 연결
@@ -270,6 +273,12 @@ erDiagram
         VARCHAR entrance_no
         GEOMETRY point
     }
+
+    ODSAY_LOAD_LANE {
+        BIGINT odsay_load_lane_id PK
+        VARCHAR map_obj
+        JSONB lane_geometries
+    }
 ```
 
 ---
@@ -415,6 +424,10 @@ erDiagram
 | 사용자 PK | user_id | UUID | NOT NULL |  |
 | 제보 유형 | report_type | VARCHAR(30) | NOT NULL |  |
 | 설명 | description | TEXT | NULL |  |
+| 주소 | address | VARCHAR(255) | NULL |  |
+| 멱등성 키 | idempotency_key | VARCHAR(255) | NULL |  |
+| 멱등성 요청 해시 | idempotency_request_hash | VARCHAR(64) | NULL |  |
+| 멱등성 만료 시각 | idempotency_expires_at | TIMESTAMP | NULL |  |
 | 제보 위치 | report_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 상태 | status | VARCHAR(30) | NOT NULL | PENDING |
 
@@ -428,7 +441,10 @@ erDiagram
 - 신규 제보는 기본적으로 `PENDING` 상태로 생성한다.
 - `APPROVED`, `REJECTED` 상태 변경은 `/admin/hazard-reports/{reportId}/approve`, `/admin/hazard-reports/{reportId}/reject`에서 처리한다.
 - 사용자 화면에는 처리 상태를 노출하지 않지만, 서버는 운영 검토를 위해 `status`를 관리한다.
-- 제보 위치의 기준 데이터는 `report_point`다. 주소 문자열은 역지오코딩 표시값으로 볼 수 있으므로 MVP DB 컬럼으로 저장하지 않는다.
+- 제보 위치의 기준 데이터는 `report_point`다. `address`는 사용자 목록 카드 표시용 역지오코딩 snapshot이며, 주소 보강 실패 또는 기존 데이터는 `NULL`일 수 있다.
+- `idempotency_key`, `idempotency_request_hash`, `idempotency_expires_at`은 `POST /hazard-reports` 재시도 중복 방지용 메타데이터다.
+- `(user_id, idempotency_key)`는 unique 제약이다. `idempotency_key`가 `NULL`인 일반 생성 요청은 중복 제한을 받지 않는다.
+- 멱등성 메타데이터는 24시간 보관 후 cleanup job이 `NULL`로 정리해 키 재사용을 허용한다.
 - 사용자별 제보 목록은 최신순으로 제공한다.
 
 ---
@@ -439,14 +455,14 @@ erDiagram
 
 사용자 제보에 첨부된 이미지 정보를 저장한다.
 
-이미지 파일 자체는 S3 같은 외부 스토리지에 저장하고, DB에는 URL과 순서만 관리한다.
+이미지 파일 자체는 S3 같은 외부 스토리지에 저장하고, DB에는 객체 key와 순서만 관리한다.
 
 ### 컬럼 명세
 
 | 한글명 | 영어명 | 타입 | NULL | DEFAULT |
 | --- | --- | --- | --- | --- |
 | 제보 이미지 ID | report_img_id | BIGINT | NOT NULL |  |
-| 이미지 URL | image_url | TEXT | NOT NULL |  |
+| 이미지 object key | image_url | TEXT | NOT NULL | 기존 컬럼명은 유지하되 값은 `hazard-reports/{userId}/{yyyyMMdd}/{uuid}.{ext}` object key |
 | 표시 순서 | display_order | SMALLINT | NOT NULL | 0 |
 | 사용자 제보 ID | report_id | BIGINT | NOT NULL |  |
 
@@ -454,7 +470,8 @@ erDiagram
 
 - `UNIQUE (report_id, display_order)` 제약을 둔다.
 - 제보 사진은 선택 입력이며 최대 5장까지 허용한다.
-- 목록 응답에서는 DB `display_order=0` 이미지를 대표 사진으로 사용하고, API에서는 `displayOrder`로 노출한다.
+- 목록 응답에서는 DB `display_order=0` 이미지를 대표 사진으로 사용하고, API에서는 조회 시점에 presigned GET URL로 변환해 노출한다.
+- 기존 데이터에 공개 URL이 저장된 경우에도 조회 시 URL path를 object key로 정규화해 presigned GET URL을 발급한다.
 
 ---
 
@@ -962,6 +979,45 @@ ODsay 역 식별자와 내부 지하철/엘리베이터 데이터를 연결하�
 
 - `subway_stations`와 물리 FK는 두지 않고, `odsay_station_id` 기준 논리 관계로 연결한다.
 - `station_id`는 부산교통공사 기준 같은 역의 엘리베이터를 묶고 조회하기 위한 grouping/index 컬럼이다.
+
+---
+
+## 18) odsay_load_lane
+
+### 역할
+
+ODsay `loadLane` 호출 결과를 `map_obj` 기준으로 영속 저장한다.
+
+대중교통 경로 검색 시 ODSay `searchPubTransPathT` 결과의 `info.mapObj`를 기준으로 먼저 DB를 조회하고, 없을 때만 ODSay `loadLane?mapObject=0:0@{mapObj}`를 호출한다. 저장 단위는 segment가 아니라 ODSay lane 1개당 전체 LineString 1개다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| ODsay loadLane ID | odsay_load_lane_id | BIGSERIAL | NOT NULL |  |
+| ODsay mapObj | map_obj | VARCHAR(255) | NOT NULL |  |
+| lane geometry 목록 | lane_geometries | JSONB | NOT NULL |  |
+
+### 제약
+
+- `odsay_load_lane_id` PK
+- `UNIQUE (map_obj)`
+
+### 비고
+
+- `map_obj`는 ODSay `searchPubTransPathT` 응답의 `info.mapObj`를 그대로 저장한다.
+- 실제 ODSay `loadLane` 호출 파라미터는 `mapObject=0:0@{map_obj}`다.
+- `0:0@` prefix는 호출 시 조립하므로 DB에 별도 저장하지 않는다.
+- `lane_geometries`는 ODSay `result.lane[]` 순서를 보존한다.
+- `lane_geometries`의 각 원소는 `order`, `transportMode`, `geometry`를 가진다.
+- `geometry`는 lane 전체를 하나의 `LINESTRING(lng lat, ...)` 문자열로 저장한다.
+- `order`는 segment 분해 목적이 아니라 transit leg geometry 매칭 순서 보존 목적이다.
+- 조회 시 shortlist의 `map_obj`를 `IN` 조건으로 batch 조회하고, miss 난 `map_obj`만 ODSay API로 보강한다.
+
+### 관계
+
+- 물리 FK 관계가 없다.
+- `TransitRouteSearchService`가 ODSay `searchPubTransPathT` 응답의 `map_obj`와 `odsay_load_lane.map_obj`를 문자열 계약으로 매칭한다.
 
 ---
 

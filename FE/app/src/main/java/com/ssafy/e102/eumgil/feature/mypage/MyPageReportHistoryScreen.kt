@@ -2,10 +2,12 @@ package com.ssafy.e102.eumgil.feature.mypage
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -26,10 +28,15 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -99,6 +106,7 @@ fun MyPageReportHistoryScreen(
                             title = "아직 제보 내역이 없어요",
                             description = "이동 중 발견한 보행 불편 사항을 제보해 주세요.",
                             primaryActionLabel = "제보하기",
+                            primaryActionSuppressRipple = true,
                             onPrimaryActionClick = {
                                 onAction(MyPageReportHistoryUiAction.ReportCtaClicked)
                             },
@@ -115,6 +123,7 @@ fun MyPageReportHistoryScreen(
                                 onAction(MyPageReportHistoryUiAction.RetryClicked)
                             },
                             secondaryActionLabel = "제보하기",
+                            secondaryActionSuppressRipple = true,
                             onSecondaryActionClick = {
                                 onAction(MyPageReportHistoryUiAction.ReportCtaClicked)
                             },
@@ -129,6 +138,7 @@ fun MyPageReportHistoryScreen(
                                 title = "새 제보 등록",
                                 description = "이동 중 발견한 보행 불편 사항을 추가로 제보할 수 있어요.",
                                 primaryActionLabel = "제보하기",
+                                primaryActionSuppressRipple = true,
                                 onPrimaryActionClick = {
                                     onAction(MyPageReportHistoryUiAction.ReportCtaClicked)
                                 },
@@ -222,7 +232,6 @@ private fun ReportHistoryCard(
                 Text(
                     text = report.title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -249,7 +258,7 @@ private fun ReportHistoryCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            ReportHistoryThumbnail(hasPhoto = report.photoUri != null)
+            ReportHistoryThumbnail(photoUri = report.photoUri)
         }
     }
 }
@@ -272,7 +281,6 @@ private fun ReportHistoryDetailCard(detail: MyPageReportHistoryDetailUiModel) {
             Text(
                 text = detail.title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -294,37 +302,66 @@ private fun ReportHistoryDetailCard(detail: MyPageReportHistoryDetailUiModel) {
     }
 }
 
+/**
+ * 마이페이지 제보 내역 카드의 썸네일.
+ *
+ * - `photoUri`가 있으면 Coil `SubcomposeAsyncImage`로 실제 이미지 렌더링
+ * - 로딩 중·실패·null인 경우에는 기존 fallback (아이콘 + tinted 배경) 유지
+ *   → mock URI(`content://mock/...`) 같은 깨지는 URI도 graceful하게 처리됨
+ */
 @Composable
-private fun ReportHistoryThumbnail(hasPhoto: Boolean) {
+private fun ReportHistoryThumbnail(photoUri: String?) {
     val spec = reportHistoryLayoutSpec()
+    val hasPhotoSource = !photoUri.isNullOrBlank()
+    val context = LocalContext.current
 
     Surface(
         modifier = Modifier.size(width = 88.dp, height = 76.dp),
         shape = RoundedCornerShape(spec.thumbnailCornerRadiusDp.dp),
         color =
-            if (hasPhoto) {
+            if (hasPhotoSource) {
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
             } else {
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
             },
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_nav_report),
+        if (hasPhotoSource) {
+            SubcomposeAsyncImage(
+                model =
+                    ImageRequest.Builder(context)
+                        .data(photoUri)
+                        .crossfade(true)
+                        .build(),
                 contentDescription = null,
-                modifier = Modifier.size(28.dp),
-                tint =
-                    if (hasPhoto) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                loading = { ReportHistoryThumbnailFallback(tinted = true) },
+                error = { ReportHistoryThumbnailFallback(tinted = false) },
             )
+        } else {
+            ReportHistoryThumbnailFallback(tinted = false)
         }
+    }
+}
+
+@Composable
+private fun ReportHistoryThumbnailFallback(tinted: Boolean) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_mypage_report_history),
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+            tint =
+                if (tinted) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+        )
     }
 }
 
@@ -334,8 +371,10 @@ private fun ReportHistoryStateCard(
     description: String,
     modifier: Modifier = Modifier,
     primaryActionLabel: String? = null,
+    primaryActionSuppressRipple: Boolean = false,
     onPrimaryActionClick: (() -> Unit)? = null,
     secondaryActionLabel: String? = null,
+    secondaryActionSuppressRipple: Boolean = false,
     onSecondaryActionClick: (() -> Unit)? = null,
     isLoading: Boolean = false,
     isError: Boolean = false,
@@ -369,7 +408,6 @@ private fun ReportHistoryStateCard(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -387,32 +425,9 @@ private fun ReportHistoryStateCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
                 ) {
-                    Button(
-                        onClick = onPrimaryActionClick,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .heightIn(min = spec.buttonMinHeightDp.dp),
-                        shape = RoundedCornerShape(spec.buttonCornerRadiusDp.dp),
-                        elevation =
-                            ButtonDefaults.buttonElevation(
-                                defaultElevation = 0.dp,
-                                pressedElevation = 0.dp,
-                                focusedElevation = 0.dp,
-                                hoveredElevation = 0.dp,
-                                disabledElevation = 0.dp,
-                            ),
-                    ) {
-                        Text(
-                            text = primaryActionLabel,
-                            modifier = Modifier.padding(vertical = EumSpacing.xSmall),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    if (secondaryActionLabel != null && onSecondaryActionClick != null) {
-                        OutlinedButton(
-                            onClick = onSecondaryActionClick,
+                    if (primaryActionSuppressRipple) {
+                        NoRippleMyPageReportHistoryNavigationButton(
+                            onClick = onPrimaryActionClick,
                             modifier =
                                 Modifier
                                     .weight(1f)
@@ -420,15 +435,128 @@ private fun ReportHistoryStateCard(
                             shape = RoundedCornerShape(spec.buttonCornerRadiusDp.dp),
                         ) {
                             Text(
-                                text = secondaryActionLabel,
+                                text = primaryActionLabel,
                                 modifier = Modifier.padding(vertical = EumSpacing.xSmall),
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
                             )
+                        }
+                    } else {
+                        Button(
+                            onClick = onPrimaryActionClick,
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .heightIn(min = spec.buttonMinHeightDp.dp),
+                            shape = RoundedCornerShape(spec.buttonCornerRadiusDp.dp),
+                            elevation =
+                                ButtonDefaults.buttonElevation(
+                                    defaultElevation = 0.dp,
+                                    pressedElevation = 0.dp,
+                                    focusedElevation = 0.dp,
+                                    hoveredElevation = 0.dp,
+                                    disabledElevation = 0.dp,
+                                ),
+                        ) {
+                            Text(
+                                text = primaryActionLabel,
+                                modifier = Modifier.padding(vertical = EumSpacing.xSmall),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                        }
+                    }
+                    if (secondaryActionLabel != null && onSecondaryActionClick != null) {
+                        if (secondaryActionSuppressRipple) {
+                            NoRippleMyPageReportHistoryNavigationButton(
+                                onClick = onSecondaryActionClick,
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .heightIn(min = spec.buttonMinHeightDp.dp),
+                                shape = RoundedCornerShape(spec.buttonCornerRadiusDp.dp),
+                                isOutlined = true,
+                            ) {
+                                Text(
+                                    text = secondaryActionLabel,
+                                    modifier = Modifier.padding(vertical = EumSpacing.xSmall),
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = onSecondaryActionClick,
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .heightIn(min = spec.buttonMinHeightDp.dp),
+                                shape = RoundedCornerShape(spec.buttonCornerRadiusDp.dp),
+                            ) {
+                                Text(
+                                    text = secondaryActionLabel,
+                                    modifier = Modifier.padding(vertical = EumSpacing.xSmall),
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NoRippleMyPageReportHistoryNavigationButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    isOutlined: Boolean = false,
+    shape: RoundedCornerShape = RoundedCornerShape(12.dp),
+    content: @Composable RowScope.() -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val containerColor =
+        when {
+            !enabled && isOutlined -> MaterialTheme.colorScheme.surface
+            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+            isOutlined -> MaterialTheme.colorScheme.surface
+            else -> MaterialTheme.colorScheme.primary
+        }
+    val contentColor =
+        when {
+            !enabled && isOutlined -> MaterialTheme.colorScheme.primary.copy(alpha = 0.56f)
+            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            isOutlined -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onPrimary
+        }
+    val border =
+        if (isOutlined) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f))
+        } else {
+            null
+        }
+
+    Surface(
+        modifier = modifier,
+        shape = shape,
+        color = containerColor,
+        contentColor = contentColor,
+        border = border,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        enabled = enabled,
+                        role = Role.Button,
+                        onClick = onClick,
+                    )
+                    .padding(horizontal = EumSpacing.medium),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
     }
 }

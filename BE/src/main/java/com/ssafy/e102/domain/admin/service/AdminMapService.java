@@ -130,7 +130,7 @@ public class AdminMapService {
 		List<RoadSegment> roadSegments;
 		long segmentCount;
 		if (hasArea(gu, dong)) {
-			roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong, limit);
+			roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
 			segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
 		} else {
 			Page<RoadSegment> page = roadSegmentRepository.findAll(PageRequest.of(0, limit, ROAD_SEGMENT_SORT));

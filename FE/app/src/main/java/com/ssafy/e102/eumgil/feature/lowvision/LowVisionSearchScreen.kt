@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -33,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -50,12 +52,14 @@ import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListOnAmber
 import com.ssafy.e102.eumgil.core.designsystem.component.place.PlaceListSubText
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.feature.search.SearchResultUiState
 import com.ssafy.e102.eumgil.feature.search.SearchUiAction
 import com.ssafy.e102.eumgil.feature.search.SearchUiState
+import com.ssafy.e102.eumgil.feature.search.resolveSearchResultDistanceUiState
 
 internal object LowVisionSearchLayoutDefaults {
-    val resultCardMinHeight = 320.dp
+    val resultCardMinHeight = 288.dp
     val resultCardGap = 12.dp
     val twoCardViewportBudget = 680.dp
     val resultListBottomPadding = 64.dp
@@ -72,6 +76,11 @@ internal object LowVisionSearchLayoutDefaults {
     val titleLineHeight = 34.sp
     val addressFontSize = 20.sp
     val addressLineHeight = 24.sp
+    val infoSectionMinHeight = 116.dp
+    val sectionDividerThickness = 3.dp
+    val sectionDividerWidthFraction = 0.2f
+    val sectionDividerTopPadding = 2.dp
+    val actionSectionTopPadding = 6.dp
     val actionIconSize = 32.dp
     val actionIconTextGap = 16.dp
     val actionLabelFontSize = 28.sp
@@ -108,6 +117,7 @@ fun LowVisionSearchScreen(
     onAction: (SearchUiAction) -> Unit,
     modifier: Modifier = Modifier,
     categoryLabel: String? = null,
+    isPreparingLocation: Boolean = false,
 ) {
     Column(
         modifier =
@@ -133,6 +143,12 @@ fun LowVisionSearchScreen(
         if (!categoryLabel.isNullOrBlank()) {
             LowVisionSearchCategoryHeader(categoryLabel = categoryLabel)
         }
+        LowVisionSearchSortControl(
+            selectedSortOption = uiState.sortOption,
+            onSortOptionSelected = { sortOption ->
+                onAction(SearchUiAction.SortOptionSelected(sortOption = sortOption))
+            },
+        )
 
         Box(
             modifier =
@@ -147,28 +163,52 @@ fun LowVisionSearchScreen(
                     }
                 }
 
-                is SearchResultUiState.Success -> {
-                    if (state.results.isEmpty()) {
-                        LowVisionSearchNoResultMessage()
-                    } else {
-                        LowVisionSearchResultList(
-                            results = state.results,
-                            onBookmarkClick = { result ->
-                                onAction(SearchUiAction.LowVisionBookmarkSaveClicked(result = result))
-                            },
-                            onNavigateClick = { result ->
-                                onAction(SearchUiAction.SearchResultClicked(result = result))
-                            },
-                            onBriefingClick = { result ->
-                                onAction(SearchUiAction.SearchResultBriefingClicked(result = result))
-                            },
-                        )
+                else -> if (isPreparingLocation) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = PlaceListAmber)
                     }
+                } else {
+                    LowVisionSearchResultContent(
+                        state = state,
+                        onAction = onAction,
+                    )
                 }
-
-                else -> LowVisionSearchNoResultMessage()
             }
         }
+    }
+}
+
+@Composable
+private fun LowVisionSearchResultContent(
+    state: SearchResultUiState,
+    onAction: (SearchUiAction) -> Unit,
+) {
+    when (state) {
+        is SearchResultUiState.Success -> {
+            if (state.results.isEmpty()) {
+                LowVisionSearchNoResultMessage()
+            } else {
+                LowVisionSearchResultList(
+                    results = state.results,
+                    onBookmarkClick = { result ->
+                        onAction(SearchUiAction.LowVisionBookmarkSaveClicked(result = result))
+                    },
+                    onNavigateClick = { result ->
+                        onAction(SearchUiAction.SearchResultClicked(result = result))
+                    },
+                    onBriefingClick = { result ->
+                        onAction(SearchUiAction.SearchResultBriefingClicked(result = result))
+                    },
+                )
+            }
+        }
+
+        is SearchResultUiState.Error ->
+            LowVisionSearchNoResultMessage(
+                message = state.message?.takeIf(String::isNotBlank) ?: LowVisionSearchLayoutDefaults.noResultText,
+            )
+
+        else -> LowVisionSearchNoResultMessage()
     }
 }
 
@@ -195,6 +235,80 @@ private fun LowVisionSearchCategoryHeader(categoryLabel: String) {
                         color = PlaceListAmber,
                         shape = RoundedCornerShape(999.dp),
                     ),
+        )
+    }
+}
+
+@Composable
+private fun LowVisionSearchSortControl(
+    selectedSortOption: SearchSortOption,
+    onSortOptionSelected: (SearchSortOption) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .border(
+                    width = 2.dp,
+                    color = PlaceListAmber,
+                    shape = RoundedCornerShape(18.dp),
+                )
+                .padding(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        LowVisionSearchSortButton(
+            label = stringResource(id = R.string.search_screen_sort_relevance),
+            selected = selectedSortOption == SearchSortOption.RELEVANCE,
+            onClick = { onSortOptionSelected(SearchSortOption.RELEVANCE) },
+            modifier = Modifier.weight(1f),
+        )
+        LowVisionSearchSortButton(
+            label = stringResource(id = R.string.search_screen_sort_distance),
+            selected = selectedSortOption == SearchSortOption.DISTANCE,
+            onClick = { onSortOptionSelected(SearchSortOption.DISTANCE) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun LowVisionSearchSortButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val backgroundColor = if (selected) PlaceListAmber else Color.Transparent
+    val contentColor = if (selected) PlaceListOnAmber else PlaceListAmber
+
+    Box(
+        modifier =
+            modifier
+                .heightIn(min = 64.dp)
+                .background(
+                    color = backgroundColor,
+                    shape = RoundedCornerShape(14.dp),
+                )
+                .clickable(role = Role.RadioButton, onClick = onClick)
+                .semantics {
+                    contentDescription =
+                        if (selected) {
+                            label + " 선택됨"
+                        } else {
+                            label + " 선택 안 됨"
+                        }
+                }
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = contentColor,
+            fontSize = 28.sp,
+            lineHeight = 32.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.sp,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -230,12 +344,13 @@ private fun LowVisionSearchResultList(
                     address = result.subtitle.ifBlank { null },
                     latitude = result.latitude,
                     longitude = result.longitude,
+                    distanceMeters = result.distanceMeters,
                     onBookmarkClick = { onBookmarkClick(result) },
                     onNavigateClick = { onNavigateClick(result) },
                     onContentClick = { onBriefingClick(result) },
-                    contentClickDescription = "${result.title} 경로 브리핑. 두 번 탭하면 브리핑 화면으로 이동합니다.",
-                    bookmarkContentDescription = "${result.title} 저장. 저장 후 북마크로 이동합니다.",
-                    navigateContentDescription = "${result.title} 길찾기. 저시력 안내 화면으로 이동합니다.",
+                    contentClickDescription = result.lowVisionSearchContentClickDescription(),
+                    bookmarkContentDescription = result.lowVisionSearchBookmarkContentDescription(),
+                    navigateContentDescription = result.lowVisionSearchNavigateContentDescription(),
                     titleMaxLines = cardMetrics.titleMaxLines,
                     addressMaxLines = cardMetrics.addressMaxLines,
                     modifier =
@@ -255,6 +370,7 @@ private fun LowVisionSearchResultCard(
     address: String?,
     latitude: Double,
     longitude: Double,
+    distanceMeters: Int?,
     onBookmarkClick: () -> Unit,
     onNavigateClick: () -> Unit,
     onContentClick: () -> Unit,
@@ -267,18 +383,29 @@ private fun LowVisionSearchResultCard(
 ) {
     val view = LocalView.current
     val addressText = lowVisionBriefAddress(address)
+    val distanceUiState = resolveSearchResultDistanceUiState(distanceMeters)
+    val distanceText =
+        distanceUiState?.let { uiState ->
+            stringResource(id = uiState.labelResId, uiState.value)
+        }
     val placeInfoContentDescription =
-        lowVisionPlaceInfoA11yLabel(
-            name = name,
-            address = address,
-        )
+        listOfNotNull(
+            lowVisionPlaceInfoA11yLabel(
+                name = name,
+                address = address,
+            ),
+            distanceText,
+        ).joinToString(separator = " ")
     val placeInfoSpeechText =
-        lowVisionPlaceInfoSpeechText(
-            name = name,
-            address = address,
-            latitude = latitude,
-            longitude = longitude,
-        )
+        listOfNotNull(
+            lowVisionPlaceInfoSpeechText(
+                name = name,
+                address = address,
+                latitude = latitude,
+                longitude = longitude,
+            ),
+            distanceText,
+        ).joinToString(separator = "\n")
 
     Column(
         modifier =
@@ -301,67 +428,92 @@ private fun LowVisionSearchResultCard(
                 ),
         verticalArrangement = Arrangement.spacedBy(LowVisionSearchLayoutDefaults.cardContentGap),
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(LowVisionSearchLayoutDefaults.cardHeaderGap),
-            verticalAlignment = Alignment.Top,
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = LowVisionSearchLayoutDefaults.infoSectionMinHeight),
+            verticalArrangement = Arrangement.Top,
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(LowVisionSearchLayoutDefaults.indexBadgeSize)
-                        .background(
-                            color = PlaceListAmber,
-                            shape = RoundedCornerShape(8.dp),
-                        ),
-                contentAlignment = Alignment.Center,
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(LowVisionSearchLayoutDefaults.cardHeaderGap),
+                verticalAlignment = Alignment.Top,
             ) {
-                Text(
-                    text = index.toString(),
-                    fontSize = LowVisionSearchLayoutDefaults.indexFontSize,
-                    fontWeight = FontWeight.Black,
-                    color = PlaceListOnAmber,
-                    lineHeight = LowVisionSearchLayoutDefaults.indexLineHeight,
-                    letterSpacing = 0.sp,
-                )
-            }
+                Box(
+                    modifier =
+                        Modifier
+                            .size(LowVisionSearchLayoutDefaults.indexBadgeSize)
+                            .background(
+                                color = PlaceListAmber,
+                                shape = RoundedCornerShape(8.dp),
+                            ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = index.toString(),
+                        fontSize = LowVisionSearchLayoutDefaults.indexFontSize,
+                        fontWeight = FontWeight.Black,
+                        color = PlaceListOnAmber,
+                        lineHeight = LowVisionSearchLayoutDefaults.indexLineHeight,
+                        letterSpacing = 0.sp,
+                    )
+                }
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .clickable(
-                            role = Role.Button,
-                            onClick = {
-                                view.announceForAccessibility(placeInfoSpeechText)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .clickable(
+                                role = Role.Button,
+                                onClick = {
+                                    view.announceForAccessibility(placeInfoSpeechText)
+                                },
+                            )
+                            .semantics {
+                                contentDescription = placeInfoContentDescription
                             },
+                ) {
+                    Text(
+                        text = name,
+                        fontSize = LowVisionSearchLayoutDefaults.titleFontSize,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        lineHeight = LowVisionSearchLayoutDefaults.titleLineHeight,
+                        letterSpacing = 0.sp,
+                        maxLines = titleMaxLines,
+                    )
+                    Text(
+                        text = addressText,
+                        fontSize = LowVisionSearchLayoutDefaults.addressFontSize,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        lineHeight = LowVisionSearchLayoutDefaults.addressLineHeight,
+                        letterSpacing = 0.sp,
+                        maxLines = addressMaxLines,
+                    )
+                    if (distanceText != null) {
+                        Text(
+                            text = distanceText,
+                            fontSize = LowVisionSearchLayoutDefaults.addressFontSize,
+                            fontWeight = FontWeight.Bold,
+                            color = PlaceListAmber,
+                            lineHeight = LowVisionSearchLayoutDefaults.addressLineHeight,
+                            letterSpacing = 0.sp,
+                            maxLines = 1,
                         )
-                        .semantics {
-                            contentDescription = placeInfoContentDescription
-                        },
-            ) {
-                Text(
-                    text = name,
-                    fontSize = LowVisionSearchLayoutDefaults.titleFontSize,
-                    fontWeight = FontWeight.Black,
-                    color = Color.White,
-                    lineHeight = LowVisionSearchLayoutDefaults.titleLineHeight,
-                    letterSpacing = 0.sp,
-                    maxLines = titleMaxLines,
-                )
-                Text(
-                    text = addressText,
-                    fontSize = LowVisionSearchLayoutDefaults.addressFontSize,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    lineHeight = LowVisionSearchLayoutDefaults.addressLineHeight,
-                    letterSpacing = 0.sp,
-                    maxLines = addressMaxLines,
-                )
+                    }
+                }
             }
         }
 
+        LowVisionPlaceCardSectionDivider()
+
         Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = LowVisionSearchLayoutDefaults.actionSectionTopPadding),
             verticalArrangement = Arrangement.spacedBy(LowVisionSearchLayoutDefaults.actionButtonGap),
         ) {
             LowVisionPlaceCardDefaults.actionOrder.forEach { action ->
@@ -383,6 +535,42 @@ private fun LowVisionSearchResultCard(
             }
         }
     }
+}
+
+private fun SearchResult.lowVisionSearchContentClickDescription(): String =
+    listOfNotNull(
+        title,
+        resolveSearchResultDistanceUiState(distanceMeters)?.let { "${distanceMeters}미터 거리" },
+        "경로 브리핑. 두 번 탭하면 브리핑 화면으로 이동합니다.",
+    ).joinToString(separator = " ")
+
+private fun SearchResult.lowVisionSearchBookmarkContentDescription(): String =
+    listOfNotNull(
+        title,
+        resolveSearchResultDistanceUiState(distanceMeters)?.let { "${distanceMeters}미터 거리" },
+        "저장. 저장 후 북마크로 이동합니다.",
+    ).joinToString(separator = " ")
+
+private fun SearchResult.lowVisionSearchNavigateContentDescription(): String =
+    listOfNotNull(
+        title,
+        resolveSearchResultDistanceUiState(distanceMeters)?.let { "${distanceMeters}미터 거리" },
+        "길찾기. 저시력 안내 화면으로 이동합니다.",
+    ).joinToString(separator = " ")
+
+@Composable
+private fun LowVisionPlaceCardSectionDivider() {
+    Box(
+        modifier =
+            Modifier
+                .padding(top = LowVisionSearchLayoutDefaults.sectionDividerTopPadding)
+                .fillMaxWidth(LowVisionSearchLayoutDefaults.sectionDividerWidthFraction)
+                .height(LowVisionSearchLayoutDefaults.sectionDividerThickness)
+                .background(
+                    color = PlaceListAmber,
+                    shape = RoundedCornerShape(999.dp),
+                ),
+    )
 }
 
 @Composable
@@ -428,6 +616,16 @@ private fun LowVisionSearchActionButton(
             fontWeight = FontWeight.Black,
             color = PlaceListOnAmber,
             letterSpacing = 0.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Spacer(
+            modifier =
+                Modifier.width(
+                    LowVisionSearchLayoutDefaults.actionIconSize +
+                        LowVisionSearchLayoutDefaults.actionIconTextGap,
+                ),
         )
     }
 }

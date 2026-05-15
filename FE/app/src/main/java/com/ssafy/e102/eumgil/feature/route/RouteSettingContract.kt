@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.feature.route
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -12,12 +13,17 @@ import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 data class RouteSettingUiState(
     val isLoading: Boolean = true,
     val loadErrorMessage: String? = null,
+    val loadNoticeMessage: String? = null,
+    val loadDebugMessage: String? = null,
+    val originState: RouteOriginState = RouteOriginState.CURRENT_LOCATION_LOADING,
+    val originStatus: RouteOriginStatusUiState? = null,
     val origin: RouteLocationUiState = RouteLocationUiState(),
     val destination: RouteLocationUiState = RouteLocationUiState(),
     val destinationHandoffState: RouteDestinationHandoffState = RouteDestinationHandoffState.EMPTY,
     val destinationFallbackMessage: String? = null,
     val isUsingFallbackDestination: Boolean = true,
     val selectedTravelMode: RouteTravelMode = RouteTravelMode.WALK,
+    val pendingTravelMode: RouteTravelMode? = null,
     val selectedOption: RouteOption = RouteOption.SAFE,
     val optionCards: List<RouteOptionCardUiState> = emptyList(),
     val selectedRoute: RouteSelectedRouteUiState? = null,
@@ -25,6 +31,7 @@ data class RouteSettingUiState(
     val sourceLabel: String? = null,
     val cta: RouteSettingCtaUiState = RouteSettingCtaUiState(),
     val ctaAcknowledged: Boolean = false,
+    val showsDuribalCallAction: Boolean = false,
 ) {
     val isStartEnabled: Boolean
         get() = cta.isEnabled
@@ -37,6 +44,11 @@ data class RouteLocationUiState(
     val coordinate: GeoCoordinate? = null,
     val category: PlaceCategory? = null,
     val metadataLabel: String? = null,
+)
+
+data class RouteOriginStatusUiState(
+    val label: String,
+    val tone: RouteOriginStatusTone = RouteOriginStatusTone.NEUTRAL,
 )
 
 data class RoutePreviewMapUiState(
@@ -57,6 +69,7 @@ data class RoutePreviewMapUiState(
 
 data class RouteOptionCardUiState(
     val routeOption: RouteOption,
+    val travelMode: RouteTravelMode = RouteTravelMode.WALK,
     val title: String,
     val description: String,
     val distanceMeters: Int,
@@ -67,7 +80,29 @@ data class RouteOptionCardUiState(
     val highlightLabel: String? = null,
     val metrics: List<RouteOptionCardMetricUiState> = emptyList(),
     val badges: List<RouteOptionBadge> = emptyList(),
+    val segmentBars: List<RouteOptionSegmentBarUiState> = emptyList(),
+    val transitStopLabel: String? = null,
+    val transitOptionLabels: List<RouteTransitOptionLabelUiState> = emptyList(),
     val isSelected: Boolean = false,
+)
+
+data class RouteOptionSegmentBarUiState(
+    val kind: RouteOptionSegmentKind,
+    val label: String,
+    val weight: Float,
+    val routeLabel: String? = null,
+)
+
+enum class RouteOptionSegmentKind {
+    WALK,
+    BUS,
+    SUBWAY,
+}
+
+data class RouteTransitOptionLabelUiState(
+    val typeLabel: String,
+    val routeNo: String,
+    val arrivalLabel: String? = null,
 )
 
 data class RouteSelectedRouteUiState(
@@ -94,8 +129,20 @@ data class RouteSelectedRouteUiState(
     val detailAccessibilityChips: List<RouteDetailChipUiState> = emptyList(),
     val detailHighlights: List<RouteDetailHighlightUiState> = emptyList(),
     val detailSteps: List<RouteDetailStepUiState> = emptyList(),
+    val detailPolylines: List<RouteDetailPolylineUiState> = emptyList(),
     val detailFallbackMessage: String? = null,
+    val lowFloorReservations: List<LowFloorBusReservation> = emptyList(),
 )
+
+data class RouteDetailPolylineUiState(
+    val points: List<GeoCoordinate>,
+    val kind: RouteDetailPolylineKind = RouteDetailPolylineKind.WALK,
+)
+
+enum class RouteDetailPolylineKind {
+    WALK,
+    TRANSIT,
+}
 
 data class RouteSummaryMetricUiState(
     val label: String,
@@ -124,10 +171,16 @@ data class RouteDetailStepUiState(
     val badgeTone: RouteDetailTone? = null,
     val kind: RouteDetailStepKind = RouteDetailStepKind.STRAIGHT,
     val tone: RouteDetailTone = RouteDetailTone.NEUTRAL,
+    val coordinate: GeoCoordinate? = null,
+    val transitLabel: String? = null,
+    val transitStartName: String? = null,
+    val transitEndName: String? = null,
+    val transitDurationLabel: String? = null,
+    val transitOptionLabels: List<RouteTransitOptionLabelUiState> = emptyList(),
 )
 
 data class RouteSettingCtaUiState(
-    val label: String = "길 안내 시작",
+    val label: String = "안내 시작",
     val supportingText: String = "경로 요약을 불러오는 동안 CTA를 잠시 비활성화합니다.",
     val isEnabled: Boolean = false,
 )
@@ -141,6 +194,19 @@ enum class RouteDestinationHandoffState {
     DIRECT,
     EMPTY,
     INVALID_COORDINATE,
+}
+
+enum class RouteOriginState {
+    MANUAL_SELECTION,
+    CURRENT_LOCATION_LOADING,
+    CURRENT_LOCATION_RESOLVED,
+    CURRENT_LOCATION_UNAVAILABLE,
+}
+
+enum class RouteOriginStatusTone {
+    NEUTRAL,
+    INFO,
+    WARNING,
 }
 
 enum class RoutePreviewMapStatus {
@@ -179,6 +245,8 @@ enum class RouteDetailChipKind {
 
 enum class RouteDetailStepKind {
     START,
+    BUS,
+    SUBWAY,
     STRAIGHT,
     TURN_LEFT,
     TURN_RIGHT,
@@ -200,10 +268,19 @@ enum class RouteOptionBadge {
     SIGNAL_CROSSWALK,
     CURB_GAP,
     UNSIGNALIZED_CROSSWALK,
+    LOW_SLOPE,
+    MIDDLE_SLOPE,
+    STAIR,
+    CROSSWALK,
+    ELEVATOR,
+    NARROW_SIDEWALK,
+    UNPAVED,
 }
 
 sealed interface RouteSettingUiAction {
     data object BackClicked : RouteSettingUiAction
+
+    data object CloseClicked : RouteSettingUiAction
 
     data class WaypointClicked(
         val editingTarget: RouteEditingTarget,
@@ -228,6 +305,10 @@ sealed interface RouteSettingUiAction {
 
 sealed interface RouteSettingUiEvent {
     data object NavigateBack : RouteSettingUiEvent
+
+    data object NavigateToMap : RouteSettingUiEvent
+
+    data object RequestLocationPermission : RouteSettingUiEvent
 
     data class NavigateToSearch(
         val editingTarget: RouteEditingTarget,
@@ -254,4 +335,6 @@ data class RouteNavigationSelectionHandoff(
     val searchId: String,
     val routeId: String,
     val sessionId: String,
+    val initialRemainingDistanceMeters: Int? = null,
+    val initialRemainingDurationSeconds: Int? = null,
 )

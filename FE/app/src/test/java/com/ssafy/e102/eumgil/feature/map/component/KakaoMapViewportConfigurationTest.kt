@@ -63,6 +63,22 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
+    fun `initial renderer loading overlay waits through a short grace period before showing`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "The initial map loading overlay should wait through a short grace period so fast renderer startups do not flash a centered loading card.",
+            source.contains("delay(KAKAO_RENDERER_LOADING_OVERLAY_DELAY_MILLIS)"),
+        )
+        assertTrue(
+            "Kakao map viewport should route fallback overlay visibility through the dedicated loading-overlay policy helper.",
+            source.contains("shouldShowKakaoRendererFallbackOverlay("),
+        )
+    }
+
+    @Test
     fun `special map markers keep a compose overlay backup anchored by screen point`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
@@ -83,18 +99,78 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
-    fun `blank map taps bind to terrain click listener so selected pin can be dropped`() {
+    fun `projected overlay markers are clipped to the viewport bounds`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
                 .readText()
 
         assertTrue(
-            "Blank-area taps should use Kakao's terrain click callback so the dropped pin action is triggered on empty map space.",
-            source.contains("setOnTerrainClickListener"),
+            "Projected marker overlays should be clipped to the map viewport so current-location or origin pins cannot bleed over the navigation info sheet.",
+            source.contains("clipToBounds()"),
+        )
+    }
+
+    @Test
+    fun `route arrow camera bearing logs keep both raw radian and converted degree values`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Kakao route-arrow debugging should keep the SDK raw rotationAngle value and the converted degree value side by side.",
+            source.contains("val cameraBearingRadians = cameraPosition?.rotationAngle ?: 0.0") &&
+                source.contains("val cameraBearingDegrees = Math.toDegrees(cameraBearingRadians)") &&
+                source.contains("bearingRad=") &&
+                source.contains("bearingDeg="),
+        )
+    }
+
+    @Test
+    fun `camera move tracking loop re-syncs native overlay markers during rotation gestures`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Route arrows should be re-synchronized inside the animation-frame tracking loop so they do not wait until camera move end during rotation gestures.",
+            Regex("""latestState\?\.let \{ state ->\s*syncMarkers\(readyMap = readyMap, state = state\)\s*}\s*updateProjectedMarkerOverlays""")
+                .containsMatchIn(source),
+        )
+    }
+
+    @Test
+    fun `background single taps are ignored before entering the map detail dispatch chain`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Terrain taps on the bare map should be ignored at the viewport layer so blank road/background presses do not open the place detail flow.",
+            Regex("""setOnTerrainClickListener\s*\{\s*_,\s*position,\s*_\s*->\s*ignoreBackgroundSingleTap\(\s*source = "terrain",\s*position = position,\s*\)""")
+                .containsMatchIn(source),
         )
         assertTrue(
-            "Blank-area taps should also listen to the generic map click callback so non-terrain surfaces can still drop a pin.",
-            source.contains("setOnMapClickListener"),
+            "Generic map clicks with no POI payload should also stop at the viewport layer instead of flowing into MapTapped detail lookup.",
+            Regex("""else if \(poi == null\)\s*\{\s*ignoreBackgroundSingleTap\(\s*source = "map",\s*position = position,\s*\)""")
+                .containsMatchIn(source),
+        )
+        assertFalse(
+            "Terrain taps should no longer dispatch ADDRESS map taps from the viewport.",
+            source.contains(
+                """
+                dispatchMapTap(
+                            source = "terrain",
+                """.trimIndent(),
+            ),
+        )
+        assertFalse(
+            "Null-POI map clicks should no longer dispatch ADDRESS map taps from the viewport.",
+            source.contains(
+                """
+                } else if (poi == null) {
+                            dispatchMapTap(
+                """.trimIndent(),
+            ),
         )
     }
 
@@ -175,9 +251,18 @@ class KakaoMapViewportConfigurationTest {
             source.contains("nameHint = poi.name"),
         )
         assertTrue(
-            "The POI callback should still fall back to providerPlaceId when Kakao does not expose a name in that callback.",
-            source.contains("providerPlaceId = poiId") &&
-                source.contains("nameHint = null"),
+            "The POI callback should only handle app markers so Kakao POIs can flow through the map click callback with a name hint.",
+            Regex("""readyMap\.setOnPoiClickListener\s*\{\s*_,\s*position,\s*layerId,\s*poiId\s*->\s*if \(layerId == KAKAO_MARKER_LAYER_ID && poiId\.isNotBlank\(\)\)""")
+                .containsMatchIn(source),
+        )
+        assertFalse(
+            "Kakao POI taps must not dispatch a name-less detail request before the map click callback can provide poi.name.",
+            source.contains(
+                """
+                providerPlaceId = poiId,
+                                nameHint = null,
+                """.trimIndent(),
+            ),
         )
     }
 }

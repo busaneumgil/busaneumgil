@@ -1,10 +1,12 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.feature.route.RouteDetailStepKind
+import com.ssafy.e102.eumgil.feature.route.RouteTransitOptionLabelUiState
 import com.ssafy.e102.eumgil.feature.route.toRouteDetailStepKind
 
 data class NavigationUiState(
@@ -46,10 +48,18 @@ enum class NavigationScreenState {
 enum class NavigationGuidanceAction(
     val label: String,
 ) {
+    BUS("버스 탑승"),
+    SUBWAY("지하철 탑승"),
     STRAIGHT("직진"),
     TURN_LEFT("좌회전"),
     TURN_RIGHT("우회전"),
     CROSSWALK("횡단보도"),
+    TACTILE_GUIDE("점자블록"),
+    ELEVATOR("엘리베이터"),
+    CONSTRUCTION("공사 구간"),
+    CURB_GAP("단차 주의"),
+    STAIRS("계단 주의"),
+    FALLBACK("세부 경로 확인"),
 }
 
 data class NavigationMapOverlayUiState(
@@ -65,6 +75,7 @@ data class NavigationMapOverlayUiState(
     val focusCoordinate: GeoCoordinate? = null,
     val routeSegments: List<NavigationMapSegmentUiState> = emptyList(),
     val mapFocusMode: NavigationMapFocusMode = NavigationMapFocusMode.ACTIVE,
+    val shouldAnimateCameraTransition: Boolean = true,
 ) {
     val shouldUsePlaceholder: Boolean
         get() = !isDisplayable
@@ -78,6 +89,7 @@ data class NavigationMapPointUiState(
 data class NavigationMapSegmentUiState(
     val sequence: Int,
     val polyline: List<GeoCoordinate>,
+    val segmentStartCoordinate: GeoCoordinate? = null,
     val distanceMeters: Int,
     val riskLevel: RouteRiskLevel,
     val guidanceMessage: String,
@@ -86,6 +98,7 @@ data class NavigationMapSegmentUiState(
     val isFocused: Boolean = false,
     val isCompleted: Boolean = false,
     val isRiskUpcoming: Boolean = false,
+    val showJunctionMarker: Boolean = true,
 ) {
     val isRenderable: Boolean
         get() = polyline.size >= 2
@@ -116,15 +129,19 @@ data class NavigationSegmentRailItemUiState(
     val isFocused: Boolean = false,
     val isCompleted: Boolean = false,
     val isRiskUpcoming: Boolean = false,
+    val transitInfo: NavigationTransitInfoUiState? = null,
 )
 
 data class NavigationFocusedSegmentCardUiState(
     val sequenceLabel: String,
     val instruction: String,
+    val heroTitle: String,
+    val heroDescription: String,
     val distanceLabel: String,
     val riskLabel: String,
     val supportingText: String,
     val guidanceAction: NavigationGuidanceAction = NavigationGuidanceAction.STRAIGHT,
+    val transitInfo: NavigationTransitInfoUiState? = null,
 )
 
 enum class NavigationMapFocusMode {
@@ -137,9 +154,12 @@ data class NavigationStepCardUiState(
     val statusLabel: String = "준비 중",
     val emphasisLabel: String = "경로 확인",
     val distanceLabel: String = "확인 중",
+    val heroTitle: String = "경로 안내",
+    val heroDescription: String = "현재 구간의 이동 정보를 확인하고 있습니다.",
     val instruction: String = "경로 안내를 준비하고 있습니다",
     val supportingText: String = "현재 위치를 확인한 뒤 안내를 시작합니다.",
     val guidanceAction: NavigationGuidanceAction = NavigationGuidanceAction.STRAIGHT,
+    val transitInfo: NavigationTransitInfoUiState? = null,
     val metrics: List<NavigationStepMetricUiState> =
         listOf(
             NavigationStepMetricUiState(
@@ -155,6 +175,14 @@ data class NavigationStepCardUiState(
                 value = "-",
             ),
         ),
+)
+
+data class NavigationTransitInfoUiState(
+    val guidanceAction: NavigationGuidanceAction,
+    val startName: String,
+    val endName: String,
+    val durationLabel: String? = null,
+    val optionLabels: List<RouteTransitOptionLabelUiState> = emptyList(),
 )
 
 data class NavigationStepMetricUiState(
@@ -217,12 +245,26 @@ sealed interface NavigationUiEvent {
         val text: String,
     ) : NavigationUiEvent
 
+    data object PlayRouteChangeAlert : NavigationUiEvent
+
     data object StopBriefing : NavigationUiEvent
 
     data class SetVoiceGuidanceEnabled(
         val enabled: Boolean,
     ) : NavigationUiEvent
 }
+
+private const val NAVIGATION_SEGMENT_MARKER_PREFIX = "navigation-segment-"
+
+internal fun navigationSegmentMarkerId(segmentIndex: Int): String =
+    "$NAVIGATION_SEGMENT_MARKER_PREFIX$segmentIndex"
+
+internal fun String.toNavigationSegmentMarkerIndexOrNull(): Int? =
+    if (startsWith(NAVIGATION_SEGMENT_MARKER_PREFIX)) {
+        substring(NAVIGATION_SEGMENT_MARKER_PREFIX.length).toIntOrNull()
+    } else {
+        null
+    }
 
 private fun navigationLoadingStepCardUiState(): NavigationStepCardUiState = NavigationStepCardUiState()
 
@@ -251,11 +293,22 @@ enum class NavigationTtsStatus {
 internal fun RouteSegment.toNavigationGuidanceAction(): NavigationGuidanceAction =
     toRouteDetailStepKind().toNavigationGuidanceAction()
 
+internal fun RouteCandidate.toNavigationGuidanceAction(segment: RouteSegment): NavigationGuidanceAction =
+    toRouteDetailStepKind(segment).toNavigationGuidanceAction()
+
 internal fun RouteDetailStepKind.toNavigationGuidanceAction(): NavigationGuidanceAction =
     when {
+        this == RouteDetailStepKind.BUS -> NavigationGuidanceAction.BUS
+        this == RouteDetailStepKind.SUBWAY -> NavigationGuidanceAction.SUBWAY
         this == RouteDetailStepKind.CROSSWALK -> NavigationGuidanceAction.CROSSWALK
         this == RouteDetailStepKind.TURN_LEFT -> NavigationGuidanceAction.TURN_LEFT
         this == RouteDetailStepKind.TURN_RIGHT -> NavigationGuidanceAction.TURN_RIGHT
+        this == RouteDetailStepKind.TACTILE_GUIDE -> NavigationGuidanceAction.TACTILE_GUIDE
+        this == RouteDetailStepKind.ELEVATOR -> NavigationGuidanceAction.ELEVATOR
+        this == RouteDetailStepKind.CONSTRUCTION -> NavigationGuidanceAction.CONSTRUCTION
+        this == RouteDetailStepKind.CURB_GAP -> NavigationGuidanceAction.CURB_GAP
+        this == RouteDetailStepKind.STAIRS -> NavigationGuidanceAction.STAIRS
+        this == RouteDetailStepKind.FALLBACK -> NavigationGuidanceAction.FALLBACK
         else -> NavigationGuidanceAction.STRAIGHT
     }
 

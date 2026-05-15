@@ -1,7 +1,9 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
+import com.kakao.vectormap.label.TransformMethod
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
@@ -9,8 +11,11 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
+import com.ssafy.e102.eumgil.feature.navigation.NavigationMapFocusMode
+import com.ssafy.e102.eumgil.feature.navigation.NavigationMapOverlayUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -161,7 +166,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `marker render state keeps visible markers and lifts selected marker rank`() {
+    fun `marker render state keeps visible marker size stable and lifts selected marker rank`() {
         val hiddenMarker =
             MapMarkerUiModel(
                 markerId = "hidden",
@@ -205,7 +210,7 @@ class KakaoMapViewportBindingsTest {
         assertEquals(0L, markerStates.first().rank)
         assertTrue(markerStates.last().rank > markerStates.first().rank)
         assertEquals(28, markerStates.first().sizeDp)
-        assertEquals(34, markerStates.last().sizeDp)
+        assertEquals(28, markerStates.last().sizeDp)
         assertFalse(markerStates.first().isSelected)
         assertTrue(markerStates.last().isSelected)
         assertTrue(markerStates.none { it.markerId == "hidden" })
@@ -261,7 +266,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `projected marker render state adds segment junction overlay points as centered dots`() {
+    fun `projected marker render state excludes segment junction overlay points`() {
         val markerStates =
             createKakaoProjectedMarkerRenderStates(
                 currentLocation = null,
@@ -270,19 +275,303 @@ class KakaoMapViewportBindingsTest {
                 overlayPoints =
                     listOf(
                         MapViewportPointOverlay(
-                            overlayId = "junction-1",
+                            overlayId = "junction-walk",
                             coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
                             kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                            tone = MapViewportOverlayTone.PRIMARY,
                         ),
                     ),
             )
 
-        assertEquals(listOf("overlay-junction-1"), markerStates.map { it.markerId })
-        assertEquals(KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION, markerStates.first().kind)
-        assertEquals(0, markerStates.first().iconResId)
-        assertEquals(16, markerStates.first().sizeDp)
-        assertEquals(0.5f, markerStates.first().anchorPointX)
-        assertEquals(0.5f, markerStates.first().anchorPointY)
+        assertTrue(markerStates.isEmpty())
+    }
+
+    @Test
+    fun `native overlay marker render state keeps guidance type marker token`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                listOf(
+                    MapViewportPointOverlay(
+                        overlayId = "junction-walk",
+                        coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                        kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                        tone = MapViewportOverlayTone.PRIMARY,
+                    ),
+                    MapViewportPointOverlay(
+                        overlayId = "junction-transit",
+                        coordinate = MapCoordinate(latitude = 35.1810, longitude = 129.0785),
+                        kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                        tone = MapViewportOverlayTone.TERTIARY,
+                    ),
+                ),
+            )
+
+        assertEquals(
+            listOf("overlay-junction-walk", "overlay-junction-transit"),
+            markerStates.map { it.markerId },
+        )
+        assertTrue(markerStates.all { it.kind == KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION })
+        assertTrue(markerStates.all { it.sizeDp == 18 })
+        assertTrue(markerStates.all { it.anchorPointX == 0.5f })
+        assertTrue(markerStates.all { it.anchorPointY == 0.5f })
+        assertTrue(markerStates.all { it.fillColorArgb == 0xFFFFFFFF.toInt() })
+        assertTrue(markerStates.all { it.strokeColorArgb == 0xFF8C8C8E.toInt() })
+    }
+
+    @Test
+    fun `native overlay marker render state adds focused guidance halo token`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                listOf(
+                    MapViewportPointOverlay(
+                        overlayId = "navigation-focus",
+                        coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                        kind = MapViewportPointKind.FOCUS_HALO,
+                    ),
+                ),
+            )
+
+        assertEquals(listOf("overlay-navigation-focus"), markerStates.map { it.markerId })
+        assertEquals(KakaoOverlayMarkerKind.FOCUS_HALO, markerStates.single().kind)
+        assertEquals(26, markerStates.single().sizeDp)
+        assertEquals(0x804D8FF9.toInt(), markerStates.single().fillColorArgb)
+        assertEquals(0x004D8FF9, markerStates.single().strokeColorArgb)
+    }
+
+    @Test
+    fun `native overlay marker render state hides segment junction markers below route detail zoom`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints =
+                    listOf(
+                        MapViewportPointOverlay(
+                            overlayId = "junction-walk",
+                            coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                        MapViewportPointOverlay(
+                            overlayId = "bus-stop",
+                            coordinate = MapCoordinate(latitude = 35.1810, longitude = 129.0785),
+                            kind = MapViewportPointKind.TRANSIT_BUS_STOP,
+                            transitMarker =
+                                MapViewportTransitMarker(
+                                    from = MapViewportTransitMarkerLeg(MapViewportTransitMarkerKind.BUS, "58-2"),
+                                ),
+                        ),
+                    ),
+                zoomLevel = ROUTE_DETAIL_OVERLAY_MIN_ZOOM_LEVEL - 1,
+            )
+
+        assertEquals(listOf("overlay-bus-stop"), markerStates.map { it.markerId })
+        assertEquals(KakaoOverlayMarkerKind.TRANSIT_STOP, markerStates.single().kind)
+    }
+
+    @Test
+    fun `native overlay marker render state uses transit stop and transfer marker tokens`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                listOf(
+                    MapViewportPointOverlay(
+                        overlayId = "bus-stop",
+                        coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                        kind = MapViewportPointKind.TRANSIT_BUS_STOP,
+                        transitMarker =
+                            MapViewportTransitMarker(
+                                from = MapViewportTransitMarkerLeg(MapViewportTransitMarkerKind.BUS, "58-2"),
+                            ),
+                    ),
+                    MapViewportPointOverlay(
+                        overlayId = "subway-stop",
+                        coordinate = MapCoordinate(latitude = 35.1810, longitude = 129.0785),
+                        kind = MapViewportPointKind.TRANSIT_SUBWAY_STATION,
+                        transitMarker =
+                            MapViewportTransitMarker(
+                                from = MapViewportTransitMarkerLeg(MapViewportTransitMarkerKind.SUBWAY, "1호선"),
+                            ),
+                    ),
+                    MapViewportPointOverlay(
+                        overlayId = "transfer",
+                        coordinate = MapCoordinate(latitude = 35.1820, longitude = 129.0795),
+                        kind = MapViewportPointKind.TRANSIT_TRANSFER,
+                        transitMarker =
+                            MapViewportTransitMarker(
+                                from = MapViewportTransitMarkerLeg(MapViewportTransitMarkerKind.BUS, "58-2"),
+                                to = MapViewportTransitMarkerLeg(MapViewportTransitMarkerKind.SUBWAY, "1호선"),
+                            ),
+                    ),
+                ),
+            )
+
+        assertEquals(
+            listOf(KakaoOverlayMarkerKind.TRANSIT_STOP, KakaoOverlayMarkerKind.TRANSIT_STOP, KakaoOverlayMarkerKind.TRANSIT_TRANSFER),
+            markerStates.map { it.kind },
+        )
+        assertEquals(0xFF304583.toInt(), markerStates[0].fillColorArgb)
+        assertEquals("BUS", markerStates[0].label)
+        assertEquals(0xFFFF7F00.toInt(), markerStates[1].fillColorArgb)
+        assertEquals("1", markerStates[1].label)
+        assertEquals("BUS", markerStates[2].label)
+        assertEquals("1", markerStates[2].secondaryLabel)
+        assertEquals(0xFFFF7F00.toInt(), markerStates[2].secondaryFillColorArgb)
+    }
+
+    @Test
+    fun `projected render path summary clearly identifies projected marker pipeline`() {
+        val summary =
+            createProjectedSegmentRenderPathDebugSummary(
+                listOf(
+                    KakaoProjectedMarkerOverlay(
+                        markerId = "current-location",
+                        kind = KakaoProjectedMarkerKind.CURRENT_LOCATION,
+                        iconResId = R.drawable.ic_map_current_location,
+                        screenPoint = KakaoMapScreenPoint(x = 320, y = 640),
+                        anchorPointX = 0.5f,
+                        anchorPointY = 0.5f,
+                        sizeDp = 28,
+                        zIndex = 2f,
+                    ),
+                ),
+            )
+
+        assertEquals(
+            "renderPath=projected overlayCount=1 segmentCount=0 details=[]",
+            summary,
+        )
+    }
+
+    @Test
+    fun `native render path summary clearly identifies native label marker pipeline`() {
+        val summary =
+            createNativeSegmentRenderPathDebugSummary(
+                layerId = "eumgil-overlay-markers",
+                markers =
+                    listOf(
+                        KakaoOverlayMarkerRenderState(
+                            markerId = "overlay-junction-16",
+                            coordinate = MapCoordinate(latitude = 35.093359, longitude = 128.854551),
+                            kind = KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION,
+                            anchorPointX = 0.5f,
+                            anchorPointY = 0.5f,
+                            sizeDp = 16,
+                            zIndex = 3.6f,
+                            fillColorArgb = 0xFFE7832F.toInt(),
+                            strokeColorArgb = 0xFFB85B16.toInt(),
+                        ),
+                    ),
+            )
+
+        assertEquals(
+            "renderPath=native-label layer=eumgil-overlay-markers markerCount=1 segmentCount=1 details=[id=overlay-junction-16 coord=35.093359,128.854551 sizeDp=16 z=3.6 fill=0xFFE7832F stroke=0xFFB85B16]",
+            summary,
+        )
+    }
+
+    @Test
+    fun `projected marker projection result retries when markers exist but screen projection is not ready`() {
+        val projectedMarkers =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+            )
+
+        val projectionResult =
+            createKakaoProjectedMarkerProjectionResult(projectedMarkers) { null }
+
+        assertTrue(projectionResult.overlays.isEmpty())
+        assertTrue(projectionResult.shouldRetry)
+    }
+
+    @Test
+    fun `projected marker projection result stops retrying once at least one screen point resolves`() {
+        val projectedMarkers =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+            )
+
+        val projectionResult =
+            createKakaoProjectedMarkerProjectionResult(projectedMarkers) { coordinate ->
+                KakaoMapScreenPoint(
+                    x = (coordinate.latitude * 10).toInt(),
+                    y = (coordinate.longitude * 10).toInt(),
+                )
+            }
+
+        assertEquals(1, projectionResult.overlays.size)
+        assertFalse(projectionResult.shouldRetry)
+    }
+
+    @Test
+    fun `selected map pin visibility resolves true only when projected point stays inside viewport bounds`() {
+        val selectedPin = MapCoordinate(latitude = 35.1798, longitude = 129.0762)
+
+        assertEquals(
+            true,
+            resolveSelectedMapPinViewportVisibility(
+                selectedMapPinCoordinate = selectedPin,
+                viewportWidth = 1080,
+                viewportHeight = 1920,
+            ) { KakaoMapScreenPoint(x = 540, y = 960) },
+        )
+        assertEquals(
+            false,
+            resolveSelectedMapPinViewportVisibility(
+                selectedMapPinCoordinate = selectedPin,
+                viewportWidth = 1080,
+                viewportHeight = 1920,
+            ) { KakaoMapScreenPoint(x = 1200, y = 960) },
+        )
+        assertEquals(
+            false,
+            resolveSelectedMapPinViewportVisibility(
+                selectedMapPinCoordinate = selectedPin,
+                viewportWidth = 1080,
+                viewportHeight = 1920,
+            ) { null },
+        )
+        assertNull(
+            resolveSelectedMapPinViewportVisibility(
+                selectedMapPinCoordinate = null,
+                viewportWidth = 1080,
+                viewportHeight = 1920,
+            ) { KakaoMapScreenPoint(x = 540, y = 960) },
+        )
+    }
+
+    @Test
+    fun `projected marker projection result does not wait for native segment junction markers`() {
+        val currentLocation = MapCoordinate(latitude = 35.1798, longitude = 129.0762)
+        val projectedMarkers =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = currentLocation,
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+                overlayPoints =
+                    listOf(
+                        MapViewportPointOverlay(
+                            overlayId = "junction",
+                            coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+            )
+
+        val projectionResult =
+            createKakaoProjectedMarkerProjectionResult(projectedMarkers) { coordinate ->
+                if (coordinate == currentLocation) {
+                    KakaoMapScreenPoint(x = 320, y = 640)
+                } else {
+                    null
+                }
+            }
+
+        assertEquals(1, projectionResult.overlays.size)
+        assertEquals(KakaoProjectedMarkerKind.CURRENT_LOCATION, projectionResult.overlays.single().kind)
+        assertFalse(projectionResult.shouldRetry)
     }
 
     @Test
@@ -305,10 +594,54 @@ class KakaoMapViewportBindingsTest {
 
         assertEquals(listOf("route-preview"), routeLineStates.map { it.routeLineId })
         assertEquals(2, routeLineStates.first().points.size)
-        assertEquals(5f, routeLineStates.first().lineWidth, 0f)
-        assertEquals(6.5f, routeLineStates.first().strokeWidth, 0f)
-        assertEquals(0xFF2A7BFF.toInt(), routeLineStates.first().lineColor)
-        assertEquals(0xFF0F4FC6.toInt(), routeLineStates.first().strokeColor)
+        assertEquals(18f, routeLineStates.first().lineWidth, 0f)
+        assertEquals(0f, routeLineStates.first().strokeWidth, 0f)
+        assertEquals(0xFF006BE0.toInt(), routeLineStates.first().lineColor)
+        assertEquals(0xFF006BE0.toInt(), routeLineStates.first().strokeColor)
+    }
+
+    @Test
+    fun `transit detail walk route line uses the confirmed walk gray token`() {
+        val routeLineStates =
+            createKakaoRouteLineRenderStates(
+                listOf(
+                    MapViewportPolylineOverlay(
+                        overlayId = "route-detail-walk",
+                        points =
+                            listOf(
+                                MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                                MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            ),
+                        style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                        tone = MapViewportOverlayTone.TRANSIT_WALK,
+                    ),
+                ),
+            )
+
+        assertEquals(0xFFD9D9D9.toInt(), routeLineStates.single().lineColor)
+        assertEquals(0xFFD9D9D9.toInt(), routeLineStates.single().strokeColor)
+    }
+
+    @Test
+    fun `transit route line uses the confirmed transit navy token`() {
+        val routeLineStates =
+            createKakaoRouteLineRenderStates(
+                listOf(
+                    MapViewportPolylineOverlay(
+                        overlayId = "route-detail-transit",
+                        points =
+                            listOf(
+                                MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                                MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                            ),
+                        style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                        tone = MapViewportOverlayTone.NAVY,
+                    ),
+                ),
+            )
+
+        assertEquals(0xFF005391.toInt(), routeLineStates.single().lineColor)
+        assertEquals(0xFF005391.toInt(), routeLineStates.single().strokeColor)
     }
 
     @Test
@@ -346,6 +679,78 @@ class KakaoMapViewportBindingsTest {
             listOf(
                 MapCoordinate(latitude = 35.1, longitude = 129.1),
                 MapCoordinate(latitude = 35.2, longitude = 129.2),
+            ),
+            cameraState.points,
+        )
+    }
+
+    @Test
+    fun `route camera render state is null when projection includes only a single focus coordinate`() {
+        val cameraState =
+            createKakaoRouteCameraRenderState(
+                MapViewportOverlayState(
+                    points =
+                        listOf(
+                            MapViewportPointOverlay(
+                                overlayId = "focus",
+                                coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                                kind = MapViewportPointKind.FOCUS_HALO,
+                            ),
+                        ),
+                    polylines =
+                        listOf(
+                            MapViewportPolylineOverlay(
+                                overlayId = "focused",
+                                points =
+                                    listOf(
+                                        MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                                        MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                                    ),
+                                style = MapViewportPolylineStyle.FOCUSED_SEGMENT,
+                                tone = MapViewportOverlayTone.PRIMARY,
+                                includeInProjection = false,
+                            ),
+                        ),
+                ),
+            )
+
+        assertNull(cameraState)
+    }
+
+    @Test
+    fun `focused navigation route camera fits the focused segment and focus halo`() {
+        val overlayState =
+            createNavigationViewportOverlayState(
+                NavigationMapOverlayUiState(
+                    isDisplayable = true,
+                    selectedRoutePolyline =
+                        listOf(
+                            GeoCoordinate(latitude = 35.170, longitude = 129.050),
+                            GeoCoordinate(latitude = 35.180, longitude = 129.065),
+                            GeoCoordinate(latitude = 35.190, longitude = 129.080),
+                        ),
+                    activeSegmentPolyline =
+                        listOf(
+                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                            GeoCoordinate(latitude = 35.178, longitude = 129.063),
+                        ),
+                    focusedSegmentPolyline =
+                        listOf(
+                            GeoCoordinate(latitude = 35.178, longitude = 129.063),
+                            GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                        ),
+                    focusCoordinate = GeoCoordinate(latitude = 35.1795, longitude = 129.0655),
+                    mapFocusMode = NavigationMapFocusMode.FOCUSED,
+                ),
+            )
+
+        val cameraState = requireNotNull(createKakaoRouteCameraRenderState(overlayState))
+
+        assertEquals(
+            listOf(
+                MapCoordinate(latitude = 35.178, longitude = 129.063),
+                MapCoordinate(latitude = 35.181, longitude = 129.068),
+                MapCoordinate(latitude = 35.1795, longitude = 129.0655),
             ),
             cameraState.points,
         )
@@ -418,7 +823,7 @@ class KakaoMapViewportBindingsTest {
 
         assertEquals(listOf("toilet", "braille"), markerStates.map { it.markerId })
         assertEquals(28, markerStates.first().sizeDp)
-        assertEquals(34, markerStates.last().sizeDp)
+        assertEquals(30, markerStates.last().sizeDp)
         assertEquals(0.5f, markerStates.first().anchorPointX)
         assertEquals(0.5f, markerStates.first().anchorPointY)
         assertEquals(0.5f, markerStates.last().anchorPointX)
@@ -430,19 +835,23 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `facility glyph mapping keeps category specific icons for native bitmap labels`() {
+    fun `facility glyph mapping uses dedicated tourist icon for tourist categories`() {
         assertEquals(
             listOf(
                 R.drawable.ic_place_restaurant,
                 R.drawable.ic_place_charging,
                 R.drawable.ic_place_healthcare,
-                R.drawable.ic_nav_facility,
+                R.drawable.ic_place_tourist_spot,
+                R.drawable.ic_place_tourist_spot,
+                R.drawable.ic_place_other,
             ),
             listOf(
                 facilityMarkerGlyphResId(FacilityCategory.RESTAURANT),
                 facilityMarkerGlyphResId(FacilityCategory.CHARGING_STATION),
                 facilityMarkerGlyphResId(FacilityCategory.HEALTHCARE),
                 facilityMarkerGlyphResId(FacilityCategory.TOURIST_SPOT),
+                facilityMarkerGlyphResId(FacilityCategory.TOURIST_ATTRACTION),
+                facilityMarkerGlyphResId(FacilityCategory.OTHER),
             ),
         )
     }
@@ -474,6 +883,46 @@ class KakaoMapViewportBindingsTest {
         assertEquals(
             "IllegalArgumentException: $KAKAO_RENDERER_ERROR_DETAIL_FALLBACK",
             failure.debugSummary,
+        )
+    }
+
+    @Test
+    fun `renderer recovery policy allows one automatic restart for retryable startup failures only`() {
+        val policyMethod =
+            Class
+                .forName("com.ssafy.e102.eumgil.feature.map.component.KakaoMapViewportBindingsKt")
+                .getDeclaredMethod(
+                    "shouldAutoRestartKakaoRenderer",
+                    KakaoRendererFailure::class.java,
+                    Int::class.javaPrimitiveType,
+                )
+
+        val timeoutFailure = createKakaoRendererTimeoutFailure()
+        val destroyedFailure = createKakaoRendererDestroyedFailure()
+        val genericFailure =
+            createKakaoRendererFailure(
+                IllegalStateException("renderer resume failed"),
+            )
+
+        assertTrue(policyMethod.invoke(null, timeoutFailure, 0) as Boolean)
+        assertTrue(policyMethod.invoke(null, destroyedFailure, 0) as Boolean)
+        assertFalse(policyMethod.invoke(null, timeoutFailure, 1) as Boolean)
+        assertFalse(policyMethod.invoke(null, genericFailure, 0) as Boolean)
+    }
+
+    @Test
+    fun `renderer loading phase switches to retry state after automatic recovery starts`() {
+        assertEquals(
+            KakaoRendererLoadingPhase.INITIALIZING,
+            resolveKakaoRendererLoadingPhase(
+                attemptedAutomaticRecoveryCount = 0,
+            ),
+        )
+        assertEquals(
+            KakaoRendererLoadingPhase.AUTOMATIC_RETRY,
+            resolveKakaoRendererLoadingPhase(
+                attemptedAutomaticRecoveryCount = 1,
+            ),
         )
     }
 
@@ -587,8 +1036,27 @@ class KakaoMapViewportBindingsTest {
             )
 
         assertEquals(listOf("selected-destination"), markerStates.map { it.markerId })
-        assertEquals(KakaoProjectedMarkerKind.SELECTED_DESTINATION, markerStates.first().kind)
-        assertEquals(R.drawable.ic_map_selected_pin_blue, markerStates.first().iconResId)
+        assertEquals(KakaoProjectedMarkerKind.ROUTE_DESTINATION, markerStates.first().kind)
+        assertEquals(R.drawable.ic_navigation_rail_destination_pin, markerStates.first().iconResId)
+    }
+
+    @Test
+    fun `selected route endpoints render as distinct origin and destination projected markers`() {
+        val markerStates =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedOriginCoordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                selectedDestinationCoordinate = MapCoordinate(latitude = 35.1801, longitude = 129.0822),
+                selectedMapPinCoordinate = null,
+            )
+
+        assertEquals(listOf("selected-origin", "selected-destination"), markerStates.map { it.markerId })
+        assertEquals(
+            listOf(KakaoProjectedMarkerKind.ROUTE_ORIGIN, KakaoProjectedMarkerKind.ROUTE_DESTINATION),
+            markerStates.map { it.kind },
+        )
+        assertEquals(R.drawable.ic_navigation_rail_origin_pin, markerStates.first().iconResId)
+        assertEquals(R.drawable.ic_navigation_rail_destination_pin, markerStates.last().iconResId)
     }
 
     @Test
@@ -601,5 +1069,275 @@ class KakaoMapViewportBindingsTest {
             )
 
         assertEquals(listOf("selected-map-pin"), markerStates.map { it.markerId })
+    }
+
+    @Test
+    fun `route polylines generate kakao direction arrow overlay markers`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+                cameraLatitude = 35.1700,
+                zoomLevel = 18,
+                screenDensity = 3f,
+            )
+
+        assertEquals(3, markerStates.size)
+        assertTrue(markerStates.all { it.kind == KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW })
+        assertEquals("arrow-route-preview-0", markerStates.first().markerId)
+        assertEquals(35.1700, markerStates.first().coordinate.latitude, 0.000001)
+        assertTrue(markerStates.first().coordinate.longitude > 129.0500)
+        assertTrue(markerStates.last().coordinate.longitude < 129.0520)
+        assertEquals(0f, markerStates.first().rotationDegrees, 0.01f)
+    }
+
+    @Test
+    fun `route polylines reduce kakao direction arrow count when the map zooms out`() {
+        val polyline =
+            listOf(
+                MapViewportPolylineOverlay(
+                    overlayId = "route-preview",
+                    points =
+                        listOf(
+                            MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                            MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                        ),
+                    style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                    tone = MapViewportOverlayTone.PRIMARY,
+                ),
+            )
+
+        val zoomedIn =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines = polyline,
+                cameraLatitude = 35.1700,
+                zoomLevel = 18,
+                screenDensity = 3f,
+            )
+        val zoomedOut =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines = polyline,
+                cameraLatitude = 35.1700,
+                zoomLevel = 17,
+                screenDensity = 3f,
+            )
+
+        assertTrue(zoomedIn.size > zoomedOut.size)
+        assertEquals(3, zoomedIn.size)
+        assertEquals(1, zoomedOut.size)
+    }
+
+    @Test
+    fun `route polylines hide kakao direction arrows below route detail zoom`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+                cameraLatitude = 35.1700,
+                zoomLevel = ROUTE_DETAIL_OVERLAY_MIN_ZOOM_LEVEL - 1,
+                screenDensity = 3f,
+            )
+
+        assertTrue(markerStates.isEmpty())
+    }
+
+    @Test
+    fun `route polylines keep a single kakao direction arrow for short routes when zoomed out`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0510),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+                cameraLatitude = 35.1700,
+                zoomLevel = 17,
+                screenDensity = 3f,
+            )
+
+        assertEquals(1, markerStates.size)
+        assertEquals(KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW, markerStates.single().kind)
+        assertEquals(35.1700, markerStates.single().coordinate.latitude, 0.000001)
+        assertTrue(markerStates.single().coordinate.longitude > 129.0500)
+        assertTrue(markerStates.single().coordinate.longitude < 129.0510)
+    }
+
+    @Test
+    fun `route polylines keep kakao direction arrow rotation in map absolute space`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+                cameraLatitude = 35.1700,
+                zoomLevel = 18,
+                cameraBearingDegrees = 90.0,
+                screenDensity = 3f,
+            )
+
+        assertEquals(3, markerStates.size)
+        assertEquals(0f, markerStates.first().rotationDegrees, 0.01f)
+        assertEquals(0f, markerStates.last().rotationDegrees, 0.01f)
+    }
+
+    @Test
+    fun `route polyline debug state keeps raw radian and converted degree camera bearing`() {
+        val computation =
+            createKakaoOverlayMarkerRenderComputation(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                        ),
+                    ),
+                cameraLatitude = 35.1700,
+                zoomLevel = 18,
+                cameraBearingRadians = Math.PI / 2.0,
+                cameraBearingDegrees = 90.0,
+                screenDensity = 3f,
+            )
+
+        assertEquals(3, computation.routeDirectionArrowDebugStates.size)
+        val firstDebugState = computation.routeDirectionArrowDebugStates.first()
+        assertEquals(0f, firstDebugState.segmentHeadingDegrees, 0.01f)
+        assertEquals(Math.PI / 2.0, firstDebugState.cameraBearingRadians, 0.000001)
+        assertEquals(90.0, firstDebugState.cameraBearingDegrees, 0.0)
+        assertEquals("map-absolute", firstDebugState.rotationModel)
+        assertEquals("AbsoluteRotation", firstDebugState.transformMethodName)
+        assertEquals(0f, firstDebugState.finalRotationDegrees, 0.01f)
+        assertTrue(
+            createKakaoRouteDirectionArrowDebugSummary(firstDebugState).contains("cameraBearingRad=1.5708"),
+        )
+        assertTrue(
+            createKakaoRouteDirectionArrowDebugSummary(firstDebugState).contains("cameraBearingDeg=90.00"),
+        )
+    }
+
+    @Test
+    fun `route direction arrow labels keep explicit map absolute transform mode`() {
+        assertEquals(
+            TransformMethod.AbsoluteRotation,
+            resolveKakaoOverlayMarkerTransformMethod(KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW),
+        )
+        assertNull(
+            resolveKakaoOverlayMarkerTransformMethod(KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION),
+        )
+    }
+
+    @Test
+    fun `route polylines suppress kakao direction arrows when detailed overlay is disabled`() {
+        val markerStates =
+            createKakaoOverlayMarkerRenderStates(
+                overlayPoints = emptyList(),
+                polylines =
+                    listOf(
+                        MapViewportPolylineOverlay(
+                            overlayId = "route-preview",
+                            points =
+                                listOf(
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                    MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                ),
+                            style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                            showDirectionArrows = false,
+                        ),
+                    ),
+            )
+
+        assertTrue(markerStates.isEmpty())
+    }
+
+    @Test
+    fun `overlay marker partition separates direction arrows from point overlays`() {
+        val partitioned =
+            partitionKakaoOverlayMarkerRenderStates(
+                createKakaoOverlayMarkerRenderStates(
+                    overlayPoints =
+                        listOf(
+                            MapViewportPointOverlay(
+                                overlayId = "junction",
+                                coordinate = MapCoordinate(latitude = 35.1802, longitude = 129.0770),
+                                kind = MapViewportPointKind.SEGMENT_JUNCTION,
+                                tone = MapViewportOverlayTone.PRIMARY,
+                            ),
+                        ),
+                    polylines =
+                        listOf(
+                            MapViewportPolylineOverlay(
+                                overlayId = "route-preview",
+                                points =
+                                    listOf(
+                                        MapCoordinate(latitude = 35.1700, longitude = 129.0500),
+                                        MapCoordinate(latitude = 35.1700, longitude = 129.0520),
+                                    ),
+                                style = MapViewportPolylineStyle.ROUTE_PREVIEW,
+                                tone = MapViewportOverlayTone.PRIMARY,
+                            ),
+                        ),
+                    cameraLatitude = 35.1700,
+                    zoomLevel = 18,
+                    screenDensity = 3f,
+                ),
+            )
+
+        assertEquals(1, partitioned.pointMarkers.size)
+        assertEquals(KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION, partitioned.pointMarkers.single().kind)
+        assertEquals(3, partitioned.directionArrowMarkers.size)
+        assertTrue(partitioned.directionArrowMarkers.all { it.kind == KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW })
     }
 }

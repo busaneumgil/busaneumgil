@@ -5,11 +5,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 DEPLOY_STATE_DIR="${DEPLOY_STATE_DIR:-.deploy-state}"
-DEPLOY_GRAPHHOPPER="${DEPLOY_GRAPHHOPPER:-false}"
+DEPLOY_GRAPHHOPPER="${DEPLOY_GRAPHHOPPER:-true}"
 BUILD_GRAPHHOPPER="${BUILD_GRAPHHOPPER:-false}"
 APP_IMAGE_TAG="${APP_IMAGE_TAG:-$(git rev-parse --short=12 HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
 GRAPHHOPPER_IMAGE_TAG="${GRAPHHOPPER_IMAGE_TAG:-$APP_IMAGE_TAG}"
-GRAPHHOPPER_CACHE_VOLUME="${GRAPHHOPPER_CACHE_VOLUME:-s14p31e102-prod_graphhopper-prod-data}"
 
 export DEPLOY_GRAPHHOPPER
 
@@ -26,6 +25,17 @@ require_env_value() {
 
 require_env_value JWT_SECRET
 require_env_value CORS_ALLOWED_ORIGINS
+require_env_value DB_URL
+require_env_value DB_USERNAME
+require_env_value DB_PASSWORD
+require_env_value REDIS_HOST
+require_env_value S3_BUCKET
+require_env_value S3_ACCESS_KEY
+require_env_value S3_SECRET_KEY
+require_env_value GMS_KEY
+require_env_value KAKAO_REST_API_KEY
+require_env_value ODSAY_API_KEY
+require_env_value BUSAN_BIMS_SERVICE_KEY_DECODING
 require_env_value VITE_BACKEND_API_URL
 require_env_value VITE_ADMIN_KAKAO_JAVASCRIPT_KEY
 require_env_value VITE_ADMIN_NAVER_CLIENT_ID
@@ -47,32 +57,26 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml config --quiet
 docker compose --env-file .env.prod -f docker-compose.prod.yml build backend ai admin
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d backend ai admin
 
-graphhopper_cache_fingerprint="$(bash "$ROOT_DIR/scripts/graphhopper/cache_fingerprint.sh" "$ROOT_DIR")"
-needs_graphhopper_build="$BUILD_GRAPHHOPPER"
-
 if [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
-  docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper build graphhopper
-  if [ "$needs_graphhopper_build" != "true" ] \
-    && ! bash "$ROOT_DIR/scripts/graphhopper/cache_matches_volume.sh" "$graphhopper_cache_fingerprint" "$GRAPHHOPPER_CACHE_VOLUME"; then
-    needs_graphhopper_build="true"
-    echo "GraphHopper cache fingerprint mismatch detected. Rebuilding graph-cache before runtime deploy."
-  fi
+  docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper build graphhopper-blue graphhopper-green
 fi
 
-if [ "$needs_graphhopper_build" = "true" ]; then
-  docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper-build build graphhopper-build
-  docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper-build run --rm \
-    -e GRAPHHOPPER_CACHE_FINGERPRINT="$graphhopper_cache_fingerprint" \
-    graphhopper-build
-fi
-
-if [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
-  docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper up -d graphhopper
+if [ "$BUILD_GRAPHHOPPER" = "true" ]; then
+  GRAPHHOPPER_REFRESH_BUILD_ID="${GRAPHHOPPER_REFRESH_BUILD_ID:-deploy-$APP_IMAGE_TAG}" \
+    bash "$ROOT_DIR/scripts/graphhopper/prod-bluegreen-refresh.sh"
+elif [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
+  docker compose --env-file .env.prod -f docker-compose.prod.yml --profile graphhopper up -d --no-recreate graphhopper-blue graphhopper-green
 fi
 
 bash "$ROOT_DIR/scripts/deploy/prod-smoke.sh"
 
 echo "$APP_IMAGE_TAG" > "$DEPLOY_STATE_DIR/current-app-image"
-if [ "$needs_graphhopper_build" = "true" ] || [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
+if [ "$BUILD_GRAPHHOPPER" = "true" ] || [ "$DEPLOY_GRAPHHOPPER" = "true" ]; then
   echo "$GRAPHHOPPER_IMAGE_TAG" > "$DEPLOY_STATE_DIR/current-graphhopper-image"
+fi
+
+if [ "${DOCKER_DISK_MAINTENANCE_AFTER_DEPLOY:-true}" = "true" ] && [ -f "$ROOT_DIR/scripts/maintenance/docker-disk-maintenance.sh" ]; then
+  DOCKER_DISK_MAINTENANCE_MODE="${DOCKER_DISK_MAINTENANCE_MODE:-pipeline}" \
+    bash "$ROOT_DIR/scripts/maintenance/docker-disk-maintenance.sh" || \
+    echo "Docker disk maintenance failed after deploy; continuing because deploy already passed." >&2
 fi

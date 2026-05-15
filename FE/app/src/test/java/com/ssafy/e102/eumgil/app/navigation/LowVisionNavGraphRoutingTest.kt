@@ -51,10 +51,26 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
-    fun `low vision navigation exit returns to low vision home`() {
+    fun `low vision navigation completion moves to low vision complete screen`() {
+        assertEquals(
+            LowVisionRoute.NavigationComplete.route,
+            resolveNavigationCompletionRoute(selectedPrimaryUserType = "low_vision"),
+        )
+    }
+
+    @Test
+    fun `low vision navigation exit moves to low vision complete screen`() {
+        assertEquals(
+            LowVisionRoute.NavigationComplete.route,
+            resolveLowVisionNavigationExitRoute(),
+        )
+    }
+
+    @Test
+    fun `low vision navigation complete done moves to low vision home`() {
         assertEquals(
             LowVisionRoute.Home.route,
-            resolveLowVisionNavigationExitRoute(),
+            resolveLowVisionNavigationCompleteDoneRoute(),
         )
     }
 
@@ -95,6 +111,18 @@ class LowVisionNavGraphRoutingTest {
         assertEquals(
             "low_vision/category_result/%ED%99%94%EC%9E%A5%EC%8B%A4",
             LowVisionRoute.CategoryResult.createRoute("화장실"),
+        )
+    }
+
+    @Test
+    fun `low vision category result decodes selected category before search`() {
+        assertEquals(
+            "음식점",
+            decodeLowVisionCategoryRouteArgument("%EC%9D%8C%EC%8B%9D%EC%A0%90"),
+        )
+        assertEquals(
+            "숙박시설",
+            decodeLowVisionCategoryRouteArgument("숙박시설"),
         )
     }
 

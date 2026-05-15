@@ -58,6 +58,8 @@ data class RouteLegDto(
 data class RouteGuidanceEventDto(
     val sequence: Int? = null,
     val type: String? = null,
+    val direction: String? = null,
+    val features: List<String> = emptyList(),
     val distanceFromLegStartMeter: Double? = null,
     val durationFromLegStartSecond: Int? = null,
     val distanceFromRouteStartMeter: Double? = null,
@@ -71,6 +73,16 @@ data class RouteTransitLaneOptionDto(
     val durationSecond: Int? = null,
     val estimatedTimeMinute: Int? = null,
     val isLowFloor: Boolean? = null,
+    val lowFloorReservation: LowFloorBusReservationDto? = null,
+)
+
+data class LowFloorBusReservationDto(
+    val stopName: String? = null,
+    val arsNo: String? = null,
+    val routeNo: String? = null,
+    val vehicleNo: String? = null,
+    val remainingMinute: Int? = null,
+    val remainingStopCount: Int? = null,
 )
 
 data class RouteStepDto(
@@ -119,6 +131,12 @@ data class RouteSegmentDto(
 
 data class RouteSelectRequestDto(
     val searchId: String,
+)
+
+data class RouteSelectResponseDto(
+    val sessionId: String,
+    val totalDistanceMeter: Double? = null,
+    val totalDurationSecond: Int? = null,
 )
 
 data class RouteSessionResponseDto(

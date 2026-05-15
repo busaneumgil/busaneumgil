@@ -1,6 +1,15 @@
 package com.ssafy.e102.eumgil.feature.report
 
+import androidx.activity.ComponentActivity
+import com.ssafy.e102.eumgil.core.location.CurrentLocationAddressResolver
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationGrantAccuracy
+import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.core.location.NoOpCurrentLocationAddressResolver
+import com.ssafy.e102.eumgil.core.location.LocationPermissionState
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
+import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
@@ -9,6 +18,9 @@ import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -29,7 +41,7 @@ class ReportViewModelTest {
     fun `save draft stores partial input and exposes saved state`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.DescriptionChanged("  보도 중앙 장애물  "))
             viewModel.onAction(ReportUiAction.SaveDraftClicked)
@@ -48,7 +60,7 @@ class ReportViewModelTest {
     fun `editing while draft save is pending does not mark current input saved`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.DescriptionChanged("처음 입력"))
             viewModel.onAction(ReportUiAction.SaveDraftClicked)
@@ -73,18 +85,26 @@ class ReportViewModelTest {
                             draftId = "draft-1",
                             reportCategory = ReportType.OTHER_OBSTACLE.apiValue,
                             description = "복원할 설명",
-                            address = "부산역 인근",
+                            // 옵션 4(v8): "부산역 인근"은 사용자 직접 보충 메모로 의도된 값이라
+                            // addressDetail에 저장 → 복원 시 addressText로 노출.
+                            address = null,
+                            addressDetail = "부산역 인근",
                             latitude = 35.1151,
                             longitude = 129.0414,
                             locationSource = ReportLocationSource.MapPin.name,
-                            photoUri = "content://draft/photo.jpg",
-                            photoMimeType = "image/jpeg",
-                            photoSizeBytes = 1000L,
+                            photos =
+                                listOf(
+                                    ReportDraftPhotoData(
+                                        localUri = "content://draft/photo.jpg",
+                                        mimeType = "image/jpeg",
+                                        sizeBytes = 1000L,
+                                    ),
+                                ),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.hasExistingDraft)
@@ -116,14 +136,12 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             advanceUntilIdle()
 
             viewModel.onAction(ReportUiAction.DraftResumeClicked)
@@ -150,14 +168,12 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             advanceUntilIdle()
 
             viewModel.onAction(ReportUiAction.DraftResumeClicked)
@@ -175,7 +191,7 @@ class ReportViewModelTest {
     fun `invalid submit marks errors and does not save outbox`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             val event = async { viewModel.uiEvent.first() }
 
             viewModel.onAction(ReportUiAction.SubmitClicked)
@@ -204,21 +220,13 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             advanceUntilIdle()
-            val event =
-                async {
-                    viewModel.uiEvent.first { emittedEvent ->
-                        emittedEvent is ReportUiEvent.NavigateToReportComplete
-                    }
-                }
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.BRAILLE_BLOCK))
             viewModel.onAction(
@@ -238,7 +246,6 @@ class ReportViewModelTest {
 
             val savedOutbox = requireNotNull(repository.savedOutbox)
             val uiState = viewModel.uiState.value
-            val completeEvent = event.await() as ReportUiEvent.NavigateToReportComplete
 
             assertEquals(ReportType.BRAILLE_BLOCK.apiValue, savedOutbox.reportCategory)
             assertEquals("점자블록 파손", savedOutbox.description)
@@ -249,8 +256,10 @@ class ReportViewModelTest {
             assertFalse(uiState.hasExistingDraft)
             assertTrue(uiState.screenState is ReportScreenState.Completed)
             assertTrue(uiState.submitState is ReportSubmitState.Success)
-            assertTrue(uiState.outboxState is ReportOutboxState.Saved)
-            assertEquals("outbox-1", completeEvent.outboxId)
+            // Task 4.4 — NavigateToReportComplete event 제거 후 outboxId는 state로만 검증.
+            val outboxState = uiState.outboxState
+            assertTrue(outboxState is ReportOutboxState.Saved)
+            assertEquals("outbox-1", (outboxState as ReportOutboxState.Saved).outboxId)
         }
 
     @Test
@@ -267,15 +276,13 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
                     failDeleteDraft = true,
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             advanceUntilIdle()
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
@@ -307,7 +314,7 @@ class ReportViewModelTest {
     fun `outbox failure keeps input and exposes retryable failure state`() =
         runTest {
             val repository = FakeReportRepository(failOutbox = true)
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
@@ -343,7 +350,7 @@ class ReportViewModelTest {
                         ReportSubmitResult.Success(outboxId = outboxId, serverReportId = 42L)
                     },
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.RAMP))
             viewModel.onAction(
@@ -382,7 +389,7 @@ class ReportViewModelTest {
                         )
                     },
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.SIDEWALK_MISSING))
             viewModel.onAction(
@@ -433,7 +440,7 @@ class ReportViewModelTest {
                         }
                     },
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.RAMP))
             viewModel.onAction(
@@ -469,7 +476,7 @@ class ReportViewModelTest {
     fun `selecting report type advances step to LocationConfirm`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
 
@@ -484,7 +491,7 @@ class ReportViewModelTest {
     fun `next step click on location confirm with valid location advances to detail input`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.RAMP))
             viewModel.onAction(
@@ -508,7 +515,7 @@ class ReportViewModelTest {
     fun `next step click on location confirm without location stays on same step`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(ReportUiAction.NextStepClicked)
@@ -521,7 +528,7 @@ class ReportViewModelTest {
     fun `back click on intermediate step moves to previous step without navigating`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.BRAILLE_BLOCK))
             assertEquals(ReportStep.LocationConfirm, viewModel.uiState.value.currentStep)
@@ -536,7 +543,7 @@ class ReportViewModelTest {
     fun `back click on type selection emits NavigateBack`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             val event = async { viewModel.uiEvent.first() }
 
             viewModel.onAction(ReportUiAction.BackClicked)
@@ -550,7 +557,7 @@ class ReportViewModelTest {
     fun `successful submit sets current step to Complete`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
@@ -574,7 +581,7 @@ class ReportViewModelTest {
     fun `report history click after complete resets form for next report`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             val event =
                 async {
                     viewModel.uiEvent.first { emittedEvent ->
@@ -619,14 +626,12 @@ class ReportViewModelTest {
                             latitude = 35.1151,
                             longitude = 129.0414,
                             locationSource = ReportLocationSource.MapPin.name,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             advanceUntilIdle()
 
             viewModel.onAction(ReportUiAction.DraftResumeClicked)
@@ -639,11 +644,19 @@ class ReportViewModelTest {
     fun `adding photos appends to list and updates count`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            repeat(3) { index ->
+                viewModel.onAction(
+                    ReportUiAction.PhotoSelected(
+                        ReportPhoto(
+                            localUri = "content://picker/photo-$index.jpg",
+                            mimeType = "image/jpeg",
+                            sizeBytes = 1_024_000L,
+                        ),
+                    ),
+                )
+            }
             advanceUntilIdle()
 
             val photoInput = viewModel.uiState.value.photo
@@ -656,10 +669,18 @@ class ReportViewModelTest {
     fun `adding more than max photos is capped without TooMany error via UI path`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
-            repeat(ReportFormLimits.PHOTO_MAX_COUNT + 2) {
-                viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            repeat(ReportFormLimits.PHOTO_MAX_COUNT + 2) { index ->
+                viewModel.onAction(
+                    ReportUiAction.PhotoSelected(
+                        ReportPhoto(
+                            localUri = "content://picker/photo-$index.jpg",
+                            mimeType = "image/jpeg",
+                            sizeBytes = 1_024_000L,
+                        ),
+                    ),
+                )
             }
             advanceUntilIdle()
 
@@ -670,14 +691,43 @@ class ReportViewModelTest {
         }
 
     @Test
+    fun `selecting photo with same localUri is ignored to dedupe attachments`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = createReportViewModel(repository)
+
+            val photo =
+                ReportPhoto(
+                    localUri = "content://picker/123",
+                    mimeType = "image/jpeg",
+                    sizeBytes = 1024L,
+                )
+            viewModel.onAction(ReportUiAction.PhotoSelected(photo))
+            viewModel.onAction(ReportUiAction.PhotoSelected(photo))
+            advanceUntilIdle()
+
+            val photoInput = viewModel.uiState.value.photo
+            assertEquals(1, photoInput.count)
+            assertEquals(photo.localUri, photoInput.values.single().localUri)
+        }
+
+    @Test
     fun `removing photo at index drops only that entry`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            repeat(3) { index ->
+                viewModel.onAction(
+                    ReportUiAction.PhotoSelected(
+                        ReportPhoto(
+                            localUri = "content://picker/photo-$index.jpg",
+                            mimeType = "image/jpeg",
+                            sizeBytes = 1_024_000L,
+                        ),
+                    ),
+                )
+            }
             advanceUntilIdle()
             val before = viewModel.uiState.value.photo.values
             assertEquals(3, before.size)
@@ -695,7 +745,7 @@ class ReportViewModelTest {
     fun `outbox saves only first photo when multiple are attached`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
             viewModel.onAction(
@@ -709,9 +759,17 @@ class ReportViewModelTest {
                     source = ReportLocationSource.MapPin,
                 ),
             )
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            repeat(3) { index ->
+                viewModel.onAction(
+                    ReportUiAction.PhotoSelected(
+                        ReportPhoto(
+                            localUri = "content://picker/photo-$index.jpg",
+                            mimeType = "image/jpeg",
+                            sizeBytes = 1_024_000L,
+                        ),
+                    ),
+                )
+            }
             viewModel.onAction(ReportUiAction.SubmitClicked)
             advanceUntilIdle()
 
@@ -724,7 +782,7 @@ class ReportViewModelTest {
     fun `description max length 300 marks error when exceeded`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             val longText = "가".repeat(ReportFormLimits.DESCRIPTION_MAX_LENGTH + 1)
             viewModel.onAction(ReportUiAction.DescriptionChanged(longText))
@@ -738,7 +796,7 @@ class ReportViewModelTest {
     fun `editing after outbox failure clears retry failure state`() =
         runTest {
             val repository = FakeReportRepository(failOutbox = true)
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
@@ -769,7 +827,7 @@ class ReportViewModelTest {
     fun `single photo attachment is preserved in outbox payload`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
@@ -783,7 +841,15 @@ class ReportViewModelTest {
                     source = ReportLocationSource.MapPin,
                 ),
             )
-            viewModel.onAction(ReportUiAction.PhotoAddClicked)
+            viewModel.onAction(
+                ReportUiAction.PhotoSelected(
+                    ReportPhoto(
+                        localUri = "content://picker/photo-0.jpg",
+                        mimeType = "image/jpeg",
+                        sizeBytes = 1_024_000L,
+                    ),
+                ),
+            )
             viewModel.onAction(ReportUiAction.SubmitClicked)
             advanceUntilIdle()
 
@@ -799,7 +865,7 @@ class ReportViewModelTest {
     fun `location with out of range coordinate marks InvalidCoordinate error and blocks submit`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
             viewModel.onAction(
@@ -837,7 +903,7 @@ class ReportViewModelTest {
                         )
                     },
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
@@ -873,7 +939,7 @@ class ReportViewModelTest {
     fun `start new report after complete resets form to type selection`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
             viewModel.onAction(
@@ -907,7 +973,7 @@ class ReportViewModelTest {
     fun `tab reentered after complete resets form to type selection`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
             viewModel.onAction(
@@ -939,7 +1005,7 @@ class ReportViewModelTest {
     fun `tab reentered while editing preserves in progress form input`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.RAMP))
             viewModel.onAction(ReportUiAction.DescriptionChanged("작성 중인 설명"))
@@ -969,14 +1035,12 @@ class ReportViewModelTest {
                             latitude = null,
                             longitude = null,
                             locationSource = null,
-                            photoUri = null,
-                            photoMimeType = null,
-                            photoSizeBytes = null,
+                            photos = emptyList(),
                             createdAtMillis = 10L,
                             updatedAtMillis = 20L,
                         ),
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             advanceUntilIdle()
 
             // 진입 직후 draft 배너 노출 조건이 충족된다.
@@ -1006,7 +1070,7 @@ class ReportViewModelTest {
                         )
                     },
                 )
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
@@ -1038,7 +1102,7 @@ class ReportViewModelTest {
     fun `back to map after complete resets form and emits navigate to map event`() =
         runTest {
             val repository = FakeReportRepository()
-            val viewModel = ReportViewModel(reportRepository = repository)
+            val viewModel = createReportViewModel(repository)
             val uiEvent = async { viewModel.uiEvent.first() }
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
@@ -1056,7 +1120,7 @@ class ReportViewModelTest {
             viewModel.onAction(ReportUiAction.SubmitClicked)
             advanceUntilIdle()
 
-            uiEvent.await() // drain ShowSnackbar / NavigateToReportComplete
+            uiEvent.await() // drain submit completion event(s)
             val backToMapEvent = async { viewModel.uiEvent.first() }
 
             viewModel.onAction(ReportUiAction.BackToMapClicked)
@@ -1066,6 +1130,414 @@ class ReportViewModelTest {
             val resetState = viewModel.uiState.value
             assertEquals(ReportStep.TypeSelection, resetState.currentStep)
             assertEquals(null, resetState.reportType.value)
+        }
+
+    // ─── Task 1.2 — Draft 충돌 confirm 다이얼로그 ─────────────────────────────
+
+    @Test
+    fun `selecting report type on fresh form with existing draft emits ShowDraftDiscardDialog`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.STAIRS_STEP.apiValue,
+                            description = "기존 임시저장 설명",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photos = emptyList(),
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = createReportViewModel(repository)
+            advanceUntilIdle()
+            val event = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.BRAILLE_BLOCK))
+            advanceUntilIdle()
+
+            val emitted = event.await()
+            assertTrue(emitted is ReportUiEvent.ShowDraftDiscardDialog)
+            assertEquals(
+                ReportType.BRAILLE_BLOCK,
+                (emitted as ReportUiEvent.ShowDraftDiscardDialog).pendingType,
+            )
+
+            // 다이얼로그가 뜨는 동안에는 아직 reportType이 적용되지 않아야 한다.
+            val midState = viewModel.uiState.value
+            assertNull(midState.reportType.value)
+            assertEquals(ReportStep.TypeSelection, midState.currentStep)
+            assertNull(repository.deletedDraftId)
+        }
+
+    @Test
+    fun `selecting report type without existing draft applies type immediately without dialog`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = createReportViewModel(repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.RAMP))
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(ReportType.RAMP, state.reportType.value)
+            assertEquals(ReportStep.LocationConfirm, state.currentStep)
+        }
+
+    @Test
+    fun `selecting different type after resuming draft also emits ShowDraftDiscardDialog`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.STAIRS_STEP.apiValue,
+                            description = "복원할 설명",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photos = emptyList(),
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = createReportViewModel(repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.DraftResumeClicked)
+            advanceUntilIdle()
+
+            // resume 후 reportType.value가 채워져 있어도 draft가 DB에 남아있으므로,
+            // 다른 type 클릭은 잠재적 데이터 손실 → 다이얼로그 노출.
+            val event = async { viewModel.uiEvent.first() }
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.SIDEWALK_WIDTH))
+            advanceUntilIdle()
+
+            val emitted = event.await()
+            assertTrue(emitted is ReportUiEvent.ShowDraftDiscardDialog)
+            assertEquals(
+                ReportType.SIDEWALK_WIDTH,
+                (emitted as ReportUiEvent.ShowDraftDiscardDialog).pendingType,
+            )
+            // 다이얼로그 노출 시점에는 type이 아직 SIDEWALK_WIDTH로 바뀌지 않아야 한다.
+            assertEquals(ReportType.STAIRS_STEP, viewModel.uiState.value.reportType.value)
+        }
+
+    @Test
+    fun `selecting same type as current is idempotent and does not emit dialog`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.STAIRS_STEP.apiValue,
+                            description = "복원할 설명",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photos = emptyList(),
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = createReportViewModel(repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.DraftResumeClicked)
+            advanceUntilIdle()
+
+            // 현재 STAIRS_STEP인 상태에서 같은 STAIRS_STEP을 다시 누르면 다이얼로그 없이 idempotent.
+            // (TypeSelection 단계라면 다음 단계로 진행만 한다.)
+            viewModel.onAction(ReportUiAction.BackClicked)
+            advanceUntilIdle()
+            // 이제 TypeSelection으로 복귀
+            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(ReportType.STAIRS_STEP, state.reportType.value)
+            assertEquals(ReportStep.LocationConfirm, state.currentStep)
+        }
+
+    @Test
+    fun `save draft then back nav then select different type emits ShowDraftDiscardDialog`() =
+        runTest {
+            // 사용자가 실제로 보고한 시나리오:
+            // 1) 단차 + 설명 입력 + 임시저장
+            // 2) TypeSelection 단계로 복귀 (뒤로가기 또는 탭 재진입)
+            // 3) 다른 type(기타 장애물) 클릭 → 다이얼로그 노출되어야 함
+            val repository = FakeReportRepository()
+            val viewModel = createReportViewModel(repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
+            viewModel.onAction(ReportUiAction.DescriptionChanged("단차 관련 내용"))
+            viewModel.onAction(ReportUiAction.SaveDraftClicked)
+            advanceUntilIdle()
+
+            // 임시저장 직후 hasExistingDraft가 true, draftId가 채워졌는지 확인
+            val savedState = viewModel.uiState.value
+            assertTrue(savedState.hasExistingDraft)
+            assertEquals("draft-1", savedState.draftId)
+
+            // TypeSelection 단계로 강제 복귀 (실제 앱에서는 뒤로가기 또는 탭 재진입으로 발생)
+            viewModel.onAction(ReportUiAction.BackClicked)
+            advanceUntilIdle()
+            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+
+            // 다른 type 클릭 → 다이얼로그 emit 검증
+            val event = async {
+                viewModel.uiEvent.first { it is ReportUiEvent.ShowDraftDiscardDialog }
+            }
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
+            advanceUntilIdle()
+
+            val emitted = event.await() as ReportUiEvent.ShowDraftDiscardDialog
+            assertEquals(ReportType.OTHER_OBSTACLE, emitted.pendingType)
+            // 다이얼로그가 뜨는 동안 type은 아직 STAIRS_STEP 유지, 설명도 그대로 (사용자 결정 대기)
+            val midState = viewModel.uiState.value
+            assertEquals(ReportType.STAIRS_STEP, midState.reportType.value)
+            assertEquals("단차 관련 내용", midState.description.value)
+        }
+
+    @Test
+    fun `DiscardDraftAndStartNew deletes draft resets form and applies new type`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.STAIRS_STEP.apiValue,
+                            description = "기존 설명",
+                            address = null,
+                            latitude = null,
+                            longitude = null,
+                            locationSource = null,
+                            photos = emptyList(),
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = createReportViewModel(repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.DiscardDraftAndStartNew(ReportType.OTHER_OBSTACLE))
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals("draft-1", repository.deletedDraftId)
+            assertEquals(ReportType.OTHER_OBSTACLE, state.reportType.value)
+            assertEquals(ReportStep.LocationConfirm, state.currentStep)
+            assertNull(state.draftId)
+            assertFalse(state.hasExistingDraft)
+        }
+
+    @Test
+    fun `ResumeDraftFromDialog restores saved draft state`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    latestDraft =
+                        ReportDraftData(
+                            draftId = "draft-1",
+                            reportCategory = ReportType.RAMP.apiValue,
+                            description = "복원할 설명",
+                            // 옵션 4(v8): "부산역"은 사용자 직접 보충 메모로 의도 — addressDetail에 저장,
+                            // 복원 시 addressText로 노출되어 L1380 검증과 부합.
+                            address = null,
+                            addressDetail = "부산역",
+                            latitude = 35.1151,
+                            longitude = 129.0414,
+                            locationSource = ReportLocationSource.MapPin.name,
+                            photos = emptyList(),
+                            createdAtMillis = 10L,
+                            updatedAtMillis = 20L,
+                        ),
+                )
+            val viewModel = createReportViewModel(repository)
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.ResumeDraftFromDialog)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(ReportType.RAMP, state.reportType.value)
+            assertEquals("복원할 설명", state.description.value)
+            assertEquals("부산역", state.location.addressText)
+        }
+
+    // ─── Task 2.1 — 현재 위치 GPS 연동 ─────────────────────────────────────
+
+    @Test
+    fun `current location with granted permission and fresh last known immediately applies location`() =
+        runTest {
+            val freshSnapshot =
+                LocationSnapshot(
+                    latitude = 37.5665,
+                    longitude = 126.9780,
+                    accuracyMeters = 10f,
+                    recordedAtEpochMillis = System.currentTimeMillis(),
+                )
+            val locationManager = FakeCurrentLocationManager(initialSnapshot = freshSnapshot)
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val viewModel =
+                createReportViewModel(
+                    repository = FakeReportRepository(),
+                    currentLocationManager = locationManager,
+                    locationPermissionManager = permissionManager,
+                )
+
+            viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(37.5665, state.location.value?.latitude ?: 0.0, 0.0001)
+            assertEquals(126.9780, state.location.value?.longitude ?: 0.0, 0.0001)
+            assertEquals(ReportLocationSource.CurrentLocation, state.location.source)
+            assertFalse(state.location.isResolvingCurrentLocation)
+            assertNull(state.location.error)
+        }
+
+    @Test
+    fun `current location with denied permission emits RequestLocationPermission and stays resolving`() =
+        runTest {
+            val permissionManager =
+                FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val viewModel =
+                createReportViewModel(
+                    repository = FakeReportRepository(),
+                    locationPermissionManager = permissionManager,
+                )
+            val event = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportUiEvent.RequestLocationPermission, event.await())
+            val state = viewModel.uiState.value
+            assertTrue(state.location.isResolvingCurrentLocation)
+            assertNull(state.location.value)
+        }
+
+    @Test
+    fun `refresh location permission after still denied finishes resolving with permission error`() =
+        runTest {
+            val permissionManager =
+                FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val viewModel =
+                createReportViewModel(
+                    repository = FakeReportRepository(),
+                    locationPermissionManager = permissionManager,
+                )
+
+            viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
+            advanceUntilIdle()
+
+            // 사용자가 권한 다이얼로그에서 거부 후 Activity가 ON_RESUME으로 돌아옴.
+            // permissionState는 여전히 Denied. RefreshLocationPermission 한 번 들어옴.
+            viewModel.onAction(ReportUiAction.RefreshLocationPermission)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertFalse(state.location.isResolvingCurrentLocation)
+            assertEquals(ReportLocationError.PermissionDenied, state.location.error)
+        }
+
+    @Test
+    fun `refresh location permission after granted starts fetch and applies location`() =
+        runTest {
+            val freshSnapshot =
+                LocationSnapshot(
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = System.currentTimeMillis(),
+                )
+            val locationManager = FakeCurrentLocationManager(initialSnapshot = freshSnapshot)
+            val permissionManager =
+                FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val viewModel =
+                createReportViewModel(
+                    repository = FakeReportRepository(),
+                    currentLocationManager = locationManager,
+                    locationPermissionManager = permissionManager,
+                )
+
+            // 1) 사용자가 버튼 탭 → 권한 요청 emit, resolving=true
+            viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.location.isResolvingCurrentLocation)
+
+            // 2) 사용자가 허용 후 Activity ON_RESUME → permissionState=Granted, RefreshLocationPermission dispatch
+            permissionManager.setPermissionState(LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE))
+            viewModel.onAction(ReportUiAction.RefreshLocationPermission)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(35.1796, state.location.value?.latitude ?: 0.0, 0.0001)
+            assertEquals(ReportLocationSource.CurrentLocation, state.location.source)
+            assertFalse(state.location.isResolvingCurrentLocation)
+        }
+
+    @Test
+    fun `current location with GPS disabled emits unavailable error`() =
+        runTest {
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState =
+                        LocationPermissionState.Unavailable(
+                            reason = com.ssafy.e102.eumgil.core.location
+                                .LocationPermissionUnavailableReason.LOCATION_SERVICES_DISABLED,
+                        ),
+                )
+            val viewModel =
+                createReportViewModel(
+                    repository = FakeReportRepository(),
+                    locationPermissionManager = permissionManager,
+                )
+
+            viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertFalse(state.location.isResolvingCurrentLocation)
+            assertEquals(ReportLocationError.CurrentLocationUnavailable, state.location.error)
+        }
+
+    @Test
+    fun `current location resolving state ignores rapid repeat clicks`() =
+        runTest {
+            val permissionManager =
+                FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
+            val viewModel =
+                createReportViewModel(
+                    repository = FakeReportRepository(),
+                    locationPermissionManager = permissionManager,
+                )
+
+            viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
+            viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
+            viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
+            advanceUntilIdle()
+
+            // 첫 클릭만 처리되어야 함. refresh가 3회가 아닌 1회 호출.
+            assertEquals(1, permissionManager.refreshCallCount)
+            assertTrue(viewModel.uiState.value.location.isResolvingCurrentLocation)
         }
 }
 
@@ -1118,5 +1590,80 @@ private class FakeReportRepository(
     override suspend fun submitOutboxToServer(outboxId: String): ReportSubmitResult {
         submittedOutboxIds.add(outboxId)
         return submitResultFactory(outboxId)
+    }
+}
+
+// ─── Test helpers ─────────────────────────────────────────────────────────
+//
+// 기존 테스트는 위치 기능을 사용하지 않으므로 기본 Granted 상태의 Fake managers를 주입한다.
+// Task 2.1 신규 테스트(권한 거부 / 타임아웃 / GPS 꺼짐)는 setPermissionState / setLocation
+// 등을 통해 시나리오를 구성한다.
+
+private fun createReportViewModel(
+    repository: ReportRepository,
+    currentLocationManager: CurrentLocationManager = FakeCurrentLocationManager(),
+    locationPermissionManager: LocationPermissionManager = FakeLocationPermissionManager(),
+    addressResolver: CurrentLocationAddressResolver = NoOpCurrentLocationAddressResolver,
+): ReportViewModel =
+    ReportViewModel(
+        reportRepository = repository,
+        currentLocationManager = currentLocationManager,
+        locationPermissionManager = locationPermissionManager,
+        addressResolver = addressResolver,
+    )
+
+private class FakeCurrentLocationManager(
+    initialSnapshot: LocationSnapshot? = null,
+) : CurrentLocationManager {
+    private val mutableLatestLocation = MutableStateFlow(initialSnapshot)
+    override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation.asStateFlow()
+
+    var refreshCallCount: Int = 0
+        private set
+    var startCallCount: Int = 0
+        private set
+    var stopCallCount: Int = 0
+        private set
+
+    override fun refreshLatestLocation() {
+        refreshCallCount += 1
+    }
+
+    override fun startLocationUpdates() {
+        startCallCount += 1
+    }
+
+    override fun stopLocationUpdates() {
+        stopCallCount += 1
+    }
+
+    fun emitSnapshot(snapshot: LocationSnapshot?) {
+        mutableLatestLocation.value = snapshot
+    }
+}
+
+private class FakeLocationPermissionManager(
+    initialState: LocationPermissionState =
+        LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+) : LocationPermissionManager {
+    private val mutablePermissionState = MutableStateFlow(initialState)
+    override val permissionState: StateFlow<LocationPermissionState> =
+        mutablePermissionState.asStateFlow()
+
+    var refreshCallCount: Int = 0
+        private set
+    var requestCallCount: Int = 0
+        private set
+
+    override fun refreshPermissionState() {
+        refreshCallCount += 1
+    }
+
+    override fun requestLocationPermission(activity: ComponentActivity) {
+        requestCallCount += 1
+    }
+
+    fun setPermissionState(state: LocationPermissionState) {
+        mutablePermissionState.value = state
     }
 }

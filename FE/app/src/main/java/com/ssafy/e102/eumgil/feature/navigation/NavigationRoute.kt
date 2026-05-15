@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.navigation
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +39,7 @@ fun NavigationRoute(
         remember(appContext) {
             AndroidTextToSpeechController(context = appContext)
         }
+    val routeChangeAlertPlayer = remember { NavigationRouteChangeAlertPlayer() }
     val currentLocationManager = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.currentLocationManager
     }
@@ -52,6 +54,7 @@ fun NavigationRoute(
             currentLocationManager = currentLocationManager,
             bookmarkRepository = bookmarkRepository,
             routeRepository = routeRepository,
+            isLowVisionMode = useLowVisionUi,
         )
     }
     val viewModel =
@@ -70,14 +73,22 @@ fun NavigationRoute(
         )
     }
 
+    BackHandler(
+        enabled = !useLowVisionUi && !uiState.isExitConfirmDialogVisible,
+    ) {
+        viewModel.onAction(NavigationUiAction.BackClicked)
+    }
+
     LaunchedEffect(
         viewModel,
+        useLowVisionUi,
         onNavigateBack,
         onNavigateToRouteDetail,
         onNavigateToMap,
         onNavigateToSavedRoute,
         onNavigateToArrival,
     ) {
+        viewModel.setLowVisionMode(useLowVisionUi)
         launch(start = CoroutineStart.UNDISPATCHED) {
             viewModel.uiEvent.collect { event ->
                 when (event) {
@@ -87,6 +98,7 @@ fun NavigationRoute(
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
                     NavigationUiEvent.NavigateToArrival -> onNavigateToArrival()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
+                    NavigationUiEvent.PlayRouteChangeAlert -> routeChangeAlertPlayer.play()
                     NavigationUiEvent.StopBriefing -> textToSpeechController.stop()
                     is NavigationUiEvent.SetVoiceGuidanceEnabled ->
                         textToSpeechController.setEnabled(event.enabled)
@@ -100,6 +112,7 @@ fun NavigationRoute(
         onDispose {
             textToSpeechController.stop()
             textToSpeechController.shutdown()
+            routeChangeAlertPlayer.release()
         }
     }
 

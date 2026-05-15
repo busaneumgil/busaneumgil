@@ -554,10 +554,11 @@ export function SegmentMap({
     if (!activeTypes.size) return;
     const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
     segmentFeatures.forEach((feature) => {
-      const overlay = createSegmentFeatureOverlay(feature, activeTypes);
-      if (!overlay) return;
-      overlay.setMap(map);
-      segmentFeatureOverlaysRef.current.push(overlay);
+      const overlays = createSegmentFeatureOverlays(feature, activeTypes);
+      overlays.forEach((overlay) => {
+        overlay.setMap(map);
+        segmentFeatureOverlaysRef.current.push(overlay);
+      });
     });
   }
 
@@ -1002,19 +1003,36 @@ function createRoutePointOverlay(point: GeoPoint, label: string, type: "start" |
   });
 }
 
-function createSegmentFeatureOverlay(feature: SegmentFeature, activeTypes: Set<SegmentFeatureType>): KakaoOverlay | null {
-  if (!window.kakao?.maps) return null;
-  const matchedType = segmentFeatureTypes.find((featureType) => activeTypes.has(featureType) && feature.properties.featureTypes?.includes(featureType));
-  if (!matchedType) return null;
-  return new window.kakao.maps.Polyline({
-    path: feature.geometry.coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng)),
-    strokeWeight: matchedType === "STAIRS" ? 9 : 8,
-    strokeColor: segmentFeatureColors[matchedType],
-    strokeOpacity: 0.78,
-    strokeStyle: matchedType === "BRAILLE_BLOCK" ? "shortdash" : "solid",
-    clickable: false,
-    zIndex: 25,
-  });
+function createSegmentFeatureOverlays(feature: SegmentFeature, activeTypes: Set<SegmentFeatureType>): KakaoOverlay[] {
+  if (!window.kakao?.maps) return [];
+  const matchedTypes = segmentFeatureTypes.filter((featureType) =>
+    activeTypes.has(featureType) && feature.properties.featureTypes?.includes(featureType));
+  if (!matchedTypes.length) return [];
+
+  const primaryType = primarySegmentFeatureType(matchedTypes);
+  const badge = document.createElement("div");
+  badge.className = "segment-feature-badge";
+  badge.style.backgroundColor = segmentFeatureColors[primaryType];
+  badge.title = matchedTypes.map((featureType) => segmentFeatureLabels[featureType]).join(" / ");
+  badge.textContent = matchedTypes.length > 1 ? String(matchedTypes.length) : "";
+  const badgeCoord = midpointCoord(feature.geometry.coordinates);
+
+  return [new window.kakao.maps.CustomOverlay({
+    position: new window.kakao.maps.LatLng(badgeCoord[1], badgeCoord[0]),
+    content: badge,
+    xAnchor: 0.5,
+    yAnchor: 0.5,
+    zIndex: 27,
+  })];
+}
+
+function primarySegmentFeatureType(featureTypes: SegmentFeatureType[]) {
+  const priority: SegmentFeatureType[] = ["STAIRS", "BRAILLE_BLOCK", "AUDIO_SIGNAL", "CROSSWALK"];
+  return priority.find((featureType) => featureTypes.includes(featureType)) ?? featureTypes[0];
+}
+
+function midpointCoord(coords: Coord[]): Coord {
+  return coords[Math.floor(coords.length / 2)] ?? coords[0] ?? [0, 0];
 }
 
 function createRouteAttributeEventOverlay(feature: SegmentFeature, activeLayers: RouteAttributeLayer[]): KakaoOverlay | null {
@@ -1170,10 +1188,6 @@ function surfaceStrokeStyle(surfaceState: unknown) {
   if (state.includes("UNPAVED") || state.includes("BAD")) return "shortdash";
   if (state.includes("UNKNOWN")) return "shortdot";
   return "solid";
-}
-
-function midpointCoord(coordinates: Coord[]) {
-  return coordinates[Math.floor(coordinates.length / 2)] ?? coordinates[0] ?? [0, 0];
 }
 
 function createBridgeOverlay(feature: BridgeFeature, map: KakaoMap): KakaoOverlay[] | null {

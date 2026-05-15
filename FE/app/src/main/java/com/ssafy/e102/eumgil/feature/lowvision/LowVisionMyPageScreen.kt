@@ -44,6 +44,8 @@ internal object LowVisionMyPageLayoutDefaults {
     const val actionCount = 3
     const val actionSectionWeight = 1f
     val actionMinHeight = 112.dp
+    val actionLabelFontSize = 36.sp
+    val actionLabelLineHeight = 42.sp
 }
 
 internal object LowVisionAppInfoLayoutDefaults {
@@ -278,10 +280,11 @@ private fun LowVisionMyPageAction(
                 text = label,
                 modifier = Modifier.weight(1f),
                 color = contentColor,
-                fontSize = 40.sp,
+                fontSize = LowVisionMyPageLayoutDefaults.actionLabelFontSize,
                 fontWeight = FontWeight.Black,
-                lineHeight = 46.sp,
+                lineHeight = LowVisionMyPageLayoutDefaults.actionLabelLineHeight,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
             )
         }
     }

@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "S2 prod 인프라와 애플리케이션 로그를 같은 Grafana에서 보는 전용 대시보드",
+  "description": "S2 prod 서비스 상태와 운영 로그를 빠르게 확인하는 단순화된 관측 대시보드",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -24,14 +24,14 @@
   "panels": [
     {
       "gridPos": {
-        "h": 7,
-        "w": 8,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 8,
+        "h": 5
       },
       "id": 1,
       "options": {
-        "content": "### prod 대시보드 읽는 순서\n1. **CloudWatch 인프라 패널**에서 EC2/RDS/ElastiCache/ALB 이상 징후를 먼저 확인합니다.\n2. 바로 아래 **prod 경고/오류 로그**에서 앱 레벨 증거를 찾습니다.\n3. 상세 흐름이 더 필요하면 Explore에서 prod 전체 로그를 확인합니다.\n\n- `prod infra metric`은 CloudWatch가 1차 기준입니다.\n- `prod app log`는 `S2 promtail -> S1 Loki` 경로를 기본으로 사용합니다.\n- 대시보드 로그는 기본적으로 `warning 이상`과 `exception/timeout/failed` 같은 장애 단서를 우선 보여줍니다.\n- CloudWatch 갱신 주기를 고려해 이 대시보드는 `1분` refresh를 기본으로 둡니다.",
+        "content": "### 이 화면에서 먼저 볼 것\n1. **API / DB 연결 / Redis 연결 / AI / Admin / GraphHopper 상태**가 모두 `UP`인지 먼저 봅니다.\n2. 장애 의심 시 아래 **최근 경고/오류 로그 건수**가 튀는지 확인합니다.\n3. 자세한 원인은 맨 아래 **prod 경고/오류 로그**와 Grafana Explore에서 추적합니다.\n\n- 이 화면의 `DB 연결 상태`, `Redis 연결 상태`는 RDS/ElastiCache 자체 상태가 아닙니다.\n- 대신 backend가 실제로 보고 있는 `db`, `redis` actuator dependency health를 공개 health endpoint로 가공해 확인합니다.\n- `GraphHopper active / blue / green 상태`는 Redis active slot 기준 공개 health와 슬롯별 원시 health를 함께 확인합니다.\n- prod 관측은 `public health endpoint + Loki 로그`만으로 유지합니다.",
         "mode": "markdown"
       },
       "pluginVersion": "11.3.1",
@@ -40,47 +40,33 @@
     },
     {
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "loki",
+        "uid": "loki"
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "fixedColor": "gray",
+            "mode": "fixed"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 70
-              },
-              {
-                "color": "red",
-                "value": 85
-              }
-            ]
-          },
-          "unit": "percent"
+          "noValue": "0",
+          "unit": "short",
+          "displayName": "최근 5분 전체 로그 건수"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 4,
         "x": 8,
-        "y": 0
+        "y": 0,
+        "w": 4,
+        "h": 5
       },
-      "id": 2,
+      "id": 7,
       "options": {
         "colorMode": "background",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "horizontal",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -90,52 +76,37 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "dimensions": {
-            "InstanceId": "*"
-          },
-          "id": "",
-          "label": "EC2 CPU",
-          "matchExact": false,
-          "metricEditorMode": 0,
-          "metricName": "CPUUtilization",
-          "metricQueryType": 0,
-          "namespace": "AWS/EC2",
-          "period": "",
-          "queryMode": "Metrics",
-          "refId": "A",
-          "region": "$aws_region",
-          "statistic": "Average"
+          "expr": "sum(count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\"}[5m])) or vector(0)",
+          "queryType": "instant",
+          "refId": "A"
         }
       ],
-      "title": "EC2 CPU 사용률",
+      "title": "최근 5분 전체 로그 건수",
       "type": "stat"
     },
     {
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "loki",
+        "uid": "loki"
       },
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -143,22 +114,509 @@
               }
             ]
           },
+          "unit": "short",
+          "displayName": "최근 5분 경고/오류 로그 건수"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\"} |~ \"(?:^|[[:space:]])(?:level|lvl|severity)=(?:warn|warning|error|fatal|critical|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:[[:space:],]|$)|^[WEFwef][0-9]{4}[[:space:]]|^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][^[:space:]]+)?[[:space:]]+)?(?:WARN|WARNING|ERROR|FATAL|CRITICAL|warn|warning|error|fatal|critical)(?:[[:space:],]|$)\" [5m])) or vector(0)",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 경고/오류 로그 건수",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "gray",
+            "mode": "fixed"
+          },
+          "noValue": "0",
+          "unit": "short",
+          "displayName": "최근 1시간 전체 로그 건수"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\"}[1h])) or vector(0)",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 1시간 전체 로그 건수",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short",
+          "displayName": "최근 1시간 경고/오류 로그 건수"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\"} |~ \"(?:^|[[:space:]])(?:level|lvl|severity)=(?:warn|warning|error|fatal|critical|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:[[:space:],]|$)|^[WEFwef][0-9]{4}[[:space:]]|^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][^[:space:]]+)?[[:space:]]+)?(?:WARN|WARNING|ERROR|FATAL|CRITICAL|warn|warning|error|fatal|critical)(?:[[:space:],]|$)\" [1h])) or vector(0)",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 1시간 경고/오류 로그 건수",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "11.3.1",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 8,
+        "h": 8
+      },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "sum by (compose_service) (count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"}[5m]))",
+          "queryType": "range",
+          "refId": "A",
+          "legendFormat": "{{compose_service}}"
+        }
+      ],
+      "title": "서비스별 5분 로그 유입량"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "11.3.1",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 8,
+        "y": 5,
+        "w": 8,
+        "h": 8
+      },
+      "id": 13,
+      "targets": [
+        {
+          "expr": "sum by (compose_service) (count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"} |~ \"(?:^|[[:space:]])(?:level|lvl|severity)=(?:warn|warning|error|fatal|critical|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:[[:space:],]|$)|^[WEFwef][0-9]{4}[[:space:]]|^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][^[:space:]]+)?[[:space:]]+)?(?:WARN|WARNING|ERROR|FATAL|CRITICAL|warn|warning|error|fatal|critical)(?:[[:space:],]|$)\" [5m]))",
+          "queryType": "range",
+          "refId": "A",
+          "legendFormat": "{{compose_service}}"
+        }
+      ],
+      "title": "서비스별 5분 경고/오류 로그량"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "11.3.1",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 16,
+        "y": 5,
+        "w": 8,
+        "h": 8
+      },
+      "id": 14,
+      "targets": [
+        {
+          "expr": "sum by (compose_service) (count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"}[1h]))",
+          "queryType": "range",
+          "refId": "A",
+          "legendFormat": "{{compose_service}}"
+        }
+      ],
+      "title": "서비스별 1시간 로그 유입량"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "11.3.1",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 8,
+        "h": 8
+      },
+      "id": 15,
+      "targets": [
+        {
+          "expr": "sum by (compose_service) (count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"} |~ \"(?:^|[[:space:]])(?:level|lvl|severity)=(?:warn|warning|error|fatal|critical|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:[[:space:],]|$)|^[WEFwef][0-9]{4}[[:space:]]|^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][^[:space:]]+)?[[:space:]]+)?(?:WARN|WARNING|ERROR|FATAL|CRITICAL|warn|warning|error|fatal|critical)(?:[[:space:],]|$)\" [1h]))",
+          "queryType": "range",
+          "refId": "A",
+          "legendFormat": "{{compose_service}}"
+        }
+      ],
+      "title": "서비스별 1시간 경고/오류 로그량"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "x": 8,
+        "y": 13,
+        "w": 16,
+        "h": 8
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"}[5m]))",
+          "legendFormat": "총 로그",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "1h",
+      "title": "최근 1시간 총 로그 추이",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "displayName": "API 상태"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 21,
         "w": 4,
-        "x": 12,
-        "y": 0
+        "h": 4
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "max(probe_success{job=\"blackbox-prod-http\", target_name=\"api\"})",
+          "legendFormat": "API 상태",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "API 상태",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "displayName": "DB 연결 상태"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 21,
+        "w": 4,
+        "h": 4
       },
       "id": 3,
       "options": {
         "colorMode": "background",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "horizontal",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -168,79 +626,75 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "dimensions": {
-            "InstanceId": "*"
-          },
-          "id": "",
-          "label": "status check",
-          "matchExact": false,
-          "metricEditorMode": 0,
-          "metricName": "StatusCheckFailed",
-          "metricQueryType": 0,
-          "namespace": "AWS/EC2",
-          "period": "",
-          "queryMode": "Metrics",
-          "refId": "A",
-          "region": "$aws_region",
-          "statistic": "Maximum"
+          "editorMode": "code",
+          "expr": "max(probe_success{job=\"blackbox-prod-http\", target_name=\"db\"})",
+          "legendFormat": "DB 연결 상태",
+          "range": true,
+          "refId": "A"
         }
       ],
-      "title": "EC2 상태 체크 실패",
+      "title": "DB 연결 상태",
       "type": "stat"
     },
     {
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 70
-              },
-              {
                 "color": "red",
-                "value": 85
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
               }
             ]
           },
-          "unit": "percent"
+          "displayName": "Redis 연결 상태"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "x": 8,
+        "y": 21,
         "w": 4,
-        "x": 16,
-        "y": 0
+        "h": 4
       },
       "id": 4,
       "options": {
         "colorMode": "background",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "horizontal",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -250,79 +704,75 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "dimensions": {
-            "DBInstanceIdentifier": "*"
-          },
-          "id": "",
-          "label": "RDS CPU",
-          "matchExact": false,
-          "metricEditorMode": 0,
-          "metricName": "CPUUtilization",
-          "metricQueryType": 0,
-          "namespace": "AWS/RDS",
-          "period": "",
-          "queryMode": "Metrics",
-          "refId": "A",
-          "region": "$aws_region",
-          "statistic": "Average"
+          "editorMode": "code",
+          "expr": "max(probe_success{job=\"blackbox-prod-http\", target_name=\"redis\"})",
+          "legendFormat": "Redis 연결 상태",
+          "range": true,
+          "refId": "A"
         }
       ],
-      "title": "RDS CPU 사용률",
+      "title": "Redis 연결 상태",
       "type": "stat"
     },
     {
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 70
-              },
-              {
                 "color": "red",
-                "value": 85
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
               }
             ]
           },
-          "unit": "percent"
+          "displayName": "AI 상태"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "x": 12,
+        "y": 21,
         "w": 4,
-        "x": 20,
-        "y": 0
+        "h": 4
       },
       "id": 5,
       "options": {
         "colorMode": "background",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "horizontal",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -332,320 +782,99 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "11.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "dimensions": {
-            "CacheClusterId": "*"
-          },
-          "id": "",
-          "label": "Redis CPU",
-          "matchExact": false,
-          "metricEditorMode": 0,
-          "metricName": "CPUUtilization",
-          "metricQueryType": 0,
-          "namespace": "AWS/ElastiCache",
-          "period": "",
-          "queryMode": "Metrics",
-          "refId": "A",
-          "region": "$aws_region",
-          "statistic": "Average"
+          "editorMode": "code",
+          "expr": "max(probe_success{job=\"blackbox-prod-http\", target_name=\"ai\"})",
+          "legendFormat": "AI 상태",
+          "range": true,
+          "refId": "A"
         }
       ],
-      "title": "ElastiCache CPU 사용률",
+      "title": "AI 상태",
       "type": "stat"
     },
     {
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "unit": "percent"
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "displayName": "Admin 상태"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 7
+        "x": 16,
+        "y": 21,
+        "w": 4,
+        "h": 4
       },
       "id": 6,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "single"
-        }
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
       },
+      "pluginVersion": "11.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "dimensions": {
-            "InstanceId": "*"
-          },
-          "id": "",
-          "label": "{{InstanceId}}",
-          "matchExact": false,
-          "metricEditorMode": 0,
-          "metricName": "CPUUtilization",
-          "metricQueryType": 0,
-          "namespace": "AWS/EC2",
-          "period": "",
-          "queryMode": "Metrics",
-          "refId": "A",
-          "region": "$aws_region",
-          "statistic": "Average"
+          "editorMode": "code",
+          "expr": "max(probe_success{job=\"blackbox-prod-http\", target_name=\"admin\"})",
+          "legendFormat": "Admin 상태",
+          "range": true,
+          "refId": "A"
         }
       ],
-      "title": "EC2 CPU 추이",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 7
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "dimensions": {
-            "DBInstanceIdentifier": "*"
-          },
-          "id": "",
-          "label": "{{DBInstanceIdentifier}}",
-          "matchExact": false,
-          "metricEditorMode": 0,
-          "metricName": "DatabaseConnections",
-          "metricQueryType": 0,
-          "namespace": "AWS/RDS",
-          "period": "",
-          "queryMode": "Metrics",
-          "refId": "A",
-          "region": "$aws_region",
-          "statistic": "Average"
-        }
-      ],
-      "title": "RDS 연결 수",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 7
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "dimensions": {
-            "CacheClusterId": "*"
-          },
-          "id": "",
-          "label": "{{CacheClusterId}}",
-          "matchExact": false,
-          "metricEditorMode": 0,
-          "metricName": "DatabaseMemoryUsagePercentage",
-          "metricQueryType": 0,
-          "namespace": "AWS/ElastiCache",
-          "period": "",
-          "queryMode": "Metrics",
-          "refId": "A",
-          "region": "$aws_region",
-          "statistic": "Average"
-        }
-      ],
-      "title": "ElastiCache 메모리 사용률",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 15
-      },
-      "id": 9,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "dimensions": {
-            "LoadBalancer": "*"
-          },
-          "id": "",
-          "label": "{{LoadBalancer}}",
-          "matchExact": false,
-          "metricEditorMode": 0,
-          "metricName": "HTTPCode_Target_5XX_Count",
-          "metricQueryType": 0,
-          "namespace": "AWS/ApplicationELB",
-          "period": "",
-          "queryMode": "Metrics",
-          "refId": "A",
-          "region": "$aws_region",
-          "statistic": "Sum"
-        }
-      ],
-      "title": "ALB 대상 5xx 개수",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 15
-      },
-      "id": 10,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "dimensions": {
-            "LoadBalancer": "*"
-          },
-          "id": "",
-          "label": "{{LoadBalancer}}",
-          "matchExact": false,
-          "metricEditorMode": 0,
-          "metricName": "TargetResponseTime",
-          "metricQueryType": 0,
-          "namespace": "AWS/ApplicationELB",
-          "period": "",
-          "queryMode": "Metrics",
-          "refId": "A",
-          "region": "$aws_region",
-          "statistic": "Average"
-        }
-      ],
-      "title": "ALB 대상 응답 시간",
-      "type": "timeseries"
+      "title": "Admin 상태",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -653,10 +882,10 @@
         "uid": "loki"
       },
       "gridPos": {
-        "h": 12,
-        "w": 24,
         "x": 0,
-        "y": 23
+        "y": 25,
+        "w": 24,
+        "h": 13
       },
       "id": 11,
       "options": {
@@ -671,22 +900,99 @@
       },
       "targets": [
         {
-          "expr": "{environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"} |~ \"(?i)(warn|warning|error|fatal|critical|exception|timeout|failed|traceback)\"",
+          "expr": "{environment=\"prod\", runtime_stack=\"s2-prod\", compose_service=~\"$prod_service\"} |~ \"(?:^|[[:space:]])(?:level|lvl|severity)=(?:warn|warning|error|fatal|critical|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:[[:space:],]|$)|^[WEFwef][0-9]{4}[[:space:]]|^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][^[:space:]]+)?[[:space:]]+)?(?:WARN|WARNING|ERROR|FATAL|CRITICAL|warn|warning|error|fatal|critical)(?:[[:space:],]|$)\"",
           "queryType": "range",
           "refId": "A"
         }
       ],
       "title": "prod 경고/오류 로그",
       "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "UNKNOWN",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "displayName": "GraphHopper ${__field.labels.target_name}"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 21,
+        "w": 4,
+        "h": 4
+      },
+      "id": 17,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.3.1",
+      "targets": [
+        {
+          "expr": "probe_success{job=\"blackbox-prod-http\", target_name=~\"graphhopper|graphhopper-blue|graphhopper-green\"}",
+          "instant": true,
+          "legendFormat": "{{target_name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "GraphHopper active / blue / green 상태",
+      "type": "stat"
     }
   ],
-  "refresh": "1m",
+  "refresh": "30s",
   "schemaVersion": 39,
   "tags": [
     "monitoring",
     "prod",
-    "cloudwatch",
-    "korean"
+    "korean",
+    "simple"
   ],
   "templating": {
     "list": [
@@ -731,27 +1037,6 @@
         ],
         "query": "backend,ai,graphhopper,admin",
         "type": "custom"
-      },
-      {
-        "current": {
-          "selected": true,
-          "text": "ap-northeast-2",
-          "value": "ap-northeast-2"
-        },
-        "hide": 0,
-        "includeAll": false,
-        "label": "AWS 리전",
-        "multi": false,
-        "name": "aws_region",
-        "options": [
-          {
-            "selected": true,
-            "text": "ap-northeast-2",
-            "value": "ap-northeast-2"
-          }
-        ],
-        "query": "ap-northeast-2",
-        "type": "custom"
       }
     ]
   },
@@ -763,6 +1048,6 @@
   "timezone": "browser",
   "title": "E102 운영 관측 개요 - Prod",
   "uid": "e102-prod-observability",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }

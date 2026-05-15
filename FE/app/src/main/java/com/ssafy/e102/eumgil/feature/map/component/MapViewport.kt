@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -51,12 +52,16 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerUiModel
+import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
 
 @Immutable
 internal data class MapViewportUiState(
     val integrationState: MapIntegrationState,
     val cameraTarget: MapCameraTarget,
+    val rendererSessionKey: Long = 0L,
     val currentLocation: MapCoordinate?,
+    val selectedOriginCoordinate: MapCoordinate? = null,
+    val selectedOriginName: String? = null,
     val selectedDestinationCoordinate: MapCoordinate? = null,
     val selectedDestinationName: String? = null,
     val markerOverlayState: MapMarkerOverlayState,
@@ -83,7 +88,7 @@ sealed interface MapIntegrationState {
 internal fun MapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit = {},
-    onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit = { _, _, _ -> },
+    onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit = { _, _, _, _ -> },
     onMapClick: (MapTapPayload) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -110,6 +115,7 @@ internal fun MapViewport(
             MapFallbackSurface(
                 markerOverlayState = state.markerOverlayState,
                 overlayState = state.overlayState,
+                cameraZoomLevel = state.cameraTarget.resolvedZoomLevel(),
                 regionLabel = state.regionLabel,
                 statusLabel = state.statusLabel,
                 title = state.title,
@@ -121,14 +127,16 @@ internal fun MapViewport(
         }
 
         is MapIntegrationState.Bound -> {
-            MapContainer(
-                integrationState = integrationState,
-                state = state,
-                onMarkerClick = onMarkerClick,
-                onCameraMoveEnd = onCameraMoveEnd,
-                onMapClick = onMapClick,
-                modifier = modifier,
-            )
+            key(state.rendererSessionKey) {
+                MapContainer(
+                    integrationState = integrationState,
+                    state = state,
+                    onMarkerClick = onMarkerClick,
+                    onCameraMoveEnd = onCameraMoveEnd,
+                    onMapClick = onMapClick,
+                    modifier = modifier,
+                )
+            }
         }
     }
 }
@@ -138,7 +146,7 @@ private fun MapContainer(
     integrationState: MapIntegrationState.Bound,
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
-    onCameraMoveEnd: (MapCoordinate, Int, Boolean) -> Unit,
+    onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
     onMapClick: (MapTapPayload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -156,6 +164,7 @@ private fun MapContainer(
             MapFallbackSurface(
                 markerOverlayState = state.markerOverlayState,
                 overlayState = state.overlayState,
+                cameraZoomLevel = state.cameraTarget.resolvedZoomLevel(),
                 regionLabel = state.regionLabel,
                 statusLabel = integrationState.providerName,
                 title = state.title,
@@ -171,6 +180,7 @@ private fun MapContainer(
 internal fun MapFallbackSurface(
     markerOverlayState: MapMarkerOverlayState,
     overlayState: MapViewportOverlayState,
+    cameraZoomLevel: Int,
     regionLabel: String,
     statusLabel: String,
     title: String,
@@ -237,6 +247,7 @@ internal fun MapFallbackSurface(
 
         MapViewportOverlayBackdrop(
             overlayState = overlayState,
+            zoomLevel = cameraZoomLevel,
             modifier = Modifier.fillMaxSize(),
             onPointClick = onMarkerClick,
         )
@@ -541,7 +552,7 @@ private fun MapMarkerChip(
                 color = palette.content,
                 style =
                     MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
+                        fontWeight = FontWeight.Bold,
                         fontSize = if (isBrailleBlock) 9.sp else 10.sp,
                     ),
                 textAlign = TextAlign.Center,
@@ -803,9 +814,7 @@ private fun markerSize(
     isSelected: Boolean,
 ): Dp =
     when {
-        marker.categoryType.category == FacilityCategory.BRAILLE_BLOCK && isSelected -> 46.dp
         marker.categoryType.category == FacilityCategory.BRAILLE_BLOCK -> 40.dp
-        isSelected -> 52.dp
         else -> 44.dp
     }
 

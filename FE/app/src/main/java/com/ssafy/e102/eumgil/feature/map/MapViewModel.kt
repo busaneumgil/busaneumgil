@@ -17,9 +17,11 @@ import com.ssafy.e102.eumgil.core.model.MapPlaceClickType
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
 import com.ssafy.e102.eumgil.core.model.MapTappedPlaceDetail
+import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
+import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
@@ -29,7 +31,9 @@ import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.NoOpDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSelectionRequestReason
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.observeAccountScopeKey
 import com.ssafy.e102.eumgil.data.repository.toBookmarkData
 import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MAX_ZOOM_LEVEL
 import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MIN_ZOOM_LEVEL
@@ -38,6 +42,8 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
 import com.ssafy.e102.eumgil.feature.map.model.MapFilterSelectionState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerDisplayState
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
+import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterChipState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
@@ -66,6 +72,7 @@ class MapViewModel(
     private val destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
     private val facilitySeedRepository: FacilitySeedRepository,
     private val bookmarkRepository: BookmarkRepository,
+    private val authSessionRepository: AuthSessionRepository? = null,
     private val searchRepository: SearchRepository = NoOpSearchRepository,
     private val placesRepository: PlacesRepository? = null,
 ) : ViewModel() {
@@ -77,7 +84,9 @@ class MapViewModel(
 
     private var latestPermissionState: LocationPermissionState = locationPermissionManager.permissionState.value
     private var latestLocation: LocationSnapshot? = currentLocationManager.latestLocation.value.toFreshCurrentLocationOrNull()
+    private var selectedOrigin: PlaceDestination? = destinationSelectionRepository.selectedOrigin.value
     private var selectedDestination: PlaceDestination? = destinationSelectionRepository.selectedDestination.value
+    private var routeEditingTarget: RouteEditingTarget = destinationSelectionRepository.editingTarget.value
     private var selectedMarkerId: String? = null
     private var selectedMapPinCoordinate: MapCoordinate? = null
     private var selectedFacilityDetail: FacilityDetailSeed? = null
@@ -97,11 +106,16 @@ class MapViewModel(
     private var locationLookupTimeoutJob: Job? = null
     private var isRecenterButtonActive = false
     private var lastPlacesBrowseAnchorSource: PlacesBrowseAnchorSource? = null
+    private var placesBrowseRequestSequence: Long = 0L
     private var lastMarkerOverlayLogSnapshot: String? = null
 
     init {
         mutableUiState.update { state ->
-            state.copy(selectedDestination = selectedDestination)
+            state.copy(
+                selectedOrigin = selectedOrigin,
+                selectedDestination = selectedDestination,
+                routeEditingTarget = routeEditingTarget,
+            )
         }
         selectedDestination?.let { destination ->
             syncCameraToSelectedDestination(
@@ -112,6 +126,7 @@ class MapViewModel(
         observeSelectedDestination()
         observeSelectionRequests()
         observeDestinationPreviewRequests()
+        observeAccountScope()
         observePermissionState()
         observeLocationUpdates()
         loadMarkerBrowseState()
@@ -149,11 +164,58 @@ class MapViewModel(
         currentLocationManager.stopLocationUpdates()
     }
 
+    fun onHomeReentered() {
+        isRecenterButtonActive = false
+        locationPermissionManager.refreshPermissionState()
+        latestPermissionState = locationPermissionManager.permissionState.value
+        if (latestPermissionState is LocationPermissionState.Granted) {
+            currentLocationManager.startLocationUpdates()
+            currentLocationManager.refreshLatestLocation()
+        }
+        latestLocation = currentLocationManager.latestLocation.value.toFreshCurrentLocationOrNull()
+
+        val hadFacilitySelection = clearSelectedFacilitySelection()
+        val hadSelectedDestination = selectedDestination != null
+        selectedDestination = null
+        mutableUiState.update { state ->
+            state.copy(
+                selectedDestination = null,
+            )
+        }
+        if (hadSelectedDestination) {
+            destinationSelectionRepository.clearSelectedDestination()
+        }
+        if (hadFacilitySelection) {
+            renderSelectedFacilityState()
+        }
+
+        val currentLocation = latestLocation
+        if (currentLocation != null && latestPermissionState is LocationPermissionState.Granted) {
+            stopLocationLookup()
+            syncCameraToCurrentLocation(
+                snapshot = currentLocation,
+                incrementRequestId = true,
+            )
+        } else {
+            if (latestPermissionState is LocationPermissionState.Granted) {
+                startLocationLookup(forceRestart = true)
+            } else {
+                stopLocationLookup()
+            }
+            applyFallbackCameraTarget()
+        }
+        renderUiState()
+    }
+
     fun onAction(action: MapUiAction) {
         when (action) {
             MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
-            MapUiAction.FacilitySetDestinationClicked -> handleFacilitySetDestinationClicked()
+            MapUiAction.FacilityPhoneClicked -> handleFacilityPhoneClicked()
+            MapUiAction.FacilitySetDestinationClicked ->
+                handleFacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION)
+            is MapUiAction.FacilitySetRouteEndpointClicked ->
+                handleFacilitySetRouteEndpointClicked(action.editingTarget)
             MapUiAction.LocationActionClicked -> handleLocationAction()
             MapUiAction.ZoomInClicked -> handleZoomAction(delta = 1)
             MapUiAction.ZoomOutClicked -> handleZoomAction(delta = -1)
@@ -164,12 +226,15 @@ class MapViewModel(
                     center = action.center,
                     zoomLevel = action.zoomLevel,
                     isUserGesture = action.isUserGesture,
+                    isSelectedMapPinVisibleInViewport = action.isSelectedMapPinVisibleInViewport,
                 )
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
             is MapUiAction.ShortcutFilterClicked -> handleShortcutFilterClicked(action.key)
             is MapUiAction.RecentDestinationRouteClicked -> handleRecentDestinationRouteClicked(action.placeId)
-            MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch)
+            MapUiAction.SearchHereClicked -> handleSearchHereClicked()
+            MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch(RouteEditingTarget.DESTINATION))
+            is MapUiAction.RouteEndpointStatusClicked -> handleRouteEndpointStatusClicked(action.editingTarget)
         }
     }
 
@@ -227,6 +292,8 @@ class MapViewModel(
     private fun loadLivePlaceBrowseState(
         anchorSource: PlacesBrowseAnchorSource,
         force: Boolean = false,
+        anchor: MapCoordinate = currentPlacesBrowseAnchor(),
+        preserveSelection: Boolean = false,
     ) {
         val placesRepository = placesRepository ?: return
         if (!force && lastPlacesBrowseAnchorSource == anchorSource && facilityBrowseData != null) {
@@ -237,10 +304,11 @@ class MapViewModel(
             return
         }
 
-        val anchor = currentPlacesBrowseAnchor()
+        val requestId = ++placesBrowseRequestSequence
+
         safeLogInfo(
             MAP_VIEW_MODEL_LOG_TAG,
-            "Requesting places browse source=${anchorSource.name} force=$force lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
+            "Requesting places browse requestId=$requestId source=${anchorSource.name} force=$force lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
         )
         viewModelScope.launch {
             runCatching {
@@ -252,6 +320,13 @@ class MapViewModel(
                     ),
                 )
             }.onSuccess { places ->
+                if (requestId != placesBrowseRequestSequence) {
+                    safeLogInfo(
+                        MAP_VIEW_MODEL_LOG_TAG,
+                        "Ignoring stale places browse response requestId=$requestId latestRequestId=$placesBrowseRequestSequence source=${anchorSource.name}",
+                    )
+                    return@onSuccess
+                }
                 val browseData = MapPlaceBrowseDataMapper.toBrowseData(places)
                 facilityBrowseData = browseData
                 lastPlacesBrowseAnchorSource = anchorSource
@@ -265,9 +340,29 @@ class MapViewModel(
                         "Places browse returned no data source=${anchorSource.name} lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
                     )
                 }
-                markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+                markerFilterSelectionState =
+                    if (preserveSelection) {
+                        MapBrowseStateFactory.normalizeSelection(
+                            selection = markerFilterSelectionState,
+                            browseData = browseData,
+                        )
+                    } else {
+                        MapBrowseStateFactory.resetSelection()
+                    }
                 renderMarkerBrowseState()
+                mutableUiState.update { state ->
+                    state.copy(
+                        isSearchHereVisible = false,
+                    )
+                }
             }.onFailure {
+                if (requestId != placesBrowseRequestSequence) {
+                    safeLogInfo(
+                        MAP_VIEW_MODEL_LOG_TAG,
+                        "Ignoring stale places browse failure requestId=$requestId latestRequestId=$placesBrowseRequestSequence source=${anchorSource.name}",
+                    )
+                    return@onFailure
+                }
                 safeLogError(
                     MAP_VIEW_MODEL_LOG_TAG,
                     "Places browse failed source=${anchorSource.name} lat=${anchor.latitude.toLogCoordinate()} lng=${anchor.longitude.toLogCoordinate()} radius=$MAP_BROWSE_RADIUS_METERS",
@@ -284,6 +379,7 @@ class MapViewModel(
                         markerOverlayState = MapBrowseStateFactory.createErrorMarkerOverlayState(),
                         markerFilterState = MapBrowseStateFactory.createErrorFilterUiState(),
                         shortcutFilterState = createShortcutFilterState(),
+                        isSearchHereVisible = false,
                     )
                 }
             }
@@ -330,6 +426,11 @@ class MapViewModel(
             MAP_VIEW_MODEL_LOG_TAG,
             "Map tapped lat=${coordinate.latitude.toLogCoordinate()} lng=${coordinate.longitude.toLogCoordinate()} clickType=${payload.clickType.name} provider=${payload.provider.orEmpty()} providerPlaceId=${payload.providerPlaceId.orEmpty()}",
         )
+        if (payload.clickType == MapTapClickType.ADDRESS) {
+            clearSelectedFacilitySelection()
+            renderSelectedFacilityState()
+            return
+        }
         mapTapDetailRequestId += 1L
         val requestId = mapTapDetailRequestId
         selectedMapPinCoordinate = coordinate
@@ -348,17 +449,18 @@ class MapViewModel(
                     placesRepository.getMapTappedPlaceDetail(payload.toMapPlaceDetailRequest())
                 }.onSuccess { detail ->
                     if (requestId != mapTapDetailRequestId) return@onSuccess
+                    val normalizedDetail = detail?.withFallbackCoordinate(coordinate)
                     isMapTapDetailLoading = false
-                    selectedMapTapDetail = detail
+                    selectedMapTapDetail = normalizedDetail
                     selectedFacilityBookmarkState =
-                        detail?.let { mapTapDetail ->
+                        normalizedDetail?.let { mapTapDetail ->
                             SelectedFacilityBookmarkState(
                                 facilityId = mapTapDetail.bookmarkCacheKey(),
                                 isBookmarked = mapTapDetail.isBookmarked,
                             )
                         } ?: SelectedFacilityBookmarkState()
                     mapTapDetailErrorMessage =
-                        if (detail == null) {
+                        if (normalizedDetail == null) {
                             MAP_TAP_DETAIL_EMPTY_MESSAGE
                         } else {
                             null
@@ -411,14 +513,14 @@ class MapViewModel(
         renderSelectedFacilityState()
     }
 
-    private fun handleFacilitySetDestinationClicked() {
+    private fun handleFacilitySetRouteEndpointClicked(editingTarget: RouteEditingTarget) {
         val preview = selectedDestinationPreview
         if (preview != null) {
             clearSelectedFacilitySelection()
             renderSelectedFacilityState()
-            destinationSelectionRepository.setEditingTarget(preview.editingTarget)
+            destinationSelectionRepository.setEditingTarget(editingTarget)
             destinationSelectionRepository.updateSelectionForEditingTarget(preview.destination)
-            emitUiEvent(MapUiEvent.NavigateToRouteSetting)
+            navigateToRouteSettingIfRouteEndpointsReady(editingTarget)
             return
         }
 
@@ -428,8 +530,26 @@ class MapViewModel(
                 ?: return
         clearSelectedFacilitySelection()
         renderSelectedFacilityState()
-        destinationSelectionRepository.updateSelectedDestination(destination)
+        destinationSelectionRepository.setEditingTarget(editingTarget)
+        destinationSelectionRepository.updateSelectionForEditingTarget(destination)
+        navigateToRouteSettingIfRouteEndpointsReady(editingTarget)
+    }
+
+    private fun navigateToRouteSettingIfRouteEndpointsReady(editingTarget: RouteEditingTarget) {
+        val hasDestination = destinationSelectionRepository.selectedDestination.value != null
+        if (editingTarget == RouteEditingTarget.ORIGIN && !hasDestination) {
+            return
+        }
         emitUiEvent(MapUiEvent.NavigateToRouteSetting)
+    }
+
+    private fun handleRouteEndpointStatusClicked(editingTarget: RouteEditingTarget) {
+        destinationSelectionRepository.setEditingTarget(editingTarget)
+        routeEditingTarget = editingTarget
+        mutableUiState.update { state ->
+            state.copy(routeEditingTarget = editingTarget)
+        }
+        emitUiEvent(MapUiEvent.NavigateToSearch(editingTarget))
     }
 
     private fun handleRecentDestinationRouteClicked(placeId: String) {
@@ -463,6 +583,21 @@ class MapViewModel(
         renderMarkerBrowseState()
     }
 
+    private fun handleSearchHereClicked() {
+        if (placesRepository == null) return
+
+        val anchor = mutableUiState.value.cameraTarget.center
+        mutableUiState.update { state ->
+            state.copy(isSearchHereVisible = false)
+        }
+        loadLivePlaceBrowseState(
+            anchorSource = PlacesBrowseAnchorSource.VIEWPORT,
+            force = true,
+            anchor = anchor,
+            preserveSelection = true,
+        )
+    }
+
     private fun handleShortcutFilterClicked(key: MapShortcutFilterKey) {
         val browseData = facilityBrowseData ?: return
 
@@ -472,7 +607,7 @@ class MapViewModel(
             return
         }
         markerFilterSelectionState =
-            MapBrowseStateFactory.toggleCategory(
+            MapBrowseStateFactory.selectSingleCategory(
                 selection = markerFilterSelectionState,
                 browseData = browseData,
                 category = category,
@@ -598,9 +733,59 @@ class MapViewModel(
         }
     }
 
+    private fun observeAccountScope() {
+        val authSessionRepository = authSessionRepository ?: return
+
+        viewModelScope.launch {
+            var isInitialEmission = true
+            authSessionRepository.observeAccountScopeKey().collectLatest {
+                if (isInitialEmission) {
+                    isInitialEmission = false
+                    return@collectLatest
+                }
+
+                handleAccountScopeChanged()
+            }
+        }
+    }
+
+    private fun handleAccountScopeChanged() {
+        selectedDestination = null
+        facilityBrowseData = null
+        markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+        recentDestinations = emptyList()
+        lastPlacesBrowseAnchorSource = null
+        lastMarkerOverlayLogSnapshot = null
+        isRecenterButtonActive = false
+
+        clearSelectedFacilitySelection()
+        mutableUiState.update { state ->
+            state.copy(
+                selectedDestination = null,
+                recentDestinations = emptyList(),
+                markerOverlayState = MapMarkerOverlayState(),
+                markerFilterState = MapMarkerFilterUiState(),
+                shortcutFilterState = createShortcutFilterState(browseData = null),
+            )
+        }
+        renderSelectedFacilityState()
+        applyFallbackCameraTarget()
+        loadMarkerBrowseState()
+        refreshRecentDestinations()
+        renderUiState()
+    }
+
     private fun observeSelectionRequests() {
         viewModelScope.launch {
             destinationSelectionRepository.selectionRequests.collectLatest { request ->
+                selectedOrigin = request.state.selectedOrigin
+                routeEditingTarget = request.state.editingTarget
+                mutableUiState.update { state ->
+                    state.copy(
+                        selectedOrigin = selectedOrigin,
+                        routeEditingTarget = routeEditingTarget,
+                    )
+                }
                 if (
                     request.reason != RouteSelectionRequestReason.DESTINATION_UPDATED &&
                     request.reason != RouteSelectionRequestReason.DESTINATION_CLEARED &&
@@ -647,6 +832,7 @@ class MapViewModel(
             )
 
         mapTapDetailRequestId += 1L
+        val requestId = mapTapDetailRequestId
         mapTapDetailLookupJob?.cancel()
         mapTapDetailLookupJob = null
         selectedMapPinCoordinate = coordinate
@@ -669,6 +855,42 @@ class MapViewModel(
         )
         renderSelectedFacilityState()
         renderUiState()
+        hydrateDestinationPreviewDetail(
+            previewRequest = previewRequest,
+            requestId = requestId,
+        )
+    }
+
+    private fun hydrateDestinationPreviewDetail(
+        previewRequest: DestinationPreviewRequest,
+        requestId: Long,
+    ) {
+        if (previewRequest.detailType != MapPlaceDetailType.INTERNAL_PLACE) return
+
+        val placeId = previewRequest.destination.placeId.takeIf(String::isNotBlank) ?: return
+        val placesRepository = placesRepository ?: return
+
+        viewModelScope.launch {
+            runCatching { placesRepository.getPlaceDetail(placeId) }
+                .onSuccess { placeDetail ->
+                    if (requestId != mapTapDetailRequestId) return@onSuccess
+                    if (selectedDestinationPreview?.requestId != previewRequest.requestId) return@onSuccess
+                    if (placeDetail == null) return@onSuccess
+
+                    selectedMapTapDetail =
+                        selectedMapTapDetail?.mergeInternalPreviewDetail(placeDetail)
+                    selectedFacilityBookmarkState =
+                        selectedFacilityBookmarkState.copy(
+                            facilityId = selectedMapTapDetail?.bookmarkCacheKey(),
+                            isBookmarked = placeDetail.isBookmarked,
+                        )
+                    renderSelectedFacilityState()
+                }
+                .onFailure {
+                    if (requestId != mapTapDetailRequestId) return@onFailure
+                    if (selectedDestinationPreview?.requestId != previewRequest.requestId) return@onFailure
+                }
+        }
     }
 
     private fun observeLocationUpdates() {
@@ -785,13 +1007,16 @@ class MapViewModel(
         center: MapCoordinate,
         zoomLevel: Int,
         isUserGesture: Boolean,
+        isSelectedMapPinVisibleInViewport: Boolean?,
     ) {
+        var ignoredStaleProgrammaticCallback = false
         mutableUiState.update { state ->
             val currentTarget = state.cameraTarget
             val isAlignedWithRequestedCenter = currentTarget.center.isApproximatelySameCoordinate(center)
 
             // Ignore stale programmatic move-end callbacks that arrive after a newer camera target won.
             if (!isUserGesture && !isAlignedWithRequestedCenter) {
+                ignoredStaleProgrammaticCallback = true
                 return@update state
             }
             val hasCameraChanged =
@@ -811,8 +1036,21 @@ class MapViewModel(
                             zoomLevel = zoomLevel,
                         ),
                     isRecenterButtonActive = if (isUserGesture) false else state.isRecenterButtonActive,
+                    isSearchHereVisible =
+                        when {
+                            isUserGesture && placesRepository != null -> true
+                            !isUserGesture -> false
+                            else -> state.isSearchHereVisible
+                        },
                 )
             }
+        }
+        if (ignoredStaleProgrammaticCallback) return
+
+        // Automatic camera sync can report the preview pin as offscreen before the viewport stabilizes.
+        if (isUserGesture && isSelectedMapPinVisibleInViewport == false && clearOffscreenSelectedMapPinState()) {
+            renderSelectedFacilityState()
+            renderUiState()
         }
     }
 
@@ -905,6 +1143,7 @@ class MapViewModel(
                         requestId = nextRequestId,
                         zoomLevel = nextZoomLevel,
                     ),
+                isSearchHereVisible = false,
             )
         }
     }
@@ -944,6 +1183,7 @@ class MapViewModel(
                         zoomLevel = nextZoomLevel,
                     ),
                 selectedDestination = destination,
+                isSearchHereVisible = false,
             )
         }
     }
@@ -978,6 +1218,7 @@ class MapViewModel(
                         requestId = nextRequestId,
                         zoomLevel = nextZoomLevel,
                     ),
+                isSearchHereVisible = false,
             )
         }
     }
@@ -1012,8 +1253,17 @@ class MapViewModel(
             return
         }
 
+        if (shouldKeepCurrentLocationCameraWhileLocationRefreshes()) {
+            return
+        }
+
         applyDefaultCameraTarget()
     }
+
+    private fun shouldKeepCurrentLocationCameraWhileLocationRefreshes(): Boolean =
+        latestPermissionState is LocationPermissionState.Granted &&
+            latestLocation == null &&
+            mutableUiState.value.cameraTarget.source == MapCameraSource.CURRENT_LOCATION
 
     private fun applyDefaultCameraTarget() {
         mutableUiState.update { state ->
@@ -1031,6 +1281,7 @@ class MapViewModel(
                             requestId = state.cameraTarget.requestId + 1L,
                             zoomLevel = MapCameraSource.DEFAULT_BUSAN.defaultZoomLevel(),
                         ),
+                    isSearchHereVisible = false,
                 )
             }
         }
@@ -1088,7 +1339,9 @@ class MapViewModel(
 
         mutableUiState.update { state ->
             state.copy(
+                selectedOrigin = selectedOrigin,
                 selectedDestination = selectedDestination,
+                routeEditingTarget = routeEditingTarget,
                 locationStatus = locationStatus,
                 recenterButtonState = recenterButtonState,
                 isRecenterButtonActive = isRecenterButtonActive,
@@ -1129,6 +1382,19 @@ class MapViewModel(
         if (clearMapTapSelection) {
             clearMapTapSelectionState(clearPin = true)
         }
+        return true
+    }
+
+    private fun clearOffscreenSelectedMapPinState(): Boolean {
+        val hasSelectedMapPinState =
+            selectedMapPinCoordinate != null ||
+                selectedDestinationPreview != null ||
+                selectedMapTapDetail != null ||
+                isMapTapDetailLoading ||
+                mapTapDetailErrorMessage != null
+        if (!hasSelectedMapPinState) return false
+
+        clearMapTapSelectionState(clearPin = true)
         return true
     }
 
@@ -1231,6 +1497,14 @@ class MapViewModel(
         }
     }
 
+    private fun handleFacilityPhoneClicked() {
+        val phoneNumber =
+            selectedMapTapDetail?.phoneNumber?.takeIf(String::isNotBlank)
+                ?: selectedFacilityDetail?.phoneNumber?.takeIf(String::isNotBlank)
+                ?: return
+        emitUiEvent(MapUiEvent.OpenDialer(phoneNumber))
+    }
+
     private fun toggleFacilityBookmark(detail: FacilityDetailSeed) {
         val currentBookmarkState = selectedFacilityBookmarkState
         if (currentBookmarkState.isUpdating) return
@@ -1260,15 +1534,9 @@ class MapViewModel(
                         errorMessage = null,
                     )
                 renderSelectedFacilityState()
-                emitUiEvent(
-                    MapUiEvent.ShowSnackbar(
-                        if (nextBookmarked) {
-                            BOOKMARK_SAVE_SUCCESS_MESSAGE
-                        } else {
-                            BOOKMARK_DELETE_SUCCESS_MESSAGE
-                        },
-                    ),
-                )
+                if (!nextBookmarked) {
+                    emitUiEvent(MapUiEvent.ShowSnackbar(BOOKMARK_DELETE_SUCCESS_MESSAGE))
+                }
             }
             .onFailure {
                 if (selectedFacilityDetail?.facilityId != detail.facilityId) return@onFailure
@@ -1322,15 +1590,9 @@ class MapViewModel(
                         errorMessage = null,
                     )
                 renderSelectedFacilityState()
-                emitUiEvent(
-                    MapUiEvent.ShowSnackbar(
-                        if (nextBookmarked) {
-                            BOOKMARK_SAVE_SUCCESS_MESSAGE
-                        } else {
-                            BOOKMARK_DELETE_SUCCESS_MESSAGE
-                        },
-                    ),
-                )
+                if (!nextBookmarked) {
+                    emitUiEvent(MapUiEvent.ShowSnackbar(BOOKMARK_DELETE_SUCCESS_MESSAGE))
+                }
             }.onFailure {
                 if (selectedMapTapDetail?.matchesBookmarkTarget(detail) != true) return@onFailure
                 selectedMapTapDetail = selectedMapTapDetail?.copy(isBookmarked = currentBookmarkState.isBookmarked)
@@ -1403,6 +1665,7 @@ class MapViewModel(
     private enum class PlacesBrowseAnchorSource {
         FALLBACK,
         CURRENT_LOCATION,
+        VIEWPORT,
     }
 
     companion object {
@@ -1423,7 +1686,6 @@ class MapViewModel(
         private const val MAP_BROWSE_RADIUS_METERS = 1_000
         private const val MAX_MAP_HOME_RECENT_DESTINATIONS = 3
         private const val BOOKMARK_LOAD_ERROR_MESSAGE = "북마크 상태를 확인하지 못했습니다."
-        private const val BOOKMARK_SAVE_SUCCESS_MESSAGE = "북마크에 저장했습니다."
         private const val BOOKMARK_DELETE_SUCCESS_MESSAGE = "북마크를 해제했습니다."
         private const val BOOKMARK_SAVE_FAILURE_MESSAGE = "북마크 저장에 실패했습니다. 다시 시도해 주세요."
         private const val SHORTCUT_FILTER_UNAVAILABLE_MESSAGE = "근처에 해당 장소가 없어요"
@@ -1438,6 +1700,7 @@ class MapViewModel(
             destinationPreviewRepository: DestinationPreviewRepository,
             facilitySeedRepository: FacilitySeedRepository,
             bookmarkRepository: BookmarkRepository,
+            authSessionRepository: AuthSessionRepository? = null,
             searchRepository: SearchRepository,
             placesRepository: PlacesRepository? = null,
         ): ViewModelProvider.Factory =
@@ -1452,6 +1715,7 @@ class MapViewModel(
                             destinationPreviewRepository = destinationPreviewRepository,
                             facilitySeedRepository = facilitySeedRepository,
                             bookmarkRepository = bookmarkRepository,
+                            authSessionRepository = authSessionRepository,
                             searchRepository = searchRepository,
                             placesRepository = placesRepository,
                         ) as T
@@ -1540,6 +1804,22 @@ private fun DestinationPreviewRequest.toMapTappedPlaceDetail(): MapTappedPlaceDe
         accessibilityTags = accessibilityTagKeys,
     )
 
+private fun MapTappedPlaceDetail.mergeInternalPreviewDetail(detail: PlaceDetail): MapTappedPlaceDetail =
+    copy(
+        bookmarkTargetId = bookmarkTargetId.ifBlank { detail.placeId },
+        placeId = detail.placeId,
+        name = detail.name,
+        category = detail.category,
+        address = detail.address,
+        features = detail.features,
+        isBookmarked = detail.isBookmarked,
+        accessibilityTags =
+            detail.accessibilityTags.takeIf { detailAccessibilityTags -> detailAccessibilityTags.isNotEmpty() }
+                ?: accessibilityTags,
+        phoneNumber = detail.phoneNumber ?: phoneNumber,
+        description = detail.description ?: description,
+    )
+
 private fun MapTappedPlaceDetail.toBookmarkData(): BookmarkData {
     val serverPlaceId = placeId?.toLongOrNull()
     val localPlaceId =
@@ -1588,6 +1868,18 @@ private fun MapTappedPlaceDetail.matchesBookmarkTarget(other: MapTappedPlaceDeta
         (!placeId.isNullOrBlank() && placeId == other.placeId) ||
         (!providerPlaceId.isNullOrBlank() && providerPlaceId == other.providerPlaceId) ||
         externalBookmarkFallbackKey() == other.externalBookmarkFallbackKey()
+
+private fun MapTappedPlaceDetail.withFallbackCoordinate(
+    fallbackCoordinate: MapCoordinate,
+): MapTappedPlaceDetail =
+    if (latitude.isValidLatitude() && longitude.isValidLongitude()) {
+        this
+    } else {
+        copy(
+            latitude = fallbackCoordinate.latitude,
+            longitude = fallbackCoordinate.longitude,
+        )
+    }
 
 private fun MapTappedPlaceDetail.toPlaceDestinationOrNull(): PlaceDestination? {
     if (!latitude.isValidLatitude() || !longitude.isValidLongitude()) return null

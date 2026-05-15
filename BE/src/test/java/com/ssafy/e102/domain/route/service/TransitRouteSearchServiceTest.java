@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -90,6 +91,9 @@ class TransitRouteSearchServiceTest {
 	private OdsayClient odsayClient;
 
 	@Mock
+	private OdsayLoadLaneStore odsayLoadLaneStore;
+
+	@Mock
 	private RouteSearchCacheService routeSearchCacheService;
 
 	private CountingExecutor bimsTaskExecutor;
@@ -110,9 +114,11 @@ class TransitRouteSearchServiceTest {
 			busanBimsClient,
 			bimsTaskExecutor,
 			odsayClient,
+			odsayLoadLaneStore,
 			routeSearchCacheService);
 		when(userProfileQueryService.getProfile(any()))
 			.thenReturn(new WalkRouteUserProfile(PrimaryUserType.MOBILITY_IMPAIRED, MobilitySubtype.POWER_WHEELCHAIR));
+		when(odsayLoadLaneStore.findValidByMapObjIn(any())).thenReturn(Map.of());
 	}
 
 	@Test
@@ -307,8 +313,11 @@ class TransitRouteSearchServiceTest {
 		assertThat(response.routes().get(0).legs())
 			.filteredOn(leg -> leg.type() == TransportMode.BUS)
 			.first()
-			.extracting(leg -> leg.laneOptions().get(0).remainingMinute(), leg -> leg.laneOptions().get(0).isLowFloor())
-			.containsExactly(null, null);
+			.extracting(
+				leg -> leg.isLowFloor(),
+				leg -> leg.laneOptions().get(0).remainingMinute(),
+				leg -> leg.laneOptions().get(0).isLowFloor())
+			.containsExactly(null, null, null);
 	}
 
 	@Test
@@ -325,6 +334,11 @@ class TransitRouteSearchServiceTest {
 		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
 
 		assertThat(response.routes().get(0).warnings()).isEmpty();
+		assertThat(response.routes().get(0).legs())
+			.filteredOn(leg -> leg.type() == TransportMode.BUS)
+			.first()
+			.extracting(leg -> leg.isLowFloor())
+			.isEqualTo(true);
 	}
 
 	@Test
@@ -399,6 +413,8 @@ class TransitRouteSearchServiceTest {
 				assertThat(leg.arrivingStop().name()).isEqualTo("부산역");
 				assertThat(leg.arrivingStop().lat()).isEqualByComparingTo("35.115");
 				assertThat(leg.arrivingStop().lng()).isEqualByComparingTo("129.041");
+				assertThat(leg.remainingMinute()).isPositive();
+				assertThat(leg.headsign()).isEqualTo("노포행");
 			});
 
 		assertThat(response.routes().get(0).legs().get(0).guidanceEvents())
@@ -428,6 +444,44 @@ class TransitRouteSearchServiceTest {
 				assertThat(nextDeparture)
 					.containsEntry("departureTimeText", "08:02")
 					.containsEntry("endStationName", "노포");
+			});
+	}
+
+	@Test
+	@DisplayName("SUBWAY 시간표가 없으면 remainingMinute와 headsign 없이 검색 응답을 반환한다")
+	void omitsSubwayArrivalFieldsWhenTimetableUnavailable() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(subwayPath("map-subway"))));
+		when(odsayClient.loadLane("map-subway"))
+			.thenReturn(List.of(new OdsayLaneGeometry(TransportMode.SUBWAY, "LINESTRING(129.061 35.161, 129.066 35.166)")));
+		when(subwayStationElevatorRepository.findByOdsayStationId("S1"))
+			.thenReturn(List.of(elevator("S1", "서면", "부산 1호선", 35.1590, 129.0590)));
+		when(subwayStationElevatorRepository.findByOdsayStationId("S2"))
+			.thenReturn(List.of(elevator("S2", "부산역", "부산 1호선", 35.1150, 129.0410)));
+		when(subwayTimetableRepository.findNextDepartures(
+			eq("S1"),
+			any(SubwayServiceDayType.class),
+			eq(1),
+			anyInt(),
+			any(Pageable.class)))
+			.thenReturn(List.of());
+		when(subwayTimetableRepository.findFirstDepartures(
+			eq("S1"),
+			any(SubwayServiceDayType.class),
+			eq(1),
+			any(Pageable.class)))
+			.thenReturn(List.of());
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes()).hasSize(1);
+		assertThat(response.routes().get(0).legs())
+			.filteredOn(leg -> leg.type() == TransportMode.SUBWAY)
+			.first()
+			.satisfies(leg -> {
+				assertThat(leg.remainingMinute()).isNull();
+				assertThat(leg.headsign()).isNull();
 			});
 	}
 
@@ -476,8 +530,8 @@ class TransitRouteSearchServiceTest {
 	}
 
 	@Test
-	@DisplayName("BIMS enrichment 대상은 shortlist 최대 5개로 제한한다")
-	void limitsBimsEnrichmentToFiveShortlistedCandidates() {
+	@DisplayName("ODsay loadLane은 raw path 전체가 아니라 1차 shortlist 최대 5개에만 호출한다")
+	void limitsLoadLaneToOdsayShortlist() {
 		when(odsayClient.searchPubTransPath(START, END))
 			.thenReturn(new OdsayTransitSearchResult(List.of(
 				busPathWithBusDuration("map-fast-1", "100", 5, 900, 1),
@@ -496,8 +550,72 @@ class TransitRouteSearchServiceTest {
 
 		service.search(UUID.randomUUID(), request());
 
-		verify(busanBimsClient, times(5)).findArrival(any(), any(), any());
-		assertThat(bimsTaskExecutor.executionCount()).isEqualTo(5);
+		verify(odsayClient, times(5)).loadLane(any());
+		verify(odsayClient, times(0)).loadLane("map-walk-3");
+	}
+
+	@Test
+	@DisplayName("ODsay loadLane DB hit 후보는 외부 loadLane을 다시 호출하지 않는다")
+	void usesCachedLoadLaneGeometryWhenDbHitExists() {
+		List<OdsayLaneGeometry> cachedLaneGeometries = List.of(new OdsayLaneGeometry(
+			TransportMode.BUS,
+			"LINESTRING(129.061 35.161, 129.066 35.166)"));
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(busPath("map-1", "100", 20, 300))));
+		when(odsayLoadLaneStore.findValidByMapObjIn(any())).thenReturn(Map.of("map-1", cachedLaneGeometries));
+		when(busanBimsClient.findArrival("BS1", "BL1", "100"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes()).hasSize(1);
+		verify(odsayClient, never()).loadLane("map-1");
+		verify(odsayLoadLaneStore, never()).saveIfAbsentOrRepairMalformed(eq("map-1"), any());
+	}
+
+	@Test
+	@DisplayName("ODsay loadLane DB miss 후보는 외부 호출 후 DB에 저장한다")
+	void savesLoadLaneGeometryWhenDbMissExists() {
+		List<OdsayLaneGeometry> laneGeometries = List.of(new OdsayLaneGeometry(
+			TransportMode.BUS,
+			"LINESTRING(129.061 35.161, 129.066 35.166)"));
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(busPath("map-1", "100", 20, 300))));
+		when(odsayClient.loadLane("map-1")).thenReturn(laneGeometries);
+		when(busanBimsClient.findArrival("BS1", "BL1", "100"))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		WalkRouteSearchResponse response = service.search(UUID.randomUUID(), request());
+
+		assertThat(response.routes()).hasSize(1);
+		verify(odsayClient).loadLane("map-1");
+		verify(odsayLoadLaneStore).saveIfAbsentOrRepairMalformed("map-1", laneGeometries);
+	}
+
+	@Test
+	@DisplayName("BIMS enrichment 대상은 BIMS 없는 정적 최종 3개 후보로 제한한다")
+	void limitsBimsEnrichmentToStaticFinalCandidates() {
+		when(odsayClient.searchPubTransPath(START, END))
+			.thenReturn(new OdsayTransitSearchResult(List.of(
+				busPathWithBusDuration("map-recommended", "100", 5, 700, 2),
+				busPathWithBusDuration("map-min-transfer", "101", 10, 800, 1),
+				busPathWithBusDuration("map-min-walk", "102", 15, 100, 2),
+				busPathWithBusDuration("map-extra-1", "103", 20, 900, 2),
+				busPathWithBusDuration("map-extra-2", "104", 21, 950, 2))));
+		when(odsayClient.loadLane(any()))
+			.thenReturn(List.of(new OdsayLaneGeometry(
+				TransportMode.BUS,
+				"LINESTRING(129.061 35.161, 129.066 35.166)")));
+		when(busanBimsClient.findArrival(any(), any(), any()))
+			.thenReturn(new BusanBimsArrival("BS1", "BL1", "100", 3, true));
+		when(graphHopperRouteClient.route(any())).thenAnswer(invocation -> walkPath(invocation.getArgument(0)));
+
+		service.search(UUID.randomUUID(), request());
+
+		verify(busanBimsClient, times(3)).findArrival(any(), any(), any());
+		assertThat(bimsTaskExecutor.executionCount()).isEqualTo(3);
 	}
 
 	@Test
@@ -520,8 +638,8 @@ class TransitRouteSearchServiceTest {
 	}
 
 	@Test
-	@DisplayName("shortlist 이후 BIMS 저상버스 결과를 RECOMMENDED 우선순위에 적용한다")
-	void appliesLowFloorPriorityAfterBimsEnrichment() {
+	@DisplayName("BIMS 저상버스 결과는 BIMS 전 정적 최종 후보 밖 경로를 승격하지 않는다")
+	void doesNotPromoteCandidateOutsideStaticFinalSelectionByLowFloorBims() {
 		when(odsayClient.searchPubTransPath(START, END))
 			.thenReturn(new OdsayTransitSearchResult(List.of(
 				busPathWithBusDuration("map-fast-normal", "100", 5, 100, 1),
@@ -543,9 +661,11 @@ class TransitRouteSearchServiceTest {
 			.filteredOn(leg -> leg.type() == TransportMode.BUS)
 			.first()
 			.satisfies(leg -> {
-				assertThat(leg.routeNo()).isEqualTo("200");
-				assertThat(leg.laneOptions().get(0).isLowFloor()).isTrue();
+				assertThat(leg.routeNo()).isEqualTo("100");
+				assertThat(leg.laneOptions().get(0).isLowFloor()).isFalse();
 			});
+		verify(busanBimsClient, times(1)).findArrival("BS1", "BL1", "100");
+		verify(busanBimsClient, times(0)).findArrival("BS1", "BL1", "200");
 	}
 
 	private WalkRouteSearchRequest request() {

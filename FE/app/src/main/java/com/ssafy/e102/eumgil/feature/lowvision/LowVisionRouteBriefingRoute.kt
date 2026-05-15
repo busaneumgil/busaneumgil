@@ -18,6 +18,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
+import com.ssafy.e102.eumgil.core.tts.ROUTE_BRIEFING_TTS_SPEECH_RATE
 
 @Composable
 fun LowVisionRouteBriefingRoute(
@@ -44,14 +45,35 @@ fun LowVisionRouteBriefingRoute(
             ViewModelProvider(owner, viewModelFactory)[LowVisionRouteBriefingViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedDestination by
+        appContainer.destinationSelectionRepository.selectedDestination.collectAsStateWithLifecycle()
     val ttsController =
         remember(appContext) {
-            AndroidTextToSpeechController(context = appContext)
+            AndroidTextToSpeechController(
+                context = appContext,
+                speechRate = ROUTE_BRIEFING_TTS_SPEECH_RATE,
+            )
         }
     val ttsState by ttsController.state.collectAsStateWithLifecycle()
     var playbackActive by rememberSaveable { mutableStateOf(false) }
     var playbackToken by rememberSaveable { mutableIntStateOf(ttsState.completedUtteranceCount) }
     var visibleStepStartIndex by rememberSaveable { mutableIntStateOf(0) }
+
+    LaunchedEffect(viewModel, selectedDestination) {
+        appContainer.currentLocationManager.startLocationUpdates()
+        appContainer.currentLocationManager.refreshLatestLocation()
+        val originSnapshot =
+            awaitLowVisionOriginSnapshot(
+                currentLocationManager = appContainer.currentLocationManager,
+                immediateSnapshot = appContainer.currentLocationManager.latestLocation.value,
+            )
+        val origin = originSnapshot.toLowVisionRouteOriginWaypointOrNull()
+        if (origin == null) {
+            viewModel.showLocationRequired()
+        } else {
+            viewModel.loadBriefing(origin = origin)
+        }
+    }
 
     LaunchedEffect(uiState.steps) {
         visibleStepStartIndex = 0

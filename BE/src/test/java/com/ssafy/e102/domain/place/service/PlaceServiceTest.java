@@ -2,7 +2,9 @@ package com.ssafy.e102.domain.place.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -28,6 +30,7 @@ import com.ssafy.e102.domain.place.dto.response.PlaceClickDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceDetailResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceListResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceReverseGeocodeResponse;
+import com.ssafy.e102.domain.place.dto.response.PlaceSearchItemResponse;
 import com.ssafy.e102.domain.place.dto.response.PlaceSearchResponse;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
@@ -39,6 +42,9 @@ import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.place.type.PlaceClickType;
 import com.ssafy.e102.domain.place.type.PlaceDetailType;
+import com.ssafy.e102.domain.route.entity.SubwayStation;
+import com.ssafy.e102.domain.route.service.BusStopMasterService;
+import com.ssafy.e102.domain.route.service.SubwayStationMasterService;
 import com.ssafy.e102.global.external.kakao.KakaoAddressDocument;
 import com.ssafy.e102.global.external.kakao.KakaoLocalClient;
 import com.ssafy.e102.global.external.kakao.KakaoPlaceDocument;
@@ -59,6 +65,12 @@ class PlaceServiceTest {
 	@Mock
 	private KakaoLocalClient kakaoLocalClient;
 
+	@Mock
+	private BusStopMasterService busStopMasterService;
+
+	@Mock
+	private SubwayStationMasterService subwayStationMasterService;
+
 	private PlaceService placeService;
 	private GeoPointConverter geoPointConverter;
 
@@ -66,7 +78,13 @@ class PlaceServiceTest {
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
 		geoPointConverter = new GeoPointConverter();
-		placeService = new PlaceService(placeRepository, bookmarkRepository, kakaoLocalClient, geoPointConverter);
+		placeService = new PlaceService(
+			placeRepository,
+			bookmarkRepository,
+			kakaoLocalClient,
+			busStopMasterService,
+			subwayStationMasterService,
+			geoPointConverter);
 	}
 
 	@Test
@@ -77,6 +95,7 @@ class PlaceServiceTest {
 			"부산시민공원",
 			"부산광역시 부산진구 시민공원로 73",
 			"여행 > 관광,명소 > 공원",
+			"051-123-4567",
 			350,
 			new GeoPointResponse(35.1686, 129.0576));
 		Place matchedPlace = place(
@@ -93,7 +112,8 @@ class PlaceServiceTest {
 			129.0576,
 			1000,
 			1,
-			10)))
+			10,
+			"accuracy")))
 			.thenReturn(new KakaoPlaceSearchResult(List.of(kakaoPlace), 1, true));
 		when(placeRepository.findAllByProviderPlaceIdIn(List.of("123456789")))
 			.thenReturn(List.of(matchedPlace));
@@ -103,6 +123,7 @@ class PlaceServiceTest {
 			"35.1686",
 			"129.0576",
 			"1000",
+			null,
 			null,
 			"10");
 
@@ -117,6 +138,174 @@ class PlaceServiceTest {
 	}
 
 	@Test
+	@DisplayName("관련도순 장소 검색은 부산 결과만 남기고 카카오 정확도 순서를 유지한다")
+	void searchPlacesFiltersBusanAndKeepsKakaoAccuracyOrder() {
+		KakaoPlaceDocument mobileStore = new KakaoPlaceDocument(
+			"mobile",
+			"삼성스토어 부산삼성전기모바일",
+			"부산 강서구 녹산산업중로 333",
+			"서비스",
+			"",
+			3877,
+			new GeoPointResponse(35.1001, 128.9001));
+		KakaoPlaceDocument exactPlace = new KakaoPlaceDocument(
+			"exact",
+			"삼성전기 부산사업장",
+			"부산 강서구 녹산산업중로 333",
+			"회사",
+			"",
+			4072,
+			new GeoPointResponse(35.1002, 128.9002));
+		KakaoPlaceDocument gate = new KakaoPlaceDocument(
+			"gate",
+			"삼성전기 부산사업장 후문",
+			"부산 강서구 송정동 1600",
+			"회사",
+			"",
+			4056,
+			new GeoPointResponse(35.1003, 128.9003));
+		KakaoPlaceDocument outOfBusan = new KakaoPlaceDocument(
+			"suwon",
+			"삼성전기 본사",
+			"경기 수원시 영통구 매영로 150",
+			"회사",
+			"",
+			291841,
+			new GeoPointResponse(37.2520, 127.0550));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기 부산사업장",
+			35.1,
+			128.9,
+			null,
+			1,
+			15,
+			"accuracy")))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(mobileStore, gate, exactPlace, outOfBusan), 4, true));
+		when(placeRepository.findAllByProviderPlaceIdIn(List.of("mobile", "gate", "exact")))
+			.thenReturn(List.of());
+
+		PlaceSearchResponse response = placeService.searchPlaces(
+			"삼성전기 부산사업장",
+			"35.1",
+			"128.9",
+			null,
+			null,
+			null,
+			"15");
+
+		assertThat(response.places())
+			.extracting(PlaceSearchItemResponse::name)
+			.containsExactly(
+				"삼성스토어 부산삼성전기모바일",
+				"삼성전기 부산사업장 후문",
+				"삼성전기 부산사업장");
+		assertThat(response.places())
+			.extracting(PlaceSearchItemResponse::address)
+			.allMatch(address -> address.startsWith("부산"));
+	}
+
+	@Test
+	@DisplayName("짧은 일반 검색어는 카카오 거리 정렬 순서를 유지한다")
+	void searchPlacesKeepsDistanceOrderForShortGenericKeyword() {
+		KakaoPlaceDocument nearStore = new KakaoPlaceDocument(
+			"near",
+			"삼성스토어 부산삼성전기모바일",
+			"부산 강서구 녹산산업중로 333",
+			"서비스",
+			"",
+			3877,
+			new GeoPointResponse(35.1001, 128.9001));
+		KakaoPlaceDocument exactButFarther = new KakaoPlaceDocument(
+			"exact",
+			"삼성전기",
+			"부산 사하구 하신중앙로 40",
+			"전기",
+			"",
+			6285,
+			new GeoPointResponse(35.1002, 128.9002));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기",
+			35.1,
+			128.9,
+			null,
+			1,
+			15,
+			"distance")))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(nearStore, exactButFarther), 2, true));
+		when(placeRepository.findAllByProviderPlaceIdIn(List.of("near", "exact")))
+			.thenReturn(List.of());
+
+		PlaceSearchResponse response = placeService.searchPlaces(
+			"삼성전기",
+			"35.1",
+			"128.9",
+			null,
+			null,
+			"distance",
+			"15");
+
+		assertThat(response.places())
+			.extracting(PlaceSearchItemResponse::name)
+			.containsExactly("삼성스토어 부산삼성전기모바일", "삼성전기");
+	}
+
+	@Test
+	@DisplayName("좌표 기반 검색은 현재 페이지에 부산 결과가 없으면 다음 카카오 페이지에서 부산 결과를 보강한다")
+	void searchPlacesBackfillsBusanResultsFromNextKakaoPage() {
+		KakaoPlaceDocument outOfBusan = new KakaoPlaceDocument(
+			"suwon",
+			"삼성전기 본사",
+			"경기 수원시 영통구 매영로 150",
+			"회사",
+			"",
+			291841,
+			new GeoPointResponse(37.2520, 127.0550));
+		KakaoPlaceDocument busanPlace = new KakaoPlaceDocument(
+			"busan",
+			"삼성전기 부산사업장",
+			"부산 강서구 녹산산업중로 333",
+			"회사",
+			"",
+			4072,
+			new GeoPointResponse(35.1002, 128.9002));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기 부산사업장",
+			35.1,
+			128.9,
+			null,
+			1,
+			15,
+			"distance")))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(outOfBusan), 45, false));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기 부산사업장",
+			35.1,
+			128.9,
+			null,
+			2,
+			15,
+			"distance")))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(busanPlace), 45, true));
+		when(placeRepository.findAllByProviderPlaceIdIn(List.of("busan")))
+			.thenReturn(List.of());
+
+		PlaceSearchResponse response = placeService.searchPlaces(
+			"삼성전기 부산사업장",
+			"35.1",
+			"128.9",
+			null,
+			null,
+			"distance",
+			"15");
+
+		assertThat(response.places())
+			.extracting(PlaceSearchItemResponse::name)
+			.containsExactly("삼성전기 부산사업장");
+		assertThat(response.hasNext()).isFalse();
+		assertThat(response.nextCursor()).isNull();
+	}
+
+	@Test
 	@DisplayName("장소 검색은 다음 cursor로 카카오 다음 페이지를 조회한다")
 	void searchPlacesWithCursor() {
 		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
@@ -125,10 +314,18 @@ class PlaceServiceTest {
 			null,
 			null,
 			1,
-			10)))
+			10,
+			"accuracy")))
 			.thenReturn(new KakaoPlaceSearchResult(List.of(), 30, false));
 
-		PlaceSearchResponse firstResponse = placeService.searchPlaces("부산시민공원", null, null, null, null, "10");
+		PlaceSearchResponse firstResponse = placeService.searchPlaces(
+			"부산시민공원",
+			null,
+			null,
+			null,
+			null,
+			null,
+			"10");
 
 		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
 			"부산시민공원",
@@ -136,7 +333,8 @@ class PlaceServiceTest {
 			null,
 			null,
 			2,
-			10)))
+			10,
+			"accuracy")))
 			.thenReturn(new KakaoPlaceSearchResult(List.of(), 30, true));
 
 		PlaceSearchResponse secondResponse = placeService.searchPlaces(
@@ -145,6 +343,7 @@ class PlaceServiceTest {
 			null,
 			null,
 			firstResponse.nextCursor(),
+			null,
 			"10");
 
 		assertThat(firstResponse.hasNext()).isTrue();
@@ -160,6 +359,7 @@ class PlaceServiceTest {
 			.thenReturn(Optional.of(new KakaoAddressDocument(
 				"부산 부산진구 범전동 200",
 				"부산 부산진구 시민공원로 73",
+				null,
 				"부산",
 				"부산진구",
 				"범전동")));
@@ -249,6 +449,7 @@ class PlaceServiceTest {
 			"부산시민공원",
 			"부산광역시 부산진구 시민공원로 73",
 			"여행 > 관광,명소 > 공원",
+			"051-123-4567",
 			12,
 			new GeoPointResponse(35.1686, 129.0576));
 		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
@@ -269,6 +470,7 @@ class PlaceServiceTest {
 		assertThat(response.provider()).isEqualTo("KAKAO");
 		assertThat(response.providerPlaceId()).isEqualTo("123456789");
 		assertThat(response.providerCategory()).isEqualTo("여행 > 관광,명소 > 공원");
+		assertThat(response.phone()).isEqualTo("051-123-4567");
 		assertThat(response.category()).isNull();
 		assertThat(response.address()).isEqualTo("부산광역시 부산진구 시민공원로 73");
 		assertThat(response.isBookmarked()).isFalse();
@@ -289,6 +491,7 @@ class PlaceServiceTest {
 			.thenReturn(Optional.of(new KakaoAddressDocument(
 				"부산 부산진구 범전동 200",
 				"부산 부산진구 시민공원로 73",
+				null,
 				"부산",
 				"부산진구",
 				"범전동")));
@@ -306,8 +509,9 @@ class PlaceServiceTest {
 	}
 
 	@Test
-	@DisplayName("외부 상세 조회는 POI 후보를 찾지 못하면 상세 없음 에러를 반환한다")
-	void getPlaceDetailPoiNotFound() {
+	@DisplayName("외부 상세 조회는 POI 후보를 찾지 못하면 주소 상세로 fallback한다")
+	void getPlaceDetailPoiNotFoundFallsBackToAddress() {
+		UUID userId = UUID.randomUUID();
 		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
 			35.1686,
 			129.0576,
@@ -323,11 +527,291 @@ class PlaceServiceTest {
 			1,
 			5)))
 			.thenReturn(new KakaoPlaceSearchResult(List.of(), 0, true));
+		when(kakaoLocalClient.reverseGeocode(35.1686, 129.0576))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 부산진구 범전동 200",
+				"부산 부산진구 시민공원로 73",
+				null,
+				"부산",
+				"부산진구",
+				"범전동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
 
-		assertThatThrownBy(() -> placeService.getPlaceDetail(UUID.randomUUID(), request))
-			.isInstanceOf(PlaceException.class)
-			.extracting("errorCode")
-			.isEqualTo(PlaceErrorCode.PLACE_CLICK_DETAIL_NOT_FOUND);
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_ADDRESS);
+		assertThat(response.providerPlaceId()).isNull();
+		assertThat(response.name()).isEqualTo("부산 부산진구 시민공원로 73");
+		assertThat(response.address()).isEqualTo("부산 부산진구 시민공원로 73");
+	}
+
+	@Test
+	@DisplayName("외부 상세 조회는 POI 이름 검색 실패 시 좌표의 건물명으로 장소명을 복구한다")
+	void getPlaceDetailPoiNotFoundUsesBuildingNameFallback() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.061481,
+			128.9793128,
+			PlaceClickType.POI,
+			"KAKAO",
+			null,
+			"다대포현대 아파트 2181세대");
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"다대포현대 아파트 2181세대",
+			35.061481,
+			128.9793128,
+			300,
+			1,
+			5)))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(), 0, true));
+		when(kakaoLocalClient.reverseGeocode(35.061481, 128.9793128))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 사하구 다대동 120-1",
+				"부산광역시 사하구 다대로 473",
+				"다대포현대아파트",
+				"부산",
+				"사하구",
+				"다대동")));
+		KakaoPlaceDocument apartment = new KakaoPlaceDocument(
+			"11201822",
+			"다대포현대아파트",
+			"부산 사하구 다대로 473",
+			"부동산 > 주거시설 > 아파트",
+			"051-987-6543",
+			117,
+			new GeoPointResponse(35.061110251800585, 128.97811023326653));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"다대포현대아파트",
+			35.061481,
+			128.9793128,
+			300,
+			1,
+			5)))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(apartment), 1, true));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_POI);
+		assertThat(response.providerPlaceId()).isEqualTo("11201822");
+		assertThat(response.name()).isEqualTo("다대포현대아파트");
+		assertThat(response.providerCategory()).isEqualTo("부동산 > 주거시설 > 아파트");
+		assertThat(response.phone()).isEqualTo("051-987-6543");
+	}
+
+	@Test
+	@DisplayName("외부 상세 조회는 POI 이름 힌트가 없으면 주소 상세로 fallback한다")
+	void getPlaceDetailPoiWithoutNameHintFallsBackToAddress() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.1686,
+			129.0576,
+			PlaceClickType.POI,
+			"KAKAO",
+			null,
+			null);
+		when(kakaoLocalClient.reverseGeocode(35.1686, 129.0576))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 부산진구 범전동 200",
+				"부산 부산진구 시민공원로 73",
+				null,
+				"부산",
+				"부산진구",
+				"범전동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_ADDRESS);
+		assertThat(response.name()).isEqualTo("부산 부산진구 시민공원로 73");
+	}
+
+	@Test
+	@DisplayName("지도 클릭 버스정류장은 일반 POI 검색을 생략하되 정류장 POI로 반환한다")
+	void getPlaceDetailBusStopKeepsClickedPoiWithoutKeywordSearch() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.061481,
+			128.9793128,
+			PlaceClickType.POI,
+			"KAKAO",
+			"BS97494",
+			"다대현대아파트");
+		when(kakaoLocalClient.reverseGeocode(35.061481, 128.9793128))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 사하구 다대동 120-1",
+				"부산광역시 사하구 다대로 473",
+				null,
+				"부산",
+				"사하구",
+				"다대동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_POI);
+		assertThat(response.providerPlaceId()).isEqualTo("BS97494");
+		assertThat(response.name()).isEqualTo("다대현대아파트");
+		assertThat(response.providerCategory()).isEqualTo("교통,수송 > 버스정류장");
+		assertThat(response.address()).isEqualTo("부산광역시 사하구 다대로 473");
+		verify(kakaoLocalClient, never()).searchKeyword(any(KakaoPlaceSearchRequest.class));
+	}
+
+	@Test
+	@DisplayName("지도 클릭 버스정류장은 일반명 힌트면 BIMS 정류장 마스터로 이름을 보강한다")
+	void getPlaceDetailBusStopResolvesGenericNameWithBimsMaster() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.061481,
+			128.9793128,
+			PlaceClickType.POI,
+			"KAKAO",
+			"BS97494",
+			"버스정류장");
+		when(busStopMasterService.findNearest(35.061481, 128.9793128, 150.0))
+			.thenReturn(Optional.of(new BusStopMasterService.BusStopMatch(
+				"178700302",
+				"다대현대아파트",
+				"10175",
+				"일반",
+				12.0)));
+		when(kakaoLocalClient.reverseGeocode(35.061481, 128.9793128))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 사하구 다대동 120-1",
+				"부산광역시 사하구 다대로 473",
+				null,
+				"부산",
+				"사하구",
+				"다대동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_POI);
+		assertThat(response.providerPlaceId()).isEqualTo("BS97494");
+		assertThat(response.name()).isEqualTo("다대현대아파트");
+		assertThat(response.providerCategory()).isEqualTo("교통,수송 > 버스정류장");
+		assertThat(response.address()).isEqualTo("부산광역시 사하구 다대로 473");
+		verify(kakaoLocalClient, never()).searchKeyword(any(KakaoPlaceSearchRequest.class));
+	}
+
+	@Test
+	@DisplayName("지도 클릭 버스정류장은 BIMS 정류장 마스터 매칭이 없으면 건물명으로 이름을 보강한다")
+	void getPlaceDetailBusStopFallsBackToBuildingNameWhenBimsMasterHasNoMatch() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.061481,
+			128.9793128,
+			PlaceClickType.POI,
+			"KAKAO",
+			"BS97494",
+			"버스정류장");
+		when(busStopMasterService.findNearest(35.061481, 128.9793128, 150.0))
+			.thenReturn(Optional.empty());
+		when(kakaoLocalClient.reverseGeocode(35.061481, 128.9793128))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 사하구 다대동 120-1",
+				"부산광역시 사하구 다대로 473",
+				"다대포현대아파트",
+				"부산",
+				"사하구",
+				"다대동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_POI);
+		assertThat(response.providerPlaceId()).isEqualTo("BS97494");
+		assertThat(response.name()).isEqualTo("다대포현대아파트");
+		assertThat(response.providerCategory()).isEqualTo("교통,수송 > 버스정류장");
+		assertThat(response.address()).isEqualTo("부산광역시 사하구 다대로 473");
+		verify(kakaoLocalClient, never()).searchKeyword(any(KakaoPlaceSearchRequest.class));
+	}
+
+	@Test
+	@DisplayName("지도 클릭 지하철역은 subway_stations 매칭 결과와 접근성 정보를 반환한다")
+	void getPlaceDetailSubwayUsesSubwayStationMaster() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.162166,
+			128.984611,
+			PlaceClickType.POI,
+			"KAKAO",
+			null,
+			"사상역 1번출구");
+		SubwayStation station = SubwayStation.create(
+			"70227",
+			"사상",
+			"부산 2호선",
+			geoPointConverter.toPoint(new GeoPointRequest(35.162166, 128.984611)));
+		when(subwayStationMasterService.findPlaceDetail("사상역 1번출구", 35.162166, 128.984611, 300.0))
+			.thenReturn(Optional.of(new SubwayStationMasterService.SubwayStationPlaceDetail(
+				station,
+				"GROUP:70227-70901",
+				List.of("부산 2호선", "부산-김해경전철"),
+				List.of(
+					new SubwayStationMasterService.SubwayAccessibilityFeature(
+						AccessibilityFeatureType.accessibleToilet,
+						true),
+					new SubwayStationMasterService.SubwayAccessibilityFeature(
+						AccessibilityFeatureType.elevator,
+						true)))));
+		when(kakaoLocalClient.reverseGeocode(35.162166, 128.984611))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 사상구 괘법동 529-1",
+				"부산광역시 사상구 사상로 지하 203",
+				null,
+				"부산",
+				"사상구",
+				"괘법동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_POI);
+		assertThat(response.provider()).isEqualTo("SUBWAY_STATION");
+		assertThat(response.providerPlaceId()).isEqualTo("GROUP:70227-70901");
+		assertThat(response.name()).isEqualTo("사상역");
+		assertThat(response.providerCategory()).isEqualTo("교통,수송 > 지하철,전철 > 부산 2호선 · 부산-김해경전철");
+		assertThat(response.address()).isEqualTo("부산광역시 사상구 사상로 지하 203");
+		assertThat(response.accessibilityFeatures())
+			.extracting(feature -> feature.featureType())
+			.containsExactly(AccessibilityFeatureType.accessibleToilet, AccessibilityFeatureType.elevator);
+		verify(kakaoLocalClient, never()).searchKeyword(any(KakaoPlaceSearchRequest.class));
+		verify(kakaoLocalClient, never()).searchCategory(anyString(), any(), any(), any(), anyInt(), anyInt());
+	}
+
+	@Test
+	@DisplayName("지도 클릭 지하철역이 subway_stations에 매칭되지 않으면 주소 상세로 fallback한다")
+	void getPlaceDetailSubwayFallsBackToAddressWhenMasterHasNoMatch() {
+		UUID userId = UUID.randomUUID();
+		PlaceClickDetailRequest request = new PlaceClickDetailRequest(
+			35.162166,
+			128.984611,
+			PlaceClickType.POI,
+			"KAKAO",
+			null,
+			"사상역 1번출구");
+		when(subwayStationMasterService.findPlaceDetail("사상역 1번출구", 35.162166, 128.984611, 300.0))
+			.thenReturn(Optional.empty());
+		when(kakaoLocalClient.reverseGeocode(35.162166, 128.984611))
+			.thenReturn(Optional.of(new KakaoAddressDocument(
+				"부산 사상구 괘법동 529-1",
+				"부산광역시 사상구 사상로 지하 203",
+				null,
+				"부산",
+				"사상구",
+				"괘법동")));
+		when(bookmarkRepository.existsByUser_UserIdAndBookmarkTargetId(eq(userId), anyString())).thenReturn(false);
+
+		PlaceClickDetailResponse response = placeService.getPlaceDetail(userId, request);
+
+		assertThat(response.detailType()).isEqualTo(PlaceDetailType.EXTERNAL_ADDRESS);
+		assertThat(response.providerPlaceId()).isNull();
+		assertThat(response.name()).isEqualTo("부산광역시 사상구 사상로 지하 203");
+		assertThat(response.address()).isEqualTo("부산광역시 사상구 사상로 지하 203");
+		verify(kakaoLocalClient, never()).searchKeyword(any(KakaoPlaceSearchRequest.class));
+		verify(kakaoLocalClient, never()).searchCategory(anyString(), any(), any(), any(), anyInt(), anyInt());
 	}
 
 	@Test
@@ -451,7 +935,7 @@ class PlaceServiceTest {
 	@Test
 	@DisplayName("검색어가 없으면 장소 검색 도메인 에러를 반환한다")
 	void rejectBlankKeyword() {
-		assertThatThrownBy(() -> placeService.searchPlaces(" ", null, null, null, null, null))
+		assertThatThrownBy(() -> placeService.searchPlaces(" ", null, null, null, null, null, null))
 			.isInstanceOf(PlaceException.class)
 			.extracting("errorCode")
 			.isEqualTo(PlaceErrorCode.PLACE_KEYWORD_REQUIRED);
@@ -469,10 +953,11 @@ class PlaceServiceTest {
 			null,
 			null,
 			1,
-			10)))
+			10,
+			"accuracy")))
 			.thenThrow(cause);
 
-		assertThatThrownBy(() -> placeService.searchPlaces("부산시민공원", null, null, null, null, null))
+		assertThatThrownBy(() -> placeService.searchPlaces("부산시민공원", null, null, null, null, null, null))
 			.isInstanceOf(PlaceException.class)
 			.hasCause(cause)
 			.extracting("errorCode")

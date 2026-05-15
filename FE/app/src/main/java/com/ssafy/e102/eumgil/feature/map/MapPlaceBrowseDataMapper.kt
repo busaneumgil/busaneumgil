@@ -68,6 +68,7 @@ internal object MapPlaceBrowseDataMapper {
                 } else {
                     detail.accessibilityTags.mapNotNull(::rawAccessibilityTagToUiTag)
                 },
+            phoneNumber = detail.phoneNumber,
             description = detail.description,
         )
 

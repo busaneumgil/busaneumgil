@@ -1,15 +1,24 @@
 package com.ssafy.e102.domain.report.service;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.client.RestClientException;
 
 import com.ssafy.e102.domain.report.dto.request.CreateHazardReportRequest;
 import com.ssafy.e102.domain.report.dto.response.HazardReportDetailResponse;
@@ -25,44 +34,146 @@ import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.exception.UserErrorCode;
 import com.ssafy.e102.domain.user.exception.UserException;
 import com.ssafy.e102.domain.user.repository.UserRepository;
+import com.ssafy.e102.global.external.kakao.KakaoAddressDocument;
+import com.ssafy.e102.global.external.kakao.KakaoLocalClient;
 import com.ssafy.e102.global.geo.GeoPointConverter;
+import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
-@Transactional(readOnly = true)
 public class HazardReportService {
 
 	private static final short REPRESENTATIVE_IMAGE_ORDER = 0;
 	private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "reportId");
+	private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 255;
+	private static final long IDEMPOTENCY_RETENTION_HOURS = 24;
 
 	private final HazardReportRepository hazardReportRepository;
 	private final HazardReportImageRepository hazardReportImageRepository;
 	private final UserRepository userRepository;
 	private final GeoPointConverter geoPointConverter;
+	private final HazardReportImageUploadService hazardReportImageUploadService;
+	private final KakaoLocalClient kakaoLocalClient;
+	private final Clock clock;
+	private final TransactionOperations writeTransaction;
 
+	@Autowired
 	public HazardReportService(
 		HazardReportRepository hazardReportRepository,
 		HazardReportImageRepository hazardReportImageRepository,
 		UserRepository userRepository,
-		GeoPointConverter geoPointConverter) {
+		GeoPointConverter geoPointConverter,
+		HazardReportImageUploadService hazardReportImageUploadService,
+		KakaoLocalClient kakaoLocalClient,
+		PlatformTransactionManager transactionManager) {
+		this(
+			hazardReportRepository,
+			hazardReportImageRepository,
+			userRepository,
+			geoPointConverter,
+			hazardReportImageUploadService,
+			kakaoLocalClient,
+			Clock.systemDefaultZone(),
+			new TransactionTemplate(transactionManager));
+	}
+
+	HazardReportService(
+		HazardReportRepository hazardReportRepository,
+		HazardReportImageRepository hazardReportImageRepository,
+		UserRepository userRepository,
+		GeoPointConverter geoPointConverter,
+		HazardReportImageUploadService hazardReportImageUploadService,
+		KakaoLocalClient kakaoLocalClient,
+		Clock clock,
+		TransactionOperations writeTransaction) {
 		this.hazardReportRepository = hazardReportRepository;
 		this.hazardReportImageRepository = hazardReportImageRepository;
 		this.userRepository = userRepository;
 		this.geoPointConverter = geoPointConverter;
+		this.hazardReportImageUploadService = hazardReportImageUploadService;
+		this.kakaoLocalClient = kakaoLocalClient;
+		this.clock = clock;
+		this.writeTransaction = writeTransaction;
 	}
 
-	@Transactional
 	public HazardReportIdResponse createHazardReport(UUID userId, CreateHazardReportRequest request) {
-		User user = getUser(userId);
+		return createHazardReport(userId, request, null);
+	}
+
+	public HazardReportIdResponse createHazardReport(
+		UUID userId,
+		CreateHazardReportRequest request,
+		String idempotencyKey) {
+		String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+		LocalDateTime now = LocalDateTime.now(clock);
+		String requestHash = null;
+		if (normalizedIdempotencyKey != null) {
+			requestHash = HazardReportIdempotencyRequestHash.from(request);
+			HazardReportIdResponse existingResponse = findExistingIdempotentResponse(
+				userId,
+				normalizedIdempotencyKey,
+				requestHash,
+				now);
+			if (existingResponse != null) {
+				return existingResponse;
+			}
+		}
+
+		getUser(userId);
+		hazardReportImageUploadService.validateImageObjectKeys(userId, request.imageObjectKeys());
+		String address = resolveAddress(request.reportPoint());
+		String idempotencyRequestHash = requestHash;
+		HazardReportIdResponse response = writeTransaction.execute(status -> createHazardReportInTransaction(
+			userId,
+			request,
+			normalizedIdempotencyKey,
+			idempotencyRequestHash,
+			address));
+		return Objects.requireNonNull(response, "Hazard report write transaction returned null.");
+	}
+
+	private HazardReportIdResponse createHazardReportInTransaction(
+		UUID userId,
+		CreateHazardReportRequest request,
+		String normalizedIdempotencyKey,
+		String requestHash,
+		String address) {
+		LocalDateTime now = LocalDateTime.now(clock);
+		User user = getUser(userId, normalizedIdempotencyKey != null);
+		if (normalizedIdempotencyKey != null) {
+			hazardReportRepository.clearExpiredIdempotencyMetadata(now);
+			HazardReportIdResponse existingResponse = findExistingIdempotentResponse(
+				userId,
+				normalizedIdempotencyKey,
+				requestHash,
+				now);
+			if (existingResponse != null) {
+				return existingResponse;
+			}
+		}
 		HazardReport hazardReport = HazardReport.create(
 			user,
 			request.reportType(),
 			request.description(),
+			address,
 			geoPointConverter.toPoint(request.reportPoint()),
-			request.imageUrls());
+			request.imageObjectKeys());
+		hazardReport.applyIdempotency(
+			normalizedIdempotencyKey,
+			requestHash,
+			now.plusHours(IDEMPOTENCY_RETENTION_HOURS));
 		HazardReport savedHazardReport = hazardReportRepository.save(hazardReport);
 		return new HazardReportIdResponse(savedHazardReport.getReportId());
 	}
 
+	@Transactional
+	public int cleanupExpiredIdempotencyMetadata() {
+		return hazardReportRepository.clearExpiredIdempotencyMetadata(LocalDateTime.now(clock));
+	}
+
+	@Transactional(readOnly = true)
 	public HazardReportListResponse getMyHazardReports(UUID userId, Long cursor, int size) {
 		PageRequest pageRequest = PageRequest.of(0, size, NEWEST_FIRST);
 		Slice<HazardReport> hazardReports = cursor == null
@@ -76,10 +187,14 @@ public class HazardReportService {
 			geoPointConverter);
 	}
 
+	@Transactional(readOnly = true)
 	public HazardReportDetailResponse getMyHazardReportDetail(UUID userId, Long reportId) {
 		HazardReport hazardReport = getHazardReport(reportId);
 		validateOwner(hazardReport, userId);
-		return HazardReportDetailResponse.of(hazardReport, geoPointConverter);
+		return HazardReportDetailResponse.of(
+			hazardReport,
+			geoPointConverter,
+			createImageReadUrls(hazardReport));
 	}
 
 	private Map<Long, String> getRepresentativeImageUrls(List<HazardReport> hazardReports) {
@@ -94,12 +209,72 @@ public class HazardReportService {
 			.stream()
 			.collect(Collectors.toMap(
 				image -> image.getHazardReport().getReportId(),
-				HazardReportImage::getImageUrl,
+				image -> hazardReportImageUploadService.createReadUrl(image.getImageObjectKey()),
 				(existing, ignored) -> existing));
 	}
 
+	private List<String> createImageReadUrls(HazardReport hazardReport) {
+		return hazardReport.getImages()
+			.stream()
+			.map(HazardReportImage::getImageObjectKey)
+			.map(hazardReportImageUploadService::createReadUrl)
+			.toList();
+	}
+
+	private String resolveAddress(GeoPointRequest reportPoint) {
+		if (reportPoint == null || reportPoint.lat() == null || reportPoint.lng() == null) {
+			return null;
+		}
+		try {
+			return kakaoLocalClient.reverseGeocode(reportPoint.lat(), reportPoint.lng())
+				.map(KakaoAddressDocument::displayAddress)
+				.orElse(null);
+		} catch (RestClientException | IllegalArgumentException exception) {
+			log.debug("제보 위치 주소 역지오코딩 실패. lat={}, lng={}", reportPoint.lat(), reportPoint.lng(), exception);
+			return null;
+		}
+	}
+
+	private HazardReportIdResponse findExistingIdempotentResponse(
+		UUID userId,
+		String idempotencyKey,
+		String requestHash,
+		LocalDateTime now) {
+		return hazardReportRepository.findByUser_UserIdAndIdempotencyKey(userId, idempotencyKey)
+			.map(existingReport -> {
+				if (!existingReport.hasActiveIdempotency(now)) {
+					return null;
+				}
+				if (!existingReport.hasSameIdempotencyRequestHash(requestHash)) {
+					throw new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_IDEMPOTENCY_CONFLICT);
+				}
+				return new HazardReportIdResponse(existingReport.getReportId());
+			})
+			.orElse(null);
+	}
+
+	private String normalizeIdempotencyKey(String idempotencyKey) {
+		if (idempotencyKey == null || idempotencyKey.isBlank()) {
+			return null;
+		}
+		String normalizedKey = idempotencyKey.trim();
+		if (normalizedKey.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
+			throw new HazardReportException(
+				HazardReportErrorCode.INVALID_HAZARD_REPORT_REQUEST,
+				"Idempotency-Key는 255자 이하여야 합니다.");
+		}
+		return normalizedKey;
+	}
+
 	private User getUser(UUID userId) {
-		return userRepository.findById(userId)
+		return getUser(userId, false);
+	}
+
+	private User getUser(UUID userId, boolean lockForIdempotency) {
+		Optional<User> user = lockForIdempotency
+			? userRepository.findByIdForUpdate(userId)
+			: userRepository.findById(userId);
+		return user
 			.orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND));
 	}
 

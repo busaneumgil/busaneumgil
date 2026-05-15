@@ -1,5 +1,8 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import android.util.Log
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,7 +21,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -95,7 +97,13 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
     val currentTopLevelRoute = currentRoute.toCurrentTopLevelRoute()
-    val showTopLevelBar = currentTopLevelRoute != null
+    val isMapFacilityDetailVisible by
+        currentBackStackEntry
+            ?.savedStateHandle
+            ?.getStateFlow(MAP_FACILITY_DETAIL_VISIBLE_KEY, false)
+            ?.collectAsStateWithLifecycle()
+            ?: remember { mutableStateOf(false) }
+    val showTopLevelBar = currentTopLevelRoute != null && !isMapFacilityDetailVisible
 
     val selectedPrimaryUserType = initSettings.selectedPrimaryUserType
 
@@ -130,7 +138,20 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     destinations = TopLevelDestination.entries,
                     currentRoute = currentTopLevelRoute,
                     onDestinationSelected = { destination ->
-                        navController.navigateToTopLevel(destination)
+                        if (
+                            shouldNavigateToTopLevelMapForHomeEntry(
+                                currentRoute = currentRoute,
+                                destination = destination,
+                            )
+                        ) {
+                            Log.i(
+                                APP_NAV_HOST_LOG_TAG,
+                                "Map home tab selected from aliased route=$currentRoute; forcing home reentry reset",
+                            )
+                            navController.navigateToTopLevelMapForHomeEntry()
+                        } else {
+                            navController.navigateToTopLevel(destination)
+                        }
                     },
                 )
             }
@@ -140,6 +161,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             navController = navController,
             startDestination = startDestination.route,
             modifier = modifier.padding(innerPadding),
+            enterTransition = { appEnterTransition() },
+            exitTransition = { appExitTransition() },
+            popEnterTransition = { appEnterTransition() },
+            popExitTransition = { appExitTransition() },
         ) {
             authNavGraph(
                 navController = navController,
@@ -168,10 +193,28 @@ internal fun String?.toCurrentTopLevelRoute(): String? =
         this == SearchRoute.Entry.route -> TopLevelRoute.Map.route
         this?.startsWith("search/") == true -> TopLevelRoute.Map.route
         this == NavigationRoute.Guidance.route -> null
-        this == ArrivalRoute.Entry.route -> TopLevelRoute.Map.route
+        this == ArrivalRoute.Entry.route -> null
         this?.startsWith("route_setting") == true -> null
         else -> null
     }
+
+internal fun shouldNavigateToTopLevelMapForHomeEntry(
+    currentRoute: String?,
+    destination: TopLevelDestination,
+): Boolean =
+    destination == TopLevelDestination.Map &&
+        currentRoute != TopLevelRoute.Map.route &&
+        currentRoute != TopLevelRoute.SavedRoute.route &&
+        currentRoute.toCurrentTopLevelRoute() != null
+
+internal fun shouldUseInstantAppDestinationTransitions(): Boolean = true
+
+private fun appEnterTransition(): EnterTransition = EnterTransition.None
+
+private fun appExitTransition(): ExitTransition = ExitTransition.None
+
+private const val APP_NAV_HOST_LOG_TAG = "AppNavHost"
+internal const val MAP_FACILITY_DETAIL_VISIBLE_KEY: String = "mapFacilityDetailVisible"
 
 @Composable
 private fun MobilityKwsEffect(
@@ -220,7 +263,7 @@ private fun MobilityKwsEffect(
 private fun AppEntryLoadingScreen(modifier: Modifier = Modifier) {
     Image(
         painter = painterResource(id = R.drawable.splash_illustration),
-        contentDescription = stringResource(id = R.string.app_name),
+        contentDescription = null,
         modifier = modifier.fillMaxSize(),
         contentScale = ContentScale.Crop,
     )

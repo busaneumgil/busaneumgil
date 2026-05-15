@@ -145,9 +145,13 @@ dependencies {
     implementation("com.kakao.sdk:v2-user:2.23.4")
     implementation("com.google.android.gms:play-services-auth:21.5.1")
     implementation("com.navercorp.nid:oauth:5.9.1")
+    // Coil: 제보 첨부 사진 / 마이페이지 내역 카드 썸네일 렌더링. Compose 통합 라이브러리.
+    // 2.7.0은 Compose BOM 2024.02.x와 호환된 안정 버전.
+    implementation("io.coil-kt:coil-compose:2.7.0")
     ksp("androidx.room:room-compiler:2.6.1")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 
     debugImplementation("androidx.compose.ui:ui-test-manifest")

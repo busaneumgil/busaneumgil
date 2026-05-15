@@ -20,4 +20,19 @@ class MapOverlayViewportUsageTest {
         assertFalse(routeScreen.contains("MapViewportOverlayBackdrop("))
         assertFalse(navigationScreen.contains("MapViewportOverlayBackdrop("))
     }
+
+    @Test
+    fun `navigation screen maps overlay marker clicks back into segment tap actions`() {
+        val navigationScreen =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val backdropSection =
+            navigationScreen
+                .substringAfter("private fun NavigationMapBackdrop(")
+                .substringBefore("@Composable\nprivate fun NavigationMapMarker")
+
+        assertTrue(backdropSection.contains("onMarkerClick = { markerId ->"))
+        assertTrue(backdropSection.contains("markerId.toNavigationSegmentMarkerIndexOrNull()"))
+        assertTrue(backdropSection.contains("onSegmentTapped(segmentIndex)"))
+    }
 }

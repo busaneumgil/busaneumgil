@@ -59,12 +59,22 @@ public class BusanBimsClient {
 		}
 		List<Element> items = requestItems("busStopArrByBstopidLineid", stopId, resolvedLineId);
 		Element item = items.isEmpty() ? null : items.get(0);
+		ArrivalSlot arrivalSlot = arrivalSlot(item);
 		return new BusanBimsArrival(
 			stopId,
 			resolvedLineId,
 			text(item, "lineno", routeNo),
-			remainingMinute(item),
-			lowFloor(item));
+			arrivalSlot.remainingMinute(),
+			arrivalSlot.lowFloor(),
+			arrivalSlot.vehicleNo(),
+			arrivalSlot.remainingStopCount());
+	}
+
+	public BusanBimsBusStopPage findBusStops(int pageNo, int numOfRows) {
+		if (pageNo < 1 || numOfRows < 1) {
+			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, "BIMS busStopList page 요청값이 올바르지 않습니다.");
+		}
+		return requestBusStopPage(pageNo, numOfRows);
 	}
 
 	private String findLineId(String stopId, String routeNo) {
@@ -131,6 +141,55 @@ public class BusanBimsClient {
 		}
 	}
 
+	private BusanBimsBusStopPage requestBusStopPage(int pageNo, int numOfRows) {
+		String endpoint = "busStopList";
+		if (!StringUtils.hasText(properties.serviceKey())) {
+			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED, "BIMS service key가 설정되지 않았습니다.");
+		}
+		try {
+			UriComponentsBuilder uriBuilder = UriComponentsBuilder
+				.fromUriString(properties.baseUrl())
+				.path("/" + endpoint)
+				.queryParam("serviceKey", encodedServiceKey())
+				.queryParam("pageNo", pageNo)
+				.queryParam("numOfRows", numOfRows);
+			String body = restTemplate.exchange(
+				RequestEntity
+					.method(HttpMethod.GET, uriBuilder.build(true).toUri())
+					.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_XML_VALUE)
+					.build(),
+				String.class)
+				.getBody();
+			return parseBusStopPage(body, pageNo, numOfRows);
+		} catch (HttpStatusCodeException exception) {
+			throw externalFailure(endpoint, exception);
+		} catch (ResourceAccessException exception) {
+			RouteErrorCode errorCode = timeoutOrFailure(exception);
+			log.warn(
+				"external route call failed provider={} operation={} status={} pageNo={} numOfRows={} message={}",
+				"bims",
+				endpoint,
+				errorCode.getStatus(),
+				pageNo,
+				numOfRows,
+				exception.getMessage(),
+				exception);
+			throw new RouteException(errorCode, errorCode.getMessage(), exception);
+		} catch (RestClientException exception) {
+			log.warn(
+				"external route call failed provider={} operation={} status={} pageNo={} numOfRows={} message={}",
+				"bims",
+				endpoint,
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getStatus(),
+				pageNo,
+				numOfRows,
+				exception.getMessage(),
+				exception);
+			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(), exception);
+		}
+	}
+
 	private String encodedServiceKey() {
 		String serviceKey = properties.serviceKey();
 		if (serviceKey.contains("%")) {
@@ -144,9 +203,7 @@ public class BusanBimsClient {
 			return List.of();
 		}
 		try {
-			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-			factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-			Document document = factory.newDocumentBuilder().parse(new InputSource(new StringReader(body)));
+			Document document = parseDocument(body);
 			NodeList nodes = document.getElementsByTagName("item");
 			List<Element> items = new ArrayList<>();
 			for (int index = 0; index < nodes.getLength(); index++) {
@@ -159,23 +216,63 @@ public class BusanBimsClient {
 		}
 	}
 
-	private Integer remainingMinute(Element item) {
-		return Arrays.asList(integer(item, "min1"), integer(item, "min2"))
-			.stream()
-			.filter(value -> value != null && value >= 0)
-			.min(Comparator.naturalOrder())
-			.orElse(null);
+	private BusanBimsBusStopPage parseBusStopPage(String body, int pageNo, int numOfRows) {
+		if (!StringUtils.hasText(body)) {
+			return new BusanBimsBusStopPage(List.of(), 0, pageNo, numOfRows);
+		}
+		try {
+			Document document = parseDocument(body);
+			NodeList nodes = document.getElementsByTagName("item");
+			List<BusanBimsBusStop> busStops = new ArrayList<>();
+			for (int index = 0; index < nodes.getLength(); index++) {
+				Element item = (Element)nodes.item(index);
+				busStops.add(new BusanBimsBusStop(
+					text(item, "bstopid", null),
+					text(item, "bstopnm", null),
+					text(item, "arsno", null),
+					doubleValue(item, "gpsx"),
+					doubleValue(item, "gpsy"),
+					text(item, "stoptype", null)));
+			}
+			return new BusanBimsBusStopPage(
+				List.copyOf(busStops),
+				documentInteger(document, "totalCount"),
+				pageNo,
+				numOfRows);
+		} catch (Exception exception) {
+			throw new RouteException(RouteErrorCode.EXTERNAL_ROUTE_API_FAILED,
+				RouteErrorCode.EXTERNAL_ROUTE_API_FAILED.getMessage(), exception);
+		}
 	}
 
-	private Boolean lowFloor(Element item) {
-		List<Boolean> values = Arrays.asList(booleanValue(item, "lowplate1"), booleanValue(item, "lowplate2"))
+	private Document parseDocument(String body) throws Exception {
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+		return factory.newDocumentBuilder().parse(new InputSource(new StringReader(body)));
+	}
+
+	private ArrivalSlot arrivalSlot(Element item) {
+		List<ArrivalSlot> slots = Arrays.asList(arrivalSlot(item, 1), arrivalSlot(item, 2))
 			.stream()
-			.filter(value -> value != null)
+			.filter(ArrivalSlot::hasArrival)
 			.toList();
-		if (values.isEmpty()) {
-			return null;
+		if (slots.isEmpty()) {
+			return ArrivalSlot.empty();
 		}
-		return values.contains(Boolean.TRUE);
+		return slots.stream()
+			.filter(slot -> Boolean.TRUE.equals(slot.lowFloor()))
+			.min(Comparator.comparing(ArrivalSlot::remainingMinuteOrMax))
+			.orElseGet(() -> slots.stream()
+				.min(Comparator.comparing(ArrivalSlot::remainingMinuteOrMax))
+				.orElse(ArrivalSlot.empty()));
+	}
+
+	private ArrivalSlot arrivalSlot(Element item, int index) {
+		return new ArrivalSlot(
+			integer(item, "min" + index),
+			booleanValue(item, "lowplate" + index),
+			firstText(item, List.of("carno" + index, "carNo" + index, "car" + index), null),
+			integer(item, "station" + index));
 	}
 
 	private Integer integer(Element item, String tagName) {
@@ -187,6 +284,30 @@ public class BusanBimsClient {
 			return Integer.parseInt(value);
 		} catch (NumberFormatException exception) {
 			return null;
+		}
+	}
+
+	private Double doubleValue(Element item, String tagName) {
+		String value = text(item, tagName, null);
+		if (!StringUtils.hasText(value)) {
+			return null;
+		}
+		try {
+			return Double.parseDouble(value);
+		} catch (NumberFormatException exception) {
+			return null;
+		}
+	}
+
+	private int documentInteger(Document document, String tagName) {
+		NodeList nodes = document.getElementsByTagName(tagName);
+		if (nodes.getLength() == 0) {
+			return 0;
+		}
+		try {
+			return Integer.parseInt(nodes.item(0).getTextContent().trim());
+		} catch (NumberFormatException exception) {
+			return 0;
 		}
 	}
 
@@ -212,6 +333,35 @@ public class BusanBimsClient {
 		}
 		String value = nodes.item(0).getTextContent();
 		return StringUtils.hasText(value) ? value.trim() : defaultValue;
+	}
+
+	private String firstText(Element item, List<String> tagNames, String defaultValue) {
+		for (String tagName : tagNames) {
+			String value = text(item, tagName, null);
+			if (StringUtils.hasText(value)) {
+				return value;
+			}
+		}
+		return defaultValue;
+	}
+
+	private record ArrivalSlot(
+		Integer remainingMinute,
+		Boolean lowFloor,
+		String vehicleNo,
+		Integer remainingStopCount) {
+
+		static ArrivalSlot empty() {
+			return new ArrivalSlot(null, null, null, null);
+		}
+
+		boolean hasArrival() {
+			return remainingMinute != null || lowFloor != null || StringUtils.hasText(vehicleNo);
+		}
+
+		int remainingMinuteOrMax() {
+			return remainingMinute == null ? Integer.MAX_VALUE : remainingMinute;
+		}
 	}
 
 	private RouteException externalFailure(String operation, HttpStatusCodeException exception) {

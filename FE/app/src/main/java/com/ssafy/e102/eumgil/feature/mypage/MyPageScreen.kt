@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +47,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDialog
+import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDismissStyle
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
@@ -53,6 +57,10 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 fun MyPageScreen(
     uiState: MyPageUiState,
     onAction: (MyPageUiAction) -> Unit,
+    isDuribalConfirmDialogVisible: Boolean,
+    onDuribalCallClick: () -> Unit,
+    onDuribalConfirmDismiss: () -> Unit,
+    onDuribalConfirm: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
@@ -87,6 +95,7 @@ fun MyPageScreen(
             )
 
             MainMenuSection(
+                onDuribalCallClick = onDuribalCallClick,
                 onMenuClick = { menuItem ->
                     onAction(MyPageUiAction.MainMenuClicked(menuItem = menuItem))
                 },
@@ -117,10 +126,17 @@ fun MyPageScreen(
                                 },
                         ),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                 )
             }
         }
+    }
+
+    if (isDuribalConfirmDialogVisible) {
+        EumDuribalCallConfirmDialog(
+            onDismiss = onDuribalConfirmDismiss,
+            onConfirm = onDuribalConfirm,
+            dismissStyle = EumDuribalCallConfirmDismissStyle.SecondaryButton,
+        )
     }
 }
 
@@ -128,7 +144,7 @@ fun MyPageScreen(
 private fun MyPageTopBar() {
     EumCenteredTopBar(
         title = stringResource(id = R.string.my_page_screen_title),
-        titleFontWeight = FontWeight.Bold,
+        titleFontWeight = FontWeight.SemiBold,
     )
 }
 
@@ -192,7 +208,6 @@ private fun ProfileCard(
                 Text(
                     text = stringResource(id = headlineTextRes),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                 )
                 uiState.mobilitySubtype?.let { subtype ->
                     Text(
@@ -221,7 +236,7 @@ private fun ProfileCard(
                 ) {
                     Text(
                         text = stringResource(id = R.string.my_page_change_user_type),
-                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.labelLarge,
                     )
                 }
             }
@@ -230,14 +245,17 @@ private fun ProfileCard(
 }
 
 @Composable
-private fun MainMenuSection(onMenuClick: (MyPageMenuItem) -> Unit) {
+private fun MainMenuSection(
+    onDuribalCallClick: () -> Unit,
+    onMenuClick: (MyPageMenuItem) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
         Text(
             text = stringResource(id = R.string.my_page_main_menu_title),
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
         )
+        DuribalCallButton(onClick = onDuribalCallClick)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(EumRadius.medium),
@@ -253,7 +271,7 @@ private fun MainMenuSection(onMenuClick: (MyPageMenuItem) -> Unit) {
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.REPORT_HISTORY,
                 titleRes = R.string.my_page_menu_report_history,
-                iconRes = R.drawable.ic_report_other,
+                iconRes = R.drawable.ic_mypage_report_history,
                 onClick = onMenuClick,
             )
             MyPageMenuRow(
@@ -267,24 +285,67 @@ private fun MainMenuSection(onMenuClick: (MyPageMenuItem) -> Unit) {
 }
 
 @Composable
+private fun DuribalCallButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp),
+        shape = RoundedCornerShape(EumRadius.medium),
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_mypage_duribal_call),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.onPrimary,
+        )
+        Text(
+            text = stringResource(id = R.string.my_page_duribal_call_button),
+            modifier = Modifier.padding(start = EumSpacing.small),
+            style = MaterialTheme.typography.titleSmall,
+        )
+    }
+}
+
+@Composable
 private fun MyPageMenuRow(
     menuItem: MyPageMenuItem,
     @StringRes titleRes: Int,
     @DrawableRes iconRes: Int,
     onClick: (MyPageMenuItem) -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     val title = stringResource(id = titleRes)
+    val suppressRipple = shouldSuppressMyPageMenuRipple(menuItem)
+    val clickableModifier =
+        if (suppressRipple) {
+            Modifier.clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = title,
+                onClick = { onClick(menuItem) },
+            )
+        } else {
+            Modifier.clickable(
+                role = Role.Button,
+                onClickLabel = title,
+                onClick = { onClick(menuItem) },
+            )
+        }
 
     Surface(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
-                .clickable(
-                    role = Role.Button,
-                    onClickLabel = title,
-                    onClick = { onClick(menuItem) },
-                ),
+                .then(clickableModifier),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
@@ -320,6 +381,9 @@ private fun MyPageMenuRow(
         }
     }
 }
+
+internal fun shouldSuppressMyPageMenuRipple(menuItem: MyPageMenuItem): Boolean =
+    menuItem == MyPageMenuItem.REPORT_HISTORY || menuItem == MyPageMenuItem.APP_HELP
 
 private val MyPageUserMode.labelRes: Int
     get() =

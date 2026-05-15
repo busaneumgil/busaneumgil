@@ -127,5 +127,6 @@ data class FacilityDetailSeed(
     val category: FacilityCategory,
     val accessibilityTags: List<AccessibilityTag> = emptyList(),
     val brailleBlockType: BrailleBlockType? = null,
+    val phoneNumber: String? = null,
     val description: String? = null,
 )

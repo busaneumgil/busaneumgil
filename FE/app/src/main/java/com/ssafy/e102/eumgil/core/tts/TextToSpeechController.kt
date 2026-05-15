@@ -1,6 +1,9 @@
 package com.ssafy.e102.eumgil.core.tts
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
@@ -37,14 +40,20 @@ enum class TextToSpeechAvailability {
     Unavailable,
 }
 
-class AndroidTextToSpeechController(
+internal class AndroidTextToSpeechController(
     context: Context,
     private val locale: Locale = Locale.KOREAN,
+    private val speechRate: Float = DEFAULT_TTS_SPEECH_RATE,
+    private val audioConfig: TextToSpeechAudioConfig = defaultTextToSpeechAudioConfig(),
 ) : TextToSpeechController {
     private val appContext = context.applicationContext
+    private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    private val audioAttributes by lazy { audioConfig.toAudioAttributes() }
     private var engine: TextToSpeech? = null
     private var pendingText: String? = null
     private var isShutdown = false
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var hasAudioFocus = false
 
     private val mutableState = MutableStateFlow(TextToSpeechState())
     override val state: StateFlow<TextToSpeechState> = mutableState.asStateFlow()
@@ -72,6 +81,7 @@ class AndroidTextToSpeechController(
     override fun stop() {
         pendingText = null
         runCatching { engine?.stop() }
+        abandonAudioFocus()
         mutableState.update { it.copy(isSpeaking = false) }
     }
 
@@ -80,6 +90,7 @@ class AndroidTextToSpeechController(
         pendingText = null
         runCatching { engine?.stop() }
         runCatching { engine?.shutdown() }
+        abandonAudioFocus()
         engine = null
         mutableState.update { it.copy(availability = TextToSpeechAvailability.Unavailable) }
     }
@@ -110,6 +121,24 @@ class AndroidTextToSpeechController(
             return
         }
 
+        val speechRateConfigured =
+            runCatching { engine?.setSpeechRate(speechRate) }
+                .getOrDefault(TextToSpeech.ERROR) != TextToSpeech.ERROR
+
+        if (!speechRateConfigured) {
+            markUnavailable()
+            return
+        }
+
+        val audioAttributesConfigured =
+            runCatching { engine?.setAudioAttributes(audioAttributes) }
+                .getOrDefault(TextToSpeech.ERROR) != TextToSpeech.ERROR
+
+        if (!audioAttributesConfigured) {
+            markUnavailable()
+            return
+        }
+
         mutableState.update { it.copy(availability = TextToSpeechAvailability.Ready) }
         engine?.setOnUtteranceProgressListener(
             object : UtteranceProgressListener() {
@@ -118,6 +147,7 @@ class AndroidTextToSpeechController(
                 }
 
                 override fun onDone(utteranceId: String?) {
+                    abandonAudioFocus()
                     mutableState.update { state ->
                         state.copy(
                             isSpeaking = false,
@@ -145,6 +175,7 @@ class AndroidTextToSpeechController(
     private fun speakPendingText() {
         val text = pendingText ?: return
         pendingText = null
+        requestAudioFocus()
 
         val result =
             runCatching {
@@ -160,6 +191,7 @@ class AndroidTextToSpeechController(
 
     private fun markUnavailable() {
         pendingText = null
+        abandonAudioFocus()
         mutableState.update {
             it.copy(
                 availability = TextToSpeechAvailability.Unavailable,
@@ -169,12 +201,34 @@ class AndroidTextToSpeechController(
     }
 
     private fun onSpeechFinishedWithError() {
+        abandonAudioFocus()
         mutableState.update { state ->
             state.copy(
                 isSpeaking = false,
                 completedUtteranceCount = state.completedUtteranceCount + 1,
             )
         }
+    }
+
+    private fun requestAudioFocus() {
+        val manager = audioManager ?: return
+        val request =
+            audioFocusRequest ?: AudioFocusRequest.Builder(audioConfig.focusGain)
+                .setAudioAttributes(audioAttributes)
+                .setWillPauseWhenDucked(false)
+                .build()
+                .also { builtRequest ->
+                    audioFocusRequest = builtRequest
+                }
+        hasAudioFocus = manager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    private fun abandonAudioFocus() {
+        val manager = audioManager ?: return
+        val request = audioFocusRequest ?: return
+        if (!hasAudioFocus) return
+        manager.abandonAudioFocusRequest(request)
+        hasAudioFocus = false
     }
 }
 
@@ -197,7 +251,16 @@ object NoOpTextToSpeechController : TextToSpeechController {
     override fun shutdown() = Unit
 }
 
+internal const val ROUTE_BRIEFING_TTS_SPEECH_RATE: Float = 1.0f
+
 private const val NAVIGATION_TTS_UTTERANCE_ID = "navigation_guidance"
+private const val DEFAULT_TTS_SPEECH_RATE: Float = 1.0f
 
 private fun Int.isSupportedLanguageResult(): Boolean =
     this != TextToSpeech.LANG_MISSING_DATA && this != TextToSpeech.LANG_NOT_SUPPORTED
+
+private fun TextToSpeechAudioConfig.toAudioAttributes(): AudioAttributes =
+    AudioAttributes.Builder()
+        .setUsage(usage)
+        .setContentType(contentType)
+        .build()

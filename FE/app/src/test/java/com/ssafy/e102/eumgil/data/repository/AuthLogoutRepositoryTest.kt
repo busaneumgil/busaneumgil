@@ -34,16 +34,19 @@ class AuthLogoutRepositoryTest {
                 FakeLogoutAuthRemoteDataSource(
                     logoutMessage = "로그아웃되었습니다.",
                 )
+            val localCacheCleaner = RecordingAccountScopedLocalCacheCleaner()
             val repository =
                 ServerAuthLogoutRepository(
                     authRemoteDataSource = remoteDataSource,
                     authSessionRepository = authSessionRepository,
+                    localCacheCleaner = localCacheCleaner,
                 )
 
             val result = repository.logout()
 
             assertEquals("access-token", remoteDataSource.latestLogoutAccessToken)
             assertTrue(authSessionRepository.clearAuthSessionCalled)
+            assertTrue(localCacheCleaner.clearCalled)
             assertEquals(AuthLogoutResult.Success(message = "로그아웃되었습니다."), result)
         }
 
@@ -76,6 +79,7 @@ class AuthLogoutRepositoryTest {
                 ServerAuthLogoutRepository(
                     authRemoteDataSource = remoteDataSource,
                     authSessionRepository = authSessionRepository,
+                    localCacheCleaner = RecordingAccountScopedLocalCacheCleaner(),
                 )
 
             val result = repository.logout()
@@ -109,16 +113,19 @@ class AuthLogoutRepositoryTest {
                             message = "인증이 필요합니다.",
                         ),
                 )
+            val localCacheCleaner = RecordingAccountScopedLocalCacheCleaner()
             val repository =
                 ServerAuthLogoutRepository(
                     authRemoteDataSource = remoteDataSource,
                     authSessionRepository = authSessionRepository,
+                    localCacheCleaner = localCacheCleaner,
                 )
 
             val result = repository.logout()
 
             assertEquals(AuthLogoutResult.AuthenticationFailed, result)
             assertTrue(authSessionRepository.clearAuthSessionCalled)
+            assertTrue(localCacheCleaner.clearCalled)
         }
 
     @Test
@@ -133,6 +140,7 @@ class AuthLogoutRepositoryTest {
                 ServerAuthLogoutRepository(
                     authRemoteDataSource = remoteDataSource,
                     authSessionRepository = authSessionRepository,
+                    localCacheCleaner = RecordingAccountScopedLocalCacheCleaner(),
                 )
 
             val result = repository.logout()
@@ -180,5 +188,14 @@ private class RecordingLogoutAuthSessionRepository(
 
     override suspend fun clearAuthSession() {
         clearAuthSessionCalled = true
+    }
+}
+
+private class RecordingAccountScopedLocalCacheCleaner : AccountScopedLocalCacheCleaner {
+    var clearCalled: Boolean = false
+        private set
+
+    override suspend fun clearCurrentAccountCache() {
+        clearCalled = true
     }
 }

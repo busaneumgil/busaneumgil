@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.core.designsystem.component.navigation
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.navigation.TopLevelDestination
@@ -62,6 +65,8 @@ fun EumTopLevelTabBar(
                         .weight(1f)
                         .selectable(
                             selected = selected,
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
                             onClick = { onDestinationSelected(destination) },
                             role = Role.Tab,
                         )
@@ -85,7 +90,7 @@ fun EumTopLevelTabBar(
                     )
                     Text(
                         text = stringResource(id = destination.labelRes),
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
                         color = contentColor,
                     )
                 }

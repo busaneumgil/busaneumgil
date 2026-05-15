@@ -1,14 +1,24 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,22 +28,31 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -43,6 +62,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -53,16 +73,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingActionButtonState
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingControls
-import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelShell
+import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelStepRow
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
+import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.component.createNavigationViewportOverlayState
+import com.ssafy.e102.eumgil.feature.map.component.rememberMapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.navigation.component.NavigationSegmentRail
+import com.ssafy.e102.eumgil.feature.route.RouteTransitOptionLabelUiState
+import kotlinx.coroutines.launch
 
 @Composable
 fun NavigationScreen(
@@ -71,28 +97,27 @@ fun NavigationScreen(
     modifier: Modifier = Modifier,
 ) {
     val screenPolicy = navigationScreenPolicy(uiState)
+    val disablesDefaultWindowInsets = navigationUsesEmptyWindowInsets()
+    val sidePanelPolicy = navigationSidePanelPolicy()
     val railWidth = (LocalConfiguration.current.screenWidthDp.dp / 7).coerceIn(48.dp, 60.dp)
+    var isSidePanelExpanded by remember(uiState.screenState) { mutableStateOf(false) }
 
     Box(
         modifier = modifier.fillMaxSize(),
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            contentWindowInsets =
+                if (disablesDefaultWindowInsets) {
+                    WindowInsets(0, 0, 0, 0)
+                } else {
+                    WindowInsets(0, 0, 0, 0)
+                },
             topBar = {
                 NavigationTopBar(
-                    onBackClick = { onAction(NavigationUiAction.BackClicked) },
-                )
-            },
-            bottomBar = {
-                val bottomBarLayoutPolicy =
-                    navigationBottomBarLayoutPolicy(
-                        showSegmentRail = screenPolicy.showSegmentRail,
-                        railWidth = railWidth,
-                    )
-                NavigationBottomBar(
                     uiState = uiState,
-                    onAction = onAction,
-                    layoutPolicy = bottomBarLayoutPolicy,
+                    onBackClick = { onAction(NavigationUiAction.BackClicked) },
+                    onCloseClick = { onAction(NavigationUiAction.ExitNavigationClicked) },
                 )
             },
         ) { innerPadding ->
@@ -106,36 +131,81 @@ fun NavigationScreen(
                     uiState = uiState,
                     onAction = onAction,
                 )
-                Row(
+                Box(
                     modifier =
                         Modifier
                             .weight(1f)
                             .fillMaxWidth(),
                 ) {
-                    if (screenPolicy.showSegmentRail) {
-                        NavigationSegmentRail(
-                            uiState = uiState.segmentSync,
-                            onSegmentTapped = { index ->
-                                onAction(NavigationUiAction.SegmentTapped(index = index))
-                            },
-                            onReturnToActiveSegmentClick = {
-                                onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
-                            },
-                            onRouteDetailClick = { onAction(NavigationUiAction.RouteDetailClicked) },
-                            isRouteDetailEnabled = uiState.canOpenRouteDetail,
-                            modifier =
-                                Modifier
-                                    .width(railWidth)
-                                    .fillMaxHeight(),
-                        )
-                    }
                     NavigationMapStage(
                         uiState = uiState,
-                        modifier = Modifier.weight(1f),
+                        onSegmentTapped = { index ->
+                            onAction(NavigationUiAction.SegmentTapped(index = index))
+                        },
+                        modifier = Modifier.fillMaxSize(),
                     )
+                    if (screenPolicy.showSegmentRail) {
+                        if (isSidePanelExpanded) {
+                            if (sidePanelPolicy.showsExpandedScrim) {
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxSize()
+                                            .background(NavigationExpandedSidePanelScrimColor),
+                                )
+                            }
+                            NavigationExpandedSidePanel(
+                                uiState = uiState,
+                                onCollapse = { isSidePanelExpanded = false },
+                                onSegmentTapped = { index ->
+                                    if (sidePanelPolicy.collapseOnSegmentTap) {
+                                        isSidePanelExpanded = false
+                                    }
+                                    onAction(NavigationUiAction.SegmentTapped(index = index))
+                                },
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterStart)
+                                        .fillMaxHeight(),
+                            )
+                        } else {
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterStart)
+                                        .fillMaxHeight(),
+                            ) {
+                                NavigationSegmentRail(
+                                    uiState = uiState.segmentSync,
+                                    onSegmentTapped = { index ->
+                                        onAction(NavigationUiAction.SegmentTapped(index = index))
+                                    },
+                                    onTopVisibleSegmentChanged = { index ->
+                                        onAction(NavigationUiAction.SegmentTapped(index = index))
+                                    },
+                                    modifier =
+                                        Modifier
+                                            .width(railWidth)
+                                            .fillMaxHeight(),
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
+
+        val bottomBarLayoutPolicy =
+            navigationBottomBarLayoutPolicy(
+                showSegmentRail = screenPolicy.showSegmentRail,
+                railWidth = railWidth,
+            )
+        NavigationBottomBar(
+            uiState = uiState,
+            onAction = onAction,
+            layoutPolicy = bottomBarLayoutPolicy,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
 
         if (uiState.isExitConfirmDialogVisible) {
             NavigationExitConfirmDialog(
@@ -149,20 +219,48 @@ fun NavigationScreen(
 
 @Composable
 private fun NavigationTopBar(
+    uiState: NavigationUiState,
     onBackClick: () -> Unit,
+    onCloseClick: () -> Unit,
 ) {
-    val policy = navigationTopBarPolicy()
-    EumCenteredTopBar(
-        title = stringResource(id = R.string.navigation_screen_title),
-        onBackClick = if (policy.showBackButton) onBackClick else null,
-        backContentDescription =
-            if (policy.showBackButton) {
-                stringResource(id = R.string.navigation_back)
-            } else {
-                null
-            },
-        titleFontWeight = policy.titleFontWeight,
-    )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.primary,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            IconButton(onClick = onBackClick) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_action_back),
+                    contentDescription = stringResource(id = R.string.navigation_back),
+                    tint = Color.White,
+                )
+            }
+            Text(
+                text = navigationRouteSummary(uiState),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+            IconButton(onClick = onCloseClick) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_action_close),
+                    contentDescription = stringResource(id = R.string.map_facility_detail_close),
+                    tint = Color.White,
+                )
+            }
+        }
+    }
 }
 
 internal data class NavigationTopBarPolicy(
@@ -187,26 +285,81 @@ internal data class NavigationScreenPolicy(
 internal data class NavigationHeroLayoutPolicy(
     val minHeight: Dp,
     val maxHeight: Dp,
+    val directionIconSize: Dp,
     val showBottomDivider: Boolean,
+)
+
+internal data class NavigationHeroContentUiState(
+    val guidanceAction: NavigationGuidanceAction,
+    val title: String,
+    val description: String,
+    val distanceLabel: String,
+)
+
+private data class NavigationHeroPresentation(
+    val content: NavigationHeroContentUiState,
+    val transitInfo: NavigationTransitInfoUiState?,
 )
 
 internal data class NavigationBottomBarLayoutPolicy(
     val topDividerStartInset: Dp,
 )
 
+internal enum class NavigationSidePanelSwipeAxis {
+    Horizontal,
+}
+
+internal data class NavigationSidePanelPolicy(
+    val swipeAxis: NavigationSidePanelSwipeAxis,
+    val swipeThresholdPx: Float,
+    val showsExpandedScrim: Boolean,
+    val collapseOnSegmentTap: Boolean,
+    val showsProgressHeader: Boolean,
+)
+
+internal data class NavigationBottomBarChromePolicy(
+    val bottomGap: Dp,
+    val usesNavigationBarPadding: Boolean,
+)
+
 internal fun navigationScreenPolicy(uiState: NavigationUiState): NavigationScreenPolicy =
     NavigationScreenPolicy(
-        showSegmentRail = uiState.segmentSync.railItems.isNotEmpty() || uiState.canOpenRouteDetail,
+        showSegmentRail = uiState.segmentSync.railItems.isNotEmpty(),
         showFocusedSegmentCard = false,
         showReturnToActiveAction = uiState.segmentSync.isInspectingSegments,
     )
 
+internal fun navigationUsesEmptyWindowInsets(): Boolean = true
+
+internal fun navigationSidePanelPolicy(): NavigationSidePanelPolicy =
+    NavigationSidePanelPolicy(
+        swipeAxis = NavigationSidePanelSwipeAxis.Horizontal,
+        swipeThresholdPx = 80f,
+        showsExpandedScrim = true,
+        collapseOnSegmentTap = true,
+        showsProgressHeader = false,
+    )
+
 internal fun navigationHeroLayoutPolicy(screenHeight: Dp): NavigationHeroLayoutPolicy =
     NavigationHeroLayoutPolicy(
-        minHeight = 116.dp,
-        maxHeight = (screenHeight * 0.24f).coerceAtLeast(132.dp),
+        minHeight = 92.dp,
+        maxHeight = (screenHeight * 0.16f).coerceIn(108.dp, 132.dp),
+        directionIconSize = 44.dp,
         showBottomDivider = false,
     )
+
+internal val NavigationHeroTransitDirectionIconSize = 40.dp
+
+internal fun navigationHeroContent(uiState: NavigationUiState): NavigationHeroContentUiState {
+    val focusedSegmentCard = uiState.focusedSegmentCard
+
+    return NavigationHeroContentUiState(
+        guidanceAction = focusedSegmentCard?.guidanceAction ?: uiState.stepCard.guidanceAction,
+        title = focusedSegmentCard?.heroTitle ?: uiState.stepCard.heroTitle,
+        description = focusedSegmentCard?.heroDescription ?: uiState.stepCard.heroDescription,
+        distanceLabel = focusedSegmentCard?.distanceLabel ?: uiState.stepCard.distanceLabel,
+    )
+}
 
 internal fun navigationBottomBarLayoutPolicy(
     showSegmentRail: Boolean,
@@ -216,13 +369,202 @@ internal fun navigationBottomBarLayoutPolicy(
         topDividerStartInset = if (showSegmentRail) railWidth else 0.dp,
     )
 
+internal fun navigationBottomBarChromePolicy(): NavigationBottomBarChromePolicy =
+    NavigationBottomBarChromePolicy(
+        bottomGap = NavigationBottomBarBottomGap,
+        usesNavigationBarPadding = false,
+    )
+
+internal enum class NavigationExitDialogShell {
+    Dialog,
+}
+
+internal data class NavigationExitDialogPolicy(
+    val shell: NavigationExitDialogShell,
+    val maxWidth: Dp,
+    val containerCornerRadius: Dp,
+    val buttonCornerRadius: Dp,
+    val primaryButtonHeight: Dp,
+    val secondaryButtonHeight: Dp,
+    val shadowElevation: Dp,
+)
+
+internal fun navigationExitDialogPolicy(): NavigationExitDialogPolicy =
+    NavigationExitDialogPolicy(
+        shell = NavigationExitDialogShell.Dialog,
+        maxWidth = 360.dp,
+        containerCornerRadius = EumRadius.scaleL,
+        buttonCornerRadius = EumRadius.scaleM,
+        primaryButtonHeight = 48.dp,
+        secondaryButtonHeight = 44.dp,
+        shadowElevation = 10.dp,
+    )
+
+@Composable
+private fun NavigationExpandedSidePanel(
+    uiState: NavigationUiState,
+    onCollapse: () -> Unit,
+    onSegmentTapped: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
+    GuideSidePanelShell(
+        isExpanded = true,
+        onExpandedChange = { expanded ->
+            if (!expanded) {
+                onCollapse()
+            }
+        },
+        expandedWidthFraction = 0.86f,
+        stateDescription = "expanded guide panel",
+        modifier = modifier,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState),
+        ) {
+            uiState.segmentSync.railItems.forEachIndexed { index, item ->
+                NavigationSidePanelRow(
+                    item = item,
+                    isFirst = index == 0,
+                    isLast = index == uiState.segmentSync.railItems.lastIndex,
+                    onClick = { onSegmentTapped(item.index) },
+                )
+            }
+            NavigationExpandedSidePanelScrollTopAction(
+                enabled = uiState.segmentSync.railItems.isNotEmpty(),
+                onClick = {
+                    coroutineScope.launch {
+                        scrollState.animateScrollTo(0)
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun NavigationExpandedSidePanelScrollTopAction(
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val label = stringResource(id = R.string.navigation_rail_scroll_to_top_label)
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .semantics {
+                    contentDescription = label
+                }
+                .clickable(
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier.size(36.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)),
+            shadowElevation = 0.dp,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_control_previous),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier
+                            .size(22.dp)
+                            .rotate(90f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavigationSidePanelRow(
+    item: NavigationSegmentRailItemUiState,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onClick: () -> Unit,
+) {
+    val isSelected = item.isFocused || item.isActive
+    val transitInfo = item.transitInfo
+    val stateLabel =
+        when {
+            item.isFocused -> "Selected segment"
+            item.isActive -> "Current segment"
+            item.isCompleted -> "Completed segment"
+            else -> "Guidance segment"
+        }
+
+    Column {
+        GuideSidePanelStepRow(
+            title =
+                transitInfo?.let { info -> "${info.startName} -> ${info.endName}" }
+                    ?: item.instruction,
+            description = transitInfo?.durationLabel ?: item.distanceLabel,
+            action = transitInfo?.guidanceAction ?: item.guidanceAction,
+            isOrigin = isFirst,
+            isDestination = isLast,
+            isActive = item.isActive,
+            isFocused = item.isFocused,
+            isSelected = isSelected,
+            contentDescription = "${item.instruction} ${item.distanceLabel}",
+            stateDescription = stateLabel,
+            onClick = onClick,
+            supportingContent = {
+                transitInfo?.let { info ->
+                    NavigationTransitSidePanelContent(transitInfo = info)
+                }
+            },
+            trailingContent = {
+                if (transitInfo == null) item.distanceLabel.takeIf(String::isNotBlank)?.let { distance ->
+                    Text(
+                        text = distance,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.End,
+                    )
+                }
+            },
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.84f))
+    }
+}
+
+@Composable
+private fun NavigationTransitSidePanelContent(transitInfo: NavigationTransitInfoUiState) {
+    NavigationTransitOptionSummary(optionLabels = transitInfo.optionLabels)
+}
+
+private fun navigationRouteSummary(uiState: NavigationUiState): String =
+    uiState.focusedSegmentCard?.sequenceLabel?.takeIf { it.isNotBlank() }
+        ?: uiState.progressLabel.takeIf { it.isNotBlank() && it != "-" }
+        ?: "1 / 1"
+
 @Composable
 private fun NavigationHeroCard(
     uiState: NavigationUiState,
     onAction: (NavigationUiAction) -> Unit,
 ) {
-    val heroGuidanceAction = uiState.focusedSegmentCard?.guidanceAction ?: uiState.stepCard.guidanceAction
-    val heroDistanceLabel = uiState.focusedSegmentCard?.distanceLabel ?: uiState.stepCard.distanceLabel
+    val heroContent = navigationHeroContent(uiState)
+    val focusedSegmentCard = uiState.focusedSegmentCard
+    val heroPresentation =
+        NavigationHeroPresentation(
+            content = heroContent,
+            transitInfo = focusedSegmentCard?.transitInfo,
+        )
     val layoutPolicy = navigationHeroLayoutPolicy(LocalConfiguration.current.screenHeightDp.dp)
 
     Surface(
@@ -245,28 +587,45 @@ private fun NavigationHeroCard(
                 horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
+                AnimatedContent(
+                    targetState = heroPresentation,
+                    label = "navigation-hero-guidance",
+                    transitionSpec = {
+                        (slideInVertically { height -> height / 3 } + fadeIn())
+                            .togetherWith(slideOutVertically { height -> -height / 3 } + fadeOut())
+                    },
                     modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    NavigationHeroDirectionIcon(
-                        guidanceAction = heroGuidanceAction,
-                    )
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) { presentation ->
+                    presentation.transitInfo?.let { transitInfo ->
+                        NavigationTransitHeroContent(
+                            transitInfo = transitInfo,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } ?: Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = heroGuidanceAction.label,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary,
+                        NavigationHeroDirectionIcon(
+                            guidanceAction = presentation.content.guidanceAction,
+                            iconSize = layoutPolicy.directionIconSize,
                         )
-                        Text(
-                            text = heroDistanceLabel,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f),
-                        )
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = presentation.content.title,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = presentation.content.description,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                maxLines = 2,
+                            )
+                        }
                     }
                 }
                 NavigationVoiceControl(
@@ -286,13 +645,142 @@ private fun NavigationHeroCard(
 @Composable
 private fun NavigationHeroDirectionIcon(
     guidanceAction: NavigationGuidanceAction,
+    iconSize: Dp,
 ) {
     Icon(
         painter = painterResource(id = guidanceAction.iconRes()),
         contentDescription = null,
         tint = MaterialTheme.colorScheme.onPrimary,
-        modifier = Modifier.size(34.dp),
+        modifier = Modifier.size(guidanceAction.heroIconSize(defaultSize = iconSize)),
     )
+}
+
+internal fun NavigationGuidanceAction.heroIconSize(defaultSize: Dp): Dp =
+    if (this == NavigationGuidanceAction.BUS || this == NavigationGuidanceAction.SUBWAY) {
+        NavigationHeroTransitDirectionIconSize
+    } else {
+        defaultSize
+    }
+
+private fun navigationTransitOptionTypeColor(typeLabel: String): Color =
+    if (typeLabel.contains("저상")) {
+        NavigationTransitTagLowFloorColor
+    } else {
+        NavigationTransitTagNormalColor
+    }
+
+@Composable
+private fun NavigationTransitHeroContent(
+    transitInfo: NavigationTransitInfoUiState,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NavigationHeroDirectionIcon(
+            guidanceAction = transitInfo.guidanceAction,
+            iconSize = NavigationHeroTransitDirectionIconSize,
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = transitInfo.startName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Text(
+                    text = "->",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
+                )
+                Text(
+                    text = transitInfo.endName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                transitInfo.durationLabel?.let { duration ->
+                    Text(
+                        text = duration,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        maxLines = 1,
+                    )
+                }
+            }
+            NavigationTransitOptionSummary(optionLabels = transitInfo.optionLabels)
+        }
+    }
+}
+
+@Composable
+private fun NavigationTransitOptionSummary(optionLabels: List<RouteTransitOptionLabelUiState>) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        optionLabels.forEach { option ->
+            NavigationTransitOptionChip(option = option)
+        }
+    }
+}
+
+@Composable
+private fun NavigationTransitOptionChip(option: RouteTransitOptionLabelUiState) {
+    Surface(
+        shape = RoundedCornerShape(NavigationTransitTagCornerRadius),
+        color = Color.White,
+        border = BorderStroke(NavigationTransitTagStrokeWidth, NavigationTransitTagBorderColor),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = RoundedCornerShape(NavigationTransitTagCornerRadius),
+                color = navigationTransitOptionTypeColor(option.typeLabel),
+            ) {
+                Text(
+                    text = option.typeLabel,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                )
+            }
+            Text(
+                text = option.routeNo,
+                style = MaterialTheme.typography.labelMedium,
+                color = NavigationTransitTagRouteNumberColor,
+                maxLines = 1,
+            )
+            option.arrivalLabel?.let { arrival ->
+                Text(
+                    text = arrival,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = NavigationTransitTagArrivalColor,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -363,13 +851,17 @@ private fun NavigationVoiceControl(
 @Composable
 private fun NavigationMapStage(
     uiState: NavigationUiState,
+    onSegmentTapped: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val mapControlState = rememberMapOverlayViewportControlState()
     Box(
         modifier = modifier.fillMaxWidth(),
     ) {
         NavigationMapBackdrop(
             mapOverlay = uiState.mapOverlay,
+            onSegmentTapped = onSegmentTapped,
+            controlState = mapControlState,
             modifier = Modifier.fillMaxSize(),
         )
         if (uiState.mapOverlay.shouldUsePlaceholder) {
@@ -383,6 +875,9 @@ private fun NavigationMapStage(
             )
         }
         NavigationMapControls(
+            onActionClick = { mapControlState.recenter() },
+            onZoomInClick = { mapControlState.zoomIn() },
+            onZoomOutClick = { mapControlState.zoomOut() },
             modifier =
                 Modifier
                     .align(Alignment.CenterEnd)
@@ -394,6 +889,8 @@ private fun NavigationMapStage(
 @Composable
 private fun NavigationMapBackdrop(
     mapOverlay: NavigationMapOverlayUiState,
+    onSegmentTapped: (Int) -> Unit,
+    controlState: MapOverlayViewportControlState? = null,
     modifier: Modifier = Modifier,
 ) {
     val mapDescription = stringResource(id = R.string.navigation_map_section_title)
@@ -401,6 +898,12 @@ private fun NavigationMapBackdrop(
         overlayState = createNavigationViewportOverlayState(mapOverlay),
         modifier = modifier,
         contentDescription = mapDescription,
+        onMarkerClick = { markerId ->
+            markerId.toNavigationSegmentMarkerIndexOrNull()?.let { segmentIndex ->
+                onSegmentTapped(segmentIndex)
+            }
+        },
+        controlState = controlState,
     )
 }
 
@@ -422,7 +925,6 @@ private fun NavigationMapMarker(
                 text = label,
                 color = MaterialTheme.colorScheme.onPrimary,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center,
             )
         }
@@ -450,7 +952,6 @@ private fun NavigationMapMessageCard(
                 text = title,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = description,
@@ -463,6 +964,9 @@ private fun NavigationMapMessageCard(
 
 @Composable
 private fun NavigationMapControls(
+    onActionClick: () -> Unit = {},
+    onZoomInClick: () -> Unit = {},
+    onZoomOutClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     EumMapFloatingControls(
@@ -473,10 +977,10 @@ private fun NavigationMapControls(
                 contentDescription = stringResource(id = R.string.navigation_return_to_active_segment_label),
                 enabled = true,
             ),
-        onActionClick = {},
+        onActionClick = onActionClick,
         modifier = modifier,
-        onZoomInClick = {},
-        onZoomOutClick = {},
+        onZoomInClick = onZoomInClick,
+        onZoomOutClick = onZoomOutClick,
         zoomInLabel = stringResource(id = R.string.navigation_map_control_zoom_in),
         zoomOutLabel = stringResource(id = R.string.navigation_map_control_zoom_out),
     )
@@ -487,17 +991,18 @@ private fun NavigationBottomBar(
     uiState: NavigationUiState,
     onAction: (NavigationUiAction) -> Unit,
     layoutPolicy: NavigationBottomBarLayoutPolicy,
+    modifier: Modifier = Modifier,
 ) {
+    val chromePolicy = navigationBottomBarChromePolicy()
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
+        color = Color.Transparent,
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {
         Column(
             modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding(),
+                Modifier.fillMaxWidth(),
         ) {
             HorizontalDivider(
                 modifier =
@@ -510,9 +1015,18 @@ private fun NavigationBottomBar(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .then(
+                            if (chromePolicy.usesNavigationBarPadding) {
+                                Modifier.navigationBarsPadding()
+                            } else {
+                                Modifier
+                            },
+                        )
                         .padding(
-                            horizontal = EumSpacing.medium,
-                            vertical = EumSpacing.small,
+                            start = NavigationBottomBarHorizontalPadding,
+                            end = NavigationBottomBarHorizontalPadding,
+                            top = EumSpacing.small,
+                            bottom = chromePolicy.bottomGap,
                         ),
             ) {
                 Button(
@@ -537,7 +1051,8 @@ private fun NavigationBottomBar(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .height(60.dp),
+                            .height(NavigationBottomBarButtonHeight)
+                            .align(Alignment.Center),
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_control_stop),
@@ -545,11 +1060,13 @@ private fun NavigationBottomBar(
                         tint = MaterialTheme.colorScheme.onError,
                         modifier = Modifier.size(18.dp),
                     )
+                    Spacer(modifier = Modifier.width(EumSpacing.xSmall))
                     Text(
                         text = uiState.exitCta.label,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = EumSpacing.xSmall),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
                     )
                 }
             }
@@ -563,36 +1080,134 @@ private fun NavigationExitConfirmDialog(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = modifier,
-        title = {
-            Text(
-                text = stringResource(id = R.string.navigation_exit_confirm_dialog_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        },
-        text = {
-            Text(
-                text = stringResource(id = R.string.navigation_exit_confirm_dialog_message),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                shape = RoundedCornerShape(EumRadius.scaleM),
+    val policy = navigationExitDialogPolicy()
+
+    when (policy.shell) {
+        NavigationExitDialogShell.Dialog ->
+            Dialog(
+                onDismissRequest = onDismiss,
             ) {
-                Text(text = stringResource(id = R.string.navigation_exit_confirm_dialog_confirm))
+                Surface(
+                    modifier =
+                        modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = EumSpacing.medium)
+                            .widthIn(max = policy.maxWidth),
+                    shape = RoundedCornerShape(policy.containerCornerRadius),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
+                    shadowElevation = policy.shadowElevation,
+                ) {
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = EumSpacing.medium,
+                                    end = EumSpacing.medium,
+                                    top = EumSpacing.large,
+                                    bottom = EumSpacing.medium,
+                                ),
+                        verticalArrangement = Arrangement.spacedBy(EumSpacing.large),
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.navigation_exit_confirm_dialog_title),
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = stringResource(id = R.string.navigation_exit_confirm_dialog_message),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                        ) {
+                            Button(
+                                onClick = onConfirm,
+                                colors =
+                                    ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error,
+                                        contentColor = MaterialTheme.colorScheme.onError,
+                                    ),
+                                elevation =
+                                    ButtonDefaults.buttonElevation(
+                                        defaultElevation = 0.dp,
+                                        pressedElevation = 0.dp,
+                                        focusedElevation = 0.dp,
+                                        hoveredElevation = 0.dp,
+                                        disabledElevation = 0.dp,
+                                    ),
+                                shape = RoundedCornerShape(policy.buttonCornerRadius),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(policy.primaryButtonHeight),
+                            ) {
+                                NavigationExitDialogStopIcon(
+                                    tint = MaterialTheme.colorScheme.onError,
+                                    modifier = Modifier.size(NavigationExitDialogConfirmIconSize),
+                                )
+                                Spacer(modifier = Modifier.width(EumSpacing.xSmall))
+                                Text(
+                                    text = stringResource(id = R.string.navigation_exit_confirm_dialog_confirm),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                            Button(
+                                onClick = onDismiss,
+                                colors =
+                                    ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.surface,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    ),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
+                                elevation =
+                                    ButtonDefaults.buttonElevation(
+                                        defaultElevation = 0.dp,
+                                        pressedElevation = 0.dp,
+                                        focusedElevation = 0.dp,
+                                        hoveredElevation = 0.dp,
+                                        disabledElevation = 0.dp,
+                                    ),
+                                shape = RoundedCornerShape(policy.buttonCornerRadius),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(policy.secondaryButtonHeight),
+                            ) {
+                                Text(
+                                    text = stringResource(id = R.string.navigation_exit_confirm_dialog_cancel),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.Medium,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                    }
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = stringResource(id = R.string.navigation_exit_confirm_dialog_cancel))
-            }
-        },
+    }
+}
+
+private val NavigationExitDialogConfirmIconSize = 18.dp
+
+@Composable
+private fun NavigationExitDialogStopIcon(
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    Icon(
+        painter = painterResource(id = R.drawable.ic_control_stop),
+        contentDescription = null,
+        tint = tint,
+        modifier = modifier,
     )
 }
 
@@ -759,3 +1374,14 @@ private const val DEFAULT_NAVIGATION_CENTER_LONGITUDE = 129.0756
 private const val MIN_NAVIGATION_LATITUDE_SPAN = 0.0035
 private const val MIN_NAVIGATION_LONGITUDE_SPAN = 0.0045
 private val NavigationMapMarkerSize = 38.dp
+private val NavigationBottomBarButtonHeight = 50.dp
+private val NavigationBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
+private val NavigationBottomBarBottomGap = 30.dp
+private val NavigationExpandedSidePanelScrimColor = Color(0x66000000)
+private val NavigationTransitTagCornerRadius = 10.dp
+private val NavigationTransitTagStrokeWidth = 0.5.dp
+private val NavigationTransitTagBorderColor = Color(0xFFD9D9D9)
+private val NavigationTransitTagLowFloorColor = Color(0xFF2671A8)
+private val NavigationTransitTagNormalColor = Color(0xFF4B9EDC)
+private val NavigationTransitTagRouteNumberColor = Color(0xFF333333)
+private val NavigationTransitTagArrivalColor = Color(0xFFF94D4D)

@@ -2,12 +2,15 @@ package com.ssafy.e102.eumgil.feature.search
 
 import com.ssafy.e102.eumgil.core.model.RecentSearch
 import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 
 data class SearchUiState(
     val query: String = "",
     val hasEditedQuery: Boolean = false,
+    val editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     val recentSearches: List<RecentSearch> = emptyList(),
+    val sortOption: SearchSortOption = SearchSortOption.RELEVANCE,
     val resultState: SearchResultUiState = SearchResultUiState.Initial,
     val voiceInputState: SearchVoiceInputUiState = SearchVoiceInputUiState(),
 )
@@ -67,6 +70,10 @@ sealed interface SearchUiAction {
     data object ClearQueryClicked : SearchUiAction
 
     data object SearchSubmitted : SearchUiAction
+
+    data class SortOptionSelected(
+        val sortOption: SearchSortOption,
+    ) : SearchUiAction
 
     data class RecentSearchClicked(
         val keyword: String,

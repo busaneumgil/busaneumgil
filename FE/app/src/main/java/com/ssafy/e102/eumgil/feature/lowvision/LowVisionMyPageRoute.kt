@@ -85,6 +85,7 @@ fun LowVisionAppInfoRoute(
                 authSessionRepository = appContainer.authSessionRepository,
                 initSettingsRepository = appContainer.settingsRepository,
                 bookmarkDao = appContainer.localDatabase.bookmarkDao(),
+                favoriteRouteDao = appContainer.localDatabase.favoriteRouteDao(),
                 isMockMode = AppEnvironment.isMockMode,
             )
         }

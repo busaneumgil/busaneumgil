@@ -58,6 +58,9 @@ class WalkRouteGraphHopperSearchServiceTest {
 		assertThat(captor.getAllValues())
 			.extracting(GraphHopperRouteRequest::profile)
 			.containsExactly(WalkRouteProfile.WHEELCHAIR_AUTO_SAFE, WalkRouteProfile.WHEELCHAIR_AUTO_FAST);
+		assertThat(captor.getAllValues())
+			.extracting(GraphHopperRouteRequest::enforceSnapDistanceLimit)
+			.containsExactly(false, false);
 	}
 
 	@Test

@@ -24,7 +24,7 @@ class KakaoMapCameraAnimationBindingsTest {
     }
 
     @Test
-    fun `camera center change keeps transition immediate`() {
+    fun `camera center change animates focused marker movement`() {
         val previous =
             MapCameraTarget(
                 center = MapCoordinate(latitude = 35.1796, longitude = 129.0756),
@@ -39,7 +39,7 @@ class KakaoMapCameraAnimationBindingsTest {
                 zoomLevel = 16,
             )
 
-        assertFalse(shouldAnimateKakaoCameraTransition(previousTarget = previous, nextTarget = next))
+        assertTrue(shouldAnimateKakaoCameraTransition(previousTarget = previous, nextTarget = next))
     }
 
     @Test
@@ -56,6 +56,25 @@ class KakaoMapCameraAnimationBindingsTest {
                 requestId = 4L,
                 source = MapCameraSource.CURRENT_LOCATION,
                 zoomLevel = 16,
+            )
+
+        assertFalse(shouldAnimateKakaoCameraTransition(previousTarget = previous, nextTarget = next))
+    }
+
+    @Test
+    fun `camera target can force long guidance jumps to be immediate`() {
+        val previous =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1796, longitude = 129.0756),
+                source = MapCameraSource.DEFAULT_BUSAN,
+                requestId = 3L,
+                zoomLevel = 15,
+            )
+        val next =
+            previous.copy(
+                requestId = 4L,
+                center = MapCoordinate(latitude = 35.1900, longitude = 129.0900),
+                shouldAnimateTransition = false,
             )
 
         assertFalse(shouldAnimateKakaoCameraTransition(previousTarget = previous, nextTarget = next))

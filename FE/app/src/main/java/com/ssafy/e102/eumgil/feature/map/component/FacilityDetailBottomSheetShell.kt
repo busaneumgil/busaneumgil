@@ -49,13 +49,16 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import kotlin.math.roundToInt
 
@@ -66,24 +69,29 @@ data class FacilityDetailBottomSheetShellState(
     val metaLabel: String = "",
     val title: String = "",
     val address: String = "",
+    val phoneNumber: String? = null,
+    val hasDetailContent: Boolean = false,
 )
 
 @Composable
 fun FacilityDetailBottomSheetShell(
     state: FacilityDetailBottomSheetShellState,
-    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onPhoneClick: (() -> Unit)? = null,
     detailContent: @Composable ColumnScope.() -> Unit,
     headerActionContent: (@Composable () -> Unit)? = null,
     actionContent: @Composable ColumnScope.() -> Unit,
 ) {
     val density = LocalDensity.current
     val dragSettleVelocityThresholdPx = with(density) { 320.dp.toPx() }
-    val dismissThresholdMinPx = with(density) { 72.dp.toPx() }
+    val collapseThresholdMinPx = with(density) { 72.dp.toPx() }
     val handleInteractionSource = remember { MutableInteractionSource() }
+    val phoneInteractionSource = remember { MutableInteractionSource() }
     var sheetHeightPx by remember(state.isVisible) { mutableIntStateOf(0) }
     var sheetOffsetPx by remember(state.isVisible) { mutableFloatStateOf(0f) }
     var isDragging by remember(state.isVisible) { mutableStateOf(false) }
+    var isCollapsed by remember(state.isVisible) { mutableStateOf(false) }
+    val sheetToggleDescription = stringResource(id = R.string.map_facility_detail_sheet_toggle)
 
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
@@ -91,7 +99,7 @@ fun FacilityDetailBottomSheetShell(
         val detailScrollState = rememberScrollState()
         val sheetMaxHeight = maxHeight * 0.9f
         val maxSheetOffsetPx = sheetHeightPx.toFloat().coerceAtLeast(0f)
-        val dismissThresholdPx = (sheetHeightPx * 0.35f).coerceAtLeast(dismissThresholdMinPx)
+        val collapseThresholdPx = (sheetHeightPx * 0.25f).coerceAtLeast(collapseThresholdMinPx)
         val animatedSheetOffsetPx by animateFloatAsState(
             targetValue = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx),
             animationSpec =
@@ -108,13 +116,19 @@ fun FacilityDetailBottomSheetShell(
         val dragState =
             rememberDraggableState { delta ->
                 isDragging = true
-                sheetOffsetPx = (sheetOffsetPx + delta).coerceIn(0f, maxSheetOffsetPx)
+                if (delta < 0f) {
+                    isCollapsed = false
+                    sheetOffsetPx = 0f
+                } else {
+                    sheetOffsetPx = (sheetOffsetPx + delta).coerceIn(0f, maxSheetOffsetPx)
+                }
             }
 
         LaunchedEffect(state.isVisible, maxSheetOffsetPx) {
             if (!state.isVisible) {
                 isDragging = false
                 sheetOffsetPx = 0f
+                isCollapsed = false
             } else {
                 sheetOffsetPx = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
             }
@@ -145,7 +159,7 @@ fun FacilityDetailBottomSheetShell(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(max = sheetMaxHeight)
+                        .heightIn(min = FacilityDetailCollapsedMinHeight, max = sheetMaxHeight)
                         .onSizeChanged { size ->
                             sheetHeightPx = size.height
                             sheetOffsetPx = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
@@ -153,18 +167,18 @@ fun FacilityDetailBottomSheetShell(
                         .offset { IntOffset(x = 0, y = animatedSheetOffsetPx.roundToInt()) },
                 handleModifier =
                     Modifier
-                        .height(24.dp)
+                        .height(MapBottomSheetHandleHeight)
                         .semantics {
                             role = Role.Button
-                            contentDescription = "장소 상세 시트 닫기"
+                            contentDescription = sheetToggleDescription
                         }
                         .clickable(
                             interactionSource = handleInteractionSource,
                             indication = null,
                             onClick = {
                                 isDragging = false
+                                isCollapsed = !isCollapsed
                                 sheetOffsetPx = 0f
-                                onDismiss()
                             },
                         )
                         .draggable(
@@ -172,15 +186,10 @@ fun FacilityDetailBottomSheetShell(
                             orientation = Orientation.Vertical,
                             onDragStopped = { velocity ->
                                 isDragging = false
-                                if (
+                                isCollapsed =
                                     velocity >= dragSettleVelocityThresholdPx ||
-                                    sheetOffsetPx >= dismissThresholdPx
-                                ) {
-                                    sheetOffsetPx = 0f
-                                    onDismiss()
-                                } else {
-                                    sheetOffsetPx = 0f
-                                }
+                                    sheetOffsetPx >= collapseThresholdPx
+                                sheetOffsetPx = 0f
                             },
                         ),
             ) {
@@ -208,10 +217,10 @@ fun FacilityDetailBottomSheetShell(
                                 text = state.title,
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 2,
+                                maxLines = if (isCollapsed) 1 else 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            if (state.metaLabel.isNotBlank()) {
+                            if (!isCollapsed && state.metaLabel.isNotBlank()) {
                                 Text(
                                     text = state.metaLabel,
                                     style = MaterialTheme.typography.bodySmall,
@@ -220,29 +229,80 @@ fun FacilityDetailBottomSheetShell(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Text(
-                                text = state.address,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            if (!isCollapsed) {
+                                Text(
+                                    text = state.address,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                val phoneNumber = state.phoneNumber?.takeIf { it.isNotBlank() }
+                                if (phoneNumber != null && onPhoneClick != null) {
+                                    val phoneActionDescription =
+                                        stringResource(
+                                            id = R.string.map_facility_detail_phone_action,
+                                            phoneNumber,
+                                        )
+                                    Row(
+                                        modifier =
+                                            Modifier
+                                                .semantics {
+                                                    role = Role.Button
+                                                    contentDescription = phoneActionDescription
+                                                }
+                                                .clickable(
+                                                    interactionSource = phoneInteractionSource,
+                                                    indication = null,
+                                                    onClick = onPhoneClick,
+                                                ),
+                                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Image(
+                                            painter = painterResource(id = R.drawable.ic_place_detail_phone),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.primary),
+                                        )
+                                        Text(
+                                            text =
+                                                stringResource(
+                                                    id = R.string.map_facility_detail_phone_value,
+                                                    phoneNumber,
+                                                ),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            textDecoration = TextDecoration.Underline,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
                         }
 
-                        headerActionContent?.let { content ->
-                            content()
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            headerActionContent?.let { content ->
+                                content()
+                            }
                         }
                     }
 
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .weight(1f, fill = false)
-                                .verticalScroll(detailScrollState),
-                        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                        content = detailContent,
-                    )
+                    if (state.hasDetailContent && !isCollapsed) {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f, fill = true)
+                                    .verticalScroll(detailScrollState),
+                            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                            content = detailContent,
+                        )
+                    }
 
                     Column(
                         modifier =
@@ -257,3 +317,5 @@ fun FacilityDetailBottomSheetShell(
         }
     }
 }
+
+private val FacilityDetailCollapsedMinHeight = 188.dp

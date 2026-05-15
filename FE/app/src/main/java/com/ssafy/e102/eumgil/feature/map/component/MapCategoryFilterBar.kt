@@ -79,7 +79,11 @@ fun MapCategoryFilterBar(
                             FilterChipIcon(iconRes = R.drawable.ic_nav_facility)
                         },
                         label = {
-                            Text(text = stringResource(id = R.string.map_filter_chip_all))
+                            Text(
+                                text = stringResource(id = R.string.map_filter_chip_all),
+                                maxLines = 1,
+                                softWrap = false,
+                            )
                         },
                     )
                 }
@@ -101,7 +105,11 @@ fun MapCategoryFilterBar(
                             )
                         },
                         label = {
-                            Text(text = categoryLabel)
+                            Text(
+                                text = categoryLabel,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
                         },
                     )
                 }
@@ -175,9 +183,9 @@ private fun categoryFilterIcon(category: FacilityCategory): Int =
         FacilityCategory.WELFARE -> R.drawable.ic_place_welfare
         FacilityCategory.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
-        FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe
+        FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        FacilityCategory.OTHER -> R.drawable.ic_nav_facility
+        FacilityCategory.OTHER -> R.drawable.ic_place_other
     }
 
 internal fun categoryFilterIconSizeDp(category: FacilityCategory): Int =

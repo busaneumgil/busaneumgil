@@ -19,11 +19,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
@@ -62,6 +62,7 @@ private fun ShortcutFilterChip(
     onClick: () -> Unit,
 ) {
     val selected = chip.isSelected
+    val enabled = chip.isEnabled
     val selectionStateDescription =
         stringResource(
             id =
@@ -72,32 +73,31 @@ private fun ShortcutFilterChip(
                 },
         )
     val containerColor =
-        if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surface
+        when {
+            selected -> MaterialTheme.colorScheme.primaryContainer
+            enabled -> MaterialTheme.colorScheme.surface
+            else -> MaterialTheme.colorScheme.surfaceVariant
         }
     val textColor =
-        if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurface
+        when {
+            selected -> MaterialTheme.colorScheme.primary
+            enabled -> MaterialTheme.colorScheme.onSurface
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
         }
     val borderColor =
-        if (selected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-        } else {
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
+        when {
+            selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+            enabled -> MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
+            else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
         }
+    val iconTint = if (enabled) EumPrimary600 else MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         onClick = onClick,
         modifier =
-            Modifier
-                .alpha(if (chip.isEnabled) 1f else 0.52f)
-                .semantics(mergeDescendants = true) {
-                    stateDescription = selectionStateDescription
-                },
+            Modifier.semantics(mergeDescendants = true) {
+                stateDescription = selectionStateDescription
+            },
         enabled = true,
         shape = RoundedCornerShape(EumRadius.scaleS),
         color = containerColor,
@@ -116,12 +116,14 @@ private fun ShortcutFilterChip(
                 painter = painterResource(id = shortcutFilterIcon(chip.key)),
                 contentDescription = null,
                 modifier = Modifier.size(shortcutFilterIconSizeDp(chip.key).dp),
-                tint = EumPrimary600,
+                tint = iconTint,
             )
             Text(
                 text = shortcutFilterLabel(chip.key),
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
                 color = textColor,
+                maxLines = 1,
+                softWrap = false,
             )
         }
     }
@@ -144,12 +146,12 @@ private fun shortcutFilterLabel(key: MapShortcutFilterKey): String =
 @DrawableRes
 private fun shortcutFilterIcon(key: MapShortcutFilterKey): Int =
     when (key) {
-        MapShortcutFilterKey.TOILET -> R.drawable.ic_user_wheelchair_compact
-        MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_place_elevator
-        MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_place_charging_station
+        MapShortcutFilterKey.TOILET -> R.drawable.ic_accessibility_tag_accessible_toilet
+        MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_accessibility_tag_elevator
+        MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_accessibility_tag_charging_station
         MapShortcutFilterKey.FOOD_CAFE -> R.drawable.ic_place_food_cafe
         MapShortcutFilterKey.TOURIST_SPOT -> R.drawable.ic_place_tourist_spot
-        MapShortcutFilterKey.ACCOMMODATION -> R.drawable.ic_place_accommodation
+        MapShortcutFilterKey.ACCOMMODATION -> R.drawable.ic_accessibility_tag_accessible_room
         MapShortcutFilterKey.HEALTHCARE -> R.drawable.ic_place_healthcare
         MapShortcutFilterKey.WELFARE -> R.drawable.ic_place_welfare
         MapShortcutFilterKey.PUBLIC_OFFICE -> R.drawable.ic_place_public_office
@@ -157,7 +159,8 @@ private fun shortcutFilterIcon(key: MapShortcutFilterKey): Int =
 
 internal fun shortcutFilterIconSizeDp(key: MapShortcutFilterKey): Int =
     when (key) {
-        MapShortcutFilterKey.ELEVATOR,
+        MapShortcutFilterKey.TOILET -> 19
+        MapShortcutFilterKey.ELEVATOR -> 18
         MapShortcutFilterKey.TOURIST_SPOT,
         MapShortcutFilterKey.ACCOMMODATION,
         MapShortcutFilterKey.WELFARE,

@@ -9,16 +9,35 @@ import java.net.URLEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private const val DEFAULT_HTTP_TIMEOUT_MILLIS = 10_000
+
 data class HttpJsonResponse(
     val statusCode: Int,
     val body: String,
 )
 
+data class HttpJsonTimeoutConfig(
+    val connectTimeoutMillis: Int = DEFAULT_HTTP_TIMEOUT_MILLIS,
+    val readTimeoutMillis: Int = DEFAULT_HTTP_TIMEOUT_MILLIS,
+)
+
 class HttpJsonClient(
     private val baseUrl: String,
-    private val connectTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
-    private val readTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
+    private val timeoutConfig: HttpJsonTimeoutConfig = HttpJsonTimeoutConfig(),
 ) {
+    constructor(
+        baseUrl: String,
+        connectTimeoutMillis: Int,
+        readTimeoutMillis: Int,
+    ) : this(
+        baseUrl = baseUrl,
+        timeoutConfig =
+            HttpJsonTimeoutConfig(
+                connectTimeoutMillis = connectTimeoutMillis,
+                readTimeoutMillis = readTimeoutMillis,
+            ),
+    )
+
     suspend fun getJson(
         path: String,
         queryParams: Map<String, String> = emptyMap(),
@@ -93,8 +112,8 @@ class HttpJsonClient(
     ): HttpURLConnection =
         URL(buildUrl(path, queryParams)).openConnection().let { connection ->
             (connection as HttpURLConnection).apply {
-                connectTimeout = connectTimeoutMillis
-                readTimeout = readTimeoutMillis
+                connectTimeout = timeoutConfig.connectTimeoutMillis
+                readTimeout = timeoutConfig.readTimeoutMillis
             }
         }
 
@@ -139,7 +158,4 @@ class HttpJsonClient(
             }
         }
 
-    private companion object {
-        private const val DEFAULT_TIMEOUT_MILLIS = 10_000
-    }
 }

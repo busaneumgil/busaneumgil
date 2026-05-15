@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,6 +26,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.route.dto.request.SelectRouteRequest;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteSelectResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteStopResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.TransitLaneOptionResponse;
@@ -48,6 +51,17 @@ class RouteSelectServiceTest {
 		routeSearchCacheService = mock(RouteSearchCacheService.class);
 		routeSessionCommandService = mock(RouteSessionCommandService.class);
 		service = new RouteSelectService(routeSearchCacheService, routeSessionCommandService, new ObjectMapper());
+		when(routeSessionCommandService.saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.any(UUID.class),
+			org.mockito.ArgumentMatchers.any(String.class),
+			org.mockito.ArgumentMatchers.any(Point.class),
+			org.mockito.ArgumentMatchers.any(Point.class),
+			org.mockito.ArgumentMatchers.any(JsonNode.class)))
+			.thenReturn(new RouteSessionResponse(UUID.fromString("00000000-0000-0000-0000-000000000099")));
+		when(routeSessionCommandService.getActiveSession(
+			org.mockito.ArgumentMatchers.any(UUID.class),
+			org.mockito.ArgumentMatchers.any(String.class)))
+			.thenReturn(new RouteSessionResponse(UUID.fromString("00000000-0000-0000-0000-000000000099")));
 	}
 
 	@Test
@@ -73,6 +87,33 @@ class RouteSelectServiceTest {
 		assertThat(endPointCaptor.getValue().getY()).isEqualTo(35.14);
 		assertThat(endPointCaptor.getValue().getX()).isEqualTo(128.956);
 		assertThat(snapshotCaptor.getValue().get("routeId").asText()).isEqualTo("rt_selected_001");
+	}
+
+	@Test
+	@DisplayName("select response exposes total route metrics without using remaining field names")
+	void selectResponseExposesTotalRouteMetrics() {
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+		RouteSummaryResponse route = transitRoute("rt_selected_001");
+		when(routeSearchCacheService.getOwnedRouteOrThrow(USER_ID, "rs_transit_test", "rt_selected_001"))
+			.thenReturn(route);
+		when(routeSessionCommandService.saveActiveSessionIfAbsent(
+			org.mockito.ArgumentMatchers.eq(USER_ID),
+			org.mockito.ArgumentMatchers.eq("rt_selected_001"),
+			org.mockito.ArgumentMatchers.any(Point.class),
+			org.mockito.ArgumentMatchers.any(Point.class),
+			org.mockito.ArgumentMatchers.any(JsonNode.class)))
+			.thenReturn(new RouteSessionResponse(sessionId));
+
+		RouteSelectResponse response = service.select(USER_ID, "rt_selected_001",
+			new SelectRouteRequest("rs_transit_test"));
+
+		assertThat(response.sessionId()).isEqualTo(sessionId);
+		assertThat(response.totalDistanceMeter()).isEqualByComparingTo(BigDecimal.valueOf(2500));
+		assertThat(response.totalDurationSecond()).isEqualTo(900);
+		assertThat(Arrays.stream(RouteSelectResponse.class.getRecordComponents())
+			.map(component -> component.getName())
+			.toList())
+			.containsExactly("sessionId", "totalDistanceMeter", "totalDurationSecond");
 	}
 
 	@Test

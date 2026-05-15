@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.map.component
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -63,6 +64,23 @@ class MapCategoryFilterBarConfigurationTest {
         assertTrue(
             "MAP top category filter icons should always tint to Primary 600.",
             source.contains("tint = EumPrimary600"),
+        )
+    }
+
+    @Test
+    fun `map category filter labels avoid wrapping without ellipsis`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
+                .readText()
+
+        assertTrue(
+            "Category filter labels should stay on one line to keep chip height stable.",
+            source.contains("maxLines = 1") &&
+                source.contains("softWrap = false"),
+        )
+        assertFalse(
+            "Category filter labels should not ellipsize; the row can scroll horizontally instead.",
+            source.contains("TextOverflow.Ellipsis"),
         )
     }
 
@@ -155,7 +173,7 @@ class MapCategoryFilterBarConfigurationTest {
     }
 
     @Test
-    fun `map category filter bar uses dedicated food cafe icon asset for food categories`() {
+    fun `map category filter bar uses dedicated restaurant icon asset separate from food cafe`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
                 .readText()
@@ -165,8 +183,24 @@ class MapCategoryFilterBarConfigurationTest {
             source.contains("FacilityCategory.FOOD_CAFE -> R.drawable.ic_place_food_cafe"),
         )
         assertTrue(
-            "Restaurant category chip should use the dedicated food cafe drawable resource.",
-            source.contains("FacilityCategory.RESTAURANT -> R.drawable.ic_place_food_cafe"),
+            "Restaurant category chip should use the dedicated restaurant drawable resource.",
+            source.contains("FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant"),
+        )
+    }
+
+    @Test
+    fun `map category filter bar uses dedicated other icon asset for other category`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapCategoryFilterBar.kt")
+                .readText()
+
+        assertTrue(
+            "Other category chip should use a dedicated place icon asset instead of the generic facility navigation icon.",
+            source.contains("FacilityCategory.OTHER -> R.drawable.ic_place_other"),
+        )
+        assertTrue(
+            "Dedicated other place drawable should exist for category chip surfaces.",
+            File("src/main/res/drawable/ic_place_other.png").exists(),
         )
     }
 

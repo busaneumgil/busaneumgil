@@ -1,24 +1,46 @@
 package com.ssafy.e102.eumgil.feature.savedroute
 
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
+import com.ssafy.e102.eumgil.core.model.RecentDestination
+import com.ssafy.e102.eumgil.core.model.RecentSearch
+import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteBookmark
+import com.ssafy.e102.eumgil.core.model.RouteBookmarkDetail
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkSaveRequest
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.RoutePolyline
+import com.ssafy.e102.eumgil.core.model.RoutePreviewModel
+import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.core.model.RouteSearchSource
+import com.ssafy.e102.eumgil.core.model.RouteSummary
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
+import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import com.ssafy.e102.eumgil.data.repository.TestAuthSessionRepository
+import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
+import kotlinx.coroutines.CompletableDeferred
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
@@ -92,6 +114,64 @@ class SavedRouteViewModelTest {
             assertEquals(SavedRouteUiEvent.NavigateToMap, uiEvent.await())
             assertEquals("bookmark-place-1", destination?.placeId)
             assertEquals(PlaceCategory.ELEVATOR, destination?.category)
+        }
+
+    @Test
+    fun `place click does not store recent destination for map home sheet`() =
+        runTest {
+            val searchRepository = FakeSearchRepository()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    searchRepository = searchRepository,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SavedRouteUiAction.PlaceClicked(placeId = "bookmark-place-1"))
+            advanceUntilIdle()
+
+            assertTrue(searchRepository.savedRecentDestinations.isEmpty())
+            /*
+            assertEquals(1, searchRepository.savedRecentDestinations.size)
+            assertEquals(
+                RecentDestination(
+                    placeId = "bookmark-place-1",
+                    name = "éºÂ€?ê³—ë¿­ KTX",
+                    address = "éºÂ€???ìˆ†ëŽ„ ä»¥ë¬’ë¸°?Â€æ¿¡?206",
+                    latitude = 35.1151,
+                    longitude = 129.0415,
+                    category = PlaceCategory.ELEVATOR,
+                    searchedAtMillis = 0L,
+                ),
+                searchRepository.savedRecentDestinations.single().copy(searchedAtMillis = 0L),
+            )
+            */
+        }
+
+    @Test
+    fun `place click does not wait for recent destination save before navigating to map`() =
+        runTest {
+            val searchRepository = FakeSearchRepository(saveGate = CompletableDeferred())
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    searchRepository = searchRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.PlaceClicked(placeId = "bookmark-place-1"))
+            runCurrent()
+
+            assertEquals(SavedRouteUiEvent.NavigateToMap, uiEvent.await())
+            assertEquals(0, searchRepository.pendingSaveCount)
+            assertTrue(searchRepository.savedRecentDestinations.isEmpty())
         }
 
     @Test
@@ -182,6 +262,91 @@ class SavedRouteViewModelTest {
                 RouteEditingTarget.DESTINATION,
                 destinationSelectionRepository.editingTarget.value,
             )
+        }
+
+    @Test
+    fun `route setting click navigates to empty route setting flow`() =
+        runTest {
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.RouteSettingClicked)
+            advanceUntilIdle()
+
+            assertEquals(SavedRouteUiEvent.NavigateToRouteSetting(), uiEvent.await())
+        }
+
+    @Test
+    fun `route guide click uses favorite route detail for direct navigation when detail snapshot is available`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val detail = testRouteBookmarkDetail()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    routeBookmarkRepository =
+                        FakeRouteBookmarkRepository(
+                            routeBookmarks = listOf(testRouteBookmark()),
+                            routeBookmarkDetail = detail,
+                        ),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.RouteGuideClicked(bookmarkId = "route-bookmark-1"))
+            advanceUntilIdle()
+
+            val event = uiEvent.await()
+            assertTrue(event is SavedRouteUiEvent.NavigateToNavigation)
+            val request = (event as SavedRouteUiEvent.NavigateToNavigation).request
+            assertEquals("bookmark-detail-route-1", request.selectedRoute.serverRouteId)
+            assertEquals(RouteOption.SHORTEST, request.selectedRoute.routeOption)
+            assertEquals("부산시청", request.origin.name)
+            assertEquals("광안리해변", request.destination.name)
+            assertNull(destinationSelectionRepository.selectedOrigin.value)
+            assertNull(destinationSelectionRepository.selectedDestination.value)
+        }
+
+    @Test
+    fun `route card click uses favorite route detail for route detail when detail snapshot is available`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val detail = testRouteBookmarkDetail()
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    routeBookmarkRepository =
+                        FakeRouteBookmarkRepository(
+                            routeBookmarks = listOf(testRouteBookmark()),
+                            routeBookmarkDetail = detail,
+                        ),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SavedRouteUiAction.RouteClicked(bookmarkId = "route-bookmark-1"))
+            advanceUntilIdle()
+
+            val event = uiEvent.await()
+            assertTrue(event is SavedRouteUiEvent.NavigateToRouteDetail)
+            val request = (event as SavedRouteUiEvent.NavigateToRouteDetail).request
+            assertEquals("bookmark-detail-route-1", request.selectedRoute.serverRouteId)
+            assertEquals(RouteOption.SHORTEST, request.selectedRoute.routeOption)
+            assertEquals(detail.startLabel, request.origin.name)
+            assertEquals(detail.endLabel, request.destination.name)
+            assertNull(destinationSelectionRepository.selectedOrigin.value)
+            assertNull(destinationSelectionRepository.selectedDestination.value)
         }
 
     @Test
@@ -411,6 +576,188 @@ class SavedRouteViewModelTest {
             assertEquals(SavedBookmarkContentState.EMPTY, viewModel.uiState.value.routeContent.screenState)
             assertEquals(emptyList<SavedRouteBookmarkUiModel>(), viewModel.uiState.value.routeContent.routes)
         }
+
+    @Test
+    fun `auth scope change resets stale edit state and reloads saved places`() =
+        runTest {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession = AuthSession(accessToken = "token-a", userId = "user-a"),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark()))
+            val viewModel =
+                SavedRouteViewModel(
+                    authSessionRepository = authSessionRepository,
+                    bookmarkRepository = bookmarkRepository,
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(SavedRouteUiAction.EditClicked)
+            viewModel.onAction(SavedRouteUiAction.PlaceDeleteClicked(placeId = "bookmark-place-1"))
+
+            bookmarkRepository.bookmarks.value =
+                listOf(
+                    testPlaceBookmark().copy(
+                        placeId = "bookmark-place-2",
+                        placeName = "광안리 해변",
+                    ),
+                )
+            authSessionRepository.updateAuthSession(
+                authSession = AuthSession(accessToken = "token-b", userId = "user-b"),
+                isProfileCompleted = true,
+            )
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isEditMode)
+            assertTrue(viewModel.uiState.value.pendingPlaceRemovalIds.isEmpty())
+            assertEquals(
+                listOf("bookmark-place-2"),
+                viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
+            )
+        }
+
+    @Test
+    fun `low vision place bookmark list reorders by nearest current location when location becomes available`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val bookmarkRepository =
+                FakeBookmarkRepository(
+                    bookmarks =
+                        listOf(
+                            testPlaceBookmark(
+                                latitude = 35.1151,
+                                longitude = 129.0415,
+                            ).copy(
+                                placeId = "far-place",
+                                placeName = "Far Place",
+                            ),
+                            testPlaceBookmark(
+                                latitude = 35.1798,
+                                longitude = 129.0750,
+                            ).copy(
+                                placeId = "near-place",
+                                placeName = "Near Place",
+                            ),
+                        ),
+                )
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = bookmarkRepository,
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    currentLocationManager = locationManager,
+                    initialLowVisionMode = true,
+                )
+
+            advanceUntilIdle()
+            assertEquals(
+                listOf("far-place", "near-place"),
+                viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
+            )
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("near-place", "far-place"),
+                viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
+            )
+        }
+
+    @Test
+    fun `low vision place bookmark list ignores tiny location shifts until movement is meaningful`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val bookmarkRepository =
+                FakeBookmarkRepository(
+                    bookmarks =
+                        listOf(
+                            testPlaceBookmark(
+                                latitude = 35.1796,
+                                longitude = 129.07500,
+                            ).copy(
+                                placeId = "alpha-place",
+                                placeName = "Alpha Place",
+                            ),
+                            testPlaceBookmark(
+                                latitude = 35.1796,
+                                longitude = 129.07560,
+                            ).copy(
+                                placeId = "beta-place",
+                                placeName = "Beta Place",
+                            ),
+                        ),
+                )
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = bookmarkRepository,
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    currentLocationManager = locationManager,
+                    initialLowVisionMode = true,
+                )
+
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1796,
+                    longitude = 129.07510,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            val initialOrder = viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId)
+            assertEquals(
+                listOf(2, 2),
+                listOf(initialOrder.size, initialOrder.toSet().size),
+            )
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1796,
+                    longitude = 129.07518,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 2_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                initialOrder,
+                viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
+            )
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = 35.1796,
+                    longitude = 129.07552,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 3_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                initialOrder.reversed(),
+                viewModel.uiState.value.placeContent.places.map(SavedPlaceUiModel::placeId),
+            )
+        }
 }
 
 private class FakeBookmarkRepository(
@@ -442,8 +789,25 @@ private class FakeBookmarkRepository(
     }
 }
 
+private class FakeCurrentLocationManager : CurrentLocationManager {
+    private val mutableLatestLocation = MutableStateFlow<LocationSnapshot?>(null)
+
+    override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation
+
+    override fun refreshLatestLocation() = Unit
+
+    override fun startLocationUpdates() = Unit
+
+    override fun stopLocationUpdates() = Unit
+
+    fun emitLocation(snapshot: LocationSnapshot?) {
+        mutableLatestLocation.value = snapshot
+    }
+}
+
 private class FakeRouteBookmarkRepository(
     routeBookmarks: List<RouteBookmark> = emptyList(),
+    private val routeBookmarkDetail: RouteBookmarkDetail? = null,
 ) : RouteBookmarkRepository {
     val routeBookmarks = MutableStateFlow(routeBookmarks)
 
@@ -475,11 +839,39 @@ private class FakeRouteBookmarkRepository(
         return savedBookmark
     }
 
+    override suspend fun getRouteBookmarkDetail(bookmarkId: String): RouteBookmarkDetail? = routeBookmarkDetail
+
     override suspend fun deleteRouteBookmark(bookmarkId: String) {
         routeBookmarks.value =
             routeBookmarks.value.filterNot { bookmark ->
                 bookmark.bookmarkId == bookmarkId
             }
+    }
+}
+
+private class FakeSearchRepository(
+    private val saveGate: CompletableDeferred<Unit>? = null,
+) : SearchRepository {
+    val savedRecentDestinations = mutableListOf<RecentDestination>()
+    var pendingSaveCount: Int = 0
+        private set
+
+    override suspend fun search(query: SearchQuery): List<SearchResult> = emptyList()
+
+    override suspend fun getRecentSearches(): List<RecentSearch> = emptyList()
+
+    override suspend fun saveRecentSearch(keyword: String) = Unit
+
+    override suspend fun getRecentDestinations(): List<RecentDestination> = savedRecentDestinations
+
+    override suspend fun saveRecentDestination(destination: RecentDestination) {
+        pendingSaveCount += 1
+        saveGate?.await()
+        savedRecentDestinations += destination
+    }
+
+    fun allowPendingSave() {
+        saveGate?.complete(Unit)
     }
 }
 
@@ -512,4 +904,52 @@ private fun testRouteBookmark(
         durationMinutes = 21,
         createdAt = 1L,
         updatedAt = 1L,
+    )
+
+private fun testRouteBookmarkDetail(): RouteBookmarkDetail =
+    RouteBookmarkDetail(
+        bookmarkId = "route-bookmark-1",
+        routeName = "부산시청-광안리해변",
+        startLabel = "부산시청",
+        endLabel = "광안리해변",
+        startPoint = GeoCoordinate(latitude = 35.1798, longitude = 129.0750),
+        endPoint = GeoCoordinate(latitude = 35.1532, longitude = 129.1186),
+        transportMode = "WALK",
+        routeOptionLabel = "SHORTEST",
+        route =
+            RouteCandidate(
+                routeId = "bookmark-detail-route-1",
+                serverRouteId = "bookmark-detail-route-1",
+                routeOption = RouteOption.SHORTEST,
+                title = "Stored Route",
+                summary =
+                    RouteSummary(
+                        distanceMeters = 7_600,
+                        estimatedTimeMinutes = 21,
+                        riskLevel = RouteRiskLevel.LOW,
+                    ),
+                geometry =
+                    RoutePolyline(
+                        points =
+                            listOf(
+                                GeoCoordinate(latitude = 35.1798, longitude = 129.0750),
+                                GeoCoordinate(latitude = 35.1665, longitude = 129.0960),
+                                GeoCoordinate(latitude = 35.1532, longitude = 129.1186),
+                            ),
+                    ),
+                preview =
+                    RoutePreviewModel(
+                        polyline =
+                            RoutePolyline(
+                                points =
+                                    listOf(
+                                        GeoCoordinate(latitude = 35.1798, longitude = 129.0750),
+                                        GeoCoordinate(latitude = 35.1665, longitude = 129.0960),
+                                        GeoCoordinate(latitude = 35.1532, longitude = 129.1186),
+                                    ),
+                            ),
+                        segmentCount = 1,
+                        renderableSegmentCount = 1,
+                    ),
+            ),
     )

@@ -35,16 +35,16 @@ class HazardReportTest {
 			" 보행 가능한 인도가 없습니다. ",
 			geoPointConverter.toPoint(new GeoPointRequest(35.1686, 129.0576)),
 			List.of(
-				" https://example.com/reports/1/image-1.jpg ",
-				"https://example.com/reports/1/image-2.jpg"));
+				" hazard-reports/user-1/20260514/image-1.jpg ",
+				"hazard-reports/user-1/20260514/image-2.jpg"));
 
 		assertThat(hazardReport.getUser()).isEqualTo(user);
 		assertThat(hazardReport.getReportType()).isEqualTo(ReportType.SIDEWALK_MISSING);
 		assertThat(hazardReport.getDescription()).isEqualTo("보행 가능한 인도가 없습니다.");
 		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.PENDING);
 		assertThat(hazardReport.getImages()).hasSize(2);
-		assertThat(hazardReport.getImages().get(0).getImageUrl())
-			.isEqualTo("https://example.com/reports/1/image-1.jpg");
+		assertThat(hazardReport.getImages().get(0).getImageObjectKey())
+			.isEqualTo("hazard-reports/user-1/20260514/image-1.jpg");
 		assertThat(hazardReport.getImages().get(0).getDisplayOrder()).isZero();
 		assertThat(hazardReport.getImages().get(1).getDisplayOrder()).isEqualTo((short)1);
 	}

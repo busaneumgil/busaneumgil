@@ -2,41 +2,66 @@ package com.ssafy.e102.eumgil.feature.report
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -45,23 +70,37 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.kakao.vectormap.KakaoMap
+import com.kakao.vectormap.KakaoMapReadyCallback
+import com.kakao.vectormap.LatLng
+import com.kakao.vectormap.MapLifeCycleCallback
+import com.kakao.vectormap.MapView
+import com.kakao.vectormap.camera.CameraAnimation
+import com.kakao.vectormap.camera.CameraUpdateFactory
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportScreen(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
+    scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             ReportTopBar(
-                title = reportStepTitle(uiState.currentStep),
+                title =
+                    reportStepTitle(
+                        step = uiState.currentStep,
+                        selectedType = uiState.reportType.value,
+                    ),
                 showBackButton = reportTopBarShowsBackButton(uiState.currentStep),
                 onBackClick = { onAction(ReportUiAction.BackClicked) },
             )
@@ -73,24 +112,31 @@ fun ReportScreen(
             )
         },
     ) { innerPadding ->
+        // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
+        // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.
+        // scrollState는 ReportRoute에서 hoist하여 ScrollToFirstError 이벤트로 외부 제어 가능.
+        val isFlexStep = uiState.currentStep == ReportStep.TypeSelection
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
+                    .then(
+                        if (isFlexStep) {
+                            Modifier
+                        } else {
+                            Modifier.verticalScroll(scrollState)
+                        },
+                    )
                     .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            if (uiState.currentStep == ReportStep.TypeSelection && uiState.hasExistingDraft) {
-                ReportDraftBanner(onAction = onAction)
-            }
-
             when (uiState.currentStep) {
                 ReportStep.TypeSelection ->
                     ReportTypeStep(
                         input = uiState.reportType,
                         onAction = onAction,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
                     )
                 ReportStep.LocationConfirm ->
                     ReportLocationStep(
@@ -105,6 +151,21 @@ fun ReportScreen(
                 ReportStep.Complete ->
                     ReportCompleteStep(uiState = uiState, onAction = onAction)
             }
+        }
+    }
+
+    // 임시저장 draft 안내 — ModalBottomSheet 형태.
+    // Scaffold 바깥에 두는 이유: 시트가 화면 전체에 걸쳐 scrim·sheet 컨텐츠를 그리도록 하기 위함.
+    val canShowDraftSheet =
+        uiState.currentStep == ReportStep.TypeSelection && uiState.hasExistingDraft
+    var draftSheetVisible by remember(canShowDraftSheet) { mutableStateOf(canShowDraftSheet) }
+    if (draftSheetVisible) {
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
+            onDismissRequest = { draftSheetVisible = false },
+            sheetState = sheetState,
+        ) {
+            ReportDraftBanner(onAction = onAction)
         }
     }
 }
@@ -146,6 +207,7 @@ private fun ReportBottomBar(
                 label = "다음",
                 enabled = uiState.isLocationStepConfirmable,
                 onClick = { onAction(ReportUiAction.NextStepClicked) },
+                suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
             )
         ReportStep.DetailInput -> {
             val submitting = uiState.submitState is ReportSubmitState.Submitting
@@ -153,73 +215,129 @@ private fun ReportBottomBar(
                 label = if (submitting) "제출 중" else "다음",
                 enabled = uiState.isSubmitEnabled,
                 onClick = { onAction(ReportUiAction.SubmitClicked) },
+                suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
             )
         }
         ReportStep.Complete -> Unit
     }
 }
 
+internal fun shouldSuppressReportPrimaryActionRipple(step: ReportStep): Boolean =
+    step == ReportStep.Complete
+
 @Composable
 private fun ReportPrimaryActionBar(
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
+    suppressRipple: Boolean = false,
 ) {
     Surface(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .imePadding(),
+        modifier = Modifier.fillMaxWidth(),
         shadowElevation = 8.dp,
-        tonalElevation = 2.dp,
     ) {
-        Button(
-            onClick = onClick,
-            enabled = enabled,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(EumSpacing.medium),
-            contentPadding = PaddingValues(vertical = EumSpacing.small),
-        ) {
-            Text(text = label)
+        if (suppressRipple) {
+            NoRippleReportPrimaryActionButton(
+                onClick = onClick,
+                enabled = enabled,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(EumSpacing.medium),
+                contentPadding = PaddingValues(vertical = EumSpacing.small),
+            ) {
+                Text(text = label)
+            }
+        } else {
+            Button(
+                onClick = onClick,
+                enabled = enabled,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(EumSpacing.medium),
+                contentPadding = PaddingValues(vertical = EumSpacing.small),
+            ) {
+                Text(text = label)
+            }
         }
     }
 }
 
 @Composable
-private fun ReportDraftBanner(onAction: (ReportUiAction) -> Unit) {
+private fun NoRippleReportPrimaryActionButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    shape: RoundedCornerShape = RoundedCornerShape(EumRadius.small),
+    containerColor: Color = MaterialTheme.colorScheme.primary,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+    border: BorderStroke? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
+    content: @Composable RowScope.() -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    val disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(EumRadius.medium),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+        modifier = modifier,
+        shape = shape,
+        color = if (enabled) containerColor else disabledContainerColor,
+        contentColor = if (enabled) contentColor else disabledContentColor,
+        border = border,
     ) {
-        Column(
-            modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        enabled = enabled,
+                        role = Role.Button,
+                        onClick = onClick,
+                    )
+                    .padding(contentPadding),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun ReportDraftBanner(onAction: (ReportUiAction) -> Unit) {
+    // ModalBottomSheet의 컨텐츠. 시트 자체가 surface·radius·elevation·드래그 핸들을 제공하므로
+    // 여기서는 내부 padding과 텍스트·버튼 배치만 담당한다.
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = EumSpacing.medium)
+                .padding(top = EumSpacing.small, bottom = EumSpacing.large),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        Text(
+            text = "임시저장된 제보가 있습니다",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
-            Text(
-                text = "임시저장된 제보가 있습니다",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            Button(
+                onClick = { onAction(ReportUiAction.DraftResumeClicked) },
+                modifier = Modifier.weight(1f),
             ) {
-                Button(
-                    onClick = { onAction(ReportUiAction.DraftResumeClicked) },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "불러오기")
-                }
-                OutlinedButton(
-                    onClick = { onAction(ReportUiAction.DraftDiscardClicked) },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "삭제")
-                }
+                Text(text = "계속하기")
+            }
+            OutlinedButton(
+                onClick = { onAction(ReportUiAction.DraftDiscardClicked) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(text = "취소")
             }
         }
     }
@@ -229,11 +347,13 @@ private fun ReportDraftBanner(onAction: (ReportUiAction) -> Unit) {
 private fun ReportTypeStep(
     input: ReportTypeInput,
     onAction: (ReportUiAction) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val helperText = reportTypeErrorText(input.error) ?: "해당하는 유형을 선택해주세요."
     val isError = input.error != null
 
     Column(
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
         Text(
@@ -253,16 +373,43 @@ private fun ReportTypeStep(
                 },
         )
         Spacer(modifier = Modifier.height(EumSpacing.xSmall))
-        ReportType.values().toList().chunked(2).forEach { rowItems ->
+        ReportTypeGrid(
+            onTypeSelected = { type -> onAction(ReportUiAction.ReportTypeSelected(type)) },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun ReportTypeGrid(
+    onTypeSelected: (ReportType) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // 호출부에서 weight(1f)로 남은 수직 공간을 받아오면, 3개 row를 동일 weight로 분할하여
+    // 그리드 전체가 화면 하단까지 채워지도록 한다. 부모가 verticalScroll이면 weight가
+    // 동작하지 않으므로 호출부에서 스크롤을 끄고 호출해야 한다.
+    val rows = ReportType.values().toList().chunked(2)
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        rows.forEach { rowItems ->
             Row(
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             ) {
                 rowItems.forEach { type ->
                     ReportTypeCard(
                         type = type,
                         selected = false,
-                        onClick = { onAction(ReportUiAction.ReportTypeSelected(type)) },
-                        modifier = Modifier.weight(1f),
+                        onClick = { onTypeSelected(type) },
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
                     )
                 }
                 if (rowItems.size < 2) {
@@ -297,7 +444,6 @@ private fun ReportTypeCard(
     Surface(
         modifier =
             modifier
-                .heightIn(min = 132.dp)
                 .clickable(onClick = onClick)
                 .semantics {
                     this.selected = selected
@@ -306,19 +452,20 @@ private fun ReportTypeCard(
         shape = RoundedCornerShape(EumRadius.large),
         color = backgroundColor,
         border = BorderStroke(1.dp, borderColor),
+        shadowElevation = 1.dp,
     ) {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(EumSpacing.small),
+                    .padding(EumSpacing.medium),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall, Alignment.CenterVertically),
         ) {
             Icon(
                 painter = painterResource(id = type.iconRes),
                 contentDescription = null,
-                modifier = Modifier.size(36.dp),
+                modifier = Modifier.size(64.dp),
                 tint = Color.Unspecified,
             )
             Text(
@@ -327,12 +474,16 @@ private fun ReportTypeCard(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = type.description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -343,15 +494,33 @@ private fun ReportLocationStep(
     input: ReportLocationInput,
     onAction: (ReportUiAction) -> Unit,
 ) {
+    val errorText = reportLocationErrorText(input.error)
     val helperText =
-        reportLocationErrorText(input.error)
-            ?: "지도 위치를 확인하거나 현재 위치 또는 지도에서 직접 선택할 수 있습니다."
+        errorText
+            ?: "지도를 드래그해 위치를 조정하거나, '현재 위치로 설정' 버튼으로 GPS 좌표를 적용할 수 있습니다."
     val isError = input.error != null
 
     Column(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
-        ReportMapPlaceholder(location = input.value)
+        ReportMapPanel(
+            location = input.value,
+            source = input.source,
+            onCenterChanged = { latitude, longitude ->
+                onAction(
+                    ReportUiAction.LocationSelected(
+                        location =
+                            ReportLocation(
+                                latitude = latitude,
+                                longitude = longitude,
+                                // 좌표 → 주소 reverse geocoding은 Task 2.3 영역. 그 전까지 address=null 유지.
+                                address = null,
+                            ),
+                        source = ReportLocationSource.MapPin,
+                    ),
+                )
+            },
+        )
         ReportLocationBottomCard(
             location = input.value,
             addressText = input.addressText,
@@ -359,19 +528,30 @@ private fun ReportLocationStep(
         Column(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
+            val resolvingCurrent = input.isResolvingCurrentLocation
             OutlinedButton(
                 onClick = { onAction(ReportUiAction.CurrentLocationResetClicked) },
+                enabled = !resolvingCurrent,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(text = "현재 위치로 설정")
+                if (resolvingCurrent) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.width(EumSpacing.xSmall))
+                    Text(text = "위치 확인 중...")
+                } else {
+                    Text(text = "현재 위치로 설정")
+                }
             }
-            OutlinedButton(
-                onClick = { onAction(ReportUiAction.LocationPickerClicked) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = "지도에서 위치 선택")
-            }
+            // "지도에서 위치 선택" 버튼은 inline 지도가 직접 노출되어 사용자가 드래그·줌으로
+            // 위치를 조정할 수 있으므로 제거되었다 (Task 2.2).
         }
+        // 옵션 4 — 자동 도로명 영역(카드의 location.address 표시)과 분리된 사용자 보충 입력 영역.
+        // 자동 영역에는 손대지 않고 여기에 건물명·정문/후문 같은 현장 맥락을 직접 보강한다.
+        // forward geocoding(주소→좌표 검색)은 의도적으로 비활성: 좌표는 지도 핀이 truth.
         OutlinedTextField(
             value = input.addressText,
             onValueChange = { onAction(ReportUiAction.AddressTextChanged(it)) },
@@ -383,8 +563,10 @@ private fun ReportLocationStep(
                             onAction(ReportUiAction.LocationBlurred)
                         }
                     },
-            label = { Text(text = "주소 (선택 입력)") },
-            placeholder = { Text(text = "예: 부산광역시 부산진구 중앙대로 인근") },
+            label = { Text(text = "건물명·주변 장소 (선택 입력)") },
+            placeholder = {
+                Text(text = "예: 삼성전기기숙사 후문 앞, 횡단보도 옆 보도블록")
+            },
             keyboardOptions =
                 KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
@@ -404,55 +586,231 @@ private fun ReportLocationStep(
     }
 }
 
+/**
+ * REPORT-02 위치 단계의 지도 패널 — KakaoMap SDK 직접 사용 (Task 2.2).
+ *
+ * Map 화면이 사용하는 무거운 `KakaoMapViewport`(렌더러 retry / fallback overlay / marker 시스템 등
+ * Report에 불필요한 기능 포함)를 거치지 않고, KakaoMap Android SDK의 `MapView`를 `AndroidView`로
+ * 직접 wrap하여 가장 가벼운 형태로 지도를 렌더링한다.
+ *
+ * 동작:
+ * - 화면 정중앙에 핀 아이콘 고정 오버레이 (drag-the-map 표준 패턴)
+ * - 사용자가 지도를 드래그·줌하여 카메라가 멈출 때 `onCenterChanged` 호출
+ * - 외부에서 `location`이 변경되면(`source != MapPin`) 카메라가 그 좌표로 이동
+ * - 사용자 드래그로 인한 자동 dispatch와 외부 카메라 이동이 겹치지 않도록 flag로 가드
+ *
+ * Lifecycle:
+ * - Activity ON_RESUME / ON_PAUSE에 맞춰 `MapView.resume()` / `pause()` 호출
+ * - Composable dispose 시 `MapView.finish()`로 정리
+ */
 @Composable
-private fun ReportMapPlaceholder(location: ReportLocation?) {
-    Surface(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 200.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-        shape = RoundedCornerShape(EumRadius.medium),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = if (location == null) "지도 (위치 미선택)" else "지도 (선택된 위치)",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(EumSpacing.xSmall))
-            Text(
-                text = "지도 SDK 연결 전 placeholder입니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+private fun ReportMapPanel(
+    location: ReportLocation?,
+    source: ReportLocationSource,
+    onCenterChanged: (latitude: Double, longitude: Double) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // 지도 ready 후 채워지는 KakaoMap 인스턴스. 외부 카메라 이동에 사용.
+    val kakaoMapRef = remember { mutableStateOf<KakaoMap?>(null) }
+    val mapViewRef = remember { mutableStateOf<MapView?>(null) }
+    // 외부 카메라 이동으로 인한 `onCameraMoveEnd` 콜백을 무시하기 위한 flag.
+    // 사용자 드래그 후 LocationSelected dispatch → state 갱신 → LaunchedEffect → moveCamera → onCameraMoveEnd
+    // 이 순환이 무한 루프 되는 것을 막는다.
+    val suppressNextCameraMoveEnd = remember { mutableStateOf(false) }
+
+    // 초기 카메라 위치 — 진입 시점의 location 또는 부산시청.
+    val initialPosition =
+        remember {
+            location?.let { LatLng.from(it.latitude, it.longitude) }
+                ?: LatLng.from(DEFAULT_REPORT_MAP_LATITUDE, DEFAULT_REPORT_MAP_LONGITUDE)
+        }
+
+    // location 외부 변경(예: "현재 위치로 설정")에 따라 카메라 이동.
+    LaunchedEffect(location, source) {
+        if (location == null || source == ReportLocationSource.MapPin) return@LaunchedEffect
+        val readyMap = kakaoMapRef.value ?: return@LaunchedEffect
+        suppressNextCameraMoveEnd.value = true
+        readyMap.moveCamera(
+            CameraUpdateFactory.newCenterPosition(
+                LatLng.from(location.latitude, location.longitude),
+                REPORT_MAP_DEFAULT_ZOOM_LEVEL,
+            ),
+            CameraAnimation.from(REPORT_MAP_CAMERA_ANIMATION_DURATION_MS),
+        )
+    }
+
+    // Activity lifecycle에 MapView resume/pause/finish 동기화.
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                val view = mapViewRef.value ?: return@LifecycleEventObserver
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> runCatching { view.resume() }
+                    Lifecycle.Event.ON_PAUSE -> runCatching { view.pause() }
+                    else -> Unit
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            runCatching { mapViewRef.value?.finish() }
+            mapViewRef.value = null
+            kakaoMapRef.value = null
         }
     }
+
+    val mapShape = RoundedCornerShape(EumRadius.large)
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                // scrollable parent(verticalScroll) 안에서 max height가 Infinity로 들어오면
+                // heightIn(min=...)은 wrap_content로 collapse되어 SurfaceView가 0 height로 measure된다.
+                // 고정 height로 강제해 KakaoMap GL surface가 일정 크기로 확보되도록 한다.
+                .height(320.dp)
+                // clip은 border보다 먼저 적용해야 지도 타일이 라운드 모서리를 넘지 않는다.
+                .clip(mapShape)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                    shape = mapShape,
+                ),
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                // MapView를 직접 AndroidView에 wrap하면 Compose의 verticalScroll이 dispatchTouchEvent
+                // 단계에서 vertical drag를 가로채 MapView가 vertical pan을 못 받는다.
+                // FrameLayout.dispatchTouchEvent에서 ACTION_DOWN 시점에 부모(=AndroidComposeView)에게
+                // intercept 금지를 요청하면 이후 MOVE 이벤트가 그대로 자식 MapView까지 전달된다.
+                // ACTION_UP/CANCEL에 다시 허용해 다음 gesture는 부모도 자유롭게 처리할 수 있게 한다.
+                val frame =
+                    object : android.widget.FrameLayout(ctx) {
+                        override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+                            when (ev.actionMasked) {
+                                android.view.MotionEvent.ACTION_DOWN ->
+                                    parent?.requestDisallowInterceptTouchEvent(true)
+                                android.view.MotionEvent.ACTION_UP,
+                                android.view.MotionEvent.ACTION_CANCEL,
+                                -> parent?.requestDisallowInterceptTouchEvent(false)
+                            }
+                            return super.dispatchTouchEvent(ev)
+                        }
+                    }
+                MapView(ctx).also { view ->
+                    mapViewRef.value = view
+                    frame.addView(
+                        view,
+                        android.widget.FrameLayout.LayoutParams(
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                    view.start(
+                        // MapLifeCycleCallback의 4개 메서드 모두 override 필요 (SDK 동작 보장).
+                        object : MapLifeCycleCallback() {
+                            override fun onMapDestroy() {
+                                android.util.Log.d(REPORT_MAP_LOG_TAG, "MapView destroyed")
+                            }
+
+                            override fun onMapError(error: Exception?) {
+                                android.util.Log.w(
+                                    REPORT_MAP_LOG_TAG,
+                                    "Kakao map error in Report tab",
+                                    error,
+                                )
+                            }
+
+                            override fun onMapResumed() {
+                                android.util.Log.d(REPORT_MAP_LOG_TAG, "MapView resumed")
+                            }
+
+                            override fun onMapPaused() {
+                                android.util.Log.d(REPORT_MAP_LOG_TAG, "MapView paused")
+                            }
+                        },
+                        object : KakaoMapReadyCallback() {
+                            override fun onMapReady(readyMap: KakaoMap) {
+                                android.util.Log.i(REPORT_MAP_LOG_TAG, "Kakao map READY in Report tab")
+                                kakaoMapRef.value = readyMap
+                                readyMap.setOnCameraMoveEndListener { _, cameraPosition, _ ->
+                                    if (suppressNextCameraMoveEnd.value) {
+                                        // 외부 카메라 이동(moveCamera 호출)으로 인한 콜백은 한 번만 무시.
+                                        suppressNextCameraMoveEnd.value = false
+                                        return@setOnCameraMoveEndListener
+                                    }
+                                    val pos = cameraPosition.position
+                                    onCenterChanged(pos.latitude, pos.longitude)
+                                }
+                            }
+
+                            override fun getPosition(): LatLng = initialPosition
+
+                            override fun getZoomLevel(): Int = REPORT_MAP_DEFAULT_ZOOM_LEVEL
+                        },
+                    )
+                    // 첫 진입 시 Activity가 이미 RESUMED 상태인 경우, lifecycle observer의 ON_RESUME 이벤트가
+                    // mapViewRef.value 채워지기 전에 fire되어 resume() 호출이 누락될 수 있다.
+                    // view.post로 한 frame 미룬 후 attach·measure 정리된 시점에 명시적으로 resume() 호출.
+                    view.post {
+                        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            runCatching { view.resume() }
+                                .onFailure { error ->
+                                    android.util.Log.w(
+                                        REPORT_MAP_LOG_TAG,
+                                        "Initial MapView resume() failed",
+                                        error,
+                                    )
+                                }
+                        }
+                    }
+                }
+                frame
+            },
+            // matchParentSize는 BoxScope 한정 — 부모 Box의 measure 결과(320.dp)에 강제로 맞춰
+            // AndroidView 자식(FrameLayout → MapView)이 wrap_content로 collapse되는 것을 막는다.
+            modifier = Modifier.matchParentSize(),
+        )
+        // 화면 정중앙 고정 핀 — 사용자가 지도를 드래그하면 핀은 그대로, 지도가 움직이며 핀이 가리키는
+        // 좌표가 현재 선택된 위치가 된다. 일반 지도앱 표준 "drag-the-map" 패턴.
+        //
+        // ic_map_selected_pin_blue의 뾰족 끝은 viewport y=22(24기준), 즉 박스 중심에서 약 41.7%
+        // 아래에 있어 단순 Alignment.Center로 두면 사용자가 인지하는 "핀 끝"이 카메라 중심보다
+        // 아이콘 높이의 약 절반만큼 아래쪽 좌표를 가리키게 된다. 박스 자체를 위로 offset해서
+        // 뾰족 끝(=좌표 anchor)이 정확히 카메라 중심에 오도록 보정한다. 계산: (22-12)/24 × 40dp ≈ 17dp.
+        Icon(
+            painter = painterResource(id = R.drawable.ic_map_selected_pin_blue),
+            contentDescription = "위치 선택 핀",
+            modifier =
+                Modifier
+                    .align(Alignment.Center)
+                    .offset(y = (-17).dp)
+                    .size(40.dp),
+            tint = Color.Unspecified,
+        )
+    }
 }
+
+// 부산시청 좌표 — 사용자 위치 정보가 없을 때 지도 초기 중심.
+private const val DEFAULT_REPORT_MAP_LATITUDE = 35.1796
+private const val DEFAULT_REPORT_MAP_LONGITUDE = 129.0756
+// 초기 줌 레벨 — 17은 카카오맵 기준 도로·건물이 명확히 보이는 수준 (Map 화면 기본값과 일관).
+private const val REPORT_MAP_DEFAULT_ZOOM_LEVEL = 17
+// 외부 카메라 이동(예: "현재 위치로 설정") 시 사용자가 변화를 자연스럽게 인지할 수 있는 짧은 애니메이션.
+private const val REPORT_MAP_CAMERA_ANIMATION_DURATION_MS = 300
+private const val REPORT_MAP_LOG_TAG = "ReportMapPanel"
 
 @Composable
 private fun ReportLocationBottomCard(
     location: ReportLocation?,
     addressText: String,
 ) {
-    val mainAddress =
-        location?.address
-            ?.takeIf { it.isNotBlank() }
-            ?: addressText.ifBlank { null }
-    val coordinateLine =
-        location?.let {
-            "위도 ${"%.4f".format(it.latitude)}, 경도 ${"%.4f".format(it.longitude)}"
-        }
+    // 옵션 4: 자동 RGC 결과(자동 도로명)와 사용자 직접 보충(addressText)을 별도 라인으로 표시.
+    // 한쪽이 다른 쪽을 가리지 않으므로 두 정보가 동시에 보존되고, 사용자의 멘탈 모델("자동은 객관,
+    // 내 입력은 보충")과 UI가 일치한다.
+    val autoAddress = location?.address?.takeIf { it.isNotBlank() }
+    val userDetail = addressText.ifBlank { null }
+    val hasAnyAddress = autoAddress != null || userDetail != null
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -470,16 +828,26 @@ private fun ReportLocationBottomCard(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
-            Text(
-                text = mainAddress ?: "아직 위치가 선택되지 않았습니다.",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (coordinateLine != null) {
+            if (!hasAnyAddress) {
                 Text(
-                    text = coordinateLine,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "아직 위치가 선택되지 않았습니다.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            if (autoAddress != null) {
+                Text(
+                    text = autoAddress,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            if (userDetail != null) {
+                Text(
+                    text = userDetail,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -686,6 +1054,10 @@ private fun ReportCompleteHero() {
 @Composable
 private fun ReportCompleteSummaryCard(uiState: ReportUiState) {
     val photoCount = uiState.photo.count
+    // 옵션 4 데이터 모델 — 자동 도로명(location.value.address)과 사용자 보충(addressText)을
+    // 각각 별도 행으로 표시. 카드(LocationBottomCard)와 일관된 분리 표시.
+    val autoAddress = uiState.location.value?.address?.takeIf { it.isNotBlank() }
+    val userDetail = uiState.location.addressText.ifBlank { null }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -705,22 +1077,34 @@ private fun ReportCompleteSummaryCard(uiState: ReportUiState) {
                 label = "유형",
                 value = uiState.reportType.value?.label ?: "-",
             )
+            // 자동 RGC 결과가 있으면 "위치"에 노출. 둘 다 없으면 "위치 정보 없음".
             ReportCompleteSummaryRow(
                 label = "위치",
-                value =
-                    uiState.location.value?.address?.takeIf { it.isNotBlank() }
-                        ?: uiState.location.addressText.ifBlank { "위치 정보 없음" },
+                value = autoAddress ?: userDetail ?: "위치 정보 없음",
             )
+            // 자동 도로명이 표시될 때만 보충 메모를 별도 줄로 노출. 자동이 없으면 위 "위치"에
+            // 이미 userDetail이 들어가므로 중복을 피한다.
+            if (autoAddress != null && userDetail != null) {
+                ReportCompleteSummaryRow(
+                    label = "위치 보충",
+                    value = userDetail,
+                )
+            }
             ReportCompleteSummaryRow(
                 label = "설명",
                 value = uiState.description.value.trim().ifBlank { "설명 없음" },
             )
-            if (photoCount > 0) {
-                ReportCompleteSummaryRow(
-                    label = "사진",
-                    value = stringResource(id = R.string.report_complete_photo_attached, photoCount),
-                )
-            }
+            // 사진 미첨부 케이스도 명시적으로 노출 — 사용자가 자기 제보 내역에서 사진 유무를
+            // 한눈에 확인할 수 있도록.
+            ReportCompleteSummaryRow(
+                label = "사진",
+                value =
+                    if (photoCount > 0) {
+                        stringResource(id = R.string.report_complete_photo_attached, photoCount)
+                    } else {
+                        "첨부 없음"
+                    },
+            )
         }
     }
 }
@@ -885,6 +1269,7 @@ private fun ReportPhotoThumb(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     Box(
         modifier =
             modifier
@@ -899,17 +1284,23 @@ private fun ReportPhotoThumb(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         ) {
-            Box(
+            // Coil SubcomposeAsyncImage로 실제 사진 썸네일 렌더링. 로딩 중·실패 시에는
+            // fallback Composable(회색 박스 + 라벨)로 graceful degradation.
+            // mock URI(`content://mock/...`)이거나 권한 없는 URI는 자연스럽게 error 상태 처리.
+            // (`AsyncImage`는 painter-only fallback만 받으므로 Composable 슬롯을 위해
+            // `SubcomposeAsyncImage` 사용.)
+            SubcomposeAsyncImage(
+                model =
+                    ImageRequest.Builder(context)
+                        .data(photo.localUri)
+                        .crossfade(true)
+                        .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "사진",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                loading = { ReportPhotoThumbFallback(label = "사진") },
+                error = { ReportPhotoThumbFallback(label = "불러오기 실패") },
+            )
         }
         Surface(
             modifier =
@@ -937,6 +1328,25 @@ private fun ReportPhotoThumb(
                 )
             }
         }
+    }
+}
+
+/**
+ * SubcomposeAsyncImage가 로딩 중이거나 실패했을 때 표시되는 fallback. 기존 텍스트 라벨 패턴
+ * 그대로 유지하여 사용자 입장에서 카드 영역이 비어 보이지 않게 한다.
+ */
+@Composable
+private fun ReportPhotoThumbFallback(label: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -1058,13 +1468,34 @@ private fun ReportDescriptionSection(
     }
 }
 
-private fun reportStepTitle(step: ReportStep): String =
-    when (step) {
+/**
+ * TopBar에 노출할 단계별 라벨.
+ *
+ * 단계 식별은 화면 콘텐츠(지도 영역 / 입력 필드 등)로 충분히 인지되므로, LocationConfirm /
+ * DetailInput 단계에서는 단계명 대신 사용자가 선택한 type 라벨만 노출하여 "지금 어떤 유형의
+ * 제보를 작성 중인지"를 시각 위계의 최상위로 끌어올린다.
+ *
+ * - TypeSelection: type 선택 전이므로 "제보"
+ * - LocationConfirm / DetailInput: type이 있으면 type 라벨만, 없으면(비정상) 단계명 fallback
+ * - Complete: 본문 요약 카드에 type이 이미 노출되므로 중복 회피 차원에서 "제보 완료" 유지
+ */
+internal fun reportStepTitle(
+    step: ReportStep,
+    selectedType: ReportType? = null,
+): String {
+    val typeLabelOverride =
+        selectedType
+            ?.takeIf { step == ReportStep.LocationConfirm || step == ReportStep.DetailInput }
+            ?.label
+    if (typeLabelOverride != null) return typeLabelOverride
+
+    return when (step) {
         ReportStep.TypeSelection -> "제보"
         ReportStep.LocationConfirm -> "위치 확인"
         ReportStep.DetailInput -> "상세 정보 입력"
         ReportStep.Complete -> "제보 완료"
     }
+}
 
 private val ReportType.label: String
     get() =

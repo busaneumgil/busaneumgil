@@ -4,10 +4,12 @@ import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
+import com.ssafy.e102.eumgil.core.location.AndroidAddressSearchResolver
 import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.core.model.resolveAccountScopeKey
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
@@ -20,11 +22,12 @@ import com.ssafy.e102.eumgil.data.mock.datasource.FacilitySeedMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.MockVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.PlacesMockDataSource
 import com.ssafy.e102.eumgil.data.mock.datasource.SearchMockDataSource
-import com.ssafy.e102.eumgil.data.mock.fixture.MockBookmarkFixtures
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.HttpJsonTimeoutConfig
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportImagesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.KtorVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
@@ -38,6 +41,7 @@ import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSocialProvider
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.CompositeSocialAccessTokenProvider
+import com.ssafy.e102.eumgil.data.repository.DefaultHazardReportImageUploader
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
@@ -87,11 +91,22 @@ class AppContainer(
         )
     }
 
-    private val placesLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesLocalDataSource() }
+    private val placesLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        PlacesLocalDataSource(
+            currentAccountScopeProvider = {
+                authSessionRepository.getAuthGateState().authSession?.resolveAccountScopeKey()
+            },
+        )
+    }
     private val facilitySeedLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { FacilitySeedLocalDataSource() }
     private val routeLocalDataSource by lazy(LazyThreadSafetyMode.NONE) { RouteLocalDataSource() }
     private val searchLocalDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        SearchLocalDataSource(dataStore = searchDataStore)
+        SearchLocalDataSource(
+            dataStore = searchDataStore,
+            currentUserScopeProvider = {
+                authSessionRepository.getAuthGateState().authSession?.resolveAccountScopeKey()
+            },
+        )
     }
 
     private val httpJsonClient by lazy(LazyThreadSafetyMode.NONE) {
@@ -108,6 +123,9 @@ class AppContainer(
     }
     private val hazardReportsRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         HazardReportsRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
+    private val hazardReportImagesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        HazardReportImagesRemoteDataSource(httpJsonClient = httpJsonClient)
     }
     private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         PlacesRemoteDataSource(
@@ -131,6 +149,11 @@ class AppContainer(
             accessTokenProvider = {
                 authSessionRepository.getAuthGateState().authSession?.accessToken
             },
+            timeoutConfig =
+                HttpJsonTimeoutConfig(
+                    connectTimeoutMillis = ROUTE_CONNECT_TIMEOUT_MILLIS,
+                    readTimeoutMillis = ROUTE_READ_TIMEOUT_MILLIS,
+                ),
         )
     }
     private val userRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
@@ -204,6 +227,11 @@ class AppContainer(
         RepositoryModule.provideAuthLogoutRepository(
             authRemoteDataSource = authRemoteDataSource,
             authSessionRepository = authSessionRepository,
+            bookmarkDao = localDatabase.bookmarkDao(),
+            favoriteRouteDao = localDatabase.favoriteRouteDao(),
+            placesLocalDataSource = placesLocalDataSource,
+            destinationSelectionRepository = destinationSelectionRepository,
+            destinationPreviewRepository = destinationPreviewRepository,
         )
     }
 
@@ -219,23 +247,19 @@ class AppContainer(
     val bookmarkRepository: BookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideBookmarkRepository(
             bookmarkDao = localDatabase.bookmarkDao(),
+            authSessionRepository = authSessionRepository,
             bookmarksRemoteDataSource =
                 if (AppEnvironment.isMockMode) null else bookmarksRemoteDataSource,
             accessTokenProvider = {
                 authSessionRepository.getAuthGateState().authSession?.accessToken
             },
-            initialBookmarks =
-                if (AppEnvironment.isDebugBuild) {
-                    MockBookmarkFixtures.defaultBookmarks
-                } else {
-                    emptyList()
-                },
         )
     }
 
     val routeBookmarkRepository: RouteBookmarkRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideRouteBookmarkRepository(
             favoriteRouteDao = localDatabase.favoriteRouteDao(),
+            authSessionRepository = authSessionRepository,
             favoriteRoutesRemoteDataSource =
                 if (AppEnvironment.isMockMode) null else favoriteRoutesRemoteDataSource,
             accessTokenProvider = {
@@ -247,6 +271,7 @@ class AppContainer(
     val settingsRepository: SettingsRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
+            authSessionRepository = authSessionRepository,
         )
     }
 
@@ -285,6 +310,7 @@ class AppContainer(
             sourcePolicy = repositorySourcePolicy,
             authSessionRepository = authSessionRepository,
             authRemoteDataSource = authRemoteDataSource,
+            addressSearchResolver = AndroidAddressSearchResolver(context = appContext),
         )
     }
 
@@ -297,6 +323,12 @@ class AppContainer(
             accessTokenProvider = {
                 authSessionRepository.getAuthGateState().authSession?.accessToken
             },
+            // Task 5.5 — 제보 제출 직전 사진 presigned 업로드 흐름.
+            imageUploader =
+                DefaultHazardReportImageUploader(
+                    contentResolver = appContext.contentResolver,
+                    remoteDataSource = hazardReportImagesRemoteDataSource,
+                ),
         )
     }
 
@@ -314,5 +346,10 @@ class AppContainer(
 
     val currentLocationManager: CurrentLocationManager by lazy(LazyThreadSafetyMode.NONE) {
         AndroidCurrentLocationManager(context = appContext)
+    }
+
+    private companion object {
+        private const val ROUTE_CONNECT_TIMEOUT_MILLIS = 5_000
+        private const val ROUTE_READ_TIMEOUT_MILLIS = 7_000
     }
 }

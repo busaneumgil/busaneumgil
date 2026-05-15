@@ -57,6 +57,7 @@ pipeline {
   environment {
     REPO_URL = 'https://lab.ssafy.com/s14-final/S14P31E102.git'
     DEPLOY_BRANCH = 'develop'
+    RUNTIME_STATE_DIR = '/opt/e102-server/runtime-state'
   }
 
   stages {
@@ -147,20 +148,11 @@ pipeline {
             sha256sum scripts/graphhopper/export_postgis_to_osm.py
           } | sha256sum | awk '{print $1}')"
 
-          docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml build graphhopper
+          compose() {
+            docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml "$@"
+          }
 
-          if docker volume inspect "$CACHE_VOLUME" >/dev/null 2>&1 \
-            && docker run --rm -e EXPECTED_FINGERPRINT="$CACHE_FINGERPRINT" -v "$CACHE_VOLUME:/graphhopper/data" alpine:3.20 sh -ceu '
-              [ -s /graphhopper/data/.ieum-graphhopper-cache-fingerprint ]
-              [ "$(cat /graphhopper/data/.ieum-graphhopper-cache-fingerprint)" = "$EXPECTED_FINGERPRINT" ]
-              test -n "$(find /graphhopper/data -mindepth 1 -maxdepth 1 ! -name .ieum-graphhopper-cache-fingerprint ! -name .ieum-graphhopper-cache-built-at 2>/dev/null)"
-            '; then
-            echo "GraphHopper graph-cache fingerprint matches current image/config. Skipping rebuild."
-          else
-            docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml --profile graphhopper-build build graphhopper-build
-            docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml --profile graphhopper-build run --rm \
-              -e GRAPHHOPPER_CACHE_FINGERPRINT="$CACHE_FINGERPRINT" \
-              graphhopper-build
+          write_cache_metadata() {
             docker run --rm \
               -e CACHE_FINGERPRINT="$CACHE_FINGERPRINT" \
               -e CACHE_BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
@@ -168,8 +160,48 @@ pipeline {
                 printf "%s\n" "$CACHE_FINGERPRINT" > /graphhopper/data/.ieum-graphhopper-cache-fingerprint
                 printf "%s\n" "$CACHE_BUILT_AT" > /graphhopper/data/.ieum-graphhopper-cache-built-at
               '
+          }
+
+          rebuild_graphhopper_cache() {
+            compose --profile graphhopper-build build graphhopper-build
+            compose --profile graphhopper-build run --rm \
+              -e GRAPHHOPPER_CACHE_FINGERPRINT="$CACHE_FINGERPRINT" \
+              graphhopper-build
+            write_cache_metadata
+          }
+
+          wait_graphhopper_health() {
+            for i in $(seq 1 24); do
+              if docker run --rm --network s14p31e102-dev_default curlimages/curl:latest -fsS \
+                http://graphhopper:8990/healthcheck >/dev/null 2>&1; then
+                return 0
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
+          compose build graphhopper
+
+          if docker volume inspect "$CACHE_VOLUME" >/dev/null 2>&1 \
+            && docker run --rm -e EXPECTED_FINGERPRINT="$CACHE_FINGERPRINT" -v "$CACHE_VOLUME:/graphhopper/data" alpine:3.20 sh -ceu '
+              [ -s /graphhopper/data/.ieum-graphhopper-cache-fingerprint ]
+              [ "$(cat /graphhopper/data/.ieum-graphhopper-cache-fingerprint)" = "$EXPECTED_FINGERPRINT" ]
+              test -n "$(find /graphhopper/data -mindepth 1 -maxdepth 1 ! -name .ieum-graphhopper-cache-fingerprint ! -name .ieum-graphhopper-cache-built-at 2>/dev/null)"
+          '; then
+            echo "GraphHopper graph-cache fingerprint matches current image/config. Skipping rebuild."
+          else
+            rebuild_graphhopper_cache
           fi
-          docker compose --env-file .env.dev -f docker-compose.dev.yml -f docker-compose.s1.override.yml up -d graphhopper
+          compose up -d graphhopper
+          if ! wait_graphhopper_health; then
+            echo "GraphHopper healthcheck failed after start. Rebuilding cache and recreating runtime once."
+            compose logs --tail=120 graphhopper || true
+            compose stop graphhopper >/dev/null 2>&1 || true
+            rebuild_graphhopper_cache
+            compose up -d --force-recreate graphhopper
+            wait_graphhopper_health
+          fi
         '''
       }
     }
@@ -218,6 +250,27 @@ pipeline {
       }
     }
 
+    stage('Write Release Manifest') {
+      steps {
+        script {
+          env.LAST_STAGE_NAME = env.STAGE_NAME
+        }
+        sh '''
+          mkdir -p "$RUNTIME_STATE_DIR"
+          python3 scripts/deploy/write-release-manifest.py \
+            --output "$RUNTIME_STATE_DIR/dev-release.json" \
+            --environment dev \
+            --branch "$DEPLOY_BRANCH" \
+            --commit "$DEPLOY_COMMIT" \
+            --build-number "$BUILD_NUMBER" \
+            --build-url "$BUILD_URL" \
+            --services backend ai graphhopper minio redis postgres \
+            --metadata source=jenkins \
+            --metadata pipeline=e102-dev-deploy
+        '''
+      }
+    }
+
     stage('Status') {
       steps {
         script {
@@ -229,6 +282,11 @@ pipeline {
   }
 
   post {
+    always {
+      script {
+        deleteDir()
+      }
+    }
     success {
       script {
         String message = """\

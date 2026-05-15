@@ -35,7 +35,9 @@ import com.ssafy.e102.domain.route.dto.request.TransitRefreshRequest;
 import com.ssafy.e102.domain.route.dto.response.RerouteResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceFeature;
 import com.ssafy.e102.domain.route.dto.response.RouteLegResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteSelectResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSessionResponse;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.dto.response.TransitArrivalStatus;
@@ -142,7 +144,9 @@ class RouteControllerTest {
 			.andExpect(jsonPath("$.data.routes[0].legs[0].isLowFloor").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].badges").doesNotExist())
 			.andExpect(jsonPath("$.data.routes[0].legs[0].steps").doesNotExist())
-			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].type").value("CROSSWALK_AUDIO"))
+			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].type").value("CROSSWALK"))
+			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].features[0]").value("SIGNAL"))
+			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].features[1]").value("AUDIO_SIGNAL"))
 			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].distanceFromLegStartMeter").value(0))
 			.andExpect(jsonPath("$.data.routes[0].legs[0].guidanceEvents[0].durationFromLegStartSecond").value(0))
 			.andExpect(
@@ -215,7 +219,7 @@ class RouteControllerTest {
 		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000099");
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 		when(routeSelectService.select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class)))
-			.thenReturn(new RouteSessionResponse(sessionId));
+			.thenReturn(new RouteSelectResponse(sessionId, BigDecimal.valueOf(950), 960));
 
 		mockMvc.perform(post("/routes/rt_selected_001/select")
 			.principal(authentication)
@@ -228,6 +232,10 @@ class RouteControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.sessionId").value(sessionId.toString()))
+			.andExpect(jsonPath("$.data.totalDistanceMeter").value(950))
+			.andExpect(jsonPath("$.data.totalDurationSecond").value(960))
+			.andExpect(jsonPath("$.data.remainingDistanceMeter").doesNotExist())
+			.andExpect(jsonPath("$.data.remainingDurationSecond").doesNotExist())
 			.andExpect(jsonPath("$.message").value("경로가 선택되었습니다."));
 
 		verify(routeSelectService).select(eq(userId), eq("rt_selected_001"), any(SelectRouteRequest.class));
@@ -698,7 +706,9 @@ class RouteControllerTest {
 					"LINESTRING(128.9360 35.1200, 128.8823 35.1315)",
 					List.of(new RouteGuidanceEventResponse(
 						1,
-						RouteGuidanceEventType.CROSSWALK_AUDIO,
+						RouteGuidanceEventType.CROSSWALK,
+						null,
+						List.of(RouteGuidanceFeature.SIGNAL, RouteGuidanceFeature.AUDIO_SIGNAL),
 						BigDecimal.ZERO,
 						0,
 						"POINT(128.9360 35.1200)")))))));

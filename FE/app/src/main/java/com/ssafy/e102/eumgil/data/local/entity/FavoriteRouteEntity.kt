@@ -2,15 +2,15 @@ package com.ssafy.e102.eumgil.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.Index
-import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "favoriteRoute",
-    indices = [Index(value = ["updatedAt"])],
+    primaryKeys = ["accountScopeKey", "favoriteRouteId"],
+    indices = [Index(value = ["accountScopeKey", "updatedAt"])],
 )
 data class FavoriteRouteEntity(
-    @PrimaryKey(autoGenerate = true)
-    val favoriteRouteId: Long = 0L,
+    val accountScopeKey: String,
+    val favoriteRouteId: Long,
     val routeName: String,
     val originName: String,
     val originPlaceId: String? = null,
@@ -24,6 +24,7 @@ data class FavoriteRouteEntity(
     val routeOption: String? = null,
     val summaryDistanceMeters: Int? = null,
     val summaryDurationSeconds: Int? = null,
+    val routeSnapshotJson: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
 )

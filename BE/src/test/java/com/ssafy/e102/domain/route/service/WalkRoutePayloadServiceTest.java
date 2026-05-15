@@ -9,7 +9,9 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventResponse;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceDirection;
 import com.ssafy.e102.domain.route.dto.response.RouteGuidanceEventType;
+import com.ssafy.e102.domain.route.dto.response.RouteGuidanceFeature;
 import com.ssafy.e102.domain.route.dto.response.RouteSummaryResponse;
 import com.ssafy.e102.domain.route.type.RouteBadge;
 import com.ssafy.e102.domain.route.type.RouteLegRole;
@@ -59,7 +61,10 @@ class WalkRoutePayloadServiceTest {
 		assertThat(route.legs()).hasSize(1);
 		assertThat(route.legs().get(0).guidanceEvents())
 			.extracting(RouteGuidanceEventResponse::type)
-			.containsExactly(RouteGuidanceEventType.NARROW_SIDEWALK, RouteGuidanceEventType.UNPAVED);
+			.containsExactly(
+				RouteGuidanceEventType.NARROW_SIDEWALK,
+				RouteGuidanceEventType.UNPAVED,
+				RouteGuidanceEventType.STRAIGHT);
 		assertThat(route.legs().get(0).guidanceEvents().get(0).distanceFromLegStartMeter())
 			.isEqualByComparingTo("0.00");
 		assertThat(route.legs().get(0).guidanceEvents().get(0).geometry())
@@ -75,10 +80,7 @@ class WalkRoutePayloadServiceTest {
 				new GraphHopperCoordinate(new BigDecimal("0.0"), new BigDecimal("0.0")),
 				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("0.0")),
 				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("1.0"))),
-			Map.of(
-				"segment_type", List.of(new GraphHopperPathDetail(0, 1, "CROSS_WALK")),
-				"signal_state", List.of(new GraphHopperPathDetail(0, 1, "YES")),
-				"width_state", List.of(new GraphHopperPathDetail(0, 2, "ADEQUATE_150"))));
+			Map.of("width_state", List.of(new GraphHopperPathDetail(0, 2, "ADEQUATE_150"))));
 
 		RouteSummaryResponse route = service.toRouteSummary(
 			"rs_walk_test",
@@ -86,10 +88,61 @@ class WalkRoutePayloadServiceTest {
 
 		assertThat(route.legs().get(0).guidanceEvents())
 			.extracting(RouteGuidanceEventResponse::type)
-			.containsExactly(RouteGuidanceEventType.CROSSWALK_SIGNAL, RouteGuidanceEventType.TURN_LEFT);
-		RouteGuidanceEventResponse turnEvent = route.legs().get(0).guidanceEvents().get(1);
+			.containsExactly((RouteGuidanceEventType)null);
+		RouteGuidanceEventResponse turnEvent = route.legs().get(0).guidanceEvents().get(0);
+		assertThat(turnEvent.direction()).isEqualTo(RouteGuidanceDirection.TURN_LEFT);
 		assertThat(turnEvent.distanceFromLegStartMeter()).isGreaterThan(BigDecimal.ZERO);
 		assertThat(turnEvent.geometry()).isEqualTo("POINT(1.0 0.0)");
+	}
+
+	@Test
+	void mergesTurnDirectionIntoAccessibilityEventAtSameDistance() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("200.00"),
+			120_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("0.0"), new BigDecimal("0.0")),
+				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("0.0")),
+				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("1.0"))),
+			Map.of("width_state", List.of(new GraphHopperPathDetail(1, 2, "NARROW"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		assertThat(route.legs().get(0).guidanceEvents()).hasSize(1);
+		RouteGuidanceEventResponse event = route.legs().get(0).guidanceEvents().get(0);
+		assertThat(event.type()).isEqualTo(RouteGuidanceEventType.NARROW_SIDEWALK);
+		assertThat(event.direction()).isEqualTo(RouteGuidanceDirection.TURN_LEFT);
+		assertThat(event.geometry()).isEqualTo("POINT(1.0 0.0)");
+	}
+
+	@Test
+	void suppressesTurnEventsWithinTenMetersBeforeOrAfterCrosswalkAndAddsContinueStraight() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("200.00"),
+			120_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("0.0"), new BigDecimal("0.0")),
+				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("0.0")),
+				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("1.0"))),
+			Map.of(
+				"segment_type", List.of(new GraphHopperPathDetail(0, 1, "CROSS_WALK")),
+				"signal_state", List.of(new GraphHopperPathDetail(0, 1, "YES"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		assertThat(route.legs().get(0).guidanceEvents())
+			.extracting(RouteGuidanceEventResponse::type)
+			.containsExactly(RouteGuidanceEventType.CROSSWALK, RouteGuidanceEventType.STRAIGHT);
+		RouteGuidanceEventResponse crosswalk = route.legs().get(0).guidanceEvents().get(0);
+		assertThat(crosswalk.features()).containsExactly(RouteGuidanceFeature.SIGNAL);
+		assertThat(crosswalk.direction()).isNull();
+		RouteGuidanceEventResponse straight = route.legs().get(0).guidanceEvents().get(1);
+		assertThat(straight.direction()).isEqualTo(RouteGuidanceDirection.STRAIGHT);
+		assertThat(straight.geometry()).isEqualTo("POINT(1.0 0.0)");
 	}
 
 	@Test
@@ -164,7 +217,7 @@ class WalkRoutePayloadServiceTest {
 	}
 
 	@Test
-	void splitsCrosswalkGuidanceEventsBySignalAndAudioSignalState() {
+	void attachesCrosswalkSignalAndAudioSignalAsFeatures() {
 		GraphHopperRoutePath path = new GraphHopperRoutePath(
 			new BigDecimal("100.00"),
 			60_000,
@@ -191,8 +244,13 @@ class WalkRoutePayloadServiceTest {
 			.extracting(RouteGuidanceEventResponse::type)
 			.containsExactly(
 				RouteGuidanceEventType.CROSSWALK,
-				RouteGuidanceEventType.CROSSWALK_SIGNAL,
-				RouteGuidanceEventType.CROSSWALK_AUDIO);
+				RouteGuidanceEventType.CROSSWALK,
+				RouteGuidanceEventType.CROSSWALK);
+		assertThat(route.legs().get(0).guidanceEvents().get(0).features()).isEmpty();
+		assertThat(route.legs().get(0).guidanceEvents().get(1).features())
+			.containsExactly(RouteGuidanceFeature.SIGNAL);
+		assertThat(route.legs().get(0).guidanceEvents().get(2).features())
+			.containsExactly(RouteGuidanceFeature.SIGNAL, RouteGuidanceFeature.AUDIO_SIGNAL);
 		assertThat(route.legs().get(0).guidanceEvents().get(1).distanceFromLegStartMeter())
 			.isGreaterThan(BigDecimal.ZERO);
 		assertThat(route.legs().get(0).guidanceEvents().get(2).distanceFromLegStartMeter())
@@ -200,7 +258,7 @@ class WalkRoutePayloadServiceTest {
 	}
 
 	@Test
-	void doesNotPromoteAudioCrosswalkWithoutSignalState() {
+	void keepsAudioSignalFeatureEvenWithoutSignalState() {
 		GraphHopperRoutePath path = new GraphHopperRoutePath(
 			new BigDecimal("100.00"),
 			60_000,
@@ -217,10 +275,12 @@ class WalkRoutePayloadServiceTest {
 
 		assertThat(route.legs().get(0).guidanceEvents()).hasSize(1);
 		assertThat(route.legs().get(0).guidanceEvents().get(0).type()).isEqualTo(RouteGuidanceEventType.CROSSWALK);
+		assertThat(route.legs().get(0).guidanceEvents().get(0).features())
+			.containsExactly(RouteGuidanceFeature.AUDIO_SIGNAL);
 	}
 
 	@Test
-	void mapsLowSlopeToGuidanceEvent() {
+	void summarizesStartingLowSlopeOnlyAsRouteBadge() {
 		GraphHopperRoutePath path = new GraphHopperRoutePath(
 			new BigDecimal("100.00"),
 			60_000,
@@ -234,9 +294,64 @@ class WalkRoutePayloadServiceTest {
 			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
 
 		assertThat(route.badges()).containsExactly(RouteBadge.LOW_SLOPE);
+		assertThat(route.legs().get(0).guidanceEvents()).isEmpty();
+	}
+
+	@Test
+	void deduplicatesContinuousAccessibilityStateEvents() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("500.00"),
+			300_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("128.0000"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0010"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0020"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0030"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0040"), new BigDecimal("35.0000")),
+				new GraphHopperCoordinate(new BigDecimal("128.0050"), new BigDecimal("35.0000"))),
+			Map.of("avg_slope_percent", List.of(
+				new GraphHopperPathDetail(0, 1, "2.50"),
+				new GraphHopperPathDetail(1, 2, "2.60"),
+				new GraphHopperPathDetail(2, 3, "6.25"),
+				new GraphHopperPathDetail(3, 4, "6.30"),
+				new GraphHopperPathDetail(4, 5, "2.50"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		assertThat(route.badges()).containsExactly(RouteBadge.MIDDLE_SLOPE, RouteBadge.LOW_SLOPE);
 		assertThat(route.legs().get(0).guidanceEvents())
 			.extracting(RouteGuidanceEventResponse::type)
-			.containsExactly(RouteGuidanceEventType.LOW_SLOPE);
+			.containsExactly(RouteGuidanceEventType.MIDDLE_SLOPE, RouteGuidanceEventType.LOW_SLOPE);
+		assertThat(route.legs().get(0).guidanceEvents().get(0).distanceFromLegStartMeter())
+			.isGreaterThan(BigDecimal.ZERO);
+		assertThat(route.legs().get(0).guidanceEvents().get(1).distanceFromLegStartMeter())
+			.isGreaterThan(route.legs().get(0).guidanceEvents().get(0).distanceFromLegStartMeter());
+	}
+
+	@Test
+	void keepsTurnEventSeparateFromContinuousAccessibilityStateDedupe() {
+		GraphHopperRoutePath path = new GraphHopperRoutePath(
+			new BigDecimal("200.00"),
+			120_000,
+			List.of(
+				new GraphHopperCoordinate(new BigDecimal("0.0"), new BigDecimal("0.0")),
+				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("0.0")),
+				new GraphHopperCoordinate(new BigDecimal("1.0"), new BigDecimal("1.0"))),
+			Map.of("width_state", List.of(
+				new GraphHopperPathDetail(0, 1, "NARROW"),
+				new GraphHopperPathDetail(1, 2, "NARROW"))));
+
+		RouteSummaryResponse route = service.toRouteSummary(
+			"rs_walk_test",
+			new WalkRouteCandidate(RouteOption.SAFE, WalkRouteProfile.PEDESTRIAN_SAFE, path));
+
+		assertThat(route.legs().get(0).guidanceEvents())
+			.extracting(RouteGuidanceEventResponse::type)
+			.containsExactly(RouteGuidanceEventType.NARROW_SIDEWALK, null);
+		assertThat(route.legs().get(0).guidanceEvents().get(1).direction())
+			.isEqualTo(RouteGuidanceDirection.TURN_LEFT);
 	}
 
 	@Test

@@ -129,6 +129,17 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `navigation briefing text does not duplicate segment distance`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+
+            assertEquals("300m 후 직진", viewModel.uiState.value.tts.briefingText)
+        }
+
+    @Test
     fun `walk to transit leg triggers transit refresh near boarding stop`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
@@ -621,6 +632,98 @@ class NavigationViewModelTest {
                 listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToArrival),
                 eventsDeferred.await(),
             )
+        }
+
+    @Test
+    fun `navigation entry keeps initial briefing pending until tts becomes ready`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            val briefingText = viewModel.uiState.value.tts.briefingText
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            advanceUntilIdle()
+
+            assertFalse(eventDeferred.isCompleted)
+
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+
+            assertEquals(listOf(NavigationUiEvent.SpeakBriefing(briefingText)), eventDeferred.await())
+        }
+
+    @Test
+    fun `initial briefing auto play does not repeat for duplicate ready updates`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+            assertEquals(1, eventDeferred.await().size)
+
+            val duplicateDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+            advanceUntilIdle()
+
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+
+            assertFalse(duplicateDeferred.isCompleted)
+            duplicateDeferred.cancel()
+        }
+
+    @Test
+    fun `voice guidance toggle on preserves pending briefing until tts becomes ready`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            val briefingText = viewModel.uiState.value.tts.briefingText
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(4).toList() }
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            viewModel.onAction(NavigationUiAction.VoiceGuidanceToggled(enabled = false))
+            viewModel.onAction(NavigationUiAction.VoiceGuidanceToggled(enabled = true))
+            advanceUntilIdle()
+
+            assertFalse(eventDeferred.isCompleted)
+
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+
+            val events = eventDeferred.await()
+            assertEquals(4, events.size)
+            assertTrue(events.contains(NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = false)))
+            assertTrue(events.contains(NavigationUiEvent.StopBriefing))
+            assertTrue(events.contains(NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true)))
+            assertEquals(NavigationUiEvent.SpeakBriefing(briefingText), events.last())
         }
 
     @Test

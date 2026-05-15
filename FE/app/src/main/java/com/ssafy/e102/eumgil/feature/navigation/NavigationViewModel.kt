@@ -56,6 +56,9 @@ class NavigationViewModel(
     val uiEvent: SharedFlow<NavigationUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var initialBriefingRequested = false
+    private var hasPendingBriefingPlayback = false
+    private var hasPendingInitialBriefing = false
+    private var hasAutoPlayedInitialBriefing = false
     private var navigationRequest: RouteNavigationRequest? = null
     private var routeSession: NavigationRouteSession? = null
     private var lastProcessedLocationEpochMillis: Long? = null
@@ -166,6 +169,9 @@ class NavigationViewModel(
         latestTransitPresentation =
             routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
         initialBriefingRequested = false
+        hasPendingBriefingPlayback = false
+        hasPendingInitialBriefing = false
+        hasAutoPlayedInitialBriefing = false
         syncActiveSegment(latestProgress?.activeSegmentIndex ?: 0)
         publishNavigationState()
 
@@ -256,6 +262,7 @@ class NavigationViewModel(
                 )
             state.copy(tts = nextTts.copy(fallbackMessage = nextTts.toFallbackMessage()))
         }
+        playPendingBriefingIfPossible()
     }
 
     override fun onCleared() {
@@ -648,7 +655,8 @@ class NavigationViewModel(
     private fun requestInitialBriefingIfNeeded() {
         if (initialBriefingRequested) return
         initialBriefingRequested = true
-        requestBriefing()
+        hasPendingInitialBriefing = true
+        requestBriefingPlayback()
     }
 
     private fun requestExitNavigationConfirmation() {
@@ -664,11 +672,12 @@ class NavigationViewModel(
         }
 
         if (enabled) {
-            val tts = uiState.value.tts
-            if (tts.canRequestBriefing) {
+            requestBriefingPlayback()
+            val briefingText = consumePendingBriefingTextIfPossible()
+            if (briefingText != null) {
                 emitUiEvents(
                     NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true),
-                    NavigationUiEvent.SpeakBriefing(tts.briefingText),
+                    NavigationUiEvent.SpeakBriefing(briefingText),
                 )
             } else {
                 emitUiEvent(NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true))
@@ -682,9 +691,37 @@ class NavigationViewModel(
     }
 
     private fun requestBriefing() {
+        requestBriefingPlayback()
+        val briefingText = consumePendingBriefingTextIfPossible() ?: return
+        emitUiEvent(NavigationUiEvent.SpeakBriefing(briefingText))
+    }
+
+    private fun requestBriefingPlayback() {
+        hasPendingBriefingPlayback = true
+    }
+
+    private fun playPendingBriefingIfPossible() {
+        val briefingText = consumePendingBriefingTextIfPossible() ?: return
+        emitUiEvent(NavigationUiEvent.SpeakBriefing(briefingText))
+    }
+
+    private fun consumePendingBriefingTextIfPossible(): String? {
         val tts = uiState.value.tts
-        if (!tts.canRequestBriefing) return
-        emitUiEvent(NavigationUiEvent.SpeakBriefing(tts.briefingText))
+        if (!tts.canRequestBriefing) return null
+        val shouldAutoPlayInitialBriefing = hasPendingInitialBriefing && !hasAutoPlayedInitialBriefing
+        if (!hasPendingBriefingPlayback && !shouldAutoPlayInitialBriefing) return null
+
+        val briefingText =
+            tts.briefingText
+                .trim()
+                .takeIf(String::isNotEmpty)
+                ?: return null
+        if (shouldAutoPlayInitialBriefing) {
+            hasPendingInitialBriefing = false
+            hasAutoPlayedInitialBriefing = true
+        }
+        hasPendingBriefingPlayback = false
+        return briefingText
     }
 
     private fun saveDestinationBookmarkAndNavigate() {
@@ -2106,12 +2143,8 @@ private fun RouteNavigationRequest.toNavigationBriefingText(
 ): String =
     selectedRoute.segments
         .getOrNull(activeSegmentIndex)
-        ?.let { segment ->
-            listOf(
-                segment.distanceMeters.toNavigationDistanceLabel(),
-                segment.toCompactNavigationInstruction(),
-            ).joinToString(separator = " ")
-        } ?: fallback
+        ?.toCompactNavigationInstruction()
+        ?: fallback
 
 private fun NavigationTtsUiState.toFallbackMessage(): String =
     when {

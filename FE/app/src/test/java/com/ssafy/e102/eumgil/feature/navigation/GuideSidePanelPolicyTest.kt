@@ -198,6 +198,25 @@ class GuideSidePanelPolicyTest {
     }
 
     @Test
+    fun `promoted rail item collapses out of layout instead of leaving a blank selected row`() {
+        val sharedSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")
+                .readText()
+        val collapsedItemSection =
+            sharedSource
+                .substringAfter("fun GuideCollapsedRailItem(")
+                .substringBefore("@Composable\nfun GuideSidePanelStepIcon")
+
+        assertTrue(
+            "The top-card item should be removed from the visible rail flow so the next guide icon sits directly under the top card.",
+            collapsedItemSection.contains("val resolvedHeight = if (isContentHidden) 0.dp else height") &&
+                collapsedItemSection.contains(".height(resolvedHeight)") &&
+                collapsedItemSection.contains("if (!isContentHidden) {") &&
+                collapsedItemSection.contains("HorizontalDivider(color = dividerColor)"),
+        )
+    }
+
+    @Test
     fun `collapsed rail spacing supports picker style scrolling`() {
         val sharedSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")

@@ -1069,6 +1069,43 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `transit selected route restores walk leg polylines when segment geometry omits them`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository =
+                TransitModeRecordingRouteRepository(
+                    walkSafeDistanceMeters = 720,
+                    omitFirstTransitWalkSegmentPolyline = true,
+                )
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.TRANSIT))
+            advanceUntilIdle()
+
+            val detailPolylines = viewModel.uiState.value.selectedRoute?.detailPolylines.orEmpty()
+
+            assertEquals(
+                listOf(
+                    RouteDetailPolylineKind.WALK,
+                    RouteDetailPolylineKind.TRANSIT,
+                    RouteDetailPolylineKind.TRANSIT,
+                    RouteDetailPolylineKind.WALK,
+                ),
+                detailPolylines.map(RouteDetailPolylineUiState::kind),
+            )
+            assertEquals(GeoCoordinate(35.1796, 129.0756), detailPolylines.firstOrNull()?.points?.firstOrNull())
+            assertTrue(detailPolylines.all { polyline -> polyline.points.size >= 2 })
+        }
+
+    @Test
     fun `manual transit selection exposes remote success debug info`() =
         runTest {
             val destinationSelectionRepository =
@@ -1597,6 +1634,7 @@ private class FallbackFailureRecoveryRouteRepository : BaseTestRouteRepository()
 
 private class TransitModeRecordingRouteRepository(
     private val walkSafeDistanceMeters: Int,
+    private val omitFirstTransitWalkSegmentPolyline: Boolean = false,
 ) : BaseTestRouteRepository() {
     var walkSearchCount: Int = 0
         private set
@@ -1618,9 +1656,29 @@ private class TransitModeRecordingRouteRepository(
 
     override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData {
         transitSearchCount += 1
-        return buildTransitSearchData(
+        val searchData =
+            buildTransitSearchData(
             query = query,
             searchId = "transit-search-$transitSearchCount",
+        )
+        if (!omitFirstTransitWalkSegmentPolyline) return searchData
+        return searchData.copy(
+            result =
+                searchData.result.copy(
+                    routes =
+                        searchData.result.routes.map { route ->
+                            route.copy(
+                                segments =
+                                    route.segments.map { segment ->
+                                        if (segment.sourceLegSequence == 1) {
+                                            segment.copy(polyline = RoutePolyline())
+                                        } else {
+                                            segment
+                                        }
+                                    },
+                            )
+                        },
+                ),
         )
     }
 

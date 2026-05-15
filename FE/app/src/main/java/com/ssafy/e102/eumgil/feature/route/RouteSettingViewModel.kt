@@ -1674,25 +1674,76 @@ class RouteSettingViewModel(
     }
 
     private fun RouteCandidate.buildDetailPolylines(): List<RouteDetailPolylineUiState> =
-        segments
-            .filter(RouteSegment::hasRenderablePolyline)
-            .sortedBy(RouteSegment::sequence)
-            .map { segment ->
-                RouteDetailPolylineUiState(
-                    points = segment.polyline.points,
-                    kind = segment.resolveSourceLeg(legs = legs)?.type.toRouteDetailPolylineKind(),
-                )
-            }
-            .ifEmpty {
-                legs
-                    .filter(RouteLeg::hasRenderablePolyline)
-                    .sortedBy(RouteLeg::sequence)
-                    .map { leg ->
-                        RouteDetailPolylineUiState(
-                            points = leg.polyline.points,
-                            kind = leg.type.toRouteDetailPolylineKind(),
-                        )
+        buildLegScopedDetailPolylines()
+            ?: segments
+                .filter(RouteSegment::hasRenderablePolyline)
+                .sortedBy(RouteSegment::sequence)
+                .map { segment ->
+                    RouteDetailPolylineUiState(
+                        points = segment.polyline.points,
+                        kind = segment.resolveSourceLeg(legs = legs)?.type.toRouteDetailPolylineKind(),
+                    )
+                }
+                .ifEmpty {
+                    legs.toDetailPolylineUiStates()
+                }
+
+    private fun RouteCandidate.buildLegScopedDetailPolylines(): List<RouteDetailPolylineUiState>? {
+        if (legs.isEmpty() || segments.none { segment -> segment.sourceLegSequence != null }) {
+            return null
+        }
+        val renderableSegmentsByLeg =
+            segments
+                .filter { segment -> segment.sourceLegSequence != null && segment.hasRenderablePolyline }
+                .groupBy(RouteSegment::sourceLegSequence)
+        val scopedPolylines =
+            legs
+                .sortedBy(RouteLeg::sequence)
+                .flatMap { leg ->
+                    val segmentPolylines =
+                        renderableSegmentsByLeg[leg.sequence]
+                            .orEmpty()
+                            .sortedBy(RouteSegment::sequence)
+                            .map { segment ->
+                                RouteDetailPolylineUiState(
+                                    points = segment.polyline.points,
+                                    kind = leg.type.toRouteDetailPolylineKind(),
+                                )
+                            }
+                    segmentPolylines.ifEmpty {
+                        if (leg.hasRenderablePolyline) {
+                            listOf(
+                                RouteDetailPolylineUiState(
+                                    points = leg.polyline.points,
+                                    kind = leg.type.toRouteDetailPolylineKind(),
+                                ),
+                            )
+                        } else {
+                            emptyList()
+                        }
                     }
+                }
+        val unscopedPolylines =
+            segments
+                .filter { segment -> segment.sourceLegSequence == null && segment.hasRenderablePolyline }
+                .sortedBy(RouteSegment::sequence)
+                .map { segment ->
+                    RouteDetailPolylineUiState(
+                        points = segment.polyline.points,
+                        kind = segment.resolveSourceLeg(legs = legs)?.type.toRouteDetailPolylineKind(),
+                    )
+                }
+        return (scopedPolylines + unscopedPolylines).ifEmpty { legs.toDetailPolylineUiStates() }
+    }
+
+    private fun List<RouteLeg>.toDetailPolylineUiStates(): List<RouteDetailPolylineUiState> =
+        filter(RouteLeg::hasRenderablePolyline)
+            .sortedBy(RouteLeg::sequence)
+            .map { leg ->
+                RouteDetailPolylineUiState(
+                    points = leg.polyline.points,
+                    kind = leg.type.toRouteDetailPolylineKind(),
+                )
             }
 
     private fun RouteCandidate.routeBadges(includeSafePriority: Boolean): List<RouteOptionBadge> {

@@ -1,6 +1,9 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
+import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.feature.navigation.component.createNavigationSegmentRailSlots
+import com.ssafy.e102.eumgil.feature.navigation.component.resolveGuideRailAutoScrollItemIndex
+import com.ssafy.e102.eumgil.feature.navigation.component.resolveGuideRailEndSnapPadding
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -110,6 +113,10 @@ class NavigationSegmentRailLayoutTest {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
                 .readText()
+        val collectSection =
+            source
+                .substringAfter(".collect { snapshot ->")
+                .substringBefore("LaunchedEffect(uiState.focusedSegmentIndex")
 
         assertTrue(source.contains("rememberLazyListState()"))
         assertTrue(source.contains("snapshotFlow"))
@@ -117,6 +124,43 @@ class NavigationSegmentRailLayoutTest {
         assertTrue(source.contains("listState.animateScrollToItem(position, scrollOffset = 0)"))
         assertTrue(source.contains("listState.scrollToItem(position, scrollOffset = 0)"))
         assertTrue(source.contains("NavigationSegmentRailItemHeight = 96.dp"))
+        assertTrue(
+            "A fast fling should update the promoted item while scrolling so the top card does not temporarily lose its guidance.",
+            collectSection.contains("val isSettlingAfterCollapsedTopCard") &&
+                collectSection.contains("if (!isSettlingAfterCollapsedTopCard") &&
+                collectSection.contains("hiddenRailItemPosition = promotedItemPosition"),
+        )
+        assertTrue(
+            "The rail should snap and hide the promoted slot before it notifies the top card, preventing fast fling recomposition from interrupting the snap.",
+            collectSection.indexOf("snapshot.shouldSnapToPromotedItem()") <
+                collectSection.indexOf("currentOnTopVisibleSegmentChanged"),
+        )
+        assertTrue(
+            "The scroll-to-top action should promote the first guide card and keep that first icon out of the collapsed rail.",
+            source.contains("hiddenRailItemPosition = 0") &&
+                source.contains("railFocusItems.firstOrNull()?.index?.let(onSegmentTapped)"),
+        )
+    }
+
+    @Test
+    fun `rail external selection scrolls the next icon to the top while clamping the destination`() {
+        assertEquals(1, resolveGuideRailAutoScrollItemIndex(focusedItemPosition = 0, itemCount = 4))
+        assertEquals(3, resolveGuideRailAutoScrollItemIndex(focusedItemPosition = 2, itemCount = 4))
+        assertEquals(3, resolveGuideRailAutoScrollItemIndex(focusedItemPosition = 3, itemCount = 4))
+        assertEquals(null, resolveGuideRailAutoScrollItemIndex(focusedItemPosition = -1, itemCount = 4))
+        assertEquals(null, resolveGuideRailAutoScrollItemIndex(focusedItemPosition = 0, itemCount = 0))
+    }
+
+    @Test
+    fun `rail end padding lets destination reach the top but keeps the scroll top action below it`() {
+        assertEquals(
+            448.dp,
+            resolveGuideRailEndSnapPadding(
+                viewportHeight = 600.dp,
+                guideItemHeight = 96.dp,
+                trailingActionHeight = 56.dp,
+            ),
+        )
     }
 }
 

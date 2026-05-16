@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -87,6 +89,7 @@ fun LoginScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .offset(y = AuthLoginHeroOffset)
                         .padding(horizontal = EumSpacing.large),
             )
             Spacer(modifier = Modifier.weight(0.28f))
@@ -96,6 +99,7 @@ fun LoginScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .offset(y = AuthLoginSkylineOffset)
                         .aspectRatio(1.52f)
                         .alpha(0.92f),
                 alignment = Alignment.BottomCenter,
@@ -109,7 +113,7 @@ fun LoginScreen(
                         .padding(
                             start = EumSpacing.large,
                             end = EumSpacing.large,
-                            bottom = EumSpacing.large,
+                            bottom = AuthSocialLoginPanelBottomPadding,
                         )
                         .navigationBarsPadding(),
                 contentAlignment = Alignment.Center,
@@ -142,26 +146,16 @@ private fun LoginHero(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Top,
     ) {
         Image(
-            painter = painterResource(id = R.drawable.app_logo),
-            contentDescription = null,
+            painter = painterResource(id = R.drawable.auth_login_wordmark),
+            contentDescription = stringResource(id = R.string.auth_login_service_name),
             modifier =
                 Modifier
-                    .width(164.dp)
-                    .height(92.dp),
+                    .fillMaxWidth(0.92f)
+                    .widthIn(max = 292.dp)
+                    .aspectRatio(AuthLoginWordmarkAspectRatio),
             contentScale = ContentScale.Fit,
         )
-        Text(
-            text = stringResource(id = R.string.auth_login_service_name),
-            style =
-                MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = 36.sp,
-                    lineHeight = 46.sp,
-                ),
-            color = EumPrimary600,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = stringResource(id = R.string.auth_login_service_english_name),
             style =
@@ -169,14 +163,17 @@ private fun LoginHero(modifier: Modifier = Modifier) {
                     fontSize = 20.sp,
                     lineHeight = 28.sp,
                 ),
-            color = EumPrimary600,
+            color = AuthLoginEnglishColor,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = stringResource(id = R.string.auth_login_service_tagline),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground,
+            style =
+                MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Medium,
+                ),
+            color = AuthLoginTaglineColor,
             textAlign = TextAlign.Center,
         )
     }
@@ -190,7 +187,7 @@ private fun SocialLoginPanel(
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(17.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         uiState.providers.forEach { provider ->
             SocialLoginButton(
@@ -377,3 +374,9 @@ private val GoogleBlue = Color(0xFF4285F4)
 private val NaverGreen = Color(0xFF03C75A)
 private val KakaoYellow = Color(0xFFFFE500)
 private val AuthSocialLoginPanelMaxWidth = 336.dp
+private val AuthSocialLoginPanelBottomPadding = 40.dp
+private val AuthLoginSkylineOffset = (-18).dp
+private val AuthLoginHeroOffset = 14.dp
+private val AuthLoginWordmarkAspectRatio = 3.2f
+private val AuthLoginEnglishColor = Color(0xFF2563EB)
+private val AuthLoginTaglineColor = Color(0xFF6B7280)

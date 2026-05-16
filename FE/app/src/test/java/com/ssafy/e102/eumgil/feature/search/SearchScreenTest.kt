@@ -198,6 +198,65 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `route endpoint quick actions appear only in apply to route mode`() {
+        assertEquals(false, shouldShowRouteEndpointQuickActions(SearchSelectionMode.PREVIEW_ON_MAP))
+        assertEquals(true, shouldShowRouteEndpointQuickActions(SearchSelectionMode.APPLY_TO_ROUTE))
+    }
+
+    @Test
+    fun `route endpoint quick action copy follows editing target`() {
+        assertEquals(
+            RouteEndpointQuickActionCopy(
+                currentLocationActionRes = R.string.search_screen_current_location_origin_action,
+                currentLocationContentDescriptionRes = R.string.search_screen_current_location_origin_a11y,
+                mapPickerActionRes = R.string.search_screen_map_picker_origin_action,
+                mapPickerContentDescriptionRes = R.string.search_screen_map_picker_origin_a11y,
+            ),
+            resolveRouteEndpointQuickActionCopy(RouteEditingTarget.ORIGIN),
+        )
+        assertEquals(
+            RouteEndpointQuickActionCopy(
+                currentLocationActionRes = R.string.search_screen_current_location_destination_action,
+                currentLocationContentDescriptionRes = R.string.search_screen_current_location_destination_a11y,
+                mapPickerActionRes = R.string.search_screen_map_picker_destination_action,
+                mapPickerContentDescriptionRes = R.string.search_screen_map_picker_destination_a11y,
+            ),
+            resolveRouteEndpointQuickActionCopy(RouteEditingTarget.DESTINATION),
+        )
+    }
+
+    @Test
+    fun `current location quick action status resolves persistent screen copy`() {
+        assertEquals(
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_resolving_status,
+                showProgress = true,
+            ),
+            resolveSearchCurrentLocationStatusContent(
+                status = SearchCurrentLocationQuickActionStatus.Resolving,
+                editingTarget = RouteEditingTarget.ORIGIN,
+            ),
+        )
+        assertEquals(
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_permission_denied_status,
+                isError = true,
+            ),
+            resolveSearchCurrentLocationStatusContent(
+                status = SearchCurrentLocationQuickActionStatus.PermissionDenied,
+                editingTarget = RouteEditingTarget.DESTINATION,
+            ),
+        )
+        assertEquals(
+            null,
+            resolveSearchCurrentLocationStatusContent(
+                status = SearchCurrentLocationQuickActionStatus.Idle,
+                editingTarget = RouteEditingTarget.DESTINATION,
+            ),
+        )
+    }
+
+    @Test
     fun `search result distance uses meter label below one kilometer`() {
         assertEquals(
             SearchResultDistanceUiState(

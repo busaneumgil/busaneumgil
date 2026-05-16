@@ -7,25 +7,34 @@ import org.junit.Test
 
 class SearchScreenPolicyTest {
     @Test
-    fun `apply to route search exposes direct map picker action`() {
+    fun `apply to route search exposes route endpoint quick actions`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
                 .readText()
 
         assertTrue(
-            "Apply-to-route search should show the direct map picker button only in route assignment mode.",
-            source.contains("uiState.selectionMode == SearchSelectionMode.APPLY_TO_ROUTE") &&
-                source.contains("RouteEndpointMapPickerButton("),
+            "Apply-to-route search should show quick actions only in route assignment mode.",
+            source.contains("shouldShowRouteEndpointQuickActions(uiState.selectionMode)") &&
+                source.contains("RouteEndpointQuickActionSection("),
         )
         assertTrue(
-            "The direct map picker button should dispatch a dedicated map picker action.",
-            source.contains("SearchUiAction.MapPickerClicked"),
+            "Route endpoint quick actions should dispatch dedicated current-location and map-picker actions.",
+            source.contains("SearchUiAction.CurrentLocationClicked") &&
+                source.contains("SearchUiAction.MapPickerClicked"),
         )
         assertTrue(
-            "The direct map picker button should use the dedicated label and target-specific accessibility copy.",
-            source.contains("R.string.search_screen_map_picker_action") &&
+            "Route endpoint quick actions should use target-specific visible labels and accessibility copy.",
+            source.contains("R.string.search_screen_current_location_origin_action") &&
+                source.contains("R.string.search_screen_current_location_destination_action") &&
+                source.contains("R.string.search_screen_map_picker_origin_action") &&
+                source.contains("R.string.search_screen_map_picker_destination_action") &&
                 source.contains("R.string.search_screen_map_picker_origin_a11y") &&
                 source.contains("R.string.search_screen_map_picker_destination_a11y"),
+        )
+        assertTrue(
+            "Current-location failures should remain visible on the screen instead of being only transient feedback.",
+            source.contains("currentLocationQuickActionState") &&
+                source.contains("resolveSearchCurrentLocationStatusContent("),
         )
     }
 

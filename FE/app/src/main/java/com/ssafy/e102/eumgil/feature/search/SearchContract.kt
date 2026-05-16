@@ -19,7 +19,22 @@ data class SearchUiState(
     val sortOption: SearchSortOption = SearchSortOption.RELEVANCE,
     val resultState: SearchResultUiState = SearchResultUiState.Initial,
     val voiceInputState: SearchVoiceInputUiState = SearchVoiceInputUiState(),
+    val currentLocationQuickActionState: SearchCurrentLocationQuickActionUiState =
+        SearchCurrentLocationQuickActionUiState(),
 )
+
+data class SearchCurrentLocationQuickActionUiState(
+    val status: SearchCurrentLocationQuickActionStatus = SearchCurrentLocationQuickActionStatus.Idle,
+)
+
+enum class SearchCurrentLocationQuickActionStatus {
+    Idle,
+    Resolving,
+    Applied,
+    PermissionDenied,
+    LocationUnavailable,
+    LocationAccessUnavailable,
+}
 
 data class SearchVoiceInputUiState(
     val isActive: Boolean = false,
@@ -53,7 +68,11 @@ sealed interface SearchUiAction {
 
     data object VoiceInputClicked : SearchUiAction
 
+    data object CurrentLocationClicked : SearchUiAction
+
     data object MapPickerClicked : SearchUiAction
+
+    data object RefreshLocationPermission : SearchUiAction
 
     data object VoiceRouteEntered : SearchUiAction
 
@@ -132,6 +151,8 @@ sealed interface SearchUiEvent {
     data object StartVoiceCapture : SearchUiEvent
 
     data object StopVoiceCapture : SearchUiEvent
+
+    data object RequestLocationPermission : SearchUiEvent
 
     data class NavigateToRouteSetting(
         val locationPermissionPrechecked: Boolean = false,

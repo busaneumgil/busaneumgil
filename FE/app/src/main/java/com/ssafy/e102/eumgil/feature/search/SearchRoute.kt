@@ -12,7 +12,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -127,6 +130,26 @@ private fun SearchRouteContent(
 ) {
     val viewModel = rememberSearchViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val appContainer =
+        remember(context.applicationContext) {
+            (context.applicationContext as BusanEumgilApp).appContainer
+        }
+    val activity = remember(context) { context.findComponentActivity() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    viewModel.onAction(SearchUiAction.RefreshLocationPermission)
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     LaunchedEffect(viewModel, initialEditingTarget, initialSelectionMode) {
         viewModel.onAction(
@@ -169,6 +192,8 @@ private fun SearchRouteContent(
         onNavigateToRouteBriefing,
         onStartVoiceCapture,
         onStopVoiceCapture,
+        appContainer,
+        activity,
     ) {
         viewModel.uiEvent.collect { event ->
             when (event) {
@@ -185,6 +210,8 @@ private fun SearchRouteContent(
                     onNavigateToRouteEndpointMapPicker(event.editingTarget)
                 SearchUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
                 SearchUiEvent.NavigateToLowVisionBookmark -> Unit
+                SearchUiEvent.RequestLocationPermission ->
+                    activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
             }
         }
     }
@@ -291,6 +318,7 @@ internal fun SearchVoiceInputExperience(
                 SearchUiEvent.NavigateToRouteBriefing -> Unit
                 SearchUiEvent.NavigateToLowVisionBookmark -> Unit
                 SearchUiEvent.NavigateToVoiceInput -> Unit
+                SearchUiEvent.RequestLocationPermission -> Unit
             }
         }
     }
@@ -323,6 +351,7 @@ private fun rememberSearchViewModel(): SearchViewModel {
                 destinationPreviewRepository = appContainer.destinationPreviewRepository,
                 placesRepository = appContainer.placesRepository,
                 currentLocationManager = appContainer.currentLocationManager,
+                locationPermissionManager = appContainer.locationPermissionManager,
             )
         }
 

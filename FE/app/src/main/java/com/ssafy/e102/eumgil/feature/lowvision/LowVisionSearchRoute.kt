@@ -87,6 +87,7 @@ fun LowVisionSearchRoute(
                 SearchUiEvent.NavigateToVoiceInput -> Unit
                 SearchUiEvent.StartVoiceCapture -> Unit
                 SearchUiEvent.StopVoiceCapture -> Unit
+                SearchUiEvent.RequestLocationPermission -> Unit
             }
         }
     }

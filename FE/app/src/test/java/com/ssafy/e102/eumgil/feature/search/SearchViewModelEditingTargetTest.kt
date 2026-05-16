@@ -1,5 +1,11 @@
 package com.ssafy.e102.eumgil.feature.search
 
+import androidx.activity.ComponentActivity
+import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationGrantAccuracy
+import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.core.location.LocationPermissionState
+import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
@@ -11,13 +17,17 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.data.repository.RouteSelectionRequestReason
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -98,6 +108,163 @@ class SearchViewModelEditingTargetTest {
             assertEquals(
                 SearchUiEvent.NavigateToRouteEndpointMapPicker(RouteEditingTarget.ORIGIN),
                 uiEvent.await(),
+            )
+        }
+
+    @Test
+    fun `current location origin action clears selected origin explicitly and navigates with prechecked permission`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedOrigin(testSearchResult().toPlaceDestination())
+                }
+            val locationManager =
+                EditingTargetFakeCurrentLocationManager(
+                    initialLocation = testLocationSnapshot(latitude = 35.1797, longitude = 129.0750),
+                )
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    currentLocationManager = locationManager,
+                    locationPermissionManager = EditingTargetFakeLocationPermissionManager(),
+                )
+
+            advanceUntilIdle()
+            val selectionRequest =
+                backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) {
+                    destinationSelectionRepository.selectionRequests.first()
+                }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+            viewModel.onAction(SearchUiAction.CurrentLocationClicked)
+            advanceUntilIdle()
+
+            assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
+            assertEquals(RouteSelectionRequestReason.ORIGIN_CLEARED, selectionRequest.await().reason)
+            assertEquals(
+                SearchCurrentLocationQuickActionStatus.Applied,
+                viewModel.uiState.value.currentLocationQuickActionState.status,
+            )
+            assertEquals(
+                SearchUiEvent.NavigateToRouteSetting(locationPermissionPrechecked = true),
+                uiEvent.await(),
+            )
+        }
+
+    @Test
+    fun `current location destination action stores explicit current place destination`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val currentLocation = testLocationSnapshot(latitude = 35.1000, longitude = 129.0320)
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    currentLocationManager =
+                        EditingTargetFakeCurrentLocationManager(
+                            initialLocation = currentLocation,
+                        ),
+                    locationPermissionManager = EditingTargetFakeLocationPermissionManager(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.DESTINATION,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+            viewModel.onAction(SearchUiAction.CurrentLocationClicked)
+            advanceUntilIdle()
+
+            val selectedDestination = destinationSelectionRepository.selectedDestination.value
+            assertEquals("current-location", selectedDestination?.placeId)
+            assertEquals("현재 위치", selectedDestination?.name)
+            assertEquals(currentLocation.latitude, selectedDestination?.latitude)
+            assertEquals(currentLocation.longitude, selectedDestination?.longitude)
+            assertEquals(
+                SearchCurrentLocationQuickActionStatus.Applied,
+                viewModel.uiState.value.currentLocationQuickActionState.status,
+            )
+            assertEquals(
+                SearchUiEvent.NavigateToRouteSetting(locationPermissionPrechecked = true),
+                uiEvent.await(),
+            )
+        }
+
+    @Test
+    fun `current location action with denied permission leaves visible permission status and requests permission`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    currentLocationManager = EditingTargetFakeCurrentLocationManager(),
+                    locationPermissionManager =
+                        EditingTargetFakeLocationPermissionManager(
+                            initialState = LocationPermissionState.Denied,
+                        ),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.DESTINATION,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+            viewModel.onAction(SearchUiAction.CurrentLocationClicked)
+            advanceUntilIdle()
+
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            assertEquals(
+                SearchCurrentLocationQuickActionStatus.PermissionDenied,
+                viewModel.uiState.value.currentLocationQuickActionState.status,
+            )
+            assertEquals(SearchUiEvent.RequestLocationPermission, uiEvent.await())
+        }
+
+    @Test
+    fun `current location action without available fix leaves visible unavailable status`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    currentLocationManager = EditingTargetFakeCurrentLocationManager(),
+                    locationPermissionManager = EditingTargetFakeLocationPermissionManager(),
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.DESTINATION,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+            viewModel.onAction(SearchUiAction.CurrentLocationClicked)
+            advanceTimeBy(1_501L)
+            advanceUntilIdle()
+
+            assertEquals(
+                SearchCurrentLocationQuickActionStatus.LocationUnavailable,
+                viewModel.uiState.value.currentLocationQuickActionState.status,
             )
         }
 
@@ -302,6 +469,44 @@ private fun testSearchResult(): SearchResult =
         longitude = 129.0750,
         category = PlaceCategory.TOURIST_ATTRACTION,
     )
+
+private fun testLocationSnapshot(
+    latitude: Double,
+    longitude: Double,
+): LocationSnapshot =
+    LocationSnapshot(
+        latitude = latitude,
+        longitude = longitude,
+        accuracyMeters = 12f,
+        recordedAtEpochMillis = System.currentTimeMillis(),
+    )
+
+private class EditingTargetFakeCurrentLocationManager(
+    initialLocation: LocationSnapshot? = null,
+) : CurrentLocationManager {
+    private val mutableLatestLocation = MutableStateFlow(initialLocation)
+
+    override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation.asStateFlow()
+
+    override fun refreshLatestLocation() = Unit
+
+    override fun startLocationUpdates() = Unit
+
+    override fun stopLocationUpdates() = Unit
+}
+
+private class EditingTargetFakeLocationPermissionManager(
+    initialState: LocationPermissionState =
+        LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+) : LocationPermissionManager {
+    private val mutablePermissionState = MutableStateFlow(initialState)
+
+    override val permissionState: StateFlow<LocationPermissionState> = mutablePermissionState.asStateFlow()
+
+    override fun refreshPermissionState() = Unit
+
+    override fun requestLocationPermission(activity: ComponentActivity) = Unit
+}
 
 private class EditingTargetFakeSearchRepository : SearchRepository {
     override suspend fun search(query: SearchQuery): List<SearchResult> = emptyList()

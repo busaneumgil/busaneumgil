@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -115,6 +116,81 @@ internal fun resolveSearchResultClickAction(
     when (selectionMode) {
         SearchSelectionMode.PREVIEW_ON_MAP -> SearchUiAction.SearchResultPreviewClicked(result = result)
         SearchSelectionMode.APPLY_TO_ROUTE -> SearchUiAction.SearchResultClicked(result = result)
+    }
+
+internal fun shouldShowRouteEndpointQuickActions(selectionMode: SearchSelectionMode): Boolean =
+    selectionMode == SearchSelectionMode.APPLY_TO_ROUTE
+
+internal data class RouteEndpointQuickActionCopy(
+    @StringRes val currentLocationActionRes: Int,
+    @StringRes val currentLocationContentDescriptionRes: Int,
+    @StringRes val mapPickerActionRes: Int,
+    @StringRes val mapPickerContentDescriptionRes: Int,
+)
+
+internal fun resolveRouteEndpointQuickActionCopy(editingTarget: RouteEditingTarget): RouteEndpointQuickActionCopy =
+    when (editingTarget) {
+        RouteEditingTarget.ORIGIN ->
+            RouteEndpointQuickActionCopy(
+                currentLocationActionRes = R.string.search_screen_current_location_origin_action,
+                currentLocationContentDescriptionRes = R.string.search_screen_current_location_origin_a11y,
+                mapPickerActionRes = R.string.search_screen_map_picker_origin_action,
+                mapPickerContentDescriptionRes = R.string.search_screen_map_picker_origin_a11y,
+            )
+
+        RouteEditingTarget.DESTINATION ->
+            RouteEndpointQuickActionCopy(
+                currentLocationActionRes = R.string.search_screen_current_location_destination_action,
+                currentLocationContentDescriptionRes = R.string.search_screen_current_location_destination_a11y,
+                mapPickerActionRes = R.string.search_screen_map_picker_destination_action,
+                mapPickerContentDescriptionRes = R.string.search_screen_map_picker_destination_a11y,
+            )
+    }
+
+internal data class SearchCurrentLocationStatusContent(
+    @StringRes val messageRes: Int,
+    val isError: Boolean = false,
+    val showProgress: Boolean = false,
+)
+
+internal fun resolveSearchCurrentLocationStatusContent(
+    status: SearchCurrentLocationQuickActionStatus,
+    editingTarget: RouteEditingTarget,
+): SearchCurrentLocationStatusContent? =
+    when (status) {
+        SearchCurrentLocationQuickActionStatus.Idle -> null
+        SearchCurrentLocationQuickActionStatus.Resolving ->
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_resolving_status,
+                showProgress = true,
+            )
+
+        SearchCurrentLocationQuickActionStatus.Applied ->
+            SearchCurrentLocationStatusContent(
+                messageRes =
+                    when (editingTarget) {
+                        RouteEditingTarget.ORIGIN -> R.string.search_screen_current_location_origin_applied_status
+                        RouteEditingTarget.DESTINATION -> R.string.search_screen_current_location_destination_applied_status
+                    },
+            )
+
+        SearchCurrentLocationQuickActionStatus.PermissionDenied ->
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_permission_denied_status,
+                isError = true,
+            )
+
+        SearchCurrentLocationQuickActionStatus.LocationUnavailable ->
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_unavailable_status,
+                isError = true,
+            )
+
+        SearchCurrentLocationQuickActionStatus.LocationAccessUnavailable ->
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_access_unavailable_status,
+                isError = true,
+            )
     }
 
 internal data class SearchResultDistanceUiState(
@@ -397,10 +473,12 @@ private fun SearchEntryContent(
         onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
         onSearch = { onAction(SearchUiAction.SearchSubmitted) },
     )
-    if (uiState.selectionMode == SearchSelectionMode.APPLY_TO_ROUTE) {
-        RouteEndpointMapPickerButton(
+    if (shouldShowRouteEndpointQuickActions(uiState.selectionMode)) {
+        RouteEndpointQuickActionSection(
             editingTarget = uiState.editingTarget,
-            onClick = { onAction(SearchUiAction.MapPickerClicked) },
+            currentLocationState = uiState.currentLocationQuickActionState,
+            onCurrentLocationClick = { onAction(SearchUiAction.CurrentLocationClicked) },
+            onMapPickerClick = { onAction(SearchUiAction.MapPickerClicked) },
         )
     }
     RecentVisitSection(
@@ -456,11 +534,13 @@ private fun SearchResultsContent(
                 onSearch = { onAction(SearchUiAction.SearchSubmitted) },
             )
         }
-        if (uiState.selectionMode == SearchSelectionMode.APPLY_TO_ROUTE) {
-            item(key = "route-endpoint-map-picker") {
-                RouteEndpointMapPickerButton(
+        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode)) {
+            item(key = "route-endpoint-quick-actions") {
+                RouteEndpointQuickActionSection(
                     editingTarget = uiState.editingTarget,
-                    onClick = { onAction(SearchUiAction.MapPickerClicked) },
+                    currentLocationState = uiState.currentLocationQuickActionState,
+                    onCurrentLocationClick = { onAction(SearchUiAction.CurrentLocationClicked) },
+                    onMapPickerClick = { onAction(SearchUiAction.MapPickerClicked) },
                 )
             }
         }
@@ -625,13 +705,87 @@ private fun SearchInputField(
 }
 
 @Composable
-private fun RouteEndpointMapPickerButton(
+private fun RouteEndpointQuickActionSection(
     editingTarget: RouteEditingTarget,
+    currentLocationState: SearchCurrentLocationQuickActionUiState,
+    onCurrentLocationClick: () -> Unit,
+    onMapPickerClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val copy = resolveRouteEndpointQuickActionCopy(editingTarget)
+    val statusContent =
+        resolveSearchCurrentLocationStatusContent(
+            status = currentLocationState.status,
+            editingTarget = editingTarget,
+        )
+    val isResolving = currentLocationState.status == SearchCurrentLocationQuickActionStatus.Resolving
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        RouteEndpointCurrentLocationButton(
+            labelRes = copy.currentLocationActionRes,
+            contentDescriptionRes = copy.currentLocationContentDescriptionRes,
+            enabled = isResolving.not(),
+            onClick = onCurrentLocationClick,
+        )
+        RouteEndpointMapPickerButton(
+            labelRes = copy.mapPickerActionRes,
+            contentDescriptionRes = copy.mapPickerContentDescriptionRes,
+            onClick = onMapPickerClick,
+        )
+        if (statusContent != null) {
+            RouteEndpointCurrentLocationStatus(content = statusContent)
+        }
+    }
+}
+
+@Composable
+private fun RouteEndpointCurrentLocationButton(
+    @StringRes labelRes: Int,
+    @StringRes contentDescriptionRes: Int,
+    enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val mapPickerContentDescription =
-        stringResource(id = editingTarget.mapPickerContentDescriptionRes())
+    val currentLocationContentDescription = stringResource(id = contentDescriptionRes)
+
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = currentLocationContentDescription
+                },
+        shape = RoundedCornerShape(EumRadius.medium),
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_map_current_location),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = stringResource(id = labelRes),
+            modifier = Modifier.padding(start = EumSpacing.xSmall),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun RouteEndpointMapPickerButton(
+    @StringRes labelRes: Int,
+    @StringRes contentDescriptionRes: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val mapPickerContentDescription = stringResource(id = contentDescriptionRes)
 
     OutlinedButton(
         onClick = onClick,
@@ -653,7 +807,7 @@ private fun RouteEndpointMapPickerButton(
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = stringResource(id = R.string.search_screen_map_picker_action),
+            text = stringResource(id = labelRes),
             modifier = Modifier.padding(start = EumSpacing.xSmall),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
@@ -662,12 +816,59 @@ private fun RouteEndpointMapPickerButton(
     }
 }
 
-@StringRes
-private fun RouteEditingTarget.mapPickerContentDescriptionRes(): Int =
-    when (this) {
-        RouteEditingTarget.ORIGIN -> R.string.search_screen_map_picker_origin_a11y
-        RouteEditingTarget.DESTINATION -> R.string.search_screen_map_picker_destination_a11y
+@Composable
+private fun RouteEndpointCurrentLocationStatus(
+    content: SearchCurrentLocationStatusContent,
+    modifier: Modifier = Modifier,
+) {
+    val contentColor =
+        when {
+            content.isError -> MaterialTheme.colorScheme.error
+            content.showProgress -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    val containerColor =
+        when {
+            content.isError -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.28f)
+            else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f)
+        }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = containerColor,
+        border = BorderStroke(1.dp, contentColor.copy(alpha = 0.12f)),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (content.showProgress) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = contentColor,
+                )
+            } else {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_map_current_location),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = contentColor,
+                )
+            }
+            Text(
+                text = stringResource(id = content.messageRes),
+                style = MaterialTheme.typography.bodyMedium,
+                color = contentColor,
+            )
+        }
     }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

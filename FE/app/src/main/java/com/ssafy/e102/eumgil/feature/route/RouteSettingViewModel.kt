@@ -36,6 +36,7 @@ import com.ssafy.e102.eumgil.core.model.toRouteWaypointOrNull
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.data.repository.RouteSelectionState
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSessionData
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
@@ -83,6 +84,7 @@ class RouteSettingViewModel(
     private var activeRouteLoadId: Long = 0L
     private var lastObservedSelectionState = destinationSelectionRepository.selectionState.value
     private var detailNavigationRequest: RouteNavigationRequest? = null
+    private var suppressNextSilentOriginClearReload: Boolean = false
 
     init {
         currentLocationManager.refreshLatestLocation()
@@ -124,6 +126,10 @@ class RouteSettingViewModel(
             destinationSelectionRepository.selectionState.collectLatest { state ->
                 val previousState = lastObservedSelectionState
                 lastObservedSelectionState = state
+                if (shouldSuppressSilentOriginClearReload(previousState = previousState, state = state)) {
+                    suppressNextSilentOriginClearReload = false
+                    return@collectLatest
+                }
                 if (
                     previousState.selectedOrigin == state.selectedOrigin &&
                     previousState.selectedDestination == state.selectedDestination
@@ -172,8 +178,11 @@ class RouteSettingViewModel(
 
     private fun observeSelectionRequests() {
         viewModelScope.launch {
-            // This ViewModel is activity-scoped, so same-place reselection needs an explicit request flow.
-            destinationSelectionRepository.selectionRequests.collectLatest {
+            // StateFlow covers endpoint changes; explicit requests cover same-place reselection.
+            destinationSelectionRepository.selectionRequests.collectLatest { request ->
+                if (request.changedEndpoints) {
+                    return@collectLatest
+                }
                 requestRouteReload(
                     resetSelectedOption = true,
                     force = true,
@@ -219,7 +228,7 @@ class RouteSettingViewModel(
 
                 when (permissionState) {
                     is LocationPermissionState.Granted ->
-                        startCurrentLocationTracking(forceReload = latestLocationSnapshot == null)
+                        startCurrentLocationTracking(forceReload = false)
 
                     LocationPermissionState.Denied -> currentLocationManager.stopLocationUpdates()
                     is LocationPermissionState.Unavailable -> currentLocationManager.stopLocationUpdates()
@@ -243,19 +252,17 @@ class RouteSettingViewModel(
         permissionManager.refreshPermissionState()
         when (permissionManager.permissionState.value) {
             is LocationPermissionState.Granted ->
-                startCurrentLocationTracking(forceReload = latestLocationSnapshot == null)
+                startCurrentLocationTracking(forceReload = false)
 
             LocationPermissionState.Denied -> {
                 currentLocationManager.stopLocationUpdates()
                 if (requestPermissionIfNeeded) {
                     emitUiEvent(RouteSettingUiEvent.RequestLocationPermission)
                 }
-                reloadAutomaticOriginIfMissing()
             }
 
             is LocationPermissionState.Unavailable -> {
                 currentLocationManager.stopLocationUpdates()
-                reloadAutomaticOriginIfMissing()
             }
         }
     }
@@ -280,6 +287,15 @@ class RouteSettingViewModel(
 
     private fun shouldUseAutomaticOrigin(): Boolean =
         destinationSelectionRepository.selectedOrigin.value == null
+
+    private fun shouldSuppressSilentOriginClearReload(
+        previousState: RouteSelectionState,
+        state: RouteSelectionState,
+    ): Boolean =
+        suppressNextSilentOriginClearReload &&
+            previousState.selectedOrigin != null &&
+            state.selectedOrigin == null &&
+            previousState.selectedDestination == state.selectedDestination
 
     private fun requestRouteReload(
         resetSelectedOption: Boolean,
@@ -882,6 +898,7 @@ class RouteSettingViewModel(
                     )
                 }
                 persistRecentDestination(selectedDestination)
+                suppressNextSilentOriginClearReload = destinationSelectionRepository.selectedOrigin.value != null
                 destinationSelectionRepository.clearSelectedOriginSilently()
 
                 emitUiEvent(
@@ -1832,6 +1849,7 @@ class RouteSettingViewModel(
     private fun RouteCandidate.routeBadges(includeSafePriority: Boolean): List<RouteOptionBadge> {
         val aggregateFlags = aggregateSafetyFlags()
         val backendBadges = badges.mapNotNull(RouteBadge::toRouteOptionBadge)
+        val hasSafetyFlagData = segments.any { segment -> segment.safetyFlags != RouteSegmentSafetyFlags() }
 
         return buildList {
             if (includeSafePriority && routeOption == RouteOption.SAFE) {
@@ -1839,7 +1857,7 @@ class RouteSettingViewModel(
             }
             if (backendBadges.isNotEmpty()) {
                 addAll(backendBadges)
-            } else {
+            } else if (hasSafetyFlagData) {
                 if (!aggregateFlags.hasStairs && !aggregateFlags.hasCurbGap) {
                     add(RouteOptionBadge.STEP_FREE)
                 }
@@ -2122,7 +2140,7 @@ private fun RouteLocationUiState.toPlaceDestinationOrNull(fallbackPlaceId: Strin
         address = supportingText,
         latitude = resolvedCoordinate.latitude,
         longitude = resolvedCoordinate.longitude,
-        category = category ?: PlaceCategory.OTHER,
+        category = category,
     )
 }
 

@@ -223,19 +223,25 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `route endpoint map picker resolves stopped camera center through places repository`() =
+    fun `route endpoint map picker resolves stopped camera center as poi before address fallback`() =
         runTest {
             val stoppedCoordinate = MapCoordinate(latitude = 35.1151, longitude = 129.0414)
             val placesRepository =
                 FakePlacesRepository(
-                    mapTapDetail =
-                        testMapTappedDetail(
-                            bookmarkTargetId = "external-address:35.1151,129.0414",
-                            detailType = MapPlaceDetailType.EXTERNAL_ADDRESS,
-                            name = "Busan Station",
-                            address = "206 Jungang-daero, Busan",
-                            latitude = stoppedCoordinate.latitude,
-                            longitude = stoppedCoordinate.longitude,
+                    mapTapDetailsByClickType =
+                        mapOf(
+                            MapPlaceClickType.POI to
+                                testMapTappedDetail(
+                                    bookmarkTargetId = "kakao:poi-123",
+                                    detailType = MapPlaceDetailType.EXTERNAL_POI,
+                                    provider = "KAKAO",
+                                    providerPlaceId = "poi-123",
+                                    name = "Busan Station",
+                                    providerCategory = "Subway Station",
+                                    address = "206 Jungang-daero, Busan",
+                                    latitude = stoppedCoordinate.latitude,
+                                    longitude = stoppedCoordinate.longitude,
+                                ),
                         ),
                 )
             val viewModel =
@@ -249,6 +255,9 @@ class MapViewModelTest {
                 )
 
             viewModel.onAction(MapUiAction.RouteEndpointMapPickerEntered(RouteEditingTarget.DESTINATION))
+            advanceUntilIdle()
+            placesRepository.mapTapDetailRequests.clear()
+
             viewModel.onAction(
                 MapUiAction.ViewportCameraChanged(
                     center = stoppedCoordinate,
@@ -261,10 +270,65 @@ class MapViewModelTest {
             val request = placesRepository.mapTapDetailRequests.last()
             val pickerState = requireNotNull(viewModel.uiState.value.routeEndpointMapPickerState)
 
-            assertEquals(MapPlaceClickType.ADDRESS, request.clickType)
+            assertEquals(listOf(MapPlaceClickType.POI), placesRepository.mapTapDetailRequests.map { it.clickType })
             assertEquals(stoppedCoordinate.latitude, request.latitude, 0.0)
             assertEquals(stoppedCoordinate.longitude, request.longitude, 0.0)
             assertEquals("Busan Station", pickerState.candidateDetail?.name)
+            assertEquals(MapPlaceDetailType.EXTERNAL_POI, pickerState.candidateDetail?.detailType)
+            assertFalse(pickerState.isResolvingCandidate)
+        }
+
+    @Test
+    fun `route endpoint map picker falls back to address when poi lookup returns empty`() =
+        runTest {
+            val stoppedCoordinate = MapCoordinate(latitude = 35.1151, longitude = 129.0414)
+            val placesRepository =
+                FakePlacesRepository(
+                    mapTapDetailsByClickType =
+                        mapOf(
+                            MapPlaceClickType.POI to null,
+                            MapPlaceClickType.ADDRESS to
+                                testMapTappedDetail(
+                                    bookmarkTargetId = "external-address:35.1151,129.0414",
+                                    detailType = MapPlaceDetailType.EXTERNAL_ADDRESS,
+                                    name = "206 Jungang-daero",
+                                    address = "206 Jungang-daero, Busan",
+                                    latitude = stoppedCoordinate.latitude,
+                                    longitude = stoppedCoordinate.longitude,
+                                ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            viewModel.onAction(MapUiAction.RouteEndpointMapPickerEntered(RouteEditingTarget.DESTINATION))
+            advanceUntilIdle()
+            placesRepository.mapTapDetailRequests.clear()
+
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = stoppedCoordinate,
+                    zoomLevel = 4,
+                    isUserGesture = true,
+                ),
+            )
+            advanceUntilIdle()
+
+            val pickerState = requireNotNull(viewModel.uiState.value.routeEndpointMapPickerState)
+
+            assertEquals(
+                listOf(MapPlaceClickType.POI, MapPlaceClickType.ADDRESS),
+                placesRepository.mapTapDetailRequests.map { it.clickType },
+            )
+            assertEquals("206 Jungang-daero", pickerState.candidateDetail?.name)
+            assertEquals(MapPlaceDetailType.EXTERNAL_ADDRESS, pickerState.candidateDetail?.detailType)
             assertFalse(pickerState.isResolvingCandidate)
         }
 
@@ -3302,9 +3366,11 @@ private class FakePlacesRepository(
     private val places: List<PlaceSummary> = emptyList(),
     private val placeDetailsById: Map<String, PlaceDetail> = emptyMap(),
     private val mapTapDetail: MapTappedPlaceDetail? = null,
+    private val mapTapDetailsByClickType: Map<MapPlaceClickType, MapTappedPlaceDetail?> = emptyMap(),
     private val placesFailure: Throwable? = null,
     private val detailFailureById: Map<String, Throwable> = emptyMap(),
     private val mapTapDetailFailure: Throwable? = null,
+    private val mapTapDetailFailuresByClickType: Map<MapPlaceClickType, Throwable> = emptyMap(),
 ) : PlacesRepository {
     val queries = mutableListOf<PlaceQuery>()
     val detailRequests = mutableListOf<String>()
@@ -3324,6 +3390,10 @@ private class FakePlacesRepository(
 
     override suspend fun getMapTappedPlaceDetail(request: MapPlaceDetailRequest): MapTappedPlaceDetail? {
         mapTapDetailRequests += request
+        mapTapDetailFailuresByClickType[request.clickType]?.let { throw it }
+        if (mapTapDetailsByClickType.containsKey(request.clickType)) {
+            return mapTapDetailsByClickType[request.clickType]
+        }
         mapTapDetailFailure?.let { throw it }
         return mapTapDetail
     }

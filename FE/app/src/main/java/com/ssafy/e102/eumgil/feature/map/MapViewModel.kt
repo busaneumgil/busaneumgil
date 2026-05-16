@@ -485,9 +485,8 @@ class MapViewModel(
             }
     }
 
-    private fun updateRouteEndpointMapPickerCandidate(payload: MapTapPayload) {
+    private fun updateRouteEndpointMapPickerCandidate(coordinate: MapCoordinate) {
         val currentPickerState = routeEndpointMapPickerState ?: return
-        val coordinate = payload.coordinate
         val previousCoordinate = currentPickerState.candidateCoordinate
         val isSameCoordinate = previousCoordinate?.isApproximatelySameCoordinate(coordinate) == true
         if (
@@ -499,7 +498,9 @@ class MapViewModel(
 
         mapTapDetailRequestId += 1L
         val requestId = mapTapDetailRequestId
-        val fallbackDetail = payload.toRouteEndpointPickerMapTapDetail()
+        val addressPayload = MapTapPayload(coordinate = coordinate, clickType = MapTapClickType.ADDRESS)
+        val poiPayload = MapTapPayload(coordinate = coordinate, clickType = MapTapClickType.POI)
+        val fallbackDetail = addressPayload.toRouteEndpointPickerMapTapDetail()
 
         routeEndpointMapPickerState =
             currentPickerState.copy(
@@ -515,8 +516,27 @@ class MapViewModel(
         mapTapDetailLookupJob?.cancel()
         mapTapDetailLookupJob =
             viewModelScope.launch {
+                val poiResult =
+                    runCatching {
+                        placesRepository.getMapTappedPlaceDetail(poiPayload.toMapPlaceDetailRequest())
+                    }
+                if (requestId != mapTapDetailRequestId) return@launch
+
+                val poiDetail = poiResult.getOrNull()?.withFallbackCoordinate(coordinate)
+                if (poiDetail != null) {
+                    routeEndpointMapPickerState =
+                        routeEndpointMapPickerState?.copy(
+                            candidateCoordinate = coordinate,
+                            candidateDetail = poiDetail,
+                            isResolvingCandidate = false,
+                            candidateErrorMessage = null,
+                        )
+                    renderUiState()
+                    return@launch
+                }
+
                 runCatching {
-                    placesRepository.getMapTappedPlaceDetail(payload.toMapPlaceDetailRequest())
+                    placesRepository.getMapTappedPlaceDetail(addressPayload.toMapPlaceDetailRequest())
                 }.onSuccess { detail ->
                     if (requestId != mapTapDetailRequestId) return@onSuccess
                     val normalizedDetail = detail?.withFallbackCoordinate(coordinate) ?: fallbackDetail
@@ -592,9 +612,7 @@ class MapViewModel(
             renderSelectedFacilityState()
         }
         renderUiState()
-        updateRouteEndpointMapPickerCandidate(
-            MapTapPayload(coordinate = mutableUiState.value.cameraTarget.center),
-        )
+        updateRouteEndpointMapPickerCandidate(mutableUiState.value.cameraTarget.center)
     }
 
     private fun dismissRouteEndpointMapPicker() {
@@ -1205,7 +1223,7 @@ class MapViewModel(
         if (ignoredStaleProgrammaticCallback) return
 
         if (routeEndpointMapPickerState != null) {
-            updateRouteEndpointMapPickerCandidate(MapTapPayload(coordinate = center))
+            updateRouteEndpointMapPickerCandidate(center)
             return
         }
 

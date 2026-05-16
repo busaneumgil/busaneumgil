@@ -80,13 +80,10 @@ private val ArrivalSuccessColor = Color(0xFF16A34A)
 private val ArrivalRatingSelectedColor = Color(0xFFFACC15)
 private val ArrivalEvaluationSectionSpacing = EumSpacing.small
 private val ArrivalEvaluationRatingFeedbackPlaceholderHeight = 8.dp
-private val ArrivalHeroBandHeight = 332.dp
+private val ArrivalHeroBandHeight = 292.dp
 private val ArrivalHeroBandTopSpacing = 36.dp
 private val ArrivalHeroArtworkBottomSpacing = 28.dp
 private val ArrivalHeroBackgroundFadeHeight = 40.dp
-private val ArrivalHeroLogoTopPadding = 58.dp
-private val ArrivalHeroLogoWidth = 108.dp
-private val ArrivalHeroLogoHeight = 60.dp
 private val ArrivalRouteSaveIconSize = 24.dp
 private const val ArrivalSheetDismissAnimationDurationMillis = 220
 private const val ArrivalHeroArtworkAspectRatio = 1440f / 900f
@@ -290,33 +287,6 @@ private fun ArrivalHeroBand(
                             ),
                     ),
         )
-
-        Column(
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = ArrivalHeroLogoTopPadding),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top,
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.app_logo),
-                contentDescription = null,
-                modifier =
-                    Modifier
-                        .width(ArrivalHeroLogoWidth)
-                        .height(ArrivalHeroLogoHeight),
-                contentScale = ContentScale.Fit,
-            )
-            Spacer(modifier = Modifier.height(EumSpacing.xxSmall))
-            Text(
-                text = stringResource(id = R.string.auth_login_service_name),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-            )
-        }
     }
 }
 

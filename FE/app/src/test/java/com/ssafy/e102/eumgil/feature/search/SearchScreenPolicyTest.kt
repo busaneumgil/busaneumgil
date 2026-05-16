@@ -22,6 +22,16 @@ class SearchScreenPolicyTest {
             source.contains("SearchUiAction.CurrentLocationClicked") &&
                 source.contains("SearchUiAction.MapPickerClicked"),
         )
+        val quickActionSection =
+            source
+                .substringAfter("private fun RouteEndpointQuickActionSection(")
+                .substringBefore("@Composable\nprivate fun RouteEndpointCurrentLocationButton")
+        assertTrue(
+            "Route endpoint quick actions should place current-location and map-picker buttons on one row.",
+            quickActionSection.contains("Row(") &&
+                quickActionSection.contains("horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)") &&
+                quickActionSection.contains("modifier = Modifier.weight(1f)"),
+        )
         assertTrue(
             "Route endpoint quick actions should use target-specific visible labels and accessibility copy.",
             source.contains("R.string.search_screen_current_location_origin_action") &&

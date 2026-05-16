@@ -724,17 +724,24 @@ private fun RouteEndpointQuickActionSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
-        RouteEndpointCurrentLocationButton(
-            labelRes = copy.currentLocationActionRes,
-            contentDescriptionRes = copy.currentLocationContentDescriptionRes,
-            enabled = isResolving.not(),
-            onClick = onCurrentLocationClick,
-        )
-        RouteEndpointMapPickerButton(
-            labelRes = copy.mapPickerActionRes,
-            contentDescriptionRes = copy.mapPickerContentDescriptionRes,
-            onClick = onMapPickerClick,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            RouteEndpointCurrentLocationButton(
+                labelRes = copy.currentLocationActionRes,
+                contentDescriptionRes = copy.currentLocationContentDescriptionRes,
+                enabled = isResolving.not(),
+                onClick = onCurrentLocationClick,
+                modifier = Modifier.weight(1f),
+            )
+            RouteEndpointMapPickerButton(
+                labelRes = copy.mapPickerActionRes,
+                contentDescriptionRes = copy.mapPickerContentDescriptionRes,
+                onClick = onMapPickerClick,
+                modifier = Modifier.weight(1f),
+            )
+        }
         if (statusContent != null) {
             RouteEndpointCurrentLocationStatus(content = statusContent)
         }

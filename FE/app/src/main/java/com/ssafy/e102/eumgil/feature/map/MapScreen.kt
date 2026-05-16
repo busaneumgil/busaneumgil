@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -96,6 +97,7 @@ fun MapScreen(
     uiState: MapUiState,
     snackbarHostState: SnackbarHostState,
     onAction: (MapUiAction) -> Unit,
+    onVoiceSearchClick: () -> Unit,
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
     modifier: Modifier = Modifier,
@@ -104,7 +106,6 @@ fun MapScreen(
     val searchBarState = mapSearchBarState(uiState = uiState)
     val facilityDetailSheetUiState = mapFacilityDetailBottomSheetState(uiState = uiState)
     val recentDestinationSheetState = mapRecentDestinationBottomSheetState(uiState = uiState)
-    val routeSelectionStatusState = mapRouteSelectionStatusState(uiState = uiState)
 
     Box(modifier = modifier.fillMaxSize()) {
         MapShellScaffold(
@@ -138,7 +139,9 @@ fun MapScreen(
                         title = searchBarState.title,
                         subtitle = searchBarState.subtitle,
                         accessibilityLabel = searchBarState.accessibilityLabel,
+                        voiceInputAccessibilityLabel = stringResource(id = R.string.search_screen_voice_input),
                         onClick = { onAction(MapUiAction.SearchEntryClicked) },
+                        onVoiceInputClick = onVoiceSearchClick,
                     )
 
                     MapShortcutFilterRow(
@@ -147,18 +150,6 @@ fun MapScreen(
                             onAction(MapUiAction.ShortcutFilterClicked(key))
                         },
                     )
-
-                    routeSelectionStatusState?.let { state ->
-                        MapRouteSelectionStatusBar(
-                            state = state,
-                            onOriginClick = {
-                                onAction(MapUiAction.RouteEndpointStatusClicked(RouteEditingTarget.ORIGIN))
-                            },
-                            onDestinationClick = {
-                                onAction(MapUiAction.RouteEndpointStatusClicked(RouteEditingTarget.DESTINATION))
-                            },
-                        )
-                    }
 
                     if (uiState.isSearchHereVisible) {
                         MapSearchHereButton(
@@ -183,9 +174,13 @@ fun MapScreen(
                         recentDestinationSheetState.copy(
                             isVisible =
                                 recentDestinationSheetState.isVisible &&
-                                    facilityDetailSheetUiState.isVisible.not(),
+                                    facilityDetailSheetUiState.isVisible.not() &&
+                                    uiState.isVoiceSearchVisible.not(),
                         ),
                     onViewAllClick = onNavigateToSavedRoutes,
+                    onPreviewClick = { placeId ->
+                        onAction(MapUiAction.RecentDestinationPreviewClicked(placeId))
+                    },
                     onRouteClick = { placeId ->
                         onAction(MapUiAction.RecentDestinationRouteClicked(placeId))
                     },
@@ -193,7 +188,12 @@ fun MapScreen(
                 )
 
                 FacilityDetailBottomSheetShell(
-                    state = facilityDetailSheetUiState.toShellState(),
+                    state =
+                        facilityDetailSheetUiState.toShellState().copy(
+                            isVisible =
+                                facilityDetailSheetUiState.isVisible &&
+                                    uiState.isVoiceSearchVisible.not(),
+                        ),
                     modifier = Modifier.fillMaxSize(),
                     onPhoneClick =
                         facilityDetailSheetUiState.phoneNumber?.let {
@@ -347,109 +347,6 @@ private data class MapRecentDestinationBottomSheetUiState(
             isVisible = isVisible,
             items = items,
         )
-}
-
-@Immutable
-private data class MapRouteSelectionStatusUiState(
-    val originLabel: String?,
-    val destinationLabel: String?,
-    val accessibilityLabel: String,
-)
-
-@Composable
-private fun MapRouteSelectionStatusBar(
-    state: MapRouteSelectionStatusUiState,
-    onOriginClick: () -> Unit,
-    onDestinationClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .semantics {
-                    contentDescription = state.accessibilityLabel
-                },
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)),
-        shadowElevation = 0.dp,
-    ) {
-        Row(
-            modifier =
-                Modifier.padding(
-                    horizontal = EumSpacing.small,
-                    vertical = EumSpacing.xSmall,
-                ),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            MapRouteEndpointChip(
-                label = stringResource(id = R.string.route_setting_origin_label),
-                value = state.originLabel ?: stringResource(id = R.string.map_route_selection_origin_empty),
-                containerColor = RouteSelectionOriginChipColor,
-                contentColor = RouteSelectionOriginTextColor,
-                onClick = onOriginClick,
-                modifier = Modifier.weight(1f),
-            )
-            MapRouteEndpointChip(
-                label = stringResource(id = R.string.route_setting_destination_label),
-                value = state.destinationLabel ?: stringResource(id = R.string.map_route_selection_destination_empty),
-                containerColor = RouteSelectionDestinationChipColor,
-                contentColor = RouteSelectionDestinationTextColor,
-                onClick = onDestinationClick,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun MapRouteEndpointChip(
-    label: String,
-    value: String,
-    containerColor: Color,
-    contentColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        modifier =
-            modifier
-                .semantics {
-                    role = Role.Button
-                    contentDescription = "$label $value"
-                }
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onClick,
-                ),
-        shape = RoundedCornerShape(EumRadius.small),
-        color = containerColor,
-        contentColor = contentColor,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = contentColor,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.labelSmall,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
 }
 
 @Composable
@@ -862,26 +759,27 @@ private fun FacilityDetailAccessibilityTagSection(
     modifier: Modifier = Modifier,
 ) {
     if (tags.isEmpty()) return
+    val hasOverflow = tags.size > FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT
+    val visibleTags = tags.take(FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT)
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
     ) {
-        tags.chunked(2).forEach { rowLabels ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-            ) {
-                rowLabels.forEach { label ->
-                    FacilityDetailTagCard(
-                        label = label,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-
-                if (rowLabels.size == 1) {
-                    Box(modifier = Modifier.weight(1f))
-                }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            visibleTags.forEach { label ->
+                FacilityDetailTagCard(
+                    label = label,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (hasOverflow) {
+                FacilityDetailTagOverflowPill(
+                    hiddenTagCount = tags.size - FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT,
+                )
             }
         }
     }
@@ -902,8 +800,8 @@ private fun FacilityDetailTagCard(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
-                    .padding(horizontal = EumSpacing.small),
+                    .height(FacilityDetailAccessibilityTagHeight)
+                    .padding(horizontal = EumSpacing.xSmall),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
@@ -918,8 +816,38 @@ private fun FacilityDetailTagCard(
             }
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FacilityDetailTagOverflowPill(
+    hiddenTagCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .widthIn(min = FacilityDetailAccessibilityOverflowMinWidth)
+                .height(FacilityDetailAccessibilityTagHeight),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = EumSpacing.small),
+            contentAlignment = androidx.compose.ui.Alignment.Center,
+        ) {
+            Text(
+                text = stringResource(id = R.string.map_facility_detail_accessibility_more, hiddenTagCount),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
             )
         }
     }
@@ -1077,36 +1005,6 @@ private fun mapSearchBarState(uiState: MapUiState): MapSearchBarState {
         title = stringResource(id = R.string.map_shell_search_title),
         subtitle = null,
         accessibilityLabel = stringResource(id = R.string.map_shell_search_a11y_label),
-    )
-}
-
-@Composable
-private fun mapRouteSelectionStatusState(uiState: MapUiState): MapRouteSelectionStatusUiState? {
-    val preview = uiState.facilityDetailSheetState.destinationPreview
-    val selectedOriginName =
-        when (preview?.editingTarget) {
-            RouteEditingTarget.ORIGIN -> preview.destination.name
-            else -> uiState.selectedOrigin?.name
-        }?.takeIf(String::isNotBlank)
-    val selectedDestinationName =
-        when (preview?.editingTarget) {
-            RouteEditingTarget.DESTINATION -> preview.destination.name
-            else -> uiState.selectedDestination?.name
-        }?.takeIf(String::isNotBlank)
-
-    if (selectedOriginName == null && selectedDestinationName == null) {
-        return null
-    }
-
-    return MapRouteSelectionStatusUiState(
-        originLabel = selectedOriginName,
-        destinationLabel = selectedDestinationName,
-        accessibilityLabel =
-            stringResource(
-                id = R.string.map_route_selection_status_a11y,
-                selectedOriginName ?: stringResource(id = R.string.map_route_selection_origin_empty),
-                selectedDestinationName ?: stringResource(id = R.string.map_route_selection_destination_empty),
-            ),
     )
 }
 
@@ -1529,8 +1427,8 @@ private fun coordinateText(location: MapCoordinate): String =
 @DrawableRes
 private fun mapTapDetailPlaceIconRes(detail: MapTappedPlaceDetail): Int =
     when (detail.category) {
-        null -> R.drawable.ic_place_other
-        PlaceCategory.OTHER -> R.drawable.ic_place_other
+        null -> R.drawable.ic_map_selected_pin_blue
+        PlaceCategory.OTHER -> R.drawable.ic_map_selected_pin_blue
         else -> recentDestinationIcon(detail.category)
     }
 
@@ -1580,7 +1478,6 @@ private fun mapTapDetailAccessibilityLabels(
     return orderedRawKeys
         .mapNotNull(::recentDestinationTagLabel)
         .distinct()
-        .take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
 }
 
 private fun MapTappedPlaceDetail.hasValidCoordinate(): Boolean =
@@ -1676,7 +1573,6 @@ private fun facilityDetailAccessibilityLabels(
             .mapNotNull(::selectedFilterAccessibilityTag)
             .filter { tag -> tag in detail.accessibilityTags }
 
-    // TODO: Keep the active filter tag visible while this sheet shows only three accessibility tags.
     return buildList {
         detail.brailleBlockType?.let { brailleBlockType ->
             add(brailleBlockTypeLabel(brailleBlockType))
@@ -1688,7 +1584,7 @@ private fun facilityDetailAccessibilityLabels(
                     accessibilityTagLabel(tag)
                 },
         )
-    }.distinct().take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
+    }.distinct()
 }
 
 private fun selectedFilterAccessibilityTag(category: FacilityCategory): AccessibilityTag? =
@@ -1844,7 +1740,7 @@ private fun facilityDetailPlaceIconRes(category: FacilityCategory): Int =
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        FacilityCategory.OTHER -> R.drawable.ic_place_other
+        FacilityCategory.OTHER -> R.drawable.ic_map_selected_pin_blue
     }
 
 @DrawableRes
@@ -1862,17 +1758,15 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
         PlaceCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         PlaceCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        PlaceCategory.OTHER -> R.drawable.ic_place_other
-        null -> R.drawable.ic_place_other
+        PlaceCategory.OTHER -> R.drawable.ic_map_selected_pin_blue
+        null -> R.drawable.ic_map_selected_pin_blue
     }
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEGREES_TO_RADIANS = PI / 180.0
-private const val MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS = 3
+private const val FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT = 3
 private const val MAX_FACILITY_DETAIL_TRANSIT_ARRIVALS = 3
+private val FacilityDetailAccessibilityTagHeight = 34.dp
+private val FacilityDetailAccessibilityOverflowMinWidth = 52.dp
 private val MapActionLabelDefaultFontSize = 14.sp
 private val MapActionLabelMinFontSize = 12.sp
-private val RouteSelectionOriginChipColor = Color(0xFFEAF8EF)
-private val RouteSelectionOriginTextColor = Color(0xFF166534)
-private val RouteSelectionDestinationChipColor = Color(0xFFFFEEF0)
-private val RouteSelectionDestinationTextColor = Color(0xFFB4232F)

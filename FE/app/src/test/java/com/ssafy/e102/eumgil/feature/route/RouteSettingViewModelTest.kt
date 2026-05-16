@@ -44,6 +44,7 @@ import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
@@ -191,7 +192,7 @@ class RouteSettingViewModelTest {
             assertEquals(RouteDestinationHandoffState.EMPTY, uiState.destinationHandoffState)
             assertEquals("목적지를 선택하면 경로를 보여드릴게요.", uiState.destinationFallbackMessage)
             assertEquals(null, uiState.destination.metadataLabel)
-            assertEquals("도착지를 선택해 주세요", uiState.destination.name)
+            assertEquals("도착지를 선택해주세요", uiState.destination.name)
             assertEquals("검색 또는 지도에서 도착지를 설정할 수 있어요.", uiState.destination.supportingText)
             assertEquals(null, uiState.selectedRoute)
             assertTrue(uiState.optionCards.isEmpty())
@@ -337,7 +338,7 @@ class RouteSettingViewModelTest {
 
             assertTrue(uiState.isUsingFallbackDestination)
             assertEquals(RouteDestinationHandoffState.EMPTY, uiState.destinationHandoffState)
-            assertEquals("도착지를 선택해 주세요", uiState.destination.name)
+            assertEquals("도착지를 선택해주세요", uiState.destination.name)
             assertEquals(RouteOption.SAFE, uiState.selectedOption)
             assertEquals(null, uiState.selectedRoute)
             assertFalse(uiState.isStartEnabled)
@@ -369,7 +370,7 @@ class RouteSettingViewModelTest {
             assertEquals("No selected route is available for the preview map.", uiState.routePreviewMap.fallbackMessage)
             assertFalse(uiState.routePreviewMap.isDisplayable)
             assertFalse(uiState.cta.isEnabled)
-            assertEquals("경로 정보를 불러오는 동안 안내 시작 버튼을 잠시 비활성화합니다.", uiState.cta.supportingText)
+            assertEquals("표시할 경로가 준비되면 시작 CTA를 활성화합니다.", uiState.cta.supportingText)
             assertFalse(uiState.isStartEnabled)
         }
 
@@ -379,7 +380,10 @@ class RouteSettingViewModelTest {
             val viewModel =
                 RouteSettingViewModel(
                     routeRepository = failingRouteRepository(),
-                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationSelectionRepository =
+                        InMemoryDestinationSelectionRepository().apply {
+                            updateSelectedDestination(testDestination())
+                        },
                 )
 
             advanceUntilIdle()
@@ -466,7 +470,10 @@ class RouteSettingViewModelTest {
                                 message = "temporary timeout",
                             ),
                         ),
-                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationSelectionRepository =
+                        InMemoryDestinationSelectionRepository().apply {
+                            updateSelectedDestination(testDestination())
+                        },
                 )
 
             advanceUntilIdle()
@@ -494,7 +501,10 @@ class RouteSettingViewModelTest {
                                 message = "network unavailable",
                             ),
                         ),
-                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationSelectionRepository =
+                        InMemoryDestinationSelectionRepository().apply {
+                            updateSelectedDestination(testDestination())
+                        },
                 )
 
             advanceUntilIdle()
@@ -523,7 +533,10 @@ class RouteSettingViewModelTest {
                                 httpStatusCode = 404,
                             ),
                         ),
-                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationSelectionRepository =
+                        InMemoryDestinationSelectionRepository().apply {
+                            updateSelectedDestination(testDestination())
+                        },
                 )
 
             advanceUntilIdle()
@@ -536,6 +549,60 @@ class RouteSettingViewModelTest {
             assertEquals("탐색 가능한 경로가 없어요. 출발지나 도착지를 다시 선택해 주세요.", uiState.routePreviewMap.fallbackMessage)
             assertEquals(null, uiState.loadNoticeMessage)
             assertFalse(uiState.routePreviewMap.isDisplayable)
+        }
+
+    @Test
+    fun `route no path failure exposes no route state without extra delay`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository =
+                        routeApiFailingRepository(
+                            routeApiException(
+                                failureKind = RouteFailureKind.HTTP_RESPONSE,
+                                status = "RT4040",
+                                message = "no route",
+                                httpStatusCode = 404,
+                            ),
+                        ),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+            assertFalse(uiState.isLoading)
+            assertEquals("탐색 가능한 경로가 없어요. 출발지나 도착지를 다시 선택해 주세요.", uiState.loadErrorMessage)
+            assertEquals(RoutePreviewMapStatus.NO_ROUTE, uiState.routePreviewMap.status)
+        }
+
+    @Test
+    fun `walk no path failure retries fresh route before exposing no route state`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = WalkNoRouteThenFreshSuccessRepository()
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+            assertEquals(1, routeRepository.walkSearchCount)
+            assertEquals(1, routeRepository.freshWalkSearchCount)
+            assertEquals(RouteTravelMode.WALK, uiState.selectedTravelMode)
+            assertEquals(RoutePreviewMapStatus.READY, uiState.routePreviewMap.status)
+            assertEquals("Safe Route", uiState.selectedRoute?.title)
+            assertEquals(null, uiState.loadErrorMessage)
         }
 
     @Test
@@ -552,7 +619,10 @@ class RouteSettingViewModelTest {
                                 httpStatusCode = 400,
                             ),
                         ),
-                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationSelectionRepository =
+                        InMemoryDestinationSelectionRepository().apply {
+                            updateSelectedDestination(testDestination())
+                        },
                 )
 
             advanceUntilIdle()
@@ -961,7 +1031,7 @@ class RouteSettingViewModelTest {
         }
 
     @Test
-    fun `manual travel mode change loads the selected mode search surface`() =
+    fun `manual travel mode change reuses cached walk surface when returning to walk`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
@@ -994,7 +1064,9 @@ class RouteSettingViewModelTest {
             advanceUntilIdle()
 
             assertEquals(RouteTravelMode.WALK, viewModel.uiState.value.selectedTravelMode)
-            assertEquals(2, routeRepository.walkSearchCount)
+            assertEquals(RouteOption.SAFE, viewModel.uiState.value.selectedOption)
+            assertEquals("Safe Route", viewModel.uiState.value.selectedRoute?.title)
+            assertEquals(1, routeRepository.walkSearchCount)
             assertEquals(1, routeRepository.transitSearchCount)
         }
 
@@ -1483,6 +1555,7 @@ private fun testRouteRepository(): RouteRepository {
                 testRouteRemoteDataSource { request ->
                     MockRouteFixtures.searchRoutes(request)
                 },
+            routeMappingDispatcher = Dispatchers.Unconfined,
         )
     return object : BaseTestRouteRepository() {
         override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
@@ -1692,6 +1765,32 @@ private class TransitModeRecordingRouteRepository(
             sessionId = "session-$routeId",
             totalDistanceMeters = 2500,
             totalDurationSeconds = 900,
+        )
+    }
+}
+
+private class WalkNoRouteThenFreshSuccessRepository : BaseTestRouteRepository() {
+    var walkSearchCount: Int = 0
+        private set
+    var freshWalkSearchCount: Int = 0
+        private set
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        walkSearchCount += 1
+        throw routeApiException(
+            failureKind = RouteFailureKind.HTTP_RESPONSE,
+            status = "RT4040",
+            message = "no walk route",
+            httpStatusCode = 404,
+        )
+    }
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        freshWalkSearchCount += 1
+        return buildWalkSearchData(
+            query = query,
+            searchId = "fresh-walk-search-$freshWalkSearchCount",
+            safeDistanceMeters = 720,
         )
     }
 }

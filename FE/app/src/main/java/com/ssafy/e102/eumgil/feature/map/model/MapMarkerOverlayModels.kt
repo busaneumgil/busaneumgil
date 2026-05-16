@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.map.model
 import com.ssafy.e102.eumgil.core.model.AccessibilityTag
 import com.ssafy.e102.eumgil.core.model.BrailleBlockType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.core.model.PlaceMarkerKind
 
 enum class MapMarkerLoadStatus {
     LOADING,
@@ -31,6 +32,8 @@ data class MapMarkerUiModel(
     val name: String,
     val coordinate: MapCoordinate,
     val categoryType: MapMarkerCategoryType,
+    val markerKind: PlaceMarkerKind = PlaceMarkerKind.DEFAULT,
+    val selectedFilterCategory: FacilityCategory? = null,
     val accessibilityTags: List<AccessibilityTag> = emptyList(),
     val displayState: MapMarkerDisplayState = MapMarkerDisplayState.VISIBLE,
 )

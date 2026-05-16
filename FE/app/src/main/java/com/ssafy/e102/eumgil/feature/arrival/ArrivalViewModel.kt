@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.arrival
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -8,7 +9,9 @@ import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteSearchData
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
+import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesApiException
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.RouteBookmarkSaveException
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -37,10 +40,10 @@ class ArrivalViewModel(
         val hasRatingSession = !currentRatingSessionId.isNullOrBlank()
         mutableUiState.update { state ->
             state.copy(
-                isEvaluationSheetVisible = hasRatingSession && currentRouteBookmarkDraft == null,
+                isEvaluationSheetVisible = hasRatingSession && currentRouteBookmarkDraft?.canSaveToServer != true,
                 hasRatingSession = hasRatingSession,
                 routeSaveDraft = currentRouteBookmarkDraft?.toUiState(),
-                isRouteSaveUpdating = currentRouteBookmarkDraft != null,
+                isRouteSaveUpdating = currentRouteBookmarkDraft?.canSaveToServer == true,
             )
         }
         currentRouteBookmarkDraft?.let(::syncInitialRouteSaveState)
@@ -61,6 +64,15 @@ class ArrivalViewModel(
     }
 
     private fun syncInitialRouteSaveState(draft: RouteBookmarkDraft) {
+        if (!draft.canSaveToServer) {
+            mutableUiState.update { state ->
+                state.copy(
+                    isEvaluationSheetVisible = state.hasRatingSession,
+                    isRouteSaveUpdating = false,
+                )
+            }
+            return
+        }
         viewModelScope.launch {
             runCatching {
                 val bookmarkId = resolveRouteBookmarkId(draft)
@@ -97,18 +109,35 @@ class ArrivalViewModel(
 
     private fun saveRouteBookmark() {
         val draft = currentRouteBookmarkDraft ?: return
-        if (!uiState.value.isRouteSaveEnabled) return
+        val saveRequest = draft.toSaveRequest()
+        if (!draft.canSaveToServer) {
+            logArrivalRouteBookmarkTraceWarning(
+                "blocked routeId=${draft.routeId.orEmpty()} reason=route_id_missing",
+            )
+            emitUiEvent(ArrivalUiEvent.ShowToast(ARRIVAL_ROUTE_BOOKMARK_UNAVAILABLE_MESSAGE))
+            return
+        }
+        if (!uiState.value.isRouteSaveEnabled) {
+            logArrivalRouteBookmarkTraceWarning(
+                "ignored routeId=${saveRequest.routeId.orEmpty()} reason=save_disabled isUpdating=${uiState.value.isRouteSaveUpdating}",
+            )
+            return
+        }
 
         mutableUiState.update { state ->
             state.copy(isRouteSaveUpdating = true)
         }
+        logArrivalRouteBookmarkTraceInfo(
+            "requested routeId=${saveRequest.routeId.orEmpty()} routeOption=${saveRequest.routeOption.name}",
+        )
 
         viewModelScope.launch {
             runCatching {
-                routeBookmarkRepository.saveRouteBookmark(
-                    draft.toSaveRequest(),
-                )
+                routeBookmarkRepository.saveRouteBookmark(saveRequest)
             }.onSuccess { bookmark ->
+                logArrivalRouteBookmarkTraceInfo(
+                    "success routeId=${saveRequest.routeId.orEmpty()} bookmarkId=${bookmark.bookmarkId}",
+                )
                 mutableUiState.update { state ->
                     state.copy(
                         isRouteSaveSelected = true,
@@ -121,6 +150,11 @@ class ArrivalViewModel(
                 mutableUiState.update { state ->
                     state.copy(isRouteSaveUpdating = false)
                 }
+                logArrivalRouteBookmarkTraceFailure(
+                    routeId = saveRequest.routeId,
+                    throwable = throwable,
+                )
+                emitUiEvent(ArrivalUiEvent.ShowToast(ARRIVAL_ROUTE_BOOKMARK_SAVE_FAILURE_MESSAGE))
             }
         }
     }
@@ -265,7 +299,74 @@ private fun RouteBookmarkDraft.toUiState(): ArrivalRouteSaveDraftUiState =
             },
         distanceMeters = distanceMeters,
         durationMinutes = durationMinutes,
+        canSaveToServer = canSaveToServer,
     )
+
+private const val ARRIVAL_ROUTE_BOOKMARK_UNAVAILABLE_MESSAGE = "안내 종료 경로 ID가 없어 경로 북마크를 저장할 수 없습니다."
+private const val ARRIVAL_ROUTE_BOOKMARK_SAVE_FAILURE_MESSAGE = "경로 북마크를 저장하지 못했습니다. 다시 시도해 주세요."
+
+private const val ARRIVAL_ROUTE_BOOKMARK_LOG_TAG = "ArrivalRouteBookmark"
+
+private fun logArrivalRouteBookmarkTraceInfo(message: String) {
+    runCatching {
+        Log.i(ARRIVAL_ROUTE_BOOKMARK_LOG_TAG, "RouteBookmarkSaveTrace[ArrivalViewModel] $message")
+    }
+}
+
+private fun logArrivalRouteBookmarkTraceWarning(
+    message: String,
+    throwable: Throwable? = null,
+) {
+    runCatching {
+        if (throwable == null) {
+            Log.w(ARRIVAL_ROUTE_BOOKMARK_LOG_TAG, "RouteBookmarkSaveTrace[ArrivalViewModel] $message")
+        } else {
+            Log.w(ARRIVAL_ROUTE_BOOKMARK_LOG_TAG, "RouteBookmarkSaveTrace[ArrivalViewModel] $message", throwable)
+        }
+    }
+}
+
+private fun logArrivalRouteBookmarkTraceError(
+    message: String,
+    throwable: Throwable,
+) {
+    runCatching {
+        Log.e(ARRIVAL_ROUTE_BOOKMARK_LOG_TAG, "RouteBookmarkSaveTrace[ArrivalViewModel] $message", throwable)
+    }
+}
+
+private fun logArrivalRouteBookmarkTraceFailure(
+    routeId: String?,
+    throwable: Throwable,
+) {
+    val routeIdLabel = routeId.orEmpty()
+    when (throwable) {
+        is FavoriteRoutesApiException ->
+            logArrivalRouteBookmarkTraceError(
+                message =
+                    "failure routeId=$routeIdLabel exception=${throwable.javaClass.simpleName} " +
+                        "httpStatus=${throwable.httpStatusCode} status=${throwable.status} " +
+                        "message=${throwable.message.orEmpty()}",
+                throwable = throwable,
+            )
+
+        is RouteBookmarkSaveException ->
+            logArrivalRouteBookmarkTraceWarning(
+                message =
+                    "failure routeId=$routeIdLabel exception=${throwable.javaClass.simpleName} " +
+                        "message=${throwable.message.orEmpty()}",
+                throwable = throwable,
+            )
+
+        else ->
+            logArrivalRouteBookmarkTraceError(
+                message =
+                    "failure routeId=$routeIdLabel exception=${throwable.javaClass.simpleName} " +
+                        "message=${throwable.message.orEmpty()}",
+                throwable = throwable,
+            )
+    }
+}
 
 private object NoOpArrivalRouteRepository : RouteRepository {
     override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =

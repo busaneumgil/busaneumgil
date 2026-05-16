@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDialog
@@ -95,11 +96,12 @@ fun MyPageScreen(
             )
 
             MainMenuSection(
-                onDuribalCallClick = onDuribalCallClick,
                 onMenuClick = { menuItem ->
                     onAction(MyPageUiAction.MainMenuClicked(menuItem = menuItem))
                 },
             )
+
+            DuribalCallButton(onClick = onDuribalCallClick)
 
             Button(
                 onClick = { onAction(MyPageUiAction.LogoutClicked) },
@@ -246,7 +248,6 @@ private fun ProfileCard(
 
 @Composable
 private fun MainMenuSection(
-    onDuribalCallClick: () -> Unit,
     onMenuClick: (MyPageMenuItem) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
@@ -255,7 +256,6 @@ private fun MainMenuSection(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        DuribalCallButton(onClick = onDuribalCallClick)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(EumRadius.medium),
@@ -299,17 +299,23 @@ private fun DuribalCallButton(onClick: () -> Unit) {
                 contentColor = MaterialTheme.colorScheme.onPrimary,
             ),
     ) {
-        Icon(
-            painter = painterResource(id = R.drawable.ic_mypage_duribal_call),
-            contentDescription = null,
-            modifier = Modifier.size(22.dp),
-            tint = MaterialTheme.colorScheme.onPrimary,
-        )
-        Text(
-            text = stringResource(id = R.string.my_page_duribal_call_button),
-            modifier = Modifier.padding(start = EumSpacing.small),
-            style = MaterialTheme.typography.titleSmall,
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_mypage_duribal_call),
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+                tint = MaterialTheme.colorScheme.onPrimary,
+            )
+            Text(
+                text = stringResource(id = R.string.my_page_duribal_call_button),
+                style = MaterialTheme.typography.titleSmall,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+            )
+        }
     }
 }
 

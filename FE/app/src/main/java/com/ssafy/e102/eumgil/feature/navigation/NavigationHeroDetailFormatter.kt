@@ -39,6 +39,7 @@ private fun RouteSegment.toNavigationHeroDetail(
 private fun RouteSegment.navigationHeroDetailTitle(kind: RouteDetailStepKind): String =
     when (kind) {
         RouteDetailStepKind.START -> "출발"
+        RouteDetailStepKind.ALIGHT -> "\uD558\uCC28"
         RouteDetailStepKind.BUS -> "버스 탑승"
         RouteDetailStepKind.SUBWAY -> "지하철 탑승"
         RouteDetailStepKind.STRAIGHT -> "직진 이동"
@@ -67,6 +68,10 @@ private fun RouteSegment.navigationHeroDetailDescription(
 
     return when (kind) {
         RouteDetailStepKind.START -> "현재 위치에서 선택한 경로 안내를 시작합니다."
+        RouteDetailStepKind.ALIGHT ->
+            sourceLeg?.alightingStop?.name?.let { stopName ->
+                "${stopName} \uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4."
+            } ?: "\uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4."
         RouteDetailStepKind.BUS ->
             sourceLeg.toTransitHeroDetailDescription(
                 defaultDescription = "버스를 타고 이동하세요.",

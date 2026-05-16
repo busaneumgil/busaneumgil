@@ -23,6 +23,9 @@ class GuideSidePanelPolicyTest {
         val rail =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
                 .readText()
+        val scrubber =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/RouteStepScrubberRail.kt")
+                .readText()
 
         assertTrue("Guide side panel primitives should live in a neutral feature package.", shared.exists())
         val sharedSource = shared.readText()
@@ -43,10 +46,11 @@ class GuideSidePanelPolicyTest {
                 sharedSource.contains("NavigationGuidanceAction"),
         )
         assertTrue(
-            "Route detail should render its side panel through the shared shell, row, and collapsed rail primitives.",
+            "Route detail should render its side panel through the shared shell, row, and anchored collapsed rail primitive.",
             routeDetail.contains("GuideSidePanelShell(") &&
                 routeDetail.contains("GuideSidePanelStepRow(") &&
-                routeDetail.contains("GuideCollapsedRailItem("),
+                routeDetail.contains("RouteStepScrubberRail(") &&
+                scrubber.contains("GuideCollapsedRailItem("),
         )
         assertTrue(
             "Navigation guidance should render its side panel through the shared shell and row primitives.",
@@ -54,8 +58,9 @@ class GuideSidePanelPolicyTest {
                 navigation.contains("GuideSidePanelStepRow("),
         )
         assertTrue(
-            "Navigation collapsed rail should use the shared collapsed rail primitive while keeping only the scroll-top action local.",
-            rail.contains("GuideCollapsedRailItem(") &&
+            "Navigation collapsed rail should use the shared anchored scrubber while keeping only the scroll-top action local.",
+            rail.contains("RouteStepScrubberRail(") &&
+                scrubber.contains("GuideCollapsedRailItem(") &&
                 rail.contains("NavigationSegmentRailTopAction(") &&
                 !rail.contains("NavigationSegmentRailDetailAction("),
         )

@@ -212,6 +212,8 @@ class MapViewModel(
             MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
             MapUiAction.FacilityPhoneClicked -> handleFacilityPhoneClicked()
+            MapUiAction.VoiceSearchClicked -> openVoiceSearch()
+            MapUiAction.VoiceSearchDismissed -> dismissVoiceSearch()
             MapUiAction.FacilitySetDestinationClicked ->
                 handleFacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION)
             is MapUiAction.FacilitySetRouteEndpointClicked ->
@@ -231,6 +233,7 @@ class MapViewModel(
             MapUiAction.MarkerCategoryFilterReset -> resetMarkerCategoryFilter()
             is MapUiAction.MarkerCategoryFilterToggled -> toggleMarkerCategoryFilter(action.category)
             is MapUiAction.ShortcutFilterClicked -> handleShortcutFilterClicked(action.key)
+            is MapUiAction.RecentDestinationPreviewClicked -> handleRecentDestinationPreviewClicked(action.placeId)
             is MapUiAction.RecentDestinationRouteClicked -> handleRecentDestinationRouteClicked(action.placeId)
             MapUiAction.SearchHereClicked -> handleSearchHereClicked()
             MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch(RouteEditingTarget.DESTINATION))
@@ -513,14 +516,37 @@ class MapViewModel(
         renderSelectedFacilityState()
     }
 
+    private fun openVoiceSearch() {
+        if (mutableUiState.value.isVoiceSearchVisible) return
+
+        if (clearSelectedFacilitySelection()) {
+            renderSelectedFacilityState()
+        }
+
+        mutableUiState.update { state ->
+            state.copy(isVoiceSearchVisible = true)
+        }
+    }
+
+    private fun dismissVoiceSearch() {
+        if (!mutableUiState.value.isVoiceSearchVisible) return
+
+        mutableUiState.update { state ->
+            state.copy(isVoiceSearchVisible = false)
+        }
+    }
+
     private fun handleFacilitySetRouteEndpointClicked(editingTarget: RouteEditingTarget) {
         val preview = selectedDestinationPreview
         if (preview != null) {
             clearSelectedFacilitySelection()
             renderSelectedFacilityState()
             destinationSelectionRepository.setEditingTarget(editingTarget)
+            if (editingTarget == RouteEditingTarget.DESTINATION) {
+                destinationSelectionRepository.clearSelectedOriginSilently()
+            }
             destinationSelectionRepository.updateSelectionForEditingTarget(preview.destination)
-            navigateToRouteSettingIfRouteEndpointsReady(editingTarget)
+            navigateToRouteSettingIfRouteEndpointsReady()
             return
         }
 
@@ -531,15 +557,14 @@ class MapViewModel(
         clearSelectedFacilitySelection()
         renderSelectedFacilityState()
         destinationSelectionRepository.setEditingTarget(editingTarget)
+        if (editingTarget == RouteEditingTarget.DESTINATION) {
+            destinationSelectionRepository.clearSelectedOriginSilently()
+        }
         destinationSelectionRepository.updateSelectionForEditingTarget(destination)
-        navigateToRouteSettingIfRouteEndpointsReady(editingTarget)
+        navigateToRouteSettingIfRouteEndpointsReady()
     }
 
-    private fun navigateToRouteSettingIfRouteEndpointsReady(editingTarget: RouteEditingTarget) {
-        val hasDestination = destinationSelectionRepository.selectedDestination.value != null
-        if (editingTarget == RouteEditingTarget.ORIGIN && !hasDestination) {
-            return
-        }
+    private fun navigateToRouteSettingIfRouteEndpointsReady() {
         emitUiEvent(MapUiEvent.NavigateToRouteSetting)
     }
 
@@ -564,6 +589,17 @@ class MapViewModel(
         }
         destinationSelectionRepository.updateSelectedDestination(destination)
         emitUiEvent(MapUiEvent.NavigateToRouteSetting)
+    }
+
+    private fun handleRecentDestinationPreviewClicked(placeId: String) {
+        val recentDestination =
+            recentDestinations.firstOrNull { destination -> destination.placeId == placeId } ?: return
+
+        destinationPreviewRepository.requestPreview(
+            destination = recentDestination.toPlaceDestination(),
+            editingTarget = routeEditingTarget,
+            accessibilityTagKeys = recentDestination.accessibilityTagKeys,
+        )
     }
 
     private fun resetMarkerCategoryFilter() {
@@ -1797,7 +1833,7 @@ private fun DestinationPreviewRequest.toMapTappedPlaceDetail(): MapTappedPlaceDe
         providerPlaceId = providerPlaceId,
         name = destination.name,
         category = destination.category,
-        providerCategory = null,
+        providerCategory = destination.providerCategory,
         address = destination.address.orEmpty(),
         latitude = destination.latitude,
         longitude = destination.longitude,
@@ -1891,6 +1927,10 @@ private fun MapTappedPlaceDetail.toPlaceDestinationOrNull(): PlaceDestination? {
         latitude = latitude,
         longitude = longitude,
         category = category,
+        serverPlaceId = placeId?.toLongOrNull(),
+        provider = provider?.takeIf { it.isNotBlank() },
+        providerPlaceId = providerPlaceId?.takeIf { it.isNotBlank() },
+        providerCategory = providerCategory?.takeIf { it.isNotBlank() },
     )
 }
 

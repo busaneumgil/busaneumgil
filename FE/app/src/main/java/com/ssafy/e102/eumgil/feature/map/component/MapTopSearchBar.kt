@@ -3,8 +3,10 @@ package com.ssafy.e102.eumgil.feature.map.component
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -31,24 +33,16 @@ fun MapTopSearchBar(
     title: String,
     subtitle: String?,
     accessibilityLabel: String,
+    voiceInputAccessibilityLabel: String,
     onClick: () -> Unit,
+    onVoiceInputClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
     Surface(
         modifier = modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) {
-                contentDescription = accessibilityLabel
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                role = Role.Button,
-                onClickLabel = accessibilityLabel,
-                onClick = onClick,
-            ),
+            .fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(EumRadius.scaleS),
         shadowElevation = 6.dp,
@@ -61,49 +55,77 @@ fun MapTopSearchBar(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_nav_search),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
             Column(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .padding(start = 12.dp),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color =
-                        if (subtitle == null) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            role = Role.Button,
+                            onClickLabel = accessibilityLabel,
+                            onClick = onClick,
+                        ).semantics {
+                            contentDescription = accessibilityLabel
                         },
-                    maxLines = 1,
-                )
-                subtitle?.let { supportingText ->
-                    Text(
-                        text = supportingText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_nav_search),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Column(
+                        modifier = Modifier.padding(start = 12.dp),
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color =
+                                if (subtitle == null) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            maxLines = 1,
+                        )
+                        subtitle?.let { supportingText ->
+                            Text(
+                                text = supportingText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                 }
             }
 
-            Icon(
-                painter = painterResource(id = R.drawable.ic_search_voice_mic),
-                contentDescription = null,
+            Box(
                 modifier =
                     Modifier
                         .padding(start = 12.dp)
-                        .size(24.dp),
-                tint = MaterialTheme.colorScheme.secondary,
-            )
+                        .defaultMinSize(minWidth = 32.dp, minHeight = 32.dp)
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = voiceInputAccessibilityLabel,
+                            onClick = onVoiceInputClick,
+                        )
+                        .semantics {
+                            contentDescription = voiceInputAccessibilityLabel
+                        },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_search_voice_mic),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+            }
         }
     }
 }

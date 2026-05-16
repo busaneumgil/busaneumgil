@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.ssafy.e102.domain.admin.entity.AdminAreaAssignment;
 import com.ssafy.e102.domain.admin.type.AdminAreaAssignmentType;
+import com.ssafy.e102.domain.admin.type.AdminAreaWorkStatus;
 
 public interface AdminAreaAssignmentRepository extends JpaRepository<AdminAreaAssignment, Long> {
 
@@ -26,4 +27,8 @@ public interface AdminAreaAssignmentRepository extends JpaRepository<AdminAreaAs
 		String gu,
 		String dong,
 		AdminAreaAssignmentType assignmentType);
+
+	long countByAssignmentType(AdminAreaAssignmentType assignmentType);
+
+	long countByAssignmentTypeAndStatus(AdminAreaAssignmentType assignmentType, AdminAreaWorkStatus status);
 }

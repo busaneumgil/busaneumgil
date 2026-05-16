@@ -86,6 +86,9 @@ private val ArrivalHeroBackgroundFadeHeight = 40.dp
 private val ArrivalHeroLogoTopPadding = 58.dp
 private val ArrivalHeroLogoWidth = 108.dp
 private val ArrivalHeroLogoHeight = 60.dp
+private val ArrivalRatingButtonSize = 64.dp
+private val ArrivalRatingIconSize = 56.dp
+private val ArrivalRatingRowVerticalPadding = 22.dp
 private const val ArrivalSheetDismissAnimationDurationMillis = 220
 private const val ArrivalHeroArtworkAspectRatio = 1440f / 900f
 private const val ArrivalRatingCount = 5
@@ -216,9 +219,7 @@ private fun ArrivalCompletionActions(
                 style = MaterialTheme.typography.labelLarge,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
-                modifier = Modifier.weight(1f, fill = false),
             )
-            Spacer(modifier = Modifier.width(24.dp))
         }
         OutlinedButton(
             onClick = onExploreNewRouteClicked,
@@ -241,9 +242,7 @@ private fun ArrivalCompletionActions(
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
-                modifier = Modifier.weight(1f, fill = false),
             )
-            Spacer(modifier = Modifier.width(24.dp))
         }
     }
 }
@@ -288,33 +287,6 @@ private fun ArrivalHeroBand(
                             ),
                     ),
         )
-
-        Column(
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = ArrivalHeroLogoTopPadding),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top,
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.app_logo),
-                contentDescription = null,
-                modifier =
-                    Modifier
-                        .width(ArrivalHeroLogoWidth)
-                        .height(ArrivalHeroLogoHeight),
-                contentScale = ContentScale.Fit,
-            )
-            Spacer(modifier = Modifier.height(EumSpacing.xxSmall))
-            Text(
-                text = stringResource(id = R.string.auth_login_service_name),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-            )
-        }
     }
 }
 
@@ -478,7 +450,10 @@ private fun ArrivalEvaluationBottomSheet(
                     }
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = ArrivalRatingRowVerticalPadding),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -487,7 +462,7 @@ private fun ArrivalEvaluationBottomSheet(
                             val isSelected = rating <= uiState.selectedRating
                             IconButton(
                                 onClick = { onAction(ArrivalUiAction.RatingSelected(rating)) },
-                                modifier = Modifier.size(72.dp),
+                                modifier = Modifier.size(ArrivalRatingButtonSize),
                             ) {
                                 Icon(
                                     painter =
@@ -510,7 +485,7 @@ private fun ArrivalEvaluationBottomSheet(
                                         } else {
                                             MaterialTheme.colorScheme.outline
                                         },
-                                    modifier = Modifier.size(54.dp),
+                                    modifier = Modifier.size(ArrivalRatingIconSize),
                                 )
                             }
                         }
@@ -531,17 +506,13 @@ private fun ArrivalEvaluationBottomSheet(
                             }
                         val routeSaveContentColor =
                             if (uiState.isRouteSaveSelected) {
-                                Color.White
+                                MaterialTheme.colorScheme.onPrimary
                             } else {
                                 EumPrimary600
                             }
                         val routeSaveBorderColor =
-                            if (uiState.isRouteSaveSelected) {
-                                EumPrimary600
-                            } else {
-                                EumPrimary600
-                            }
-                        OutlinedButton(
+                            EumPrimary600.copy(alpha = if (uiState.isRouteSaveEnabled) 1f else 0.38f)
+                        Button(
                             onClick = { onAction(ArrivalUiAction.SaveRouteClicked) },
                             enabled = uiState.isRouteSaveEnabled,
                             modifier =
@@ -550,13 +521,13 @@ private fun ArrivalEvaluationBottomSheet(
                                     .heightIn(min = 48.dp),
                             shape = RoundedCornerShape(EumRadius.medium),
                             colors =
-                                ButtonDefaults.outlinedButtonColors(
+                                ButtonDefaults.buttonColors(
                                     containerColor = routeSaveContainerColor,
                                     contentColor = routeSaveContentColor,
                                     disabledContainerColor = routeSaveContainerColor.copy(alpha = 0.38f),
                                     disabledContentColor = routeSaveContentColor.copy(alpha = 0.38f),
                                 ),
-                            border = BorderStroke(1.dp, routeSaveBorderColor.copy(alpha = if (uiState.isRouteSaveEnabled) 1f else 0.38f)),
+                            border = BorderStroke(1.dp, routeSaveBorderColor),
                         ) {
                             Text(
                                 text =

@@ -23,13 +23,20 @@ declare global {
 
 export interface KakaoMap {
   setCenter: (latLng: unknown) => void;
+  getCenter?: () => unknown;
   setBounds?: (bounds: unknown) => void;
   getLevel?: () => number;
   setLevel: (level: number) => void;
+  getProjection?: () => KakaoMapProjection;
+  relayout?: () => void;
 }
 
 export interface KakaoOverlay {
   setMap: (map: KakaoMap | null) => void;
+}
+
+export interface KakaoMapProjection {
+  containerPointFromCoords: (latLng: unknown) => { x: number; y: number };
 }
 
 export interface KakaoRoadview {
@@ -49,7 +56,7 @@ export function attachKakaoWheelZoom(
 ) {
   const handleWheel = (event: WheelEvent) => {
     const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target?.closest(".map-toolbar, .map-status")) {
+    if (target?.closest(".map-toolbar, .map-status, .facility-selected-map-card")) {
       return;
     }
 
@@ -89,7 +96,7 @@ export function loadKakaoMap(): Promise<void> {
   loadingPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.async = true;
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appKey)}&autoload=false&libraries=services`;
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appKey)}&autoload=false&libraries=services,clusterer`;
     script.onload = () => {
       if (!window.kakao?.maps) {
         reject(new Error("Kakao Map SDK를 초기화할 수 없습니다."));

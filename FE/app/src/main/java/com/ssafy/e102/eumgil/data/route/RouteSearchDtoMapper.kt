@@ -523,6 +523,10 @@ private fun List<RouteLeg>.toCompatibilitySegments(): List<RouteSegment> {
                         sequence = nextSequence++,
                     ),
                 )
+                leg.toAlightingCompatibilitySegment(sequence = nextSequence)?.let { alightingSegment ->
+                    add(alightingSegment)
+                    nextSequence++
+                }
             }
         }
     }
@@ -565,6 +569,22 @@ private fun RouteLeg.toCompatibilitySegment(sequence: Int): RouteSegment =
         guidanceMessage = instruction.ifBlank { RouteDefaults.DEFAULT_GUIDANCE_MESSAGE },
         sourceLegSequence = this.sequence,
     )
+
+private fun RouteLeg.toAlightingCompatibilitySegment(sequence: Int): RouteSegment? {
+    if (type != RouteLegType.BUS && type != RouteLegType.SUBWAY) return null
+    val stop = alightingStop ?: return null
+    return RouteSegment(
+        sequence = sequence,
+        polyline = RoutePolyline(),
+        anchorCoordinate = stop.coordinate,
+        distanceMeters = 0,
+        safetyFlags = RouteSegmentSafetyFlags(),
+        riskLevel = RouteRiskLevel.LOW,
+        guidanceMessage = "${stop.name} \uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4.",
+        sourceLegSequence = this.sequence,
+        guidanceType = RouteGuidanceType.ARRIVING_POINT,
+    )
+}
 
 private fun List<RouteSegmentDto>.toLegacySegments(geometryParser: RouteGeometryParser): List<RouteSegment> =
     mapIndexed { index, segment ->

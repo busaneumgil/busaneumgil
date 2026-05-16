@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.arrival
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
@@ -49,6 +50,8 @@ fun ArrivalRoute(
             when (event) {
                 ArrivalUiEvent.NavigateToMap -> onNavigateToMap()
                 ArrivalUiEvent.NavigateToSearch -> onNavigateToSearch()
+                is ArrivalUiEvent.ShowToast ->
+                    Toast.makeText(context.applicationContext, event.message, Toast.LENGTH_SHORT).show()
             }
         }
     }

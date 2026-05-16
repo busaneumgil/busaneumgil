@@ -139,4 +139,33 @@ class MapBrowseStateFactoryTest {
             selection.selectedFacilityCategories,
         )
     }
+
+    @Test
+    fun `visible marker exposes selected accessibility filter category for marker icon policy`() {
+        val browseData =
+            FacilityBrowseData(
+                facilityMarkers =
+                    listOf(
+                        FacilityMarkerSeed(
+                            facilityId = "other-accessible-toilet",
+                            name = "Accessible building",
+                            coordinate = GeoCoordinate(latitude = 35.1796, longitude = 129.0756),
+                            category = FacilityCategory.OTHER,
+                            filterCategories = setOf(FacilityCategory.OTHER, FacilityCategory.TOILET),
+                        ),
+                    ),
+                availableCategories = listOf(FacilityCategory.OTHER, FacilityCategory.TOILET),
+            )
+
+        val overlayState =
+            MapBrowseStateFactory.createMarkerOverlayState(
+                browseData = browseData,
+                selection =
+                    MapFilterSelectionState(
+                        selectedFacilityCategories = setOf(FacilityCategory.TOILET),
+                    ),
+            )
+
+        assertEquals(FacilityCategory.TOILET, overlayState.visibleMarkers.single().selectedFilterCategory)
+    }
 }

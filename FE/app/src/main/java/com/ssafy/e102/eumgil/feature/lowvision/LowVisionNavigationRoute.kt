@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.lowvision
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -94,6 +95,8 @@ fun LowVisionNavigationRoute(
                         -> onNavigateToComplete()
 
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToBookmark()
+                    is NavigationUiEvent.ShowToast ->
+                        Toast.makeText(appContext, event.message, Toast.LENGTH_SHORT).show()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
                     NavigationUiEvent.PlayRouteChangeAlert -> routeChangeAlertPlayer.play()
                     NavigationUiEvent.StopBriefing -> textToSpeechController.stop()

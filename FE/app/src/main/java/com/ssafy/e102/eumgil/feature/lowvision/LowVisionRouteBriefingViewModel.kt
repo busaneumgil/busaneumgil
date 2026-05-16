@@ -249,10 +249,13 @@ private fun NavigationGuidanceAction.toBriefingStepIcon(): LowVisionRouteBriefin
 
         NavigationGuidanceAction.BUS,
         NavigationGuidanceAction.SUBWAY,
+        NavigationGuidanceAction.ALIGHT,
         NavigationGuidanceAction.CROSSWALK,
             -> LowVisionRouteBriefingStepIcon.TRANSIT
 
         NavigationGuidanceAction.STRAIGHT,
+        NavigationGuidanceAction.START,
+        NavigationGuidanceAction.ARRIVAL,
         NavigationGuidanceAction.TACTILE_GUIDE,
         NavigationGuidanceAction.ELEVATOR,
         NavigationGuidanceAction.CONSTRUCTION,

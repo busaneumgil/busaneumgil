@@ -31,6 +31,7 @@ data class MapUiState(
     val isSearchHereVisible: Boolean = false,
     val recentDestinations: List<RecentDestination> = emptyList(),
     val facilityDetailSheetState: MapFacilityDetailSheetState = MapFacilityDetailSheetState(),
+    val isVoiceSearchVisible: Boolean = false,
 )
 
 data class MapFacilityDetailSheetState(
@@ -69,6 +70,10 @@ enum class MapTapClickType {
 sealed interface MapUiAction {
     data object SearchEntryClicked : MapUiAction
 
+    data object VoiceSearchClicked : MapUiAction
+
+    data object VoiceSearchDismissed : MapUiAction
+
     data object SearchHereClicked : MapUiAction
 
     data object LocationActionClicked : MapUiAction
@@ -91,6 +96,10 @@ sealed interface MapUiAction {
 
     data class ShortcutFilterClicked(
         val key: MapShortcutFilterKey,
+    ) : MapUiAction
+
+    data class RecentDestinationPreviewClicked(
+        val placeId: String,
     ) : MapUiAction
 
     data class RecentDestinationRouteClicked(

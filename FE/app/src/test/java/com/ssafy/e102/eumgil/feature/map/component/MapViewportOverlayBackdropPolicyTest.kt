@@ -1,0 +1,29 @@
+package com.ssafy.e102.eumgil.feature.map.component
+
+import java.io.File
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class MapViewportOverlayBackdropPolicyTest {
+    @Test
+    fun `route guidance junction markers use the shared round gray stroke token`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")
+                .readText()
+        val markerSection =
+            source
+                .substringAfter("MapViewportPointKind.SEGMENT_JUNCTION ->")
+                .substringBefore("MapViewportPointKind.TRANSIT_BUS_STOP ->")
+
+        assertTrue(
+            "Guidance junction markers should use the requested 2dp gray stroke token.",
+            source.contains("GuidanceJunctionMarkerStrokeWidth = 2.dp") &&
+                source.contains("GuidanceJunctionMarkerStrokeColor = Color(0xFF9CA3AF)") &&
+                markerSection.contains("borderColor = GuidanceJunctionMarkerStrokeColor"),
+        )
+        assertTrue(
+            "Guidance junction markers should stay circular instead of using the diamond marker branch.",
+            markerSection.contains("isDiamond = false"),
+        )
+    }
+}

@@ -88,6 +88,7 @@ data class RecentDestinationRowState(
 fun RecentDestinationBottomSheetShell(
     state: RecentDestinationBottomSheetState,
     onViewAllClick: () -> Unit,
+    onPreviewClick: (String) -> Unit,
     onRouteClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -231,6 +232,7 @@ fun RecentDestinationBottomSheetShell(
                     state.items.forEachIndexed { index, item ->
                         RecentDestinationRow(
                             state = item,
+                            onPreviewClick = { onPreviewClick(item.placeId) },
                             onRouteClick = { onRouteClick(item.placeId) },
                         )
                         if (index != state.items.lastIndex) {
@@ -321,6 +323,7 @@ private fun RecentDestinationRestoreHandle(
 @OptIn(ExperimentalLayoutApi::class)
 private fun RecentDestinationRow(
     state: RecentDestinationRowState,
+    onPreviewClick: () -> Unit,
     onRouteClick: () -> Unit,
 ) {
     Row(
@@ -328,44 +331,57 @@ private fun RecentDestinationRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Icon(
-            painter = painterResource(id = state.iconRes),
-            contentDescription = null,
+        Row(
             modifier =
                 Modifier
-                    .padding(top = 2.dp)
-                    .size(36.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                    .weight(1f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onPreviewClick,
+                    ),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            Text(
-                text = state.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Icon(
+                painter = painterResource(id = state.iconRes),
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .padding(top = 2.dp)
+                        .size(36.dp),
+                tint = MaterialTheme.colorScheme.primary,
             )
-            Text(
-                text = state.address,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (state.tags.isNotEmpty()) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    state.tags.forEach { label ->
-                        RecentDestinationTagChip(
-                            label = label,
-                        )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = state.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = state.address,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (state.tags.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        state.tags.forEach { label ->
+                            RecentDestinationTagChip(
+                                label = label,
+                            )
+                        }
                     }
                 }
             }

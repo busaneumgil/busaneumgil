@@ -44,6 +44,8 @@ fun MapRoute(
     shouldResetForHomeEntry: Boolean = false,
     onHomeReentryResetConsumed: () -> Unit = {},
     onFacilityDetailVisibilityChanged: (Boolean) -> Unit = {},
+    facilityDetailDismissRequestId: Long = 0L,
+    onFacilityDetailDismissRequestConsumed: (Long) -> Boolean = { false },
     onVoiceSearchVisibilityChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -173,6 +175,18 @@ fun MapRoute(
 
     LaunchedEffect(uiState.isVoiceSearchVisible, onVoiceSearchVisibilityChanged) {
         onVoiceSearchVisibilityChanged(uiState.isVoiceSearchVisible)
+    }
+
+    LaunchedEffect(
+        facilityDetailDismissRequestId,
+        onFacilityDetailDismissRequestConsumed,
+        viewModel,
+    ) {
+        if (facilityDetailDismissRequestId <= 0L) return@LaunchedEffect
+        if (!onFacilityDetailDismissRequestConsumed(facilityDetailDismissRequestId)) return@LaunchedEffect
+
+        viewModel.onAction(MapUiAction.FacilityDetailDismissed)
+        viewModel.onAction(MapUiAction.VoiceSearchDismissed)
     }
 
     DisposableEffect(onFacilityDetailVisibilityChanged, onVoiceSearchVisibilityChanged) {

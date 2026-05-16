@@ -1,6 +1,5 @@
 package com.ssafy.e102.eumgil.app.navigation
 
-import android.net.Uri
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import java.net.URLEncoder
@@ -70,7 +69,7 @@ sealed interface OnboardingRoute : AppRoute {
         override val route: String = "onboarding/permission/{$ARG_NEXT_ROUTE}"
 
         fun createRoute(nextRoute: String): String =
-            "onboarding/permission/${Uri.encode(nextRoute)}"
+            "onboarding/permission/${nextRoute.navArgEncode()}"
     }
 }
 
@@ -162,7 +161,7 @@ sealed interface LowVisionRoute : AppRoute {
         override val route: String = "low_vision/voice_search/{$ARG_QUERY}"
 
         fun createRoute(query: String): String =
-            "low_vision/voice_search/${Uri.encode(query.ifBlank { " " })}"
+            "low_vision/voice_search/${query.ifBlank { " " }.navArgEncode()}"
     }
 }
 
@@ -204,7 +203,7 @@ sealed interface SearchRoute : AppRoute {
             editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
         ): String =
             buildString {
-                append("search/results/${Uri.encode(query)}")
+                append("search/results/${query.navArgEncode()}")
                 if (editingTarget != RouteEditingTarget.DESTINATION) {
                     append("?$ARG_EDITING_TARGET=${editingTarget.name.navArgEncode()}")
                 }
@@ -234,7 +233,7 @@ sealed interface RouteSettingRoute : AppRoute {
                         add("$ARG_AUTO_START_NAVIGATION=true")
                     }
                     initialRouteOption?.let { routeOption ->
-                        add("$ARG_INITIAL_ROUTE_OPTION=${Uri.encode(routeOption.name)}")
+                        add("$ARG_INITIAL_ROUTE_OPTION=${routeOption.name.navArgEncode()}")
                     }
                     if (locationPermissionPrechecked) {
                         add("$ARG_LOCATION_PERMISSION_PRECHECKED=true")
@@ -267,7 +266,7 @@ sealed interface RouteSettingRoute : AppRoute {
                         add("$ARG_AUTO_START_NAVIGATION=true")
                     }
                     initialRouteOption?.let { routeOption ->
-                        add("$ARG_INITIAL_ROUTE_OPTION=${Uri.encode(routeOption.name)}")
+                        add("$ARG_INITIAL_ROUTE_OPTION=${routeOption.name.navArgEncode()}")
                     }
                 }
 

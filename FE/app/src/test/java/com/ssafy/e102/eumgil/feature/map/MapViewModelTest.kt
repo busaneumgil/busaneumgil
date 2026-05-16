@@ -546,7 +546,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `search preview CTA honors origin editing target`() =
+    fun `search preview origin CTA navigates to route setting without destination`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
@@ -584,11 +584,11 @@ class MapViewModelTest {
 
             assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             assertNull(destinationSelectionRepository.selectedDestination.value)
-            assertNull(event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
         }
 
     @Test
-    fun `search preview destination CTA preserves existing origin`() =
+    fun `search preview destination CTA clears existing origin for current location default`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
@@ -626,8 +626,14 @@ class MapViewModelTest {
             viewModel.onAction(MapUiAction.FacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION))
             advanceUntilIdle()
 
-            assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertNull(destinationSelectionRepository.selectedOrigin.value)
             assertEquals(destination, destinationSelectionRepository.selectedDestination.value)
+            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
         }
 
     @Test

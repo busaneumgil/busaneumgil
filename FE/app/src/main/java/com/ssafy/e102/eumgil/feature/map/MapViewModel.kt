@@ -520,8 +520,11 @@ class MapViewModel(
             clearSelectedFacilitySelection()
             renderSelectedFacilityState()
             destinationSelectionRepository.setEditingTarget(editingTarget)
+            if (editingTarget == RouteEditingTarget.DESTINATION) {
+                destinationSelectionRepository.clearSelectedOriginSilently()
+            }
             destinationSelectionRepository.updateSelectionForEditingTarget(preview.destination)
-            navigateToRouteSettingIfRouteEndpointsReady(editingTarget)
+            navigateToRouteSettingIfRouteEndpointsReady()
             return
         }
 
@@ -532,15 +535,14 @@ class MapViewModel(
         clearSelectedFacilitySelection()
         renderSelectedFacilityState()
         destinationSelectionRepository.setEditingTarget(editingTarget)
+        if (editingTarget == RouteEditingTarget.DESTINATION) {
+            destinationSelectionRepository.clearSelectedOriginSilently()
+        }
         destinationSelectionRepository.updateSelectionForEditingTarget(destination)
-        navigateToRouteSettingIfRouteEndpointsReady(editingTarget)
+        navigateToRouteSettingIfRouteEndpointsReady()
     }
 
-    private fun navigateToRouteSettingIfRouteEndpointsReady(editingTarget: RouteEditingTarget) {
-        val hasDestination = destinationSelectionRepository.selectedDestination.value != null
-        if (editingTarget == RouteEditingTarget.ORIGIN && !hasDestination) {
-            return
-        }
+    private fun navigateToRouteSettingIfRouteEndpointsReady() {
         emitUiEvent(MapUiEvent.NavigateToRouteSetting)
     }
 

@@ -191,7 +191,7 @@ class RouteSettingViewModelTest {
             assertEquals(RouteDestinationHandoffState.EMPTY, uiState.destinationHandoffState)
             assertEquals("목적지를 선택하면 경로를 보여드릴게요.", uiState.destinationFallbackMessage)
             assertEquals(null, uiState.destination.metadataLabel)
-            assertEquals("도착지를 선택해 주세요", uiState.destination.name)
+            assertEquals("도착지를 선택해주세요", uiState.destination.name)
             assertEquals("검색 또는 지도에서 도착지를 설정할 수 있어요.", uiState.destination.supportingText)
             assertEquals(null, uiState.selectedRoute)
             assertTrue(uiState.optionCards.isEmpty())
@@ -337,7 +337,7 @@ class RouteSettingViewModelTest {
 
             assertTrue(uiState.isUsingFallbackDestination)
             assertEquals(RouteDestinationHandoffState.EMPTY, uiState.destinationHandoffState)
-            assertEquals("도착지를 선택해 주세요", uiState.destination.name)
+            assertEquals("도착지를 선택해주세요", uiState.destination.name)
             assertEquals(RouteOption.SAFE, uiState.selectedOption)
             assertEquals(null, uiState.selectedRoute)
             assertFalse(uiState.isStartEnabled)

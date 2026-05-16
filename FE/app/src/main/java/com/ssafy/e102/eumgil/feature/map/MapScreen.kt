@@ -104,7 +104,6 @@ fun MapScreen(
     val searchBarState = mapSearchBarState(uiState = uiState)
     val facilityDetailSheetUiState = mapFacilityDetailBottomSheetState(uiState = uiState)
     val recentDestinationSheetState = mapRecentDestinationBottomSheetState(uiState = uiState)
-    val routeSelectionStatusState = mapRouteSelectionStatusState(uiState = uiState)
 
     Box(modifier = modifier.fillMaxSize()) {
         MapShellScaffold(
@@ -147,18 +146,6 @@ fun MapScreen(
                             onAction(MapUiAction.ShortcutFilterClicked(key))
                         },
                     )
-
-                    routeSelectionStatusState?.let { state ->
-                        MapRouteSelectionStatusBar(
-                            state = state,
-                            onOriginClick = {
-                                onAction(MapUiAction.RouteEndpointStatusClicked(RouteEditingTarget.ORIGIN))
-                            },
-                            onDestinationClick = {
-                                onAction(MapUiAction.RouteEndpointStatusClicked(RouteEditingTarget.DESTINATION))
-                            },
-                        )
-                    }
 
                     if (uiState.isSearchHereVisible) {
                         MapSearchHereButton(
@@ -350,109 +337,6 @@ private data class MapRecentDestinationBottomSheetUiState(
             isVisible = isVisible,
             items = items,
         )
-}
-
-@Immutable
-private data class MapRouteSelectionStatusUiState(
-    val originLabel: String?,
-    val destinationLabel: String?,
-    val accessibilityLabel: String,
-)
-
-@Composable
-private fun MapRouteSelectionStatusBar(
-    state: MapRouteSelectionStatusUiState,
-    onOriginClick: () -> Unit,
-    onDestinationClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .semantics {
-                    contentDescription = state.accessibilityLabel
-                },
-        shape = RoundedCornerShape(EumRadius.medium),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)),
-        shadowElevation = 0.dp,
-    ) {
-        Row(
-            modifier =
-                Modifier.padding(
-                    horizontal = EumSpacing.small,
-                    vertical = EumSpacing.xSmall,
-                ),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            MapRouteEndpointChip(
-                label = stringResource(id = R.string.route_setting_origin_label),
-                value = state.originLabel ?: stringResource(id = R.string.map_route_selection_origin_empty),
-                containerColor = RouteSelectionOriginChipColor,
-                contentColor = RouteSelectionOriginTextColor,
-                onClick = onOriginClick,
-                modifier = Modifier.weight(1f),
-            )
-            MapRouteEndpointChip(
-                label = stringResource(id = R.string.route_setting_destination_label),
-                value = state.destinationLabel ?: stringResource(id = R.string.map_route_selection_destination_empty),
-                containerColor = RouteSelectionDestinationChipColor,
-                contentColor = RouteSelectionDestinationTextColor,
-                onClick = onDestinationClick,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun MapRouteEndpointChip(
-    label: String,
-    value: String,
-    containerColor: Color,
-    contentColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        modifier =
-            modifier
-                .semantics {
-                    role = Role.Button
-                    contentDescription = "$label $value"
-                }
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onClick,
-                ),
-        shape = RoundedCornerShape(EumRadius.small),
-        color = containerColor,
-        contentColor = contentColor,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = EumSpacing.xSmall),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = contentColor,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.labelSmall,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
 }
 
 @Composable
@@ -1080,36 +964,6 @@ private fun mapSearchBarState(uiState: MapUiState): MapSearchBarState {
         title = stringResource(id = R.string.map_shell_search_title),
         subtitle = null,
         accessibilityLabel = stringResource(id = R.string.map_shell_search_a11y_label),
-    )
-}
-
-@Composable
-private fun mapRouteSelectionStatusState(uiState: MapUiState): MapRouteSelectionStatusUiState? {
-    val preview = uiState.facilityDetailSheetState.destinationPreview
-    val selectedOriginName =
-        when (preview?.editingTarget) {
-            RouteEditingTarget.ORIGIN -> preview.destination.name
-            else -> uiState.selectedOrigin?.name
-        }?.takeIf(String::isNotBlank)
-    val selectedDestinationName =
-        when (preview?.editingTarget) {
-            RouteEditingTarget.DESTINATION -> preview.destination.name
-            else -> uiState.selectedDestination?.name
-        }?.takeIf(String::isNotBlank)
-
-    if (selectedOriginName == null && selectedDestinationName == null) {
-        return null
-    }
-
-    return MapRouteSelectionStatusUiState(
-        originLabel = selectedOriginName,
-        destinationLabel = selectedDestinationName,
-        accessibilityLabel =
-            stringResource(
-                id = R.string.map_route_selection_status_a11y,
-                selectedOriginName ?: stringResource(id = R.string.map_route_selection_origin_empty),
-                selectedDestinationName ?: stringResource(id = R.string.map_route_selection_destination_empty),
-            ),
     )
 }
 
@@ -1875,7 +1729,3 @@ private const val MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS = 3
 private const val MAX_FACILITY_DETAIL_TRANSIT_ARRIVALS = 3
 private val MapActionLabelDefaultFontSize = 14.sp
 private val MapActionLabelMinFontSize = 12.sp
-private val RouteSelectionOriginChipColor = Color(0xFFEAF8EF)
-private val RouteSelectionOriginTextColor = Color(0xFF166534)
-private val RouteSelectionDestinationChipColor = Color(0xFFFFEEF0)
-private val RouteSelectionDestinationTextColor = Color(0xFFB4232F)

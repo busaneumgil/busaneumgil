@@ -2344,6 +2344,7 @@ private fun RouteLeg.toDetailTransitOptionLabels(): List<RouteTransitOptionLabel
 private fun RouteSegment.detailStepTitle(kind: RouteDetailStepKind): String =
     when (kind) {
         RouteDetailStepKind.START -> DETAIL_STEP_START_TITLE
+        RouteDetailStepKind.ALIGHT -> "\uD558\uCC28"
         RouteDetailStepKind.BUS -> DETAIL_STEP_BUS_TITLE
         RouteDetailStepKind.SUBWAY -> DETAIL_STEP_SUBWAY_TITLE
         RouteDetailStepKind.STRAIGHT -> "${guidanceDisplayDistanceMeters()}m 직진 이동"
@@ -2366,7 +2367,7 @@ private fun RouteSegment.detailStepDescription(
 ): String {
     val distanceLabel = distanceMeters.toDistanceLabel()
 
-    if (kind != RouteDetailStepKind.BUS && kind != RouteDetailStepKind.SUBWAY) {
+    if (kind != RouteDetailStepKind.BUS && kind != RouteDetailStepKind.SUBWAY && kind != RouteDetailStepKind.ALIGHT) {
         return detailStepSupportingDescription(kind = kind, routeDurationSeconds = routeDurationSeconds)
     }
 
@@ -2378,6 +2379,9 @@ private fun RouteSegment.detailStepDescription(
 
     return when (kind) {
         RouteDetailStepKind.START -> DETAIL_STEP_START_DESCRIPTION
+        RouteDetailStepKind.ALIGHT -> guidanceFallback ?: sourceLeg?.alightingStop?.name?.let { stopName ->
+            "${stopName} \uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4."
+        } ?: "\uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4."
         RouteDetailStepKind.BUS ->
             sourceLeg.toTransitStepDescription(
                 defaultDescription = "버스를 타고 이동하세요.",
@@ -2500,6 +2504,7 @@ private fun RouteLeg?.toTransitStepDescription(
 private fun RouteSegment.detailStepMetaLabel(kind: RouteDetailStepKind): String? =
     when (kind) {
         RouteDetailStepKind.START,
+        RouteDetailStepKind.ALIGHT,
         RouteDetailStepKind.ARRIVAL,
         RouteDetailStepKind.FALLBACK,
             -> null
@@ -2515,6 +2520,7 @@ private fun RouteSegment.detailStepMetaLabel(kind: RouteDetailStepKind): String?
 private fun RouteSegment.detailStepBadgeLabel(kind: RouteDetailStepKind): String? =
     when (kind) {
         RouteDetailStepKind.START,
+        RouteDetailStepKind.ALIGHT,
         RouteDetailStepKind.BUS,
         RouteDetailStepKind.SUBWAY,
         RouteDetailStepKind.STRAIGHT,
@@ -2541,6 +2547,7 @@ private fun RouteSegment.detailStepBadgeLabel(kind: RouteDetailStepKind): String
 private fun RouteSegment.detailStepBadgeTone(kind: RouteDetailStepKind): RouteDetailTone? =
     when (kind) {
         RouteDetailStepKind.START,
+        RouteDetailStepKind.ALIGHT,
         RouteDetailStepKind.BUS,
         RouteDetailStepKind.SUBWAY,
         RouteDetailStepKind.STRAIGHT,
@@ -2570,6 +2577,7 @@ private fun RouteSegment.detailStepBadgeTone(kind: RouteDetailStepKind): RouteDe
 private fun RouteSegment.detailStepTone(kind: RouteDetailStepKind): RouteDetailTone =
     when (kind) {
         RouteDetailStepKind.START,
+        RouteDetailStepKind.ALIGHT,
         RouteDetailStepKind.BUS,
         RouteDetailStepKind.SUBWAY,
         RouteDetailStepKind.ELEVATOR,

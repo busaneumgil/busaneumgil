@@ -41,7 +41,9 @@ import com.ssafy.e102.domain.place.repository.PlaceAccessibilityFeatureRepositor
 import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
+import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
+import com.ssafy.e102.domain.route.repository.RoadNodeRepository;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
 import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
 import com.ssafy.e102.global.geo.GeoPointConverter;
@@ -54,6 +56,9 @@ class AdminMapServiceTest {
 
 	@Mock
 	private AdminAreaRepository adminAreaRepository;
+
+	@Mock
+	private RoadNodeRepository roadNodeRepository;
 
 	@Mock
 	private RoadSegmentRepository roadSegmentRepository;
@@ -83,6 +88,7 @@ class AdminMapServiceTest {
 		geoPointConverter = new GeoPointConverter();
 		adminMapService = new AdminMapService(
 			adminAreaRepository,
+			roadNodeRepository,
 			roadSegmentRepository,
 			segmentFeatureRepository,
 			placeRepository,
@@ -115,11 +121,15 @@ class AdminMapServiceTest {
 			.thenReturn(List.of(roadSegment));
 		when(roadSegmentRepository.countIntersectingArea("강서구", "명지동")).thenReturn(1L);
 		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());
+		when(roadNodeRepository.findAllById(any())).thenReturn(List.of(
+			roadNode(10L, 129.0, 35.0),
+			roadNode(20L, 129.1, 35.1)));
 
 		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "명지동", 10);
 
 		assertThat(response.summary().segmentCount()).isEqualTo(1);
 		assertThat(response.segments().features()).hasSize(1);
+		assertThat(response.roadNodes().features()).hasSize(2);
 		assertThat(response.segments().features().get(0).geometry().coordinates().get(0))
 			.containsExactly(129.0, 35.0);
 	}
@@ -243,10 +253,7 @@ class AdminMapServiceTest {
 	@Test
 	@DisplayName("관리자 장소 접근성 속성은 같은 유형을 중복 요청할 수 없다")
 	void updatePlaceAccessibilityFeaturesDuplicateType() throws Exception {
-		Place place = place();
 		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
-		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
-		when(placeRepository.findById(1L)).thenReturn(Optional.of(place));
 
 		assertThatThrownBy(() -> adminMapService.updatePlaceAccessibilityFeatures(
 			adminUserId,
@@ -266,6 +273,12 @@ class AdminMapServiceTest {
 		});
 		geom.setSRID(4326);
 		return RoadSegment.create(edgeId, 10L, 20L, geom, BigDecimal.valueOf(12.3));
+	}
+
+	private RoadNode roadNode(Long vertexId, double lng, double lat) {
+		Point point = geometryFactory.createPoint(new Coordinate(lng, lat));
+		point.setSRID(4326);
+		return RoadNode.create(vertexId, "node:" + vertexId, point);
 	}
 
 	private Place place() throws Exception {

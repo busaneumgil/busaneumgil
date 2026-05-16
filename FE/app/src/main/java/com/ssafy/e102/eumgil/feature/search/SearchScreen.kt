@@ -23,12 +23,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -50,6 +48,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -345,24 +345,20 @@ private fun SearchContentBody(
         return
     }
 
-    Column(
-        modifier =
-            modifier
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-    ) {
-        when (destination) {
-            SearchScreenDestination.Entry ->
-                SearchEntryContent(
-                    uiState = uiState,
-                    copy = copy,
-                    onAction = onAction,
-                )
+    when (destination) {
+        SearchScreenDestination.Entry ->
+            SearchEntryContent(
+                uiState = uiState,
+                copy = copy,
+                onAction = onAction,
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+            )
 
-            SearchScreenDestination.Results,
-            SearchScreenDestination.VoiceInput -> Unit
-        }
+        SearchScreenDestination.Results,
+        SearchScreenDestination.VoiceInput -> Unit
     }
 }
 
@@ -371,27 +367,37 @@ private fun SearchEntryContent(
     uiState: SearchUiState,
     copy: SearchCopyUiState,
     onAction: (SearchUiAction) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Text(
-        text = stringResource(id = copy.entryHeadlineRes),
-        style = MaterialTheme.typography.headlineSmall,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    SearchInputField(
-        query = uiState.query,
-        queryPlaceholderRes = copy.queryPlaceholderRes,
-        showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
-        onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
-        onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
-        onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
-        onSearch = { onAction(SearchUiAction.SearchSubmitted) },
-    )
-    RecentVisitSection(
-        recentSearches = uiState.recentSearches,
-        onAction = onAction,
-    )
-    if (shouldShowDestinationPromoBanner(uiState.editingTarget)) {
-        DestinationPromoBanner()
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        Text(
+            text = stringResource(id = copy.entryHeadlineRes),
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        SearchInputField(
+            query = uiState.query,
+            queryPlaceholderRes = copy.queryPlaceholderRes,
+            showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
+            onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
+            onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
+            onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
+            onSearch = { onAction(SearchUiAction.SearchSubmitted) },
+        )
+        RecentVisitSection(
+            recentSearches = uiState.recentSearches,
+            onAction = onAction,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+        )
+        if (shouldShowDestinationPromoBanner(uiState.editingTarget)) {
+            DestinationPromoBanner()
+        }
     }
 }
 
@@ -446,15 +452,23 @@ private fun SearchResultsContent(
         when (val resultState = uiState.resultState) {
             SearchResultUiState.Initial ->
                 SearchResultStateBox {
-                    SearchStateCard(
+                    SearchCenteredStateMessage(
                         title = stringResource(id = copy.initialTitleRes),
                         description = stringResource(id = copy.initialDescriptionRes),
+                        showIllustration = false,
                     )
                 }
 
-            SearchResultUiState.EmptyQuery,
-            is SearchResultUiState.Typing,
-            -> Unit
+            SearchResultUiState.EmptyQuery ->
+                SearchResultStateBox {
+                    SearchCenteredStateMessage(
+                        title = stringResource(id = copy.initialTitleRes),
+                        description = stringResource(id = copy.initialDescriptionRes),
+                        showIllustration = false,
+                    )
+                }
+
+            is SearchResultUiState.Typing -> Unit
 
             is SearchResultUiState.Loading ->
                 SearchResultStateBox {
@@ -545,6 +559,13 @@ private fun SearchInputField(
     onSearch: () -> Unit,
 ) {
     val trailingAction = resolveSearchTrailingAction(query = query)
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val dismissKeyboardBeforeVoiceInput = {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+        onVoiceInputClick()
+    }
 
     OutlinedTextField(
         value = query,
@@ -561,7 +582,7 @@ private fun SearchInputField(
         trailingIcon = {
             when (trailingAction) {
                 SearchTrailingAction.VoiceInput ->
-                    IconButton(onClick = onVoiceInputClick) {
+                    IconButton(onClick = dismissKeyboardBeforeVoiceInput) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_search_voice_mic),
                             contentDescription = stringResource(id = R.string.search_screen_voice_input),
@@ -790,17 +811,17 @@ private fun SearchResultSection(
     ) {
         when (resultState) {
             SearchResultUiState.Initial ->
-                SearchStateCard(
+                SearchCenteredStateMessage(
                     title = stringResource(id = copy.initialTitleRes),
                     description = stringResource(id = copy.initialDescriptionRes),
+                    showIllustration = false,
                 )
 
             SearchResultUiState.EmptyQuery ->
-                SearchStateCard(
-                    title = stringResource(id = R.string.search_screen_empty_query_title),
-                    description = stringResource(id = R.string.search_screen_empty_query_description),
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
+                SearchCenteredStateMessage(
+                    title = stringResource(id = copy.initialTitleRes),
+                    description = stringResource(id = copy.initialDescriptionRes),
+                    showIllustration = false,
                 )
 
             is SearchResultUiState.Typing -> Unit
@@ -960,8 +981,10 @@ private fun SearchNextPageLoadingIndicator() {
 private fun RecentVisitSection(
     recentSearches: List<RecentSearch>,
     onAction: (SearchUiAction) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
         Row(
@@ -995,10 +1018,20 @@ private fun RecentVisitSection(
         }
 
         if (recentSearches.isEmpty()) {
-            SearchStateCard(
-                title = stringResource(id = R.string.search_screen_recent_section_title),
-                description = stringResource(id = R.string.search_screen_recent_empty),
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(id = R.string.search_screen_recent_empty),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    textAlign = TextAlign.Center,
+                )
+            }
         } else {
             recentSearches.forEach { recentSearch ->
                 RecentVisitItem(

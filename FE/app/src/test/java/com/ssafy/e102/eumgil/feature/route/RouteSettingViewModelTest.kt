@@ -34,6 +34,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.RouteFailureKind
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.DefaultRouteRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.RouteRatingData
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRerouteData
@@ -201,6 +202,37 @@ class RouteSettingViewModelTest {
             assertFalse(uiState.routePreviewMap.isDisplayable)
             assertFalse(uiState.isStartEnabled)
             assertEquals("검색 또는 지도에서 목적지를 선택하면 안내 시작을 활성화합니다.", uiState.cta.supportingText)
+        }
+
+    @Test
+    fun `destination outside Gangseo shows unsupported area state without requesting route`() =
+        runTest {
+            val routeRepository = CountingRouteRepository()
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(
+                        testDestination().copy(
+                            address = "부산 부산진구 중앙대로 1001",
+                        ),
+                    )
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertFalse(uiState.isLoading)
+            assertEquals(0, routeRepository.callCount)
+            assertEquals(RouteEditingTarget.DESTINATION, uiState.unsupportedArea?.editingTarget)
+            assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
+            assertEquals(null, uiState.selectedRoute)
+            assertFalse(uiState.showsDuribalCallAction)
+            assertFalse(uiState.isStartEnabled)
         }
 
     @Test
@@ -1595,7 +1627,7 @@ private fun testDestination(): PlaceDestination =
     PlaceDestination(
         placeId = "place-1",
         name = "카페 온도",
-        address = "부산 부산진구 중앙대로 1001",
+        address = "부산 강서구 녹산산단321로 24-8",
         latitude = 35.1797,
         longitude = 129.0750,
         category = PlaceCategory.RESTAURANT,

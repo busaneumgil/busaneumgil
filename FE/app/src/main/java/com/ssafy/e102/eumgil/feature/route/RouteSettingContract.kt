@@ -32,10 +32,15 @@ data class RouteSettingUiState(
     val cta: RouteSettingCtaUiState = RouteSettingCtaUiState(),
     val ctaAcknowledged: Boolean = false,
     val showsDuribalCallAction: Boolean = false,
+    val unsupportedArea: RouteUnsupportedAreaUiState? = null,
 ) {
     val isStartEnabled: Boolean
         get() = cta.isEnabled
 }
+
+data class RouteUnsupportedAreaUiState(
+    val editingTarget: RouteEditingTarget,
+)
 
 data class RouteLocationUiState(
     val placeId: String? = null,

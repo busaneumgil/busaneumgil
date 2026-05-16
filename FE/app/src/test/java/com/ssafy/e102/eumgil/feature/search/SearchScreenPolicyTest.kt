@@ -201,4 +201,31 @@ class SearchScreenPolicyTest {
                 centeredStateSection.contains("val descriptionTopPadding = if (useEmptyResultTypography) 16.dp"),
         )
     }
+
+    @Test
+    fun `voice input action dismisses keyboard before opening bottom sheet`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val inputFieldSection =
+            source
+                .substringAfter("private fun SearchInputField(")
+                .substringBefore("@OptIn(ExperimentalMaterial3Api::class)")
+
+        assertTrue(
+            "Voice input should clear TextField focus and hide the IME before navigating to the bottom sheet route.",
+            source.contains("import androidx.compose.ui.platform.LocalFocusManager") &&
+                source.contains("import androidx.compose.ui.platform.LocalSoftwareKeyboardController") &&
+                inputFieldSection.contains("focusManager.clearFocus(force = true)") &&
+                inputFieldSection.contains("keyboardController?.hide()") &&
+                inputFieldSection.indexOf("focusManager.clearFocus(force = true)") <
+                inputFieldSection.indexOf("onVoiceInputClick()") &&
+                inputFieldSection.indexOf("keyboardController?.hide()") <
+                inputFieldSection.indexOf("onVoiceInputClick()"),
+        )
+        assertTrue(
+            "The microphone trailing icon should use the keyboard-safe voice input handler.",
+            inputFieldSection.contains("IconButton(onClick = dismissKeyboardBeforeVoiceInput)"),
+        )
+    }
 }

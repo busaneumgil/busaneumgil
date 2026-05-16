@@ -178,13 +178,14 @@ class RouteSettingLayoutPolicyTest {
                 source.contains("modifier = Modifier.weight(1f)"),
         )
         assertTrue(
-            "Transit mode should use a map-free pane, while loading and failure states replace the map and hide the shared CTA.",
+            "Transit mode should use a map-free pane, while loading, unsupported-area, and failure states replace the map and hide the shared CTA.",
             screenSection.contains("RouteSettingTransitResultPane(") &&
                 screenSection.contains("RouteLoadingScreen(") &&
+                screenSection.contains("RouteUnsupportedAreaScreen(") &&
                 screenSection.contains("RouteFailureScreen(") &&
                 source.contains("selectedTravelMode == RouteTravelMode.TRANSIT") &&
                 source.contains("selectedRoute == null") &&
-                screenSection.contains("if (!showsRouteLoadingScreen && !showsRouteFailureScreen)") &&
+                screenSection.contains("if (!showsRouteLoadingScreen && !showsRouteUnsupportedAreaScreen && !showsRouteFailureScreen)") &&
                 source.contains("routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE") &&
                 source.contains("loadErrorMessage != null"),
         )
@@ -202,12 +203,12 @@ class RouteSettingLayoutPolicyTest {
         val loadingScreen =
             source
                 .substringAfter("private fun RouteLoadingScreen(")
-                .substringBefore("@Composable\nprivate fun RouteFailureScreen")
+                .substringBefore("@Composable\nprivate fun RouteUnsupportedAreaScreen")
 
         assertTrue(
             "Route search loading should render before the map and hide the floating start CTA.",
             screenSection.indexOf("RouteLoadingScreen(") in 0 until screenSection.indexOf("RouteMapStage(") &&
-                screenSection.contains("if (!showsRouteLoadingScreen && !showsRouteFailureScreen)") &&
+                screenSection.contains("if (!showsRouteLoadingScreen && !showsRouteUnsupportedAreaScreen && !showsRouteFailureScreen)") &&
                 source.contains("isLoading && optionCards.isEmpty()"),
         )
         assertTrue(
@@ -216,6 +217,36 @@ class RouteSettingLayoutPolicyTest {
                 loadingScreen.contains("route_setting_summary_loading_title") &&
                 loadingScreen.contains("route_setting_summary_loading_description") &&
                 loadingScreen.contains("MaterialTheme.colorScheme.background"),
+        )
+    }
+
+    @Test
+    fun `unsupported area replaces route map and opens place selection instead of Duribal fallback`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("if (isDuribalConfirmDialogVisible)")
+        val unsupportedScreen =
+            source
+                .substringAfter("private fun RouteUnsupportedAreaScreen(")
+                .substringBefore("@Composable\nprivate fun RouteFailureScreen")
+
+        assertTrue(
+            "Unsupported area should render before route failure and hide the floating start CTA.",
+            screenSection.indexOf("RouteUnsupportedAreaScreen(") in 0 until screenSection.indexOf("RouteFailureScreen(") &&
+                screenSection.contains("showsRouteUnsupportedAreaScreen") &&
+                screenSection.contains("if (!showsRouteLoadingScreen && !showsRouteUnsupportedAreaScreen && !showsRouteFailureScreen)"),
+        )
+        assertTrue(
+            "Unsupported area CTA should send the user back to waypoint selection and avoid Duribal copy.",
+            unsupportedScreen.contains("route_setting_unsupported_area_title") &&
+                unsupportedScreen.contains("route_setting_unsupported_area_description") &&
+                unsupportedScreen.contains("route_setting_unsupported_area_action") &&
+                screenSection.contains("uiState.unsupportedArea?.editingTarget ?: RouteEditingTarget.DESTINATION") &&
+                !unsupportedScreen.contains("route_setting_duribal_call_prompt_call"),
         )
     }
 
@@ -572,7 +603,7 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(
             "When route search fails, the screen should render a full failure state instead of the map and keep the start CTA hidden.",
             screenSection.indexOf("RouteFailureScreen(") in 0 until screenSection.indexOf("RouteMapStage(") &&
-                screenSection.contains("if (!showsRouteLoadingScreen && !showsRouteFailureScreen)") &&
+                screenSection.contains("if (!showsRouteLoadingScreen && !showsRouteUnsupportedAreaScreen && !showsRouteFailureScreen)") &&
                 source.contains("private fun RouteFailureScreen("),
         )
         assertTrue(

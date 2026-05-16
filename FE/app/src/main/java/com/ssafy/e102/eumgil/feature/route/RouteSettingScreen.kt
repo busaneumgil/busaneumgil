@@ -26,11 +26,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateBottomPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -2864,6 +2867,9 @@ private fun RouteMapStage(
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
     val mapControlState = rememberMapOverlayViewportControlState()
+    val navigationBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val walkPreviewBottomPadding = routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset)
+    val mapControlsBottomPadding = routeWalkMapControlsBottomPadding(navigationBarBottomInset)
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(RouteMapStageCornerRadius),
@@ -2907,7 +2913,7 @@ private fun RouteMapStage(
                         .align(Alignment.BottomEnd)
                         .padding(
                             end = EumSpacing.small,
-                            bottom = RouteWalkMapControlsBottomPadding,
+                            bottom = mapControlsBottomPadding,
                         )
                 } else {
                     Modifier
@@ -2932,7 +2938,7 @@ private fun RouteMapStage(
                             .padding(
                                 start = EumSpacing.medium,
                                 end = EumSpacing.medium,
-                                bottom = RouteWalkPreviewCarouselBottomPadding,
+                                bottom = walkPreviewBottomPadding,
                             ),
                 )
             }
@@ -4905,11 +4911,23 @@ private val RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
 private val RouteSettingBottomBarBottomGap = 30.dp
 private val RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
 private val RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance
-private val RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 70.dp
-private val RouteWalkMapControlsBottomPadding = RouteWalkPreviewCarouselBottomPadding + RouteWalkPreviewCardMinHeight + 70.dp
+// Match the tighter card-to-CTA spacing users currently see on devices with a visible system nav bar.
+private val RouteWalkPreviewToStartButtonGap = 22.dp
+private val RouteWalkMapControlsToPreviewGap = 70.dp
 private val RouteDetailFeatureCardContainerColor = Color(0xFFE9ECF3)
 private val RouteDetailFeatureTitleFontSize = 18.sp
 private val RouteDetailExpandedSidePanelScrimColor = Color(0x66000000)
 private val RoutePreviewMarkerSize = 38.dp
 private const val MIN_ROUTE_PREVIEW_LATITUDE_SPAN = 0.0035
 private const val MIN_ROUTE_PREVIEW_LONGITUDE_SPAN = 0.0045
+
+internal fun routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset: Dp): Dp =
+    RouteSettingBottomBarButtonHeight +
+        RouteSettingBottomBarBottomGap +
+        RouteWalkPreviewToStartButtonGap +
+        navigationBarBottomInset
+
+internal fun routeWalkMapControlsBottomPadding(navigationBarBottomInset: Dp): Dp =
+    routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset) +
+        RouteWalkPreviewCardMinHeight +
+        RouteWalkMapControlsToPreviewGap

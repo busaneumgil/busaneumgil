@@ -269,13 +269,18 @@ class RouteSettingLayoutPolicyTest {
 
         assertTrue(
             "Walk preview cards should sit above the fixed bottom CTA instead of being covered by it.",
-            mapStageSection.contains("bottom = RouteWalkPreviewCarouselBottomPadding"),
+            mapStageSection.contains("bottom = walkPreviewBottomPadding"),
+        )
+        assertTrue(
+            "Walk preview cards should use the same navigation-bar inset basis as the shared bottom CTA.",
+            mapStageSection.contains("WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()") &&
+                mapStageSection.contains("val walkPreviewBottomPadding = routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset)") &&
+                source.contains("RouteWalkPreviewToStartButtonGap = 22.dp"),
         )
         assertTrue(
             "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
-                source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
-                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 70.dp"),
+                source.contains("RouteWalkPreviewCardMinHeight = 116.dp"),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",
@@ -313,14 +318,13 @@ class RouteSettingLayoutPolicyTest {
                 .substringAfter("private fun RouteMapStage(")
                 .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
 
+        assertEquals(102.dp, routeWalkPreviewCarouselBottomPadding(0.dp))
+        assertEquals(150.dp, routeWalkPreviewCarouselBottomPadding(48.dp))
+        assertEquals(288.dp, routeWalkMapControlsBottomPadding(0.dp))
+        assertEquals(336.dp, routeWalkMapControlsBottomPadding(48.dp))
         assertTrue(
-            "Walk preview cards should be raised 70dp above the fixed start button.",
-            source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 70.dp"),
-        )
-        assertTrue(
-            "Map controls should use a bottom padding derived from the raised preview card plus an extra 70dp gap.",
-            source.contains("RouteWalkMapControlsBottomPadding = RouteWalkPreviewCarouselBottomPadding + RouteWalkPreviewCardMinHeight + 70.dp") &&
-                mapStageSection.contains("bottom = RouteWalkMapControlsBottomPadding"),
+            "Map controls should use a bottom padding derived from the inset-aware preview card offset plus an extra gap.",
+            mapStageSection.contains("bottom = mapControlsBottomPadding"),
         )
     }
 

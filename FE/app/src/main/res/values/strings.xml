@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="map_route_endpoint_picker_set_origin_action">이 위치를 출발지로 설정</string>
+    <string name="map_route_endpoint_picker_set_destination_action">이 위치를 도착지로 설정</string>
+    <string name="search_screen_map_picker_action">지도에서 직접 선택</string>
+    <string name="search_screen_map_picker_origin_a11y">지도에서 출발지 직접 선택</string>
+    <string name="search_screen_map_picker_destination_a11y">지도에서 도착지 직접 선택</string>
     <string name="app_name">부산이음길</string>
     <string name="auth_login_service_name">부산이음길</string>
     <string name="auth_login_service_english_name">Busan EumGil</string>

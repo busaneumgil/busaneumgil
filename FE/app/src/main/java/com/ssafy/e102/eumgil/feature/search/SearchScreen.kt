@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -54,6 +55,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -105,6 +107,15 @@ internal fun shouldAutoRequestNextSearchPage(
         isLoadingNextPage.not() &&
         totalItemsCount > 0 &&
         lastVisibleItemIndex >= totalItemsCount - SEARCH_NEXT_PAGE_PREFETCH_ITEM_THRESHOLD
+
+internal fun resolveSearchResultClickAction(
+    selectionMode: SearchSelectionMode,
+    result: SearchResult,
+): SearchUiAction =
+    when (selectionMode) {
+        SearchSelectionMode.PREVIEW_ON_MAP -> SearchUiAction.SearchResultPreviewClicked(result = result)
+        SearchSelectionMode.APPLY_TO_ROUTE -> SearchUiAction.SearchResultClicked(result = result)
+    }
 
 internal data class SearchResultDistanceUiState(
     @StringRes val labelResId: Int,
@@ -386,6 +397,12 @@ private fun SearchEntryContent(
         onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
         onSearch = { onAction(SearchUiAction.SearchSubmitted) },
     )
+    if (uiState.selectionMode == SearchSelectionMode.APPLY_TO_ROUTE) {
+        RouteEndpointMapPickerButton(
+            editingTarget = uiState.editingTarget,
+            onClick = { onAction(SearchUiAction.MapPickerClicked) },
+        )
+    }
     RecentVisitSection(
         recentSearches = uiState.recentSearches,
         onAction = onAction,
@@ -439,6 +456,14 @@ private fun SearchResultsContent(
                 onSearch = { onAction(SearchUiAction.SearchSubmitted) },
             )
         }
+        if (uiState.selectionMode == SearchSelectionMode.APPLY_TO_ROUTE) {
+            item(key = "route-endpoint-map-picker") {
+                RouteEndpointMapPickerButton(
+                    editingTarget = uiState.editingTarget,
+                    onClick = { onAction(SearchUiAction.MapPickerClicked) },
+                )
+            }
+        }
         item(key = "search-sort") {
             SearchSortControl(
                 selectedSortOption = uiState.sortOption,
@@ -491,11 +516,10 @@ private fun SearchResultsContent(
                         result = result,
                         onClick = {
                             onAction(
-                                if (uiState.selectionMode == SearchSelectionMode.APPLY_TO_ROUTE) {
-                                    SearchUiAction.SearchResultClicked(result = result)
-                                } else {
-                                    SearchUiAction.SearchResultPreviewClicked(result = result)
-                                },
+                                resolveSearchResultClickAction(
+                                    selectionMode = uiState.selectionMode,
+                                    result = result,
+                                ),
                             )
                         },
                     )
@@ -599,6 +623,51 @@ private fun SearchInputField(
             },
     )
 }
+
+@Composable
+private fun RouteEndpointMapPickerButton(
+    editingTarget: RouteEditingTarget,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val mapPickerContentDescription =
+        stringResource(id = editingTarget.mapPickerContentDescriptionRes())
+
+    OutlinedButton(
+        onClick = onClick,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = mapPickerContentDescription
+                },
+        shape = RoundedCornerShape(EumRadius.medium),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)),
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_map_selected_pin_blue),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = stringResource(id = R.string.search_screen_map_picker_action),
+            modifier = Modifier.padding(start = EumSpacing.xSmall),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@StringRes
+private fun RouteEditingTarget.mapPickerContentDescriptionRes(): Int =
+    when (this) {
+        RouteEditingTarget.ORIGIN -> R.string.search_screen_map_picker_origin_a11y
+        RouteEditingTarget.DESTINATION -> R.string.search_screen_map_picker_destination_a11y
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -841,11 +910,10 @@ private fun SearchResultSection(
                         result = result,
                         onClick = {
                             onAction(
-                                if (selectionMode == SearchSelectionMode.APPLY_TO_ROUTE) {
-                                    SearchUiAction.SearchResultClicked(result = result)
-                                } else {
-                                    SearchUiAction.SearchResultPreviewClicked(result = result)
-                                },
+                                resolveSearchResultClickAction(
+                                    selectionMode = selectionMode,
+                                    result = result,
+                                ),
                             )
                         },
                     )

@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.app.navigation
 
+import androidx.lifecycle.SavedStateHandle
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
@@ -149,6 +150,22 @@ class AppNavHostRoutingTest {
                 selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
             ),
         )
+    }
+
+    @Test
+    fun `map route endpoint picker request is stored and consumed on map saved state`() {
+        val savedStateHandle = SavedStateHandle()
+
+        savedStateHandle.requestRouteEndpointMapPicker(RouteEditingTarget.ORIGIN)
+
+        assertEquals(
+            RouteEditingTarget.ORIGIN.name,
+            savedStateHandle.get<String>("mapRouteEndpointPickerTarget"),
+        )
+
+        savedStateHandle.consumeRouteEndpointMapPickerTarget()
+
+        assertNull(savedStateHandle.get<String>("mapRouteEndpointPickerTarget"))
     }
 
     @Test

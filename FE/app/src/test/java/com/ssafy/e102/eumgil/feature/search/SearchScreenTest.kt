@@ -172,6 +172,32 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `search result click action previews result in map preview mode`() {
+        val result = testSearchResult()
+
+        assertEquals(
+            SearchUiAction.SearchResultPreviewClicked(result = result),
+            resolveSearchResultClickAction(
+                selectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
+                result = result,
+            ),
+        )
+    }
+
+    @Test
+    fun `search result click action applies result directly in route selection mode`() {
+        val result = testSearchResult()
+
+        assertEquals(
+            SearchUiAction.SearchResultClicked(result = result),
+            resolveSearchResultClickAction(
+                selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                result = result,
+            ),
+        )
+    }
+
+    @Test
     fun `search result distance uses meter label below one kilometer`() {
         assertEquals(
             SearchResultDistanceUiState(
@@ -365,3 +391,15 @@ class SearchScreenTest {
         assertEquals(emptyList<Int>(), uiState.labelResIds)
     }
 }
+
+private fun testSearchResult(): SearchResult =
+    SearchResult(
+        placeId = "10",
+        serverPlaceId = "10",
+        providerPlaceId = "123456789",
+        title = "Busan Tower",
+        subtitle = "1 Yongdusan-gil, Busan",
+        latitude = 35.1000,
+        longitude = 129.0320,
+        matched = true,
+    )

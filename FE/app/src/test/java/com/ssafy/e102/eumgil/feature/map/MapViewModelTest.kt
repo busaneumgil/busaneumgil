@@ -150,6 +150,72 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `route endpoint map picker enter exposes active editing target and dismiss clears mode`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onAction(MapUiAction.RouteEndpointMapPickerEntered(RouteEditingTarget.ORIGIN))
+            advanceUntilIdle()
+
+            assertEquals(RouteEditingTarget.ORIGIN, destinationSelectionRepository.editingTarget.value)
+            assertEquals(RouteEditingTarget.ORIGIN, viewModel.uiState.value.routeEndpointMapPickerState?.editingTarget)
+
+            viewModel.onAction(MapUiAction.RouteEndpointMapPickerDismissed)
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.routeEndpointMapPickerState)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+        }
+
+    @Test
+    fun `route endpoint map picker address tap selects coordinate destination for active target`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val tappedCoordinate = MapCoordinate(latitude = 35.1775, longitude = 129.0771)
+
+            viewModel.onAction(MapUiAction.RouteEndpointMapPickerEntered(RouteEditingTarget.ORIGIN))
+            viewModel.onAction(MapUiAction.MapTapped(MapTapPayload(coordinate = tappedCoordinate)))
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertEquals(tappedCoordinate, viewModel.uiState.value.selectedMapPinCoordinate)
+            assertEquals(MapPlaceDetailType.EXTERNAL_ADDRESS, viewModel.uiState.value.facilityDetailSheetState.mapTapDetail?.detailType)
+
+            viewModel.onAction(MapUiAction.FacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION))
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+            val selectedOrigin = destinationSelectionRepository.selectedOrigin.value
+
+            assertEquals(MapUiEvent.NavigateToRouteSetting(locationPermissionPrechecked = true), event)
+            assertEquals("선택한 위치", selectedOrigin?.name)
+            assertEquals(tappedCoordinate.latitude, selectedOrigin?.latitude ?: 0.0, 0.0)
+            assertEquals(tappedCoordinate.longitude, selectedOrigin?.longitude ?: 0.0, 0.0)
+            assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertNull(viewModel.uiState.value.routeEndpointMapPickerState)
+            assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+        }
+
+    @Test
     fun `search preview centers camera and opens bottom sheet without selecting route destination`() =
         runTest {
             val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
@@ -540,7 +606,7 @@ class MapViewModelTest {
                 }
 
             assertEquals(destination, destinationSelectionRepository.selectedDestination.value)
-            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting(), event)
             assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
             assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
         }
@@ -584,7 +650,7 @@ class MapViewModelTest {
 
             assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             assertNull(destinationSelectionRepository.selectedDestination.value)
-            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting(), event)
         }
 
     @Test
@@ -633,7 +699,7 @@ class MapViewModelTest {
 
             assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             assertEquals(destination, destinationSelectionRepository.selectedDestination.value)
-            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting(), event)
         }
 
     @Test
@@ -685,7 +751,7 @@ class MapViewModelTest {
 
             assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             assertEquals(destination, destinationSelectionRepository.selectedDestination.value)
-            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting(), event)
         }
 
     @Test
@@ -752,7 +818,7 @@ class MapViewModelTest {
             assertEquals(mapTapDetail.address, selectedDestination?.address)
             assertEquals(mapTapDetail.latitude, selectedDestination?.latitude ?: 0.0, 0.0)
             assertEquals(mapTapDetail.longitude, selectedDestination?.longitude ?: 0.0, 0.0)
-            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting(), event)
         }
 
     @Test
@@ -1381,7 +1447,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `map tap drops selected location pin and clears selected facility`() =
+    fun `address map tap clears selected facility without selecting coordinate outside picker`() =
         runTest {
             val viewModel =
                 MapViewModel(
@@ -1403,7 +1469,7 @@ class MapViewModelTest {
             viewModel.onAction(MapUiAction.MapTapped(MapTapPayload(coordinate = tappedCoordinate)))
             advanceUntilIdle()
 
-            assertEquals(tappedCoordinate, viewModel.uiState.value.selectedMapPinCoordinate)
+            assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
             assertEquals(null, viewModel.uiState.value.selectedMarkerId)
             assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
         }
@@ -1567,7 +1633,7 @@ class MapViewModelTest {
                     viewModel.uiEvent.first()
                 }
             val selectedDestination = requireNotNull(destinationSelectionRepository.selectedDestination.value)
-            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting(), event)
             assertEquals("Kakao Cafe", selectedDestination.name)
             assertEquals(tappedCoordinate.latitude, selectedDestination.latitude, 0.0)
             assertEquals(tappedCoordinate.longitude, selectedDestination.longitude, 0.0)
@@ -1977,7 +2043,7 @@ class MapViewModelTest {
             assertEquals(selectedDetail.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
             assertEquals(null, viewModel.uiState.value.selectedMarkerId)
             assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
-            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting(), event)
         }
 
     @Test
@@ -2193,7 +2259,7 @@ class MapViewModelTest {
                 }
 
             assertEquals("recent-place-1", destinationSelectionRepository.selectedDestination.value?.placeId)
-            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting(), event)
         }
 
     @Test
@@ -2683,7 +2749,7 @@ class MapViewModelTest {
 
             assertEquals("101", destinationSelectionRepository.selectedDestination.value?.placeId)
             assertEquals("Accessible Cafe", destinationSelectionRepository.selectedDestination.value?.name)
-            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting(), event)
         }
 
     @Test

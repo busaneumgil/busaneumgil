@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -65,6 +66,39 @@ class SearchViewModelEditingTargetTest {
             )
 
             assertEquals(SearchSelectionMode.APPLY_TO_ROUTE, viewModel.uiState.value.selectionMode)
+        }
+
+    @Test
+    fun `map picker click in apply to route mode opens picker for active editing target`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent =
+                backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) {
+                    withTimeoutOrNull(100) { viewModel.uiEvent.first() }
+                }
+
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+            viewModel.onAction(SearchUiAction.MapPickerClicked)
+            advanceUntilIdle()
+
+            assertEquals(RouteEditingTarget.ORIGIN, destinationSelectionRepository.editingTarget.value)
+            assertEquals(
+                SearchUiEvent.NavigateToRouteEndpointMapPicker(RouteEditingTarget.ORIGIN),
+                uiEvent.await(),
+            )
         }
 
     @Test
@@ -122,6 +156,38 @@ class SearchViewModelEditingTargetTest {
                     editingTarget = RouteEditingTarget.ORIGIN,
                     selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
                 ),
+                uiEvent.await(),
+            )
+        }
+
+    @Test
+    fun `apply to route search result click stores selected origin and prechecks route setting permission`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+            val result = testSearchResult()
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedOrigin.value)
+            assertEquals(null, destinationSelectionRepository.selectedDestination.value)
+            assertEquals(
+                SearchUiEvent.NavigateToRouteSetting(locationPermissionPrechecked = true),
                 uiEvent.await(),
             )
         }

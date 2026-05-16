@@ -83,6 +83,7 @@ class SearchViewModel(
                 )
             is SearchUiAction.EntryRouteEntered -> enterEntryRoute(preserveState = action.preserveState)
             SearchUiAction.VoiceInputClicked -> emitUiEvent(SearchUiEvent.NavigateToVoiceInput)
+            SearchUiAction.MapPickerClicked -> openRouteEndpointMapPicker()
             SearchUiAction.VoiceRouteEntered -> enterVoiceRoute()
             SearchUiAction.VoiceCaptureButtonClicked -> startVoiceCapture()
             SearchUiAction.VoiceCaptureEmpty -> handleVoiceCaptureEmpty()
@@ -116,7 +117,19 @@ class SearchViewModel(
     private fun selectSearchResult(result: SearchResult) {
         if (!handoffSearchResult(result)) return
 
-        emitUiEvent(SearchUiEvent.NavigateToRouteSetting)
+        emitUiEvent(
+            SearchUiEvent.NavigateToRouteSetting(
+                locationPermissionPrechecked = destinationSelectionRepository.selectedOrigin.value != null,
+            ),
+        )
+    }
+
+    private fun openRouteEndpointMapPicker() {
+        val currentState = mutableUiState.value
+        if (currentState.selectionMode != SearchSelectionMode.APPLY_TO_ROUTE) return
+
+        destinationSelectionRepository.setEditingTarget(currentState.editingTarget)
+        emitUiEvent(SearchUiEvent.NavigateToRouteEndpointMapPicker(currentState.editingTarget))
     }
 
     private fun previewSearchResult(result: SearchResult) {

@@ -28,8 +28,9 @@ fun SearchEntryRoute(
     onNavigateBack: () -> Unit,
     onNavigateToResults: (String, RouteEditingTarget, SearchSelectionMode) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
-    onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteSetting: (Boolean) -> Unit,
     onNavigateToMapPreview: () -> Unit,
+    onNavigateToRouteEndpointMapPicker: (RouteEditingTarget) -> Unit,
     onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     initialSelectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
@@ -47,6 +48,7 @@ fun SearchEntryRoute(
         onNavigateToVoiceInput = onNavigateToVoiceInput,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
         onNavigateToMapPreview = onNavigateToMapPreview,
+        onNavigateToRouteEndpointMapPicker = onNavigateToRouteEndpointMapPicker,
         onNavigateToRouteBriefing = onNavigateToRouteBriefing,
         modifier = modifier,
     )
@@ -58,8 +60,9 @@ fun SearchResultsRoute(
     onNavigateBack: () -> Unit,
     onNavigateToResults: (String, RouteEditingTarget, SearchSelectionMode) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
-    onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteSetting: (Boolean) -> Unit,
     onNavigateToMapPreview: () -> Unit,
+    onNavigateToRouteEndpointMapPicker: (RouteEditingTarget) -> Unit,
     onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     initialSelectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
@@ -75,6 +78,7 @@ fun SearchResultsRoute(
         onNavigateToVoiceInput = onNavigateToVoiceInput,
         onNavigateToRouteSetting = onNavigateToRouteSetting,
         onNavigateToMapPreview = onNavigateToMapPreview,
+        onNavigateToRouteEndpointMapPicker = onNavigateToRouteEndpointMapPicker,
         onNavigateToRouteBriefing = onNavigateToRouteBriefing,
         modifier = modifier,
     )
@@ -113,8 +117,9 @@ private fun SearchRouteContent(
     onNavigateBack: () -> Unit,
     onNavigateToResults: (String, RouteEditingTarget, SearchSelectionMode) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
-    onNavigateToRouteSetting: () -> Unit,
+    onNavigateToRouteSetting: (Boolean) -> Unit,
     onNavigateToMapPreview: () -> Unit,
+    onNavigateToRouteEndpointMapPicker: (RouteEditingTarget) -> Unit,
     onNavigateToRouteBriefing: () -> Unit = {},
     onStartVoiceCapture: () -> Unit = {},
     onStopVoiceCapture: () -> Unit = {},
@@ -160,6 +165,7 @@ private fun SearchRouteContent(
         onNavigateToVoiceInput,
         onNavigateToRouteSetting,
         onNavigateToMapPreview,
+        onNavigateToRouteEndpointMapPicker,
         onNavigateToRouteBriefing,
         onStartVoiceCapture,
         onStopVoiceCapture,
@@ -172,8 +178,11 @@ private fun SearchRouteContent(
                     onNavigateToResults(event.query, event.editingTarget, event.selectionMode)
                 SearchUiEvent.StartVoiceCapture -> onStartVoiceCapture()
                 SearchUiEvent.StopVoiceCapture -> onStopVoiceCapture()
-                SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
+                is SearchUiEvent.NavigateToRouteSetting ->
+                    onNavigateToRouteSetting(event.locationPermissionPrechecked)
                 SearchUiEvent.NavigateToMapPreview -> onNavigateToMapPreview()
+                is SearchUiEvent.NavigateToRouteEndpointMapPicker ->
+                    onNavigateToRouteEndpointMapPicker(event.editingTarget)
                 SearchUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
                 SearchUiEvent.NavigateToLowVisionBookmark -> Unit
             }
@@ -276,8 +285,9 @@ internal fun SearchVoiceInputExperience(
 
                 SearchUiEvent.StartVoiceCapture -> sttViewModel.startListening()
                 SearchUiEvent.StopVoiceCapture -> sttViewModel.stopListening()
-                SearchUiEvent.NavigateToRouteSetting -> Unit
+                is SearchUiEvent.NavigateToRouteSetting -> Unit
                 SearchUiEvent.NavigateToMapPreview -> Unit
+                is SearchUiEvent.NavigateToRouteEndpointMapPicker -> Unit
                 SearchUiEvent.NavigateToRouteBriefing -> Unit
                 SearchUiEvent.NavigateToLowVisionBookmark -> Unit
                 SearchUiEvent.NavigateToVoiceInput -> Unit

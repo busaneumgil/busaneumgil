@@ -966,7 +966,53 @@ class SearchViewModelTest {
             advanceUntilIdle()
 
             assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
-            assertEquals(SearchUiEvent.NavigateToRouteSetting, uiEvent.await())
+            assertEquals(SearchUiEvent.NavigateToRouteSetting(), uiEvent.await())
+        }
+
+    @Test
+    fun `search result click with manual origin prechecks route setting location permission`() =
+        runTest {
+            val origin =
+                SearchResult(
+                    placeId = "origin-1",
+                    title = "Manual Origin",
+                    subtitle = "1 Origin-ro, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0300,
+                    category = PlaceCategory.PUBLIC_OFFICE,
+                ).toPlaceDestination()
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedOrigin(origin)
+                }
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+            val result =
+                SearchResult(
+                    placeId = "place-1",
+                    title = "Busan City Hall",
+                    subtitle = "123 Jungang-daero, Busan",
+                    latitude = 35.1797,
+                    longitude = 129.0750,
+                    category = PlaceCategory.TOURIST_ATTRACTION,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(SearchUiAction.SearchResultClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
+            assertEquals(result.toPlaceDestination(), destinationSelectionRepository.selectedDestination.value)
+            assertEquals(
+                SearchUiEvent.NavigateToRouteSetting(locationPermissionPrechecked = true),
+                uiEvent.await(),
+            )
         }
 
     @Test

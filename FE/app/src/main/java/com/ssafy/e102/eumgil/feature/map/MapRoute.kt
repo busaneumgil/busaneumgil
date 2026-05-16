@@ -38,9 +38,11 @@ fun MapRoute(
     viewModelStoreOwner: ViewModelStoreOwner,
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
-    onNavigateToRouteSetting: () -> Unit = {},
+    onNavigateToRouteSetting: (Boolean) -> Unit = {},
     onNavigateToSearch: (RouteEditingTarget) -> Unit = {},
     onNavigateToSearchResults: (String, RouteEditingTarget) -> Unit = { _, _ -> },
+    routeEndpointMapPickerTarget: RouteEditingTarget? = null,
+    onRouteEndpointMapPickerTargetConsumed: () -> Unit = {},
     shouldResetForHomeEntry: Boolean = false,
     onHomeReentryResetConsumed: () -> Unit = {},
     onFacilityDetailVisibilityChanged: (Boolean) -> Unit = {},
@@ -105,6 +107,13 @@ fun MapRoute(
         consumeHomeReentryReset()
     }
 
+    LaunchedEffect(viewModel, routeEndpointMapPickerTarget) {
+        val editingTarget = routeEndpointMapPickerTarget ?: return@LaunchedEffect
+
+        viewModel.onAction(MapUiAction.RouteEndpointMapPickerEntered(editingTarget))
+        onRouteEndpointMapPickerTargetConsumed()
+    }
+
     DisposableEffect(lifecycleOwner, viewModel) {
         val lifecycle = lifecycleOwner.lifecycle
         val observer =
@@ -139,7 +148,8 @@ fun MapRoute(
     ) {
         viewModel.uiEvent.collect { event ->
             when (event) {
-                MapUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
+                is MapUiEvent.NavigateToRouteSetting ->
+                    onNavigateToRouteSetting(event.locationPermissionPrechecked)
                 is MapUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget)
                 is MapUiEvent.OpenDialer -> context.startActivity(createDialIntent(event.phoneNumber))
                 MapUiEvent.RequestLocationPermission ->
@@ -151,6 +161,10 @@ fun MapRoute(
 
     BackHandler(enabled = uiState.isVoiceSearchVisible) {
         viewModel.onAction(MapUiAction.VoiceSearchDismissed)
+    }
+
+    BackHandler(enabled = uiState.routeEndpointMapPickerState != null && uiState.isVoiceSearchVisible.not()) {
+        viewModel.onAction(MapUiAction.RouteEndpointMapPickerDismissed)
     }
 
     BackHandler(enabled = uiState.facilityDetailSheetState.isVisible && uiState.isVoiceSearchVisible.not()) {

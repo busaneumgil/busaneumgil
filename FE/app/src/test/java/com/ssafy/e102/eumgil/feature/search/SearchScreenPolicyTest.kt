@@ -7,6 +7,29 @@ import org.junit.Test
 
 class SearchScreenPolicyTest {
     @Test
+    fun `apply to route search exposes direct map picker action`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+
+        assertTrue(
+            "Apply-to-route search should show the direct map picker button only in route assignment mode.",
+            source.contains("uiState.selectionMode == SearchSelectionMode.APPLY_TO_ROUTE") &&
+                source.contains("RouteEndpointMapPickerButton("),
+        )
+        assertTrue(
+            "The direct map picker button should dispatch a dedicated map picker action.",
+            source.contains("SearchUiAction.MapPickerClicked"),
+        )
+        assertTrue(
+            "The direct map picker button should use the dedicated label and target-specific accessibility copy.",
+            source.contains("R.string.search_screen_map_picker_action") &&
+                source.contains("R.string.search_screen_map_picker_origin_a11y") &&
+                source.contains("R.string.search_screen_map_picker_destination_a11y"),
+        )
+    }
+
+    @Test
     fun `search screen suppresses ripple on row taps that navigate away from the current view`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")

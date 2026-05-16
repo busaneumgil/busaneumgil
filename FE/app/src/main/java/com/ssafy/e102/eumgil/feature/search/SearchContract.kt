@@ -53,6 +53,8 @@ sealed interface SearchUiAction {
 
     data object VoiceInputClicked : SearchUiAction
 
+    data object MapPickerClicked : SearchUiAction
+
     data object VoiceRouteEntered : SearchUiAction
 
     data object VoiceCaptureButtonClicked : SearchUiAction
@@ -131,9 +133,15 @@ sealed interface SearchUiEvent {
 
     data object StopVoiceCapture : SearchUiEvent
 
-    data object NavigateToRouteSetting : SearchUiEvent
+    data class NavigateToRouteSetting(
+        val locationPermissionPrechecked: Boolean = false,
+    ) : SearchUiEvent
 
     data object NavigateToMapPreview : SearchUiEvent
+
+    data class NavigateToRouteEndpointMapPicker(
+        val editingTarget: RouteEditingTarget,
+    ) : SearchUiEvent
 
     data object NavigateToRouteBriefing : SearchUiEvent
 

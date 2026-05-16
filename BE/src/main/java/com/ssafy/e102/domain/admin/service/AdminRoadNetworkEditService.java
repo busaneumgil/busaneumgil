@@ -938,7 +938,8 @@ public class AdminRoadNetworkEditService {
 				from updates
 				where rs.edge_id = updates.edge_id
 					and updates.match_count > 0
-				""".formatted(SOURCE_FEATURE_BBOX_EXPAND_DEGREE));
+				"""
+				.formatted(SOURCE_FEATURE_BBOX_EXPAND_DEGREE));
 	}
 
 	private int removeOrphanNodes(Set<Long> candidateNodeIds) {

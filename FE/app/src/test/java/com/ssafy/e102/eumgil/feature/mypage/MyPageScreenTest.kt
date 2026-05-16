@@ -101,46 +101,46 @@ class MyPageScreenTest {
     }
 
     @Test
-    fun `my page main menu exposes duribal call button before the regular menu rows`() {
+    fun `my page main menu does not expose duribal call button`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
                 .readText()
+        val mainMenuSection =
+            source
+                .substringAfter("private fun MainMenuSection(")
+                .substringBefore("@Composable\nprivate fun MyPageMenuRow")
 
-        assertTrue(
-            "My page should surface the duribal call CTA at the top of the main menu section.",
-            source.contains("DuribalCallButton(onClick = onDuribalCallClick)"),
+        assertFalse(
+            "My page should not expose the duribal CTA; route search failure owns that fallback.",
+            source.contains("DuribalCallButton(") ||
+                source.contains("ic_mypage_duribal_call") ||
+                source.contains("my_page_duribal_call_button") ||
+                mainMenuSection.contains("onDuribalCallClick"),
         )
         assertTrue(
-            "The duribal CTA should use the provided dedicated icon resource.",
-            source.contains("R.drawable.ic_mypage_duribal_call"),
+            "The regular menu rows should remain in the main menu after removing the duribal CTA.",
+            mainMenuSection.contains("MyPageMenuRow("),
         )
     }
 
     @Test
-    fun `my page screen renders duribal call confirmation dialog with yes and no actions`() {
+    fun `my page route does not own duribal call confirmation flow`() {
         val myPageSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
                 .readText()
-        val dialogSource =
-            File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/component/dialog/EumDuribalCallConfirmDialog.kt")
+        val routeSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageRoute.kt")
                 .readText()
 
-        assertTrue(
-            "MyPageScreen should render the duribal confirmation dialog when the route marks it visible.",
-            myPageSource.contains("if (isDuribalConfirmDialogVisible)"),
+        assertFalse(
+            "MyPageScreen should not render the duribal confirmation dialog after moving the CTA to route fallback.",
+            myPageSource.contains("isDuribalConfirmDialogVisible") ||
+                myPageSource.contains("EumDuribalCallConfirmDialog("),
         )
-        assertTrue(
-            "MyPageScreen should reuse the shared duribal confirmation dialog component.",
-            myPageSource.contains("EumDuribalCallConfirmDialog(") &&
-                myPageSource.contains("EumDuribalCallConfirmDismissStyle.SecondaryButton"),
-        )
-        assertTrue(
-            "The shared dialog should expose a positive confirmation action.",
-            dialogSource.contains("my_page_duribal_call_dialog_confirm"),
-        )
-        assertTrue(
-            "The shared dialog should expose a negative dismiss action.",
-            dialogSource.contains("my_page_duribal_call_dialog_dismiss"),
+        assertFalse(
+            "MyPageRoute should not create the duribal dial intent; route setting owns that entry point.",
+            routeSource.contains("createDuribalDialIntent") ||
+                routeSource.contains("onDuribalCallClick"),
         )
     }
 }

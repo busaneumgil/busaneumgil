@@ -287,6 +287,12 @@
     <string name="saved_route_action_start_a11y">%1$s 길안내 시작</string>
     <string name="saved_route_action_remove_a11y">%1$s 북마크 삭제</string>
     <string name="saved_route_select_item_a11y">%1$s 삭제 선택</string>
+    <string name="saved_route_place_count_label">저장한 장소</string>
+    <string name="saved_route_route_count_label">저장한 경로</string>
+    <string name="saved_route_selected_place_count_label">선택한 장소</string>
+    <string name="saved_route_selected_route_count_label">선택한 경로</string>
+    <string name="saved_route_place_sort_nearest">가까운 순</string>
+    <string name="saved_route_route_sort_recent_used">최근 이용순</string>
     <string name="saved_route_done">완료</string>
     <string name="saved_route_start_route">길찾기</string>
     <string name="saved_route_route_setting_action">경로 설정하기</string>
@@ -498,6 +504,8 @@
     <string name="route_setting_fallback_notice_title">도보 경로를 먼저 보여드려요.</string>
     <string name="route_setting_summary_empty_title">표시할 경로 요약이 없습니다.</string>
     <string name="route_setting_summary_empty_description">선택된 목적지에 대한 route summary를 만들 수 없으면 이 영역에 empty 상태를 유지합니다.</string>
+    <string name="route_setting_no_route_result_title">탐색 가능한 경로가 없어요</string>
+    <string name="route_setting_no_route_result_description">출발지나 도착지를 조금 조정한 뒤 다시 시도해 주세요.</string>
     <string name="route_setting_summary_source_value">source: %1$s</string>
     <string name="route_setting_preview_title">경로 preview</string>
     <string name="route_setting_preview_placeholder_title">Preview line 준비 중</string>

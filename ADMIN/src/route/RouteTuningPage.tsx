@@ -149,7 +149,7 @@ export function RouteTuningPage({
         roadviewContainerRef={roadviewContainerRef}
         onRoadviewChange={onRoadviewChange}
         editable={false}
-        toolbarMode="segmentFeatureLegend"
+        toolbarMode="routeAttributeLegend"
         routePointPickMode={routePickEnabled ? pointMode : null}
         onRoutePointPick={handleRoutePointPick}
         routePoints={{
@@ -220,6 +220,8 @@ export function RouteTuningPage({
                 <AttributeRow label="edge" value={String(selectedSegment.properties.edgeId)} />
                 <AttributeRow label="type" value={String(selectedSegment.properties.segmentType ?? "-")} />
                 <AttributeRow label="length" value={`${formatNumber(Number(selectedSegment.properties.lengthMeter))}m`} />
+                <AttributeRow label="실측 폭" value={formatMeter(selectedSegment.properties.widthMeter)} />
+                <AttributeRow label="평균 경사도" value={formatPercent(selectedSegment.properties.avgSlopePercent)} />
               </dl>
               <div className="admin-form-grid">
                 <StateSelect label="통행 가능" value={attributeDraft.walkAccess ?? "UNKNOWN"} options={accessibilityOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, walkAccess: value as AccessibilityState }))} />
@@ -320,4 +322,16 @@ function formatDistance(distanceMeter: number) {
 function formatNumber(value?: number | null) {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return value.toFixed(value % 1 === 0 ? 0 : 1);
+}
+
+function formatMeter(value?: number | string | null) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return "-";
+  return `${numberValue.toFixed(2)}m`;
+}
+
+function formatPercent(value?: number | string | null) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return "-";
+  return `${numberValue.toFixed(2)}%`;
 }

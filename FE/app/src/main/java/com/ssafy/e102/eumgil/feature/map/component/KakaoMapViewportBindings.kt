@@ -1319,10 +1319,16 @@ private fun MapViewportOverlayTone.toKakaoRouteLinePalette(): KakaoRouteLinePale
                 casingColor = 0xFF005391.toInt(),
             )
 
+        MapViewportOverlayTone.NAVIGATION_WALK ->
+            KakaoRouteLinePalette(
+                lineColor = 0xFF0061FE.toInt(),
+                casingColor = 0xFF0061FE.toInt(),
+            )
+
         MapViewportOverlayTone.TRANSIT_WALK ->
             KakaoRouteLinePalette(
-                lineColor = 0xFFD9D9D9.toInt(),
-                casingColor = 0xFFD9D9D9.toInt(),
+                lineColor = 0xFF99B5D1.toInt(),
+                casingColor = 0xFF99B5D1.toInt(),
             )
 
         MapViewportOverlayTone.ERROR ->

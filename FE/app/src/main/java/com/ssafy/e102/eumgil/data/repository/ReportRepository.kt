@@ -4,16 +4,18 @@ import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.entity.ReportDraftEntity
 import com.ssafy.e102.eumgil.data.local.entity.ReportOutboxEntity
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.CreateHazardReportRequestDto
+import com.ssafy.e102.eumgil.data.remote.dto.CreateHazardReportResponseDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPointDto
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
-import java.time.ZoneOffset
+import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +42,12 @@ interface ReportRepository {
     suspend fun saveOutbox(outbox: ReportOutboxData): ReportOutboxData
 
     suspend fun submitOutboxToServer(outboxId: String): ReportSubmitResult
+
+    /**
+     * Task 4.2 — 앱이 비정상 종료되어 `Submitting` 상태로 멈춰있던 outbox row를 다시 `Pending`으로 되돌린다.
+     * 앱 시작 시 1회 호출. 영향 row 수를 반환한다. 기본 구현은 no-op (테스트 더블 호환).
+     */
+    suspend fun resetStaleSubmittingOutboxes(): Int = 0
 }
 
 data class ReportDraftData(
@@ -177,8 +185,22 @@ class DefaultReportRepository(
     private val clock: () -> Long = { System.currentTimeMillis() },
     // Task 5.5 — outbox 사진들을 BE submit 직전에 presigned URL로 업로드. null/NoOp이면 업로드 skip.
     private val imageUploader: HazardReportImageUploader = NoOpHazardReportImageUploader,
+    // Task 5.9 — 401(A4010) 발생 시 /auth/reissue로 토큰 갱신 후 동일 요청을 1회 재시도하기 위한 인프라.
+    // 둘 다 주입되면 AuthenticatedRequestRunner를 사용하고, 아니면 기존 accessTokenProvider fallback.
+    authSessionRepository: AuthSessionRepository? = null,
+    authRemoteDataSource: AuthRemoteDataSource? = null,
 ) : ReportRepository {
     private val serverReportHistory = MutableStateFlow(emptyList<ReportHistoryData>())
+
+    private val authenticatedRequestRunner =
+        if (authSessionRepository != null && authRemoteDataSource != null) {
+            AuthenticatedRequestRunner(
+                authSessionRepository = authSessionRepository,
+                authRemoteDataSource = authRemoteDataSource,
+            )
+        } else {
+            null
+        }
 
     override fun observeReportHistory(): Flow<List<ReportOutboxData>> =
         reportOutboxDao.observeReportOutboxItems().map { outboxItems ->
@@ -233,6 +255,9 @@ class DefaultReportRepository(
         reportDraftDao.deleteReportDraft(draftId)
     }
 
+    override suspend fun resetStaleSubmittingOutboxes(): Int =
+        reportOutboxDao.resetSubmittingOutboxesToPending(now = clock())
+
     override suspend fun saveOutbox(outbox: ReportOutboxData): ReportOutboxData {
         val now = clock()
         val outboxId = outbox.outboxId.ifBlank(idFactory)
@@ -250,7 +275,6 @@ class DefaultReportRepository(
 
     override suspend fun submitOutboxToServer(outboxId: String): ReportSubmitResult {
         val datasource = hazardReportsRemoteDataSource ?: return ReportSubmitResult.Skipped
-        val token = accessTokenProvider() ?: return failOutbox(outboxId, ReportSubmitFailureReason.Unauthorized)
 
         val outboxEntity =
             reportOutboxDao.getReportOutbox(outboxId) ?: return ReportSubmitResult.Skipped
@@ -264,30 +288,81 @@ class DefaultReportRepository(
 
         markOutboxStatus(outboxEntity, ReportOutboxStatus.Submitting, lastFailureReason = null)
 
-        // Task 5.5 — 서버 제출 직전에 outbox 사진들을 presigned URL로 업로드한다.
-        // 부분 성공 시 성공한 objectKey는 outbox에 보존되어 다음 재시도 시 중복 업로드를 피한다.
-        val outboxData = outboxEntity.toData()
-        val uploadResult =
+        // Task 5.9 — 업로드+생성을 한 단위로 runner.run에 감싸서 401(A4010) 발생 시
+        // /auth/reissue 후 같은 흐름을 1회 재시도한다. 이미 업로드된 사진은 outbox에 보존된 objectKey 덕분에
+        // 재시도 시 alreadyUploadedCount로 skip되므로 재시도 비용도 작다.
+        val runResult =
             runCatching {
-                imageUploader.uploadAll(
-                    accessToken = token,
-                    photos = outboxData.photos,
-                    alreadyUploadedCount = outboxData.imageObjectKeys.size,
-                )
-            }.getOrElse {
-                return failOutbox(outboxId, ReportSubmitFailureReason.Network)
+                runAuthenticated { token ->
+                    performSubmit(
+                        datasource = datasource,
+                        outboxEntity = outboxEntity,
+                        token = token,
+                    )
+                }
             }
 
+        return runResult.fold(
+            onSuccess = { outcome ->
+                if (outcome == null) {
+                    // 인증 세션 없음/재발급 실패 — UnAuthorized로 분류.
+                    failOutbox(outboxId, ReportSubmitFailureReason.Unauthorized)
+                } else if (outcome.partialUploadFailure) {
+                    // 사진 업로드 부분 실패(인증과 무관한 IO/네트워크 오류).
+                    failOutbox(outboxId, ReportSubmitFailureReason.Network)
+                } else {
+                    val now = clock()
+                    reportOutboxDao.upsertReportOutbox(
+                        outcome.outboxAfterUpload.copy(
+                            status = ReportOutboxStatus.Submitted.name,
+                            serverReportId = outcome.response!!.reportId,
+                            lastFailureReason = null,
+                            updatedAt = now,
+                        ),
+                    )
+                    ReportSubmitResult.Success(
+                        outboxId = outcome.outboxAfterUpload.outboxId,
+                        serverReportId = outcome.response.reportId,
+                    )
+                }
+            },
+            onFailure = { throwable ->
+                failOutbox(outboxId, throwable.toSubmitFailureReason())
+            },
+        )
+    }
+
+    /**
+     * 한 번의 submit 시도(이미지 업로드 + 제보 생성)를 토큰을 받아 수행한다.
+     *
+     * 부분 업로드 실패는 throw하지 않고 `SubmitOutcome.partialUploadFailure = true`로 표현해
+     * runner의 재시도 대상에서 제외한다(인증 문제가 아니라 재시도해도 무의미하므로).
+     * 인증 실패(401)는 throw 그대로 두어 runner가 reissue + 재시도하도록 한다.
+     */
+    private suspend fun performSubmit(
+        datasource: HazardReportsRemoteDataSource,
+        outboxEntity: ReportOutboxEntity,
+        token: String,
+    ): SubmitOutcome {
+        val outboxData = outboxEntity.toData()
+        val uploadResult =
+            imageUploader.uploadAll(
+                accessToken = token,
+                photos = outboxData.photos,
+                alreadyUploadedCount = outboxData.imageObjectKeys.size,
+            )
         val mergedObjectKeys = outboxData.imageObjectKeys + uploadResult.newlyUploadedObjectKeys
-        // 업로드 결과(부분 성공이라도 그때까지의 objectKey)를 outbox에 미리 반영하여 재시도 시 활용.
         val outboxAfterUpload = persistObjectKeys(outboxEntity, mergedObjectKeys)
 
         if (!uploadResult.allSucceeded) {
-            // 일부 사진 업로드 실패 시 즉시 실패 처리. 이미 보존된 objectKey는 다음 재시도에 재활용.
-            return failOutbox(outboxId, ReportSubmitFailureReason.Network)
+            return SubmitOutcome(
+                outboxAfterUpload = outboxAfterUpload,
+                response = null,
+                partialUploadFailure = true,
+            )
         }
 
-        return runCatching {
+        val response =
             datasource.createHazardReport(
                 accessToken = token,
                 request =
@@ -299,32 +374,57 @@ class DefaultReportRepository(
                                 lat = outboxAfterUpload.latitude,
                                 lng = outboxAfterUpload.longitude,
                             ),
-                        // Task 5.6에서 imageObjectKeys 필드로 전환 예정. 이번 분기는 5.5 범위라
-                        // 기존 imageUrls 필드 그대로 두되 업로드된 objectKey는 outbox에 보존.
-                        imageUrls = emptyList(),
+                        // Task 5.6 — Task 5.5에서 outbox에 보존된 presigned 업로드 objectKey를 BE에 전달.
+                        // 업로드가 모두 성공한 시점에만 이 코드 경로에 도달하므로 mergedObjectKeys는
+                        // 사용자가 첨부한 사진 전체에 대응한다.
+                        imageObjectKeys = mergedObjectKeys,
                     ),
+                // Task 5.8 — outboxId(UUID, 36자)를 Idempotency-Key로 재사용.
+                // 같은 outbox가 네트워크 끊김 등으로 재시도되어도 BE는 신규 row를 만들지 않고 기존 reportId를 반환한다.
+                idempotencyKey = outboxAfterUpload.outboxId,
             )
-        }.fold(
-            onSuccess = { response ->
-                val now = clock()
-                reportOutboxDao.upsertReportOutbox(
-                    outboxAfterUpload.copy(
-                        status = ReportOutboxStatus.Submitted.name,
-                        serverReportId = response.reportId,
-                        lastFailureReason = null,
-                        updatedAt = now,
-                    ),
-                )
-                ReportSubmitResult.Success(
-                    outboxId = outboxAfterUpload.outboxId,
-                    serverReportId = response.reportId,
-                )
-            },
-            onFailure = { throwable ->
-                failOutbox(outboxId, throwable.toSubmitFailureReason())
-            },
+
+        return SubmitOutcome(
+            outboxAfterUpload = outboxAfterUpload,
+            response = response,
+            partialUploadFailure = false,
         )
     }
+
+    /**
+     * `runAuthenticated`를 통해 token이 필요한 작업을 실행한다.
+     *
+     * Runner가 주입되어 있으면 401 자동 재발급/재시도를 처리하고, 그렇지 않으면 legacy `accessTokenProvider`로 fallback.
+     * 인증 세션이 아예 없거나 reissue마저 실패하면 `null`을 반환해 호출자가 Unauthorized로 분류한다.
+     */
+    private suspend fun <T : Any> runAuthenticated(execute: suspend (token: String) -> T): T? {
+        val runner = authenticatedRequestRunner
+        if (runner != null) {
+            return when (
+                val result =
+                    runner.run(
+                        execute = { session -> execute(session.accessToken) },
+                        isAuthenticationFailure = ::isHazardReportsAuthenticationFailure,
+                    )
+            ) {
+                AuthenticatedRequestResult.MissingSession,
+                AuthenticatedRequestResult.AuthenticationFailed,
+                -> null
+                is AuthenticatedRequestResult.Success -> result.value
+            }
+        }
+        val token = accessTokenProvider() ?: return null
+        return execute(token)
+    }
+
+    private fun isHazardReportsAuthenticationFailure(throwable: Throwable): Boolean =
+        throwable is HazardReportsApiException && throwable.httpStatusCode == HTTP_UNAUTHORIZED
+
+    private data class SubmitOutcome(
+        val outboxAfterUpload: ReportOutboxEntity,
+        val response: CreateHazardReportResponseDto?,
+        val partialUploadFailure: Boolean,
+    )
 
     /**
      * 업로드 단계의 결과(목록의 일부 또는 전부 성공한 objectKey)를 outbox에 미리 보존한다.
@@ -375,9 +475,12 @@ class DefaultReportRepository(
     private suspend fun refreshReportHistoryFromServerIfPossible() {
         runCatching {
             val datasource = hazardReportsRemoteDataSource ?: return@runCatching
-            val token = accessTokenProvider() ?: return@runCatching
 
-            val serverItems = fetchAllReportHistoryFromServer(datasource = datasource, token = token)
+            // Task 5.9 — 목록 조회도 401 자동 재발급 흐름으로 감싼다. 세션이 없으면 그냥 skip.
+            val serverItems =
+                runAuthenticated { token ->
+                    fetchAllReportHistoryFromServer(datasource = datasource, token = token)
+                } ?: return@runCatching
             serverReportHistory.value = serverItems.map { item -> item.toHistoryData() }
         }
     }
@@ -406,9 +509,11 @@ class DefaultReportRepository(
     private suspend fun fetchServerReportDetail(reportId: Long): ReportHistoryDetailData? =
         runCatching {
             val datasource = hazardReportsRemoteDataSource ?: return@runCatching null
-            val token = accessTokenProvider() ?: return@runCatching null
 
-            datasource.getMyHazardReportDetail(accessToken = token, reportId = reportId).toDetailData()
+            // Task 5.9 — 상세 조회도 동일하게 runner.run으로 감싼다.
+            runAuthenticated { token ->
+                datasource.getMyHazardReportDetail(accessToken = token, reportId = reportId).toDetailData()
+            }
         }.getOrNull()
 
     private fun HazardReportListItemDto.toHistoryData(): ReportHistoryData {
@@ -416,8 +521,9 @@ class DefaultReportRepository(
         return ReportHistoryData(
             historyId = "$SERVER_HISTORY_PREFIX$reportId",
             reportCategory = reportType,
-            description = null,
-            address = null,
+            // Task 5.7 — BE list 응답의 description/address 그대로 노출 (mypage 카드용).
+            description = description,
+            address = address,
             latitude = reportPoint.lat,
             longitude = reportPoint.lng,
             photoUri = null,
@@ -448,14 +554,13 @@ class DefaultReportRepository(
     /**
      * 서버 응답의 createdAt(ISO 8601 형식)을 epoch millis로 변환한다.
      *
-     * BE 명세에는 `"2026-04-28T17:00:00"`처럼 timezone offset이 명시되지 않은 LocalDateTime
-     * 형식으로 정의되어 있다. 기존 구현은 이 값을 `ZoneId.systemDefault()`(=KST)로 해석해
-     * BE가 UTC로 보낸 경우 9시간 오차가 발생했다.
+     * BE는 timezone offset이 없는 LocalDateTime 형식(예: `"2026-05-15T15:49:30.628581"`)으로 내려보내며,
+     * 실제 값은 **KST 시간**이다 (logcat 진단으로 확인). 따라서 offset 없는 케이스는 KST로 해석해야 한다.
      *
-     * Fallback chain으로 견고하게 처리:
+     * Fallback chain:
      * 1. ISO Instant("...Z") — 추후 BE가 UTC offset을 명시할 때 자동 호환
-     * 2. ISO with offset("...+09:00") — 추후 BE가 KST offset 명시할 때
-     * 3. offset 없는 LocalDateTime — 일반 REST API 관례대로 UTC로 가정
+     * 2. ISO with offset("...+09:00" 등) — BE가 offset을 명시할 때
+     * 3. offset 없는 LocalDateTime — 현재 BE 응답 케이스. KST로 해석한다.
      */
     private fun String.toServerEpochMillisOrNull(): Long? {
         runCatching { Instant.parse(this).toEpochMilli() }
@@ -466,7 +571,7 @@ class DefaultReportRepository(
             ?.let { return it }
         return runCatching {
             LocalDateTime.parse(this)
-                .atZone(ZoneOffset.UTC)
+                .atZone(KST_ZONE_ID)
                 .toInstant()
                 .toEpochMilli()
         }.getOrNull()
@@ -474,6 +579,9 @@ class DefaultReportRepository(
 
     private companion object {
         private const val DEFAULT_PAGE_SIZE = 50
+        private const val HTTP_UNAUTHORIZED = 401
+        // BE가 createdAt을 offset 없는 LocalDateTime(KST 시간)으로 내려보내므로 명시적으로 KST로 해석한다.
+        private val KST_ZONE_ID: ZoneId = ZoneId.of("Asia/Seoul")
     }
 }
 

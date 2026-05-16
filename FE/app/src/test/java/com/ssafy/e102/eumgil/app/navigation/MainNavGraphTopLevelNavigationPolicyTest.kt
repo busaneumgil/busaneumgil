@@ -61,6 +61,9 @@ class MainNavGraphTopLevelNavigationPolicyTest {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
                 .readText()
+        val entryRouteSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingEntryRoute.kt")
+                .readText()
         val routeSettingDestination =
             source
                 .substringAfter("route = RouteSettingRoute.Setting.route")
@@ -69,6 +72,9 @@ class MainNavGraphTopLevelNavigationPolicyTest {
             source
                 .substringAfter("route = RouteSettingRoute.Detail.route")
                 .substringBefore("composable(route = ReportRoute.Report.route)")
+        val routeDetailEntry =
+            entryRouteSource
+                .substringAfter("fun RouteDetailEntryRoute(")
 
         assertTrue(
             "Route setting close should return to map home instead of a plain back-stack pop.",
@@ -79,6 +85,10 @@ class MainNavGraphTopLevelNavigationPolicyTest {
             "Route detail close should also return to map home.",
             routeDetailDestination.contains("onNavigateToMap = {") &&
                 routeDetailDestination.contains("navController.navigateToTopLevelMapForHomeEntry()"),
+        )
+        assertTrue(
+            "Route detail top-bar X should invoke the map-home callback directly instead of falling back through the route flow back stack.",
+            routeDetailEntry.contains("onCloseClick = onNavigateToMap"),
         )
     }
 

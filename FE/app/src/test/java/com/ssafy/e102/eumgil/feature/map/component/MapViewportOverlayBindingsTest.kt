@@ -256,9 +256,39 @@ class MapViewportOverlayBindingsTest {
                 .readText()
 
         assertTrue(
-            "Compose fallback route lines should use #D9D9D9 for walking inside public transit and #005391 for public transit.",
-            backdropSource.contains("transitWalk = Color(0xFFD9D9D9)") &&
+            "Compose fallback route lines should use #99B5D1 for walking inside public transit and #005391 for public transit.",
+            backdropSource.contains("transitWalk = Color(0xFF99B5D1)") &&
                 backdropSource.contains("navy = Color(0xFF005391)"),
+        )
+    }
+
+    @Test
+    fun `navigation walking route color is distinct from public transit walking segment color`() {
+        val contractSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationContract.kt")
+                .readText()
+        val overlaySource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlay.kt")
+                .readText()
+        val kakaoBindingSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewportBindings.kt")
+                .readText()
+        val fallbackSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")
+                .readText()
+
+        assertTrue(contractSource.contains("TRANSIT_WALK"))
+        assertTrue(
+            overlaySource.contains("NavigationSegmentTravelKind.WALK -> MapViewportOverlayTone.NAVIGATION_WALK") &&
+                overlaySource.contains("NavigationSegmentTravelKind.TRANSIT_WALK -> MapViewportOverlayTone.TRANSIT_WALK"),
+        )
+        assertTrue(
+            kakaoBindingSource.contains("MapViewportOverlayTone.NAVIGATION_WALK") &&
+                kakaoBindingSource.contains("lineColor = 0xFF0061FE.toInt()"),
+        )
+        assertTrue(
+            fallbackSource.contains("navigationWalk = Color(0xFF0061FE)") &&
+                fallbackSource.contains("transitWalk = Color(0xFF99B5D1)"),
         )
     }
 
@@ -481,6 +511,70 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
+    fun `navigation binding hides current marker when it overlaps route endpoints`() {
+        val originCoordinate = GeoCoordinate(latitude = 35.170, longitude = 129.050)
+        val destinationCoordinate = GeoCoordinate(latitude = 35.190, longitude = 129.080)
+
+        val originOverlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        currentLocation =
+                            NavigationMapPointUiState(
+                                label = "Current",
+                                coordinate = originCoordinate,
+                            ),
+                        origin =
+                            NavigationMapPointUiState(
+                                label = "Origin",
+                                coordinate = originCoordinate,
+                            ),
+                        destination =
+                            NavigationMapPointUiState(
+                                label = "Destination",
+                                coordinate = destinationCoordinate,
+                            ),
+                        mapFocusMode = NavigationMapFocusMode.ACTIVE,
+                    ),
+            )
+        val destinationOverlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        currentLocation =
+                            NavigationMapPointUiState(
+                                label = "Current",
+                                coordinate = destinationCoordinate,
+                            ),
+                        origin =
+                            NavigationMapPointUiState(
+                                label = "Origin",
+                                coordinate = originCoordinate,
+                            ),
+                        destination =
+                            NavigationMapPointUiState(
+                                label = "Destination",
+                                coordinate = destinationCoordinate,
+                            ),
+                        mapFocusMode = NavigationMapFocusMode.ACTIVE,
+                    ),
+            )
+
+        assertFalse(originOverlayState.points.any { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION })
+        assertEquals(
+            listOf(MapViewportPointKind.ORIGIN, MapViewportPointKind.DESTINATION),
+            originOverlayState.points.map { point -> point.kind },
+        )
+        assertFalse(destinationOverlayState.points.any { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION })
+        assertEquals(
+            listOf(MapViewportPointKind.ORIGIN, MapViewportPointKind.DESTINATION),
+            destinationOverlayState.points.map { point -> point.kind },
+        )
+    }
+
+    @Test
     fun `navigation binding adds segment start markers except the first segment and skips empty polylines`() {
         val overlayState =
             createNavigationViewportOverlayState(
@@ -537,15 +631,17 @@ class MapViewportOverlayBindingsTest {
             )
 
         val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
-        assertEquals(1, junctionPoints.size)
+        assertEquals(3, junctionPoints.size)
         assertEquals(
             listOf(
+                MapCoordinate(latitude = 35.170, longitude = 129.050),
                 MapCoordinate(latitude = 35.175, longitude = 129.058),
+                MapCoordinate(latitude = 35.190, longitude = 129.080),
             ),
             junctionPoints.map { it.coordinate },
         )
         assertEquals(
-            listOf(MapViewportOverlayTone.NEUTRAL),
+            listOf(MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NAVY),
             junctionPoints.map { it.tone },
         )
         assertTrue(junctionPoints.none { it.includeInProjection })
@@ -609,14 +705,124 @@ class MapViewportOverlayBindingsTest {
         val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
         assertEquals(
             listOf(
+                MapCoordinate(latitude = 35.170, longitude = 129.050),
                 MapCoordinate(latitude = 35.176, longitude = 129.060),
+                MapCoordinate(latitude = 35.181, longitude = 129.068),
             ),
             junctionPoints.map { it.coordinate },
         )
         assertEquals(
-            listOf(MapViewportOverlayTone.NEUTRAL),
+            listOf(MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NAVY),
             junctionPoints.map { it.tone },
         )
+    }
+
+    @Test
+    fun `navigation binding shows the route start junction marker with the origin pin`() {
+        val routeStart = GeoCoordinate(latitude = 35.170, longitude = 129.050)
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        currentLocation = NavigationMapPointUiState(label = "current", coordinate = routeStart),
+                        origin = NavigationMapPointUiState(label = "origin", coordinate = routeStart),
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline =
+                                        listOf(
+                                            routeStart,
+                                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                        ),
+                                    distanceMeters = 300,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Start walking",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT_WALK,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.175, longitude = 129.058),
+                                            GeoCoordinate(latitude = 35.181, longitude = 129.068),
+                                        ),
+                                    distanceMeters = 320,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Next crossing",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT_WALK,
+                                ),
+                            ),
+                    ),
+            )
+
+        val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
+        assertEquals(
+            listOf(
+                MapCoordinate(latitude = 35.170, longitude = 129.050),
+                MapCoordinate(latitude = 35.175, longitude = 129.058),
+            ),
+            junctionPoints.map { it.coordinate },
+        )
+        assertTrue(overlayState.points.any { it.kind == MapViewportPointKind.ORIGIN })
+        assertTrue(overlayState.points.none { it.kind == MapViewportPointKind.CURRENT_LOCATION })
+    }
+
+    @Test
+    fun `navigation binding keeps transit alighting and following walk polylines without a synthetic connector`() {
+        val boarding = GeoCoordinate(latitude = 35.170, longitude = 129.050)
+        val strayTransitPolylineEnd = GeoCoordinate(latitude = 35.185, longitude = 129.070)
+        val alighting = GeoCoordinate(latitude = 35.180, longitude = 129.060)
+        val walkStart = GeoCoordinate(latitude = 35.1804, longitude = 129.0605)
+        val walkEnd = GeoCoordinate(latitude = 35.183, longitude = 129.064)
+
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline = listOf(boarding, strayTransitPolylineEnd),
+                                    segmentEndCoordinate = alighting,
+                                    distanceMeters = 900,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Ride bus",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline = listOf(walkStart, walkEnd),
+                                    distanceMeters = 200,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Walk from stop",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT_WALK,
+                                ),
+                            ),
+                    ),
+            )
+
+        val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
+        assertEquals(
+            listOf(
+                MapCoordinate(latitude = alighting.latitude, longitude = alighting.longitude),
+                MapCoordinate(latitude = walkStart.latitude, longitude = walkStart.longitude),
+            ),
+            junctionPoints.map { it.coordinate },
+        )
+        assertEquals(MapViewportOverlayTone.NAVY, junctionPoints.first().tone)
+        assertEquals(MapViewportOverlayTone.NEUTRAL, junctionPoints.last().tone)
+        assertEquals(
+            listOf(
+                "navigation-route-segment-1",
+                "navigation-route-segment-2",
+            ),
+            overlayState.polylines.map(MapViewportPolylineOverlay::overlayId),
+        )
+        assertTrue(overlayState.polylines.none { polyline -> polyline.overlayId.startsWith("navigation-transfer-connection") })
     }
 
     @Test
@@ -662,12 +868,15 @@ class MapViewportOverlayBindingsTest {
             )
 
         val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
-        assertEquals(1, junctionPoints.size)
+        assertEquals(2, junctionPoints.size)
         assertEquals(
-            MapCoordinate(latitude = 35.176, longitude = 129.060),
-            junctionPoints.single().coordinate,
+            listOf(
+                MapCoordinate(latitude = 35.170, longitude = 129.050),
+                MapCoordinate(latitude = 35.176, longitude = 129.060),
+            ),
+            junctionPoints.map { it.coordinate },
         )
-        assertEquals(MapViewportOverlayTone.NEUTRAL, junctionPoints.single().tone)
+        assertEquals(listOf(MapViewportOverlayTone.NEUTRAL, MapViewportOverlayTone.NEUTRAL), junctionPoints.map { it.tone })
     }
 
     @Test
@@ -760,9 +969,10 @@ class MapViewportOverlayBindingsTest {
             projectionPoints.map { it.kind },
         )
         assertEquals(MapCoordinate(latitude = 35.176, longitude = 129.060), projectionPoints.first().coordinate)
+        assertTrue(overlayState.polylines.none(MapViewportPolylineOverlay::includeInProjection))
         assertTrue(
             overlayState.polylines.any { polyline ->
-                polyline.overlayId == "navigation-focused" && polyline.includeInProjection
+                polyline.overlayId == "navigation-route-segment-2" && polyline.showDirectionArrows
             },
         )
     }
@@ -892,14 +1102,24 @@ class MapViewportOverlayBindingsTest {
         val summary = createSegmentJunctionOverlayDebugSummary(mapOverlay, overlayState)
 
         assertTrue(summary.contains("focusMode=FOCUSED"))
-        assertTrue(summary.contains("junctions=1"))
+        assertTrue(summary.contains("junctions=3"))
+        assertTrue(
+            summary.contains(
+                "id=navigation-junction-0 coord=35.170000,129.050000 tone=NEUTRAL includeInProjection=false",
+            ),
+        )
         assertTrue(
             summary.contains(
                 "id=navigation-junction-1 coord=35.176000,129.060000 tone=NEUTRAL includeInProjection=false",
             ),
         )
+        assertTrue(
+            summary.contains(
+                "id=navigation-junction-2 coord=35.181000,129.068000 tone=NAVY includeInProjection=false",
+            ),
+        )
         assertTrue(summary.contains("projectionPoints=[navigation-focus:FOCUS_HALO]"))
-        assertTrue(summary.contains("projectionPolylines=[navigation-focused:FOCUSED_SEGMENT]"))
+        assertTrue(summary.contains("projectionPolylines=[]"))
     }
 
     @Test
@@ -921,7 +1141,7 @@ class MapViewportOverlayBindingsTest {
                                     distanceMeters = 300,
                                     riskLevel = RouteRiskLevel.LOW,
                                     guidanceMessage = "Walk",
-                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT_WALK,
                                 ),
                                 NavigationMapSegmentUiState(
                                     sequence = 2,
@@ -961,6 +1181,62 @@ class MapViewportOverlayBindingsTest {
             baselineTones,
         )
         assertEquals(MapViewportOverlayTone.NAVY, overlayState.polylines.last().tone)
+    }
+
+    @Test
+    fun `navigation binding does not duplicate active transit line when detailed baseline segments exist`() {
+        val sharedTransitPolyline =
+            listOf(
+                GeoCoordinate(latitude = 35.180, longitude = 129.070),
+                GeoCoordinate(latitude = 35.185, longitude = 129.075),
+            )
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline = sharedTransitPolyline,
+                                    distanceMeters = 500,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Transit",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                    isActive = true,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline = emptyList(),
+                                    segmentStartCoordinate = sharedTransitPolyline.last(),
+                                    distanceMeters = 0,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Alight",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                    isFocused = true,
+                                ),
+                            ),
+                        activeSegmentPolyline = sharedTransitPolyline,
+                        focusedSegmentPolyline = emptyList(),
+                        activeSegmentTravelKind = NavigationSegmentTravelKind.TRANSIT,
+                        focusedSegmentTravelKind = NavigationSegmentTravelKind.TRANSIT,
+                        focusCoordinate = sharedTransitPolyline.last(),
+                        mapFocusMode = NavigationMapFocusMode.FOCUSED,
+                    ),
+            )
+
+        assertEquals(
+            listOf(MapViewportPolylineStyle.ROUTE_BASELINE),
+            overlayState.polylines.map { it.style },
+        )
+        assertEquals(
+            sharedTransitPolyline.map { coordinate ->
+                MapCoordinate(latitude = coordinate.latitude, longitude = coordinate.longitude)
+            },
+            overlayState.polylines.single().points,
+        )
+        assertTrue(overlayState.polylines.single().showDirectionArrows)
     }
 
     @Test

@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -101,9 +102,7 @@ fun LoginScreen(
                 contentScale = ContentScale.FillWidth,
             )
             Spacer(modifier = Modifier.height(10.dp))
-            SocialLoginPanel(
-                uiState = uiState,
-                onAction = onAction,
+            BoxWithConstraints(
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -113,7 +112,14 @@ fun LoginScreen(
                             bottom = EumSpacing.large,
                         )
                         .navigationBarsPadding(),
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                SocialLoginPanel(
+                    uiState = uiState,
+                    onAction = onAction,
+                    modifier = Modifier.width(minOf(maxWidth, AuthSocialLoginPanelMaxWidth)),
+                )
+            }
         }
     }
 }
@@ -370,3 +376,4 @@ private val SkyBlue = Color(0xFFEAF6FF)
 private val GoogleBlue = Color(0xFF4285F4)
 private val NaverGreen = Color(0xFF03C75A)
 private val KakaoYellow = Color(0xFFFFE500)
+private val AuthSocialLoginPanelMaxWidth = 336.dp

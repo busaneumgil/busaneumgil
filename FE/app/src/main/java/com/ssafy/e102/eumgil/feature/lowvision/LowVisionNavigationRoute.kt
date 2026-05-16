@@ -80,6 +80,10 @@ fun LowVisionNavigationRoute(
         )
     }
 
+    LaunchedEffect(textToSpeechController, uiState.tts.isEnabled) {
+        textToSpeechController.setEnabled(uiState.tts.isEnabled)
+    }
+
     LaunchedEffect(viewModel, onNavigateToComplete, onNavigateToBookmark) {
         launch(start = CoroutineStart.UNDISPATCHED) {
             viewModel.uiEvent.collect { event ->

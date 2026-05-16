@@ -74,6 +74,10 @@ fun NavigationRoute(
         )
     }
 
+    LaunchedEffect(textToSpeechController, uiState.tts.isEnabled) {
+        textToSpeechController.setEnabled(uiState.tts.isEnabled)
+    }
+
     BackHandler(
         enabled = !useLowVisionUi && !uiState.isExitConfirmDialogVisible,
     ) {

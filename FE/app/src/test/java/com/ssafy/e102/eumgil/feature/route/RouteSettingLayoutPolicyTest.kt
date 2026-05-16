@@ -319,7 +319,8 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(
             "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
-                source.contains("RouteWalkPreviewCardMinHeight = 116.dp"),
+                source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
+                !source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp"),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",
@@ -548,11 +549,14 @@ class RouteSettingLayoutPolicyTest {
 
         assertTrue(
             "Transit bottom sheet content should reserve clearance so low-floor reservations are not hidden behind the shared CTA.",
-            routeSheetSection.contains("bottom = RouteSettingBottomBarOverlayClearance"),
+            routeSheetSection.contains("val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()") &&
+                routeSheetSection.contains("bottom = bottomBarOverlayClearance"),
         )
         assertTrue(
-            "Transit CTA clearance should be derived from the actual CTA height and requested bottom gap.",
-            source.contains("RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium"),
+            "Transit CTA clearance should be derived from the actual CTA height plus the live navigation bar inset, not a fixed extra dp token.",
+            source.contains("private fun routeSettingBottomBarOverlayClearance(") &&
+                source.contains("WindowInsets.navigationBars.getBottom(density).toDp()") &&
+                !source.contains("RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium"),
         )
     }
 
@@ -1097,8 +1101,8 @@ class RouteSettingLayoutPolicyTest {
 
         assertTrue(
             "The open detail side panel must reserve bottom clearance so the arrival row is not hidden by the fixed CTA.",
-            timelinePanelSection.contains("contentPadding = PaddingValues(bottom = RouteDetailSidePanelBottomClearance)") &&
-                source.contains("RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance") &&
+            timelinePanelSection.contains("val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()") &&
+                timelinePanelSection.contains("contentPadding = PaddingValues(bottom = bottomBarOverlayClearance)") &&
                 !source.contains("RouteDetailSidePanelBottomActionSpace"),
         )
         assertTrue(

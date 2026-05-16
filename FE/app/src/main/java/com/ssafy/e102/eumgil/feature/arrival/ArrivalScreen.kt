@@ -76,12 +76,16 @@ import com.ssafy.e102.eumgil.feature.map.component.MapBottomSheetHandleHeight
 import com.ssafy.e102.eumgil.feature.map.component.MapBottomSheetSurface
 import kotlin.math.roundToInt
 
+private val ArrivalCloseButtonTint = Color(0xFF9CA3AF)
 private val ArrivalRatingSelectedColor = Color(0xFFFACC15)
 private val ArrivalEvaluationSectionSpacing = EumSpacing.small
-private val ArrivalHeroBandHeight = 292.dp
+private val ArrivalHeroBandHeight = 332.dp
 private val ArrivalHeroBandTopSpacing = 36.dp
 private val ArrivalHeroArtworkBottomSpacing = 28.dp
 private val ArrivalHeroBackgroundFadeHeight = 40.dp
+private val ArrivalHeroLogoTopPadding = 58.dp
+private val ArrivalHeroLogoWidth = 108.dp
+private val ArrivalHeroLogoHeight = 60.dp
 private val ArrivalRatingButtonSize = 64.dp
 private val ArrivalRatingIconSize = 56.dp
 private val ArrivalRatingRowVerticalPadding = 22.dp
@@ -440,7 +444,7 @@ private fun ArrivalEvaluationBottomSheet(
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_action_close),
                                 contentDescription = closeSheetLabel,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = ArrivalCloseButtonTint,
                             )
                         }
                     }
@@ -494,15 +498,9 @@ private fun ArrivalEvaluationBottomSheet(
                                 .navigationBarsPadding(),
                         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                     ) {
-                        val routeSaveAccentColor =
-                            if (uiState.isRouteSaveEnabled) {
-                                EumPrimary600
-                            } else {
-                                EumPrimary600.copy(alpha = 0.38f)
-                            }
                         val routeSaveContainerColor =
                             if (uiState.isRouteSaveSelected) {
-                                routeSaveAccentColor
+                                EumPrimary600
                             } else {
                                 MaterialTheme.colorScheme.surface
                             }
@@ -510,8 +508,10 @@ private fun ArrivalEvaluationBottomSheet(
                             if (uiState.isRouteSaveSelected) {
                                 MaterialTheme.colorScheme.onPrimary
                             } else {
-                                routeSaveAccentColor
+                                EumPrimary600
                             }
+                        val routeSaveBorderColor =
+                            EumPrimary600.copy(alpha = if (uiState.isRouteSaveEnabled) 1f else 0.38f)
                         Button(
                             onClick = { onAction(ArrivalUiAction.SaveRouteClicked) },
                             enabled = uiState.isRouteSaveEnabled,
@@ -524,10 +524,10 @@ private fun ArrivalEvaluationBottomSheet(
                                 ButtonDefaults.buttonColors(
                                     containerColor = routeSaveContainerColor,
                                     contentColor = routeSaveContentColor,
-                                    disabledContainerColor = routeSaveContainerColor,
-                                    disabledContentColor = routeSaveContentColor,
+                                    disabledContainerColor = routeSaveContainerColor.copy(alpha = 0.38f),
+                                    disabledContentColor = routeSaveContentColor.copy(alpha = 0.38f),
                                 ),
-                            border = BorderStroke(1.dp, routeSaveAccentColor),
+                            border = BorderStroke(1.dp, routeSaveBorderColor),
                         ) {
                             Text(
                                 text =

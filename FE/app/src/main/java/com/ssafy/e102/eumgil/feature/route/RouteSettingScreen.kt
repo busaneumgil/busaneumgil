@@ -812,6 +812,7 @@ private fun RouteDetailTimelinePanelContent(
 ) {
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()
     val startStep = steps.firstOrNull()
     val renderedSteps =
         if (steps.size > 1) {
@@ -838,7 +839,7 @@ private fun RouteDetailTimelinePanelContent(
                 Modifier
                     .fillMaxSize(),
             state = listState,
-            contentPadding = PaddingValues(bottom = RouteDetailSidePanelBottomClearance),
+            contentPadding = PaddingValues(bottom = bottomBarOverlayClearance),
         ) {
             if (startStep == null) {
                 item(key = "route-detail-empty") {
@@ -2181,6 +2182,13 @@ internal data class RouteSearchHeaderModeTabPolicy(
 
 internal fun routeSettingUsesEmptyWindowInsets(): Boolean = true
 
+@Composable
+private fun routeSettingBottomBarOverlayClearance(extraSpacing: Dp = EumSpacing.medium): Dp {
+    val density = LocalDensity.current
+    val navigationBarInset = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
+    return RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + extraSpacing + navigationBarInset
+}
+
 internal fun routeSearchHeaderPolicy(showModeTabs: Boolean = true): RouteSearchHeaderPolicy =
     RouteSearchHeaderPolicy(
         titleResId = R.string.route_setting_screen_title,
@@ -3212,6 +3220,7 @@ private fun RouteSettingTransitResultPane(
     onOptionDetailClick: (RouteOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()
     Surface(
         modifier = modifier.fillMaxSize(),
         color = Color.White,
@@ -3226,7 +3235,7 @@ private fun RouteSettingTransitResultPane(
                         start = EumSpacing.small,
                         end = EumSpacing.small,
                         top = RouteSettingSheetVerticalPadding,
-                        bottom = RouteSettingBottomBarOverlayClearance,
+                        bottom = bottomBarOverlayClearance,
                     ),
             verticalArrangement = Arrangement.spacedBy(RouteSettingSheetGap),
         ) {
@@ -5117,8 +5126,8 @@ private val RouteInlineButtonHeight = 44.dp
 private val RouteSettingBottomBarButtonHeight = 50.dp
 private val RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
 private val RouteSettingBottomBarBottomGap = 30.dp
-private val RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
-private val RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance
+private val RouteDetailSidePanelBottomClearance =
+    RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
 // Match the tighter card-to-CTA spacing users currently see on devices with a visible system nav bar.
 private val RouteWalkPreviewToStartButtonGap = 22.dp
 private val RouteWalkMapControlsToPreviewGap = 70.dp

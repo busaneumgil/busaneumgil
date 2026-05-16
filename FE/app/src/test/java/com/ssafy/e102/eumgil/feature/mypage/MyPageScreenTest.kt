@@ -131,6 +131,28 @@ class MyPageScreenTest {
     }
 
     @Test
+    fun `duribal call button centers icon and label as a single group`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+        val buttonSection =
+            source
+                .substringAfter("private fun DuribalCallButton(")
+                .substringBefore("@Composable\nprivate fun MyPageMenuRow")
+
+        assertTrue(
+            "Duribal call CTA should wrap its icon and label in a single row so the combined content stays centered inside the full-width button.",
+            buttonSection.contains(
+                "Row(\n            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),\n            verticalAlignment = Alignment.CenterVertically,\n        )",
+            ),
+        )
+        assertFalse(
+            "Duribal call CTA should not rely on text-only start padding because the icon and label are centered together as one group.",
+            buttonSection.contains("modifier = Modifier.padding(start = EumSpacing.small)"),
+        )
+    }
+
+    @Test
     fun `my page route owns duribal call confirmation flow`() {
         val myPageSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
@@ -148,6 +170,29 @@ class MyPageScreenTest {
             "MyPageRoute should create the duribal dial intent after confirmation.",
             routeSource.contains("createDuribalDialIntent") ||
                 routeSource.contains("onDuribalCallClick"),
+        )
+    }
+
+    @Test
+    fun `my page screen renders duribal call confirmation dialog with yes and no actions`() {
+        val myPageSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+        val dialogSource =
+            File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/component/dialog/EumDuribalCallConfirmDialog.kt")
+                .readText()
+
+        assertTrue(
+            "MyPageScreen should render the duribal confirmation dialog instead of dialing immediately from the button tap.",
+            myPageSource.contains("isDuribalConfirmDialogVisible") &&
+                myPageSource.contains("EumDuribalCallConfirmDialog("),
+        )
+        assertTrue(
+            "Duribal confirmation dialog should expose explicit yes and no actions for the restored CTA flow.",
+            dialogSource.contains("onConfirm") &&
+                dialogSource.contains("onDismiss") &&
+                dialogSource.contains("confirmButtonText") &&
+                dialogSource.contains("dismissButtonText"),
         )
     }
 

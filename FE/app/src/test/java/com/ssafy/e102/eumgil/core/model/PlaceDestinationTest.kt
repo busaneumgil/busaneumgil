@@ -5,7 +5,7 @@ import org.junit.Test
 
 class PlaceDestinationTest {
     @Test
-    fun `search result handoff keeps minimum route destination dataset`() {
+    fun `search result handoff preserves bookmark metadata needed for server save`() {
         val result =
             SearchResult(
                 placeId = "place-1",
@@ -14,6 +14,8 @@ class PlaceDestinationTest {
                 latitude = 35.1796,
                 longitude = 129.0756,
                 category = PlaceCategory.ELEVATOR,
+                serverPlaceId = "101",
+                providerPlaceId = "kakao-101",
             )
 
         val destination = result.toPlaceDestination()
@@ -24,6 +26,10 @@ class PlaceDestinationTest {
         assertEquals(35.1796, destination.latitude, 0.0)
         assertEquals(129.0756, destination.longitude, 0.0)
         assertEquals(PlaceCategory.ELEVATOR, destination.category)
+        assertEquals(101L, destination.serverPlaceId)
+        assertEquals("KAKAO", destination.provider)
+        assertEquals("kakao-101", destination.providerPlaceId)
+        assertEquals("ELEVATOR", destination.providerCategory)
     }
 
     @Test
@@ -45,13 +51,15 @@ class PlaceDestinationTest {
         assertEquals(35.1632, destination.latitude, 0.0)
         assertEquals(129.1636, destination.longitude, 0.0)
         assertEquals(PlaceCategory.TOILET, destination.category)
+        assertEquals(null, destination.provider)
+        assertEquals(null, destination.providerPlaceId)
     }
 
     @Test
     fun `facility detail handoff preserves new place categories for recent destination consumers`() {
         val detail =
             FacilityDetailSeed(
-                facilityId = "facility-2",
+                facilityId = "2",
                 name = "Busan District Office",
                 address = "10 Jungang-daero, Busan",
                 coordinate = GeoCoordinate(latitude = 35.1798, longitude = 129.0758),
@@ -61,6 +69,7 @@ class PlaceDestinationTest {
         val destination = detail.toPlaceDestination()
 
         assertEquals(PlaceCategory.PUBLIC_OFFICE, destination.category)
+        assertEquals(2L, destination.serverPlaceId)
     }
 
     @Test
@@ -86,5 +95,7 @@ class PlaceDestinationTest {
         assertEquals("2 Gwangbok-ro, Busan", destination?.address)
         assertEquals(35.1010, destination?.latitude ?: Double.NaN, 0.0)
         assertEquals(129.0330, destination?.longitude ?: Double.NaN, 0.0)
+        assertEquals("KAKAO", destination?.provider)
+        assertEquals("987654321", destination?.providerPlaceId)
     }
 }

@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.core.model
 
+import com.ssafy.e102.eumgil.core.location.ANDROID_GEOCODER_PROVIDER
+
 data class SearchQuery(
     val keyword: String,
     val limit: Int = DEFAULT_LIMIT,
@@ -105,3 +107,17 @@ fun PlaceDestination.toRecentDestination(): RecentDestination =
         longitude = longitude,
         category = category,
     )
+
+fun SearchResult.bookmarkProvider(): String? =
+    when {
+        isAddressSearchFallback() -> "KAKAO"
+        !provider.isNullOrBlank() -> provider
+        !providerPlaceId.isNullOrBlank() -> "KAKAO"
+        else -> null
+    }
+
+fun SearchResult.bookmarkProviderPlaceId(): String? =
+    providerPlaceId?.takeIf { !isAddressSearchFallback() && it.isNotBlank() }
+
+fun SearchResult.isAddressSearchFallback(): Boolean =
+    provider?.equals(ANDROID_GEOCODER_PROVIDER, ignoreCase = true) == true

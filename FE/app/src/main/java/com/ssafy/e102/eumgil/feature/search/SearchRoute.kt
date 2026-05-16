@@ -9,15 +9,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -82,82 +83,18 @@ fun SearchVoiceInputRoute(
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val searchViewModel = rememberSearchViewModel()
-    val sttViewModel: SearchVoiceInputViewModel = viewModel()
-    val ttsController = remember(context.applicationContext) {
-        AndroidTextToSpeechController(context = context.applicationContext)
-    }
-    val ttsState by ttsController.state.collectAsStateWithLifecycle()
-    val voiceInputPrompt = stringResource(R.string.voice_input_prompt)
-
-    LaunchedEffect(searchViewModel, sttViewModel) {
-        // Route entry auto-start must not depend on SearchViewModel UI-event collection order.
-        searchViewModel.onAction(SearchUiAction.VoiceRouteEntered)
-        sttViewModel.startListening()
-    }
-
-    // -1: 아직 speak()를 한 번도 호출하지 않은 상태.
-    // completedUtteranceCount >= 0 조건을 함께 쓰면 앱 진입 시 spurious 트리거 방지.
-    val lastCompletedCount = remember { mutableIntStateOf(-1) }
-
-    // TTS 완료 감지 → beginRecording().
-    // lastCompletedCount >= 0 이어야 실제로 speak()를 호출한 이후임을 보장한다.
-    LaunchedEffect(ttsState.completedUtteranceCount) {
-        if (lastCompletedCount.intValue >= 0 &&
-            ttsState.completedUtteranceCount > lastCompletedCount.intValue
-        ) {
-            delay(300) // TTS 잔향 + AEC 안정화 대기
-            sttViewModel.beginRecording()
-        }
-        lastCompletedCount.intValue = ttsState.completedUtteranceCount
-    }
-
-    LaunchedEffect(sttViewModel) {
-        sttViewModel.uiEvent.collect { event ->
-            when (event) {
-                is SearchVoiceInputEvent.TranscriptReady ->
-                    searchViewModel.onAction(
-                        SearchUiAction.VoiceTranscriptReceived(
-                            transcript = event.recognizedText,
-                            searchQuery = event.searchQuery,
-                        ),
-                    )
-                SearchVoiceInputEvent.TranscriptEmpty -> {
-                    searchViewModel.onAction(SearchUiAction.VoiceCaptureEmpty)
-                }
-                is SearchVoiceInputEvent.SpeakError -> ttsController.speak(event.text)
-                SearchVoiceInputEvent.ReadyToRecord -> {
-                    // AndroidTextToSpeechController가 내부적으로 pendingText를 처리하므로
-                    // 엔진 초기화 전에 호출해도 초기화 완료 후 자동 재생됨
-                    lastCompletedCount.intValue = ttsState.completedUtteranceCount
-                    ttsController.speak(voiceInputPrompt)
-                }
-            }
-        }
-    }
-
-    DisposableEffect(ttsController) {
-        onDispose {
-            ttsController.stop()
-            ttsController.shutdown()
-        }
-    }
-
-    SearchRouteContent(
-        destination = SearchScreenDestination.VoiceInput,
-        initialQuery = null,
+    SearchVoiceInputExperience(
         initialEditingTarget = initialEditingTarget,
         onNavigateBack = onNavigateBack,
         onNavigateToResults = onNavigateToResults,
-        onNavigateToVoiceInput = {},
-        onNavigateToRouteSetting = {},
-        onNavigateToMapPreview = {},
-        onNavigateToRouteBriefing = {},
-        onStartVoiceCapture = { sttViewModel.startListening() },
-        onStopVoiceCapture = { sttViewModel.stopListening() },
-        modifier = modifier,
-    )
+    ) { uiState, onAction ->
+        SearchScreen(
+            destination = SearchScreenDestination.VoiceInput,
+            uiState = uiState,
+            onAction = onAction,
+            modifier = modifier,
+        )
+    }
 }
 
 @Composable
@@ -231,6 +168,108 @@ private fun SearchRouteContent(
         onAction = viewModel::onAction,
         modifier = modifier,
     )
+}
+
+@Composable
+internal fun SearchVoiceInputExperience(
+    initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    onNavigateBack: () -> Unit,
+    onNavigateToResults: (String, RouteEditingTarget) -> Unit,
+    content: @Composable (SearchUiState, (SearchUiAction) -> Unit) -> Unit,
+) {
+    val context = LocalContext.current
+    val searchViewModel = rememberSearchViewModel()
+    val sttViewModel: SearchVoiceInputViewModel = viewModel()
+    val uiState by searchViewModel.uiState.collectAsStateWithLifecycle()
+    val ttsController =
+        remember(context.applicationContext) {
+            AndroidTextToSpeechController(context = context.applicationContext)
+        }
+    val ttsState by ttsController.state.collectAsStateWithLifecycle()
+    val voiceInputPrompt = stringResource(R.string.voice_input_prompt)
+    val currentOnNavigateBack by rememberUpdatedState(onNavigateBack)
+    val currentOnNavigateToResults by rememberUpdatedState(onNavigateToResults)
+    val currentCompletedUtteranceCount by rememberUpdatedState(ttsState.completedUtteranceCount)
+    val currentVoiceInputPrompt by rememberUpdatedState(voiceInputPrompt)
+
+    LaunchedEffect(searchViewModel, initialEditingTarget) {
+        searchViewModel.onAction(SearchUiAction.EditingTargetConfigured(editingTarget = initialEditingTarget))
+    }
+
+    LaunchedEffect(searchViewModel, sttViewModel) {
+        searchViewModel.onAction(SearchUiAction.VoiceRouteEntered)
+        sttViewModel.startListening()
+    }
+
+    val lastCompletedCount = remember { mutableIntStateOf(-1) }
+
+    LaunchedEffect(ttsState.completedUtteranceCount) {
+        if (
+            lastCompletedCount.intValue >= 0 &&
+            ttsState.completedUtteranceCount > lastCompletedCount.intValue
+        ) {
+            delay(300)
+            sttViewModel.beginRecording()
+        }
+        lastCompletedCount.intValue = ttsState.completedUtteranceCount
+    }
+
+    LaunchedEffect(searchViewModel, sttViewModel, ttsController) {
+        sttViewModel.uiEvent.collect { event ->
+            when (event) {
+                is SearchVoiceInputEvent.TranscriptReady ->
+                    searchViewModel.onAction(
+                        SearchUiAction.VoiceTranscriptReceived(
+                            transcript = event.recognizedText,
+                            searchQuery = event.searchQuery,
+                        ),
+                    )
+
+                SearchVoiceInputEvent.TranscriptEmpty ->
+                    searchViewModel.onAction(SearchUiAction.VoiceCaptureEmpty)
+
+                is SearchVoiceInputEvent.SpeakError -> ttsController.speak(event.text)
+                SearchVoiceInputEvent.ReadyToRecord -> {
+                    lastCompletedCount.intValue = currentCompletedUtteranceCount
+                    ttsController.speak(currentVoiceInputPrompt)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(searchViewModel, sttViewModel) {
+        searchViewModel.uiEvent.collect { event ->
+            when (event) {
+                SearchUiEvent.NavigateBack -> {
+                    sttViewModel.stopListening()
+                    currentOnNavigateBack()
+                }
+
+                is SearchUiEvent.NavigateToResults -> {
+                    sttViewModel.stopListening()
+                    currentOnNavigateToResults(event.query, event.editingTarget)
+                }
+
+                SearchUiEvent.StartVoiceCapture -> sttViewModel.startListening()
+                SearchUiEvent.StopVoiceCapture -> sttViewModel.stopListening()
+                SearchUiEvent.NavigateToRouteSetting -> Unit
+                SearchUiEvent.NavigateToMapPreview -> Unit
+                SearchUiEvent.NavigateToRouteBriefing -> Unit
+                SearchUiEvent.NavigateToLowVisionBookmark -> Unit
+                SearchUiEvent.NavigateToVoiceInput -> Unit
+            }
+        }
+    }
+
+    DisposableEffect(sttViewModel, ttsController) {
+        onDispose {
+            sttViewModel.stopListening()
+            ttsController.stop()
+            ttsController.shutdown()
+        }
+    }
+
+    content(uiState, searchViewModel::onAction)
 }
 
 @Composable

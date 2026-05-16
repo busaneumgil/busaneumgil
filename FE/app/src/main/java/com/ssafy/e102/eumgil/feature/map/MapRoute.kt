@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -21,19 +24,27 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.external.createDialIntent
+import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
+import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
+import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputBottomSheet
+import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputExperience
 import kotlinx.coroutines.flow.collect
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun MapRoute(
     viewModelStoreOwner: ViewModelStoreOwner,
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
     onNavigateToRouteSetting: () -> Unit = {},
     onNavigateToSearch: (RouteEditingTarget) -> Unit = {},
+    onNavigateToSearchResults: (String, RouteEditingTarget) -> Unit = { _, _ -> },
     shouldResetForHomeEntry: Boolean = false,
     onHomeReentryResetConsumed: () -> Unit = {},
     onFacilityDetailVisibilityChanged: (Boolean) -> Unit = {},
+    onVoiceSearchVisibilityChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -64,6 +75,28 @@ fun MapRoute(
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
     val consumeHomeReentryReset by rememberUpdatedState(onHomeReentryResetConsumed)
+    val micPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            if (isGranted) {
+                viewModel.onAction(MapUiAction.VoiceSearchClicked)
+            }
+        }
+    val openVoiceSearch =
+        remember(context, micPermissionLauncher, viewModel) {
+            {
+                when (context.resolveMicrophonePermissionState()) {
+                    MicrophonePermissionState.GRANTED ->
+                        viewModel.onAction(MapUiAction.VoiceSearchClicked)
+
+                    MicrophonePermissionState.DENIED ->
+                        micPermissionLauncher.launch(MICROPHONE_PERMISSION)
+
+                    MicrophonePermissionState.UNAVAILABLE -> Unit
+                }
+            }
+        }
 
     LaunchedEffect(viewModel, shouldResetForHomeEntry) {
         if (!shouldResetForHomeEntry) return@LaunchedEffect
@@ -101,6 +134,7 @@ fun MapRoute(
         context,
         onNavigateToRouteSetting,
         onNavigateToSearch,
+        onNavigateToSearchResults,
         snackbarHostState,
     ) {
         viewModel.uiEvent.collect { event ->
@@ -115,23 +149,36 @@ fun MapRoute(
         }
     }
 
-    BackHandler(enabled = uiState.facilityDetailSheetState.isVisible) {
+    BackHandler(enabled = uiState.isVoiceSearchVisible) {
+        viewModel.onAction(MapUiAction.VoiceSearchDismissed)
+    }
+
+    BackHandler(enabled = uiState.facilityDetailSheetState.isVisible && uiState.isVoiceSearchVisible.not()) {
         viewModel.onAction(MapUiAction.FacilityDetailDismissed)
     }
 
-    BackHandler(enabled = uiState.facilityDetailSheetState.isVisible.not()) {
+    BackHandler(enabled = uiState.facilityDetailSheetState.isVisible.not() && uiState.isVoiceSearchVisible.not()) {
         if (activity?.moveTaskToBack(true) == false) {
             activity.finish()
         }
     }
 
-    LaunchedEffect(uiState.facilityDetailSheetState.isVisible, onFacilityDetailVisibilityChanged) {
+    LaunchedEffect(
+        uiState.facilityDetailSheetState.isVisible,
+        uiState.isVoiceSearchVisible,
+        onFacilityDetailVisibilityChanged,
+    ) {
         onFacilityDetailVisibilityChanged(uiState.facilityDetailSheetState.isVisible)
     }
 
-    DisposableEffect(onFacilityDetailVisibilityChanged) {
+    LaunchedEffect(uiState.isVoiceSearchVisible, onVoiceSearchVisibilityChanged) {
+        onVoiceSearchVisibilityChanged(uiState.isVoiceSearchVisible)
+    }
+
+    DisposableEffect(onFacilityDetailVisibilityChanged, onVoiceSearchVisibilityChanged) {
         onDispose {
             onFacilityDetailVisibilityChanged(false)
+            onVoiceSearchVisibilityChanged(false)
         }
     }
 
@@ -139,10 +186,29 @@ fun MapRoute(
         uiState = uiState,
         snackbarHostState = snackbarHostState,
         onAction = viewModel::onAction,
+        onVoiceSearchClick = openVoiceSearch,
         onNavigateToSavedRoutes = onNavigateToSavedRoutes,
         onNavigateToMyPage = onNavigateToMyPage,
         modifier = modifier,
     )
+
+    if (uiState.isVoiceSearchVisible) {
+        SearchVoiceInputExperience(
+            initialEditingTarget = RouteEditingTarget.DESTINATION,
+            onNavigateBack = {
+                viewModel.onAction(MapUiAction.VoiceSearchDismissed)
+            },
+            onNavigateToResults = { query, editingTarget ->
+                viewModel.onAction(MapUiAction.VoiceSearchDismissed)
+                onNavigateToSearchResults(query, editingTarget)
+            },
+        ) { searchUiState, onSearchAction ->
+            SearchVoiceInputBottomSheet(
+                uiState = searchUiState,
+                onAction = onSearchAction,
+            )
+        }
+    }
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

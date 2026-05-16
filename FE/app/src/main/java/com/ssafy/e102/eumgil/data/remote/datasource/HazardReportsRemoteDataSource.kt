@@ -42,6 +42,9 @@ open class HazardReportsRemoteDataSource private constructor(
     open suspend fun createHazardReport(
         accessToken: String,
         request: CreateHazardReportRequestDto,
+        // Task 5.8 — BE 명세상 선택 헤더. outbox 재시도 시 동일 키로 보내면 BE가 중복 row 생성을 방지하고
+        // 기존 reportId를 다시 돌려준다 (24시간 보관, 255자 한도).
+        idempotencyKey: String? = null,
     ): CreateHazardReportResponseDto {
         val requestJson =
             JSONObject()
@@ -55,13 +58,18 @@ open class HazardReportsRemoteDataSource private constructor(
                         .put("lat", request.reportPoint.lat)
                         .put("lng", request.reportPoint.lng),
                 )
-                .put("imageUrls", JSONArray(request.imageUrls))
+                .put("imageObjectKeys", JSONArray(request.imageObjectKeys))
 
+        val headers =
+            buildMap {
+                putAll(bearerHeader(accessToken))
+                idempotencyKey?.takeIf(String::isNotBlank)?.let { put("Idempotency-Key", it) }
+            }
         val response =
             postExecutor(
                 "/hazard-reports",
                 requestJson.toString(),
-                bearerHeader(accessToken),
+                headers,
             )
         val responseJson = response.body.toJsonObjectOrNull()
         val dataJson = response.requireDataJson(responseJson)
@@ -135,6 +143,8 @@ open class HazardReportsRemoteDataSource private constructor(
             reportPoint = requireReportPointDto("reportPoint"),
             createdAt = requireString("createdAt"),
             representativeImageUrl = optNullableString("representativeImageUrl"),
+            description = optNullableString("description"),
+            address = optNullableString("address"),
         )
 
     private fun JSONObject.toHazardReportDetailDto(): HazardReportDetailDto =

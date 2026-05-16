@@ -5,6 +5,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,7 @@ import java.util.stream.Collectors;
 import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.geom.Point;
+import org.locationtech.jts.index.strtree.STRtree;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -36,6 +39,9 @@ import com.ssafy.e102.domain.admin.dto.response.AdminGeoJsonFeatureResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminLineStringGeometryResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPointGeometryResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkBridgePayloadResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkBridgePropertiesResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkBridgeSummaryResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkSummaryResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentPropertiesResponse;
@@ -53,6 +59,7 @@ import com.ssafy.e102.domain.route.entity.SegmentFeature;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
 import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
 import com.ssafy.e102.domain.route.type.SegmentFeatureType;
+import com.ssafy.e102.domain.route.type.SegmentType;
 import com.ssafy.e102.global.exception.BusinessException;
 import com.ssafy.e102.global.exception.CommonErrorCode;
 import com.ssafy.e102.global.geo.GeoPointConverter;
@@ -63,6 +70,8 @@ public class AdminMapService {
 
 	private static final Sort ROAD_SEGMENT_SORT = Sort.by(Sort.Direction.ASC, "edgeId");
 	private static final Sort PLACE_SORT = Sort.by(Sort.Direction.ASC, "placeId");
+	private static final double BRIDGE_MAX_DISTANCE_METER = 50.0;
+	private static final double BRIDGE_AUTO_DISTANCE_METER = 12.0;
 
 	private final AdminAreaRepository adminAreaRepository;
 	private final RoadSegmentRepository roadSegmentRepository;
@@ -148,6 +157,32 @@ public class AdminMapService {
 			toBbox(roadSegments.stream()
 				.map(RoadSegment::getGeom)
 				.map(LineString::getEnvelopeInternal)
+				.toList()),
+			AdminGeoJsonFeatureCollectionResponse.of(features));
+	}
+
+	public AdminRoadNetworkBridgePayloadResponse getRoadNetworkBridges(String gu, String dong) {
+		if (!hasArea(gu, dong)) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "구/동은 필수입니다.");
+		}
+		List<RoadSegment> roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
+		BridgeGraph bridgeGraph = buildBridgeGraph(roadSegments);
+		List<BridgeCandidate> candidates = findBridgeCandidates(bridgeGraph);
+		List<AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadNetworkBridgePropertiesResponse>> features = candidates
+			.stream()
+			.map(this::toBridgeFeature)
+			.toList();
+
+		return new AdminRoadNetworkBridgePayloadResponse(
+			new AdminRoadNetworkBridgeSummaryResponse(
+				bridgeGraph.componentCount(),
+				bridgeGraph.endpointCount(),
+				candidates.size(),
+				features.size(),
+				BRIDGE_MAX_DISTANCE_METER,
+				BRIDGE_AUTO_DISTANCE_METER),
+			toBbox(features.stream()
+				.map(feature -> toEnvelope(feature.geometry().coordinates()))
 				.toList()),
 			AdminGeoJsonFeatureCollectionResponse.of(features));
 	}
@@ -296,6 +331,214 @@ public class AdminMapService {
 		return after;
 	}
 
+	private BridgeGraph buildBridgeGraph(List<RoadSegment> roadSegments) {
+		BridgeUnionFind unionFind = new BridgeUnionFind();
+		Map<Long, Integer> degreesByNodeId = new HashMap<>();
+		Map<Long, BridgeNode> nodesById = new HashMap<>();
+		List<GraphSegment> graphSegments = new ArrayList<>();
+
+		for (RoadSegment roadSegment : roadSegments) {
+			Long fromNodeId = roadSegment.getFromNodeId();
+			Long toNodeId = roadSegment.getToNodeId();
+			List<BridgeCoord> coordinates = toBridgeCoords(roadSegment.getGeom());
+			if (coordinates.size() < 2) {
+				continue;
+			}
+			BridgeCoord start = coordinates.get(0);
+			BridgeCoord end = coordinates.get(coordinates.size() - 1);
+			nodesById.putIfAbsent(fromNodeId, new BridgeNode(fromNodeId, start));
+			nodesById.putIfAbsent(toNodeId, new BridgeNode(toNodeId, end));
+			degreesByNodeId.merge(fromNodeId, 1, Integer::sum);
+			degreesByNodeId.merge(toNodeId, 1, Integer::sum);
+			unionFind.add(fromNodeId);
+			unionFind.add(toNodeId);
+			unionFind.union(fromNodeId, toNodeId);
+			graphSegments.add(new GraphSegment(
+				roadSegment.getEdgeId(),
+				fromNodeId,
+				toNodeId,
+				roadSegment.getSegmentType(),
+				coordinates,
+				roadSegment.getGeom().getEnvelopeInternal(),
+				null));
+		}
+
+		Map<Long, Integer> componentIndexes = new HashMap<>();
+		List<GraphSegment> segmentsWithComponent = graphSegments.stream()
+			.map(segment -> {
+				Long root = unionFind.find(segment.fromNodeId());
+				Integer componentIndex = componentIndexes.computeIfAbsent(root, ignored -> componentIndexes.size() + 1);
+				return segment.withComponentId(componentIndex);
+			})
+			.toList();
+		Map<Long, Integer> componentByNodeId = new HashMap<>();
+		nodesById.keySet()
+			.forEach(nodeId -> {
+				Long root = unionFind.find(nodeId);
+				componentByNodeId.put(nodeId,
+					componentIndexes.computeIfAbsent(root, ignored -> componentIndexes.size() + 1));
+			});
+		List<BridgeEndpoint> endpoints = nodesById.values()
+			.stream()
+			.filter(node -> degreesByNodeId.getOrDefault(node.nodeId(), 0) <= 1)
+			.map(node -> new BridgeEndpoint(
+				node.nodeId(),
+				node.coord(),
+				componentByNodeId.getOrDefault(node.nodeId(), 0)))
+			.toList();
+		return new BridgeGraph(segmentsWithComponent, endpoints, componentIndexes.size());
+	}
+
+	private List<BridgeCandidate> findBridgeCandidates(BridgeGraph bridgeGraph) {
+		STRtree segmentIndex = new STRtree();
+		bridgeGraph.segments().forEach(segment -> segmentIndex.insert(segment.envelope(), segment));
+		List<BridgeCandidate> candidates = new ArrayList<>();
+		Set<String> candidateKeys = new HashSet<>();
+
+		for (BridgeEndpoint endpoint : bridgeGraph.endpoints()) {
+			ClosestBridgeTarget nearest = findNearestBridgeTarget(endpoint, segmentIndex);
+			if (nearest == null) {
+				continue;
+			}
+			String key = endpoint.nodeId() + ":" + nearest.segment().edgeId();
+			if (!candidateKeys.add(key)) {
+				continue;
+			}
+			String priority = nearest.distanceMeter() <= BRIDGE_AUTO_DISTANCE_METER ? "AUTO" : "REVIEW";
+			candidates.add(new BridgeCandidate(
+				"bridge-" + (candidates.size() + 1),
+				priority,
+				endpoint.nodeId(),
+				endpoint.componentId(),
+				nearest.segment().edgeId(),
+				nearest.segment().componentId(),
+				roundMeter(nearest.distanceMeter()),
+				endpoint.coord(),
+				nearest.coord()));
+		}
+
+		return candidates.stream()
+			.sorted(Comparator
+				.comparing(BridgeCandidate::distanceMeter)
+				.thenComparing(BridgeCandidate::fromNodeId)
+				.thenComparing(BridgeCandidate::toEdgeId))
+			.toList();
+	}
+
+	@SuppressWarnings("unchecked")
+	private ClosestBridgeTarget findNearestBridgeTarget(BridgeEndpoint endpoint, STRtree segmentIndex) {
+		Envelope queryEnvelope = new Envelope(
+			endpoint.coord().lng(),
+			endpoint.coord().lng(),
+			endpoint.coord().lat(),
+			endpoint.coord().lat());
+		queryEnvelope.expandBy(toDegreeExpand(endpoint.coord().lat(), BRIDGE_MAX_DISTANCE_METER));
+		List<GraphSegment> nearbySegments = segmentIndex.query(queryEnvelope);
+
+		ClosestBridgeTarget nearest = null;
+		for (GraphSegment segment : nearbySegments) {
+			if (!isBridgeTargetSegment(segment) || segment.componentId() == endpoint.componentId()) {
+				continue;
+			}
+			ClosestBridgePoint closestPoint = closestPointOnLine(endpoint.coord(), segment.coordinates());
+			if (closestPoint.distanceMeter() > BRIDGE_MAX_DISTANCE_METER) {
+				continue;
+			}
+			if (nearest == null || closestPoint.distanceMeter() < nearest.distanceMeter()
+				|| closestPoint.distanceMeter() == nearest.distanceMeter()
+					&& segment.edgeId() < nearest.segment().edgeId()) {
+				nearest = new ClosestBridgeTarget(segment, closestPoint.coord(), closestPoint.distanceMeter());
+			}
+		}
+		return nearest;
+	}
+
+	private boolean isBridgeTargetSegment(GraphSegment segment) {
+		return segment.segmentType() == SegmentType.SIDE_LINE;
+	}
+
+	private AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadNetworkBridgePropertiesResponse> toBridgeFeature(
+		BridgeCandidate candidate) {
+		List<List<Double>> coordinates = List.of(
+			List.of(candidate.fromCoord().lng(), candidate.fromCoord().lat()),
+			List.of(candidate.toCoord().lng(), candidate.toCoord().lat()));
+		return AdminGeoJsonFeatureResponse.of(
+			AdminLineStringGeometryResponse.of(coordinates),
+			new AdminRoadNetworkBridgePropertiesResponse(
+				candidate.candidateId(),
+				"PROPOSED_BRIDGE",
+				candidate.priority(),
+				String.valueOf(candidate.fromNodeId()),
+				String.valueOf(candidate.fromComponentId()),
+				String.valueOf(candidate.toEdgeId()),
+				String.valueOf(candidate.toComponentId()),
+				candidate.distanceMeter(),
+				List.of(candidate.fromCoord().lng(), candidate.fromCoord().lat()),
+				"다른 컴포넌트 endpoint와 가까운 보행 segment 연결 후보"));
+	}
+
+	private List<BridgeCoord> toBridgeCoords(LineString lineString) {
+		return Arrays.stream(lineString.getCoordinates())
+			.map(coordinate -> new BridgeCoord(coordinate.getX(), coordinate.getY()))
+			.toList();
+	}
+
+	private ClosestBridgePoint closestPointOnLine(BridgeCoord point, List<BridgeCoord> coordinates) {
+		ClosestBridgePoint nearest = null;
+		for (int i = 1; i < coordinates.size(); i++) {
+			ClosestBridgePoint projected = closestPointOnLineSegment(point, coordinates.get(i - 1), coordinates.get(i));
+			if (nearest == null || projected.distanceMeter() < nearest.distanceMeter()) {
+				nearest = projected;
+			}
+		}
+		return nearest;
+	}
+
+	private ClosestBridgePoint closestPointOnLineSegment(BridgeCoord point, BridgeCoord start, BridgeCoord end) {
+		double originLat = point.lat();
+		LocalMeterCoord pointMeter = toLocalMeters(point, originLat);
+		LocalMeterCoord startMeter = toLocalMeters(start, originLat);
+		LocalMeterCoord endMeter = toLocalMeters(end, originLat);
+		double dx = endMeter.x() - startMeter.x();
+		double dy = endMeter.y() - startMeter.y();
+		double lengthSquared = dx * dx + dy * dy;
+		double t = lengthSquared == 0
+			? 0
+			: Math.max(0, Math.min(1,
+				((pointMeter.x() - startMeter.x()) * dx + (pointMeter.y() - startMeter.y()) * dy) / lengthSquared));
+		LocalMeterCoord projectedMeter = new LocalMeterCoord(startMeter.x() + dx * t, startMeter.y() + dy * t);
+		double distanceMeter = Math.hypot(pointMeter.x() - projectedMeter.x(), pointMeter.y() - projectedMeter.y());
+		return new ClosestBridgePoint(toLngLat(projectedMeter, originLat), distanceMeter);
+	}
+
+	private LocalMeterCoord toLocalMeters(BridgeCoord coord, double originLat) {
+		double metersPerDegreeLat = 111_320.0;
+		double metersPerDegreeLng = 111_320.0 * Math.cos(Math.toRadians(originLat));
+		return new LocalMeterCoord(coord.lng() * metersPerDegreeLng, coord.lat() * metersPerDegreeLat);
+	}
+
+	private BridgeCoord toLngLat(LocalMeterCoord coord, double originLat) {
+		double metersPerDegreeLat = 111_320.0;
+		double metersPerDegreeLng = 111_320.0 * Math.cos(Math.toRadians(originLat));
+		return new BridgeCoord(coord.x() / metersPerDegreeLng, coord.y() / metersPerDegreeLat);
+	}
+
+	private double toDegreeExpand(double lat, double meter) {
+		double lngDegree = meter / (111_320.0 * Math.cos(Math.toRadians(lat)));
+		double latDegree = meter / 111_320.0;
+		return Math.max(lngDegree, latDegree);
+	}
+
+	private double roundMeter(double value) {
+		return Math.round(value * 100.0) / 100.0;
+	}
+
+	private Envelope toEnvelope(List<List<Double>> coordinates) {
+		Envelope envelope = new Envelope();
+		coordinates.forEach(coord -> envelope.expandToInclude(coord.get(0), coord.get(1)));
+		return envelope;
+	}
+
 	private boolean hasArea(String gu, String dong) {
 		return gu != null && !gu.isBlank() && dong != null && !dong.isBlank();
 	}
@@ -386,6 +629,8 @@ public class AdminMapService {
 			roadSegment.getToNodeId(),
 			roadSegment.getSegmentType(),
 			roadSegment.getLengthMeter(),
+			roadSegment.getAvgSlopePercent(),
+			roadSegment.getWidthMeter(),
 			roadSegment.getWalkAccess(),
 			roadSegment.getBrailleBlockState(),
 			roadSegment.getAudioSignalState(),
@@ -436,5 +681,100 @@ public class AdminMapService {
 				Map.Entry::getValue,
 				(left, right) -> left,
 				LinkedHashMap::new));
+	}
+
+	private record BridgeGraph(
+		List<GraphSegment> segments,
+		List<BridgeEndpoint> endpoints,
+		int componentCount) {
+
+		int endpointCount() {
+			return endpoints.size();
+		}
+	}
+
+	private record GraphSegment(
+		Long edgeId,
+		Long fromNodeId,
+		Long toNodeId,
+		SegmentType segmentType,
+		List<BridgeCoord> coordinates,
+		Envelope envelope,
+		Integer componentId) {
+
+		GraphSegment withComponentId(Integer nextComponentId) {
+			return new GraphSegment(edgeId, fromNodeId, toNodeId, segmentType, coordinates, envelope, nextComponentId);
+		}
+	}
+
+	private record BridgeNode(
+		Long nodeId,
+		BridgeCoord coord) {
+	}
+
+	private record BridgeEndpoint(
+		Long nodeId,
+		BridgeCoord coord,
+		Integer componentId) {
+	}
+
+	private record BridgeCandidate(
+		String candidateId,
+		String priority,
+		Long fromNodeId,
+		Integer fromComponentId,
+		Long toEdgeId,
+		Integer toComponentId,
+		Double distanceMeter,
+		BridgeCoord fromCoord,
+		BridgeCoord toCoord) {
+	}
+
+	private record ClosestBridgeTarget(
+		GraphSegment segment,
+		BridgeCoord coord,
+		Double distanceMeter) {
+	}
+
+	private record ClosestBridgePoint(
+		BridgeCoord coord,
+		Double distanceMeter) {
+	}
+
+	private record BridgeCoord(
+		double lng,
+		double lat) {
+	}
+
+	private record LocalMeterCoord(
+		double x,
+		double y) {
+	}
+
+	private static final class BridgeUnionFind {
+
+		private final Map<Long, Long> parentByNodeId = new HashMap<>();
+
+		private void add(Long nodeId) {
+			parentByNodeId.putIfAbsent(nodeId, nodeId);
+		}
+
+		private Long find(Long nodeId) {
+			Long parent = parentByNodeId.get(nodeId);
+			if (parent == null || parent.equals(nodeId)) {
+				return nodeId;
+			}
+			Long root = find(parent);
+			parentByNodeId.put(nodeId, root);
+			return root;
+		}
+
+		private void union(Long left, Long right) {
+			Long leftRoot = find(left);
+			Long rightRoot = find(right);
+			if (!leftRoot.equals(rightRoot)) {
+				parentByNodeId.put(rightRoot, leftRoot);
+			}
+		}
 	}
 }

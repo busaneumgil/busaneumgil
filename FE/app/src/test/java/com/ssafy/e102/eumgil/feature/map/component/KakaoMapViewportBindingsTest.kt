@@ -602,7 +602,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `transit detail walk route line uses the confirmed walk gray token`() {
+    fun `transit detail walk route line uses the confirmed transit walk token`() {
         val routeLineStates =
             createKakaoRouteLineRenderStates(
                 listOf(
@@ -619,8 +619,8 @@ class KakaoMapViewportBindingsTest {
                 ),
             )
 
-        assertEquals(0xFFD9D9D9.toInt(), routeLineStates.single().lineColor)
-        assertEquals(0xFFD9D9D9.toInt(), routeLineStates.single().strokeColor)
+        assertEquals(0xFF99B5D1.toInt(), routeLineStates.single().lineColor)
+        assertEquals(0xFF99B5D1.toInt(), routeLineStates.single().strokeColor)
     }
 
     @Test
@@ -719,7 +719,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `focused navigation route camera fits the focused segment and focus halo`() {
+    fun `focused navigation route camera uses projection target without route fit camera`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 NavigationMapOverlayUiState(
@@ -743,18 +743,10 @@ class KakaoMapViewportBindingsTest {
                     focusCoordinate = GeoCoordinate(latitude = 35.1795, longitude = 129.0655),
                     mapFocusMode = NavigationMapFocusMode.FOCUSED,
                 ),
-            )
-
-        val cameraState = requireNotNull(createKakaoRouteCameraRenderState(overlayState))
-
-        assertEquals(
-            listOf(
-                MapCoordinate(latitude = 35.178, longitude = 129.063),
-                MapCoordinate(latitude = 35.181, longitude = 129.068),
-                MapCoordinate(latitude = 35.1795, longitude = 129.0655),
-            ),
-            cameraState.points,
         )
+
+        assertFalse(overlayState.fitToProjection)
+        assertNull(createKakaoRouteCameraRenderState(overlayState))
     }
 
     @Test

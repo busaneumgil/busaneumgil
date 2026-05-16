@@ -23,6 +23,9 @@ class GuideSidePanelPolicyTest {
         val rail =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
                 .readText()
+        val scrubber =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/RouteStepScrubberRail.kt")
+                .readText()
 
         assertTrue("Guide side panel primitives should live in a neutral feature package.", shared.exists())
         val sharedSource = shared.readText()
@@ -43,10 +46,11 @@ class GuideSidePanelPolicyTest {
                 sharedSource.contains("NavigationGuidanceAction"),
         )
         assertTrue(
-            "Route detail should render its side panel through the shared shell, row, and collapsed rail primitives.",
+            "Route detail should render its side panel through the shared shell, row, and anchored collapsed rail primitive.",
             routeDetail.contains("GuideSidePanelShell(") &&
                 routeDetail.contains("GuideSidePanelStepRow(") &&
-                routeDetail.contains("GuideCollapsedRailItem("),
+                routeDetail.contains("RouteStepScrubberRail(") &&
+                scrubber.contains("GuideCollapsedRailItem("),
         )
         assertTrue(
             "Navigation guidance should render its side panel through the shared shell and row primitives.",
@@ -54,8 +58,9 @@ class GuideSidePanelPolicyTest {
                 navigation.contains("GuideSidePanelStepRow("),
         )
         assertTrue(
-            "Navigation collapsed rail should use the shared collapsed rail primitive while keeping only the scroll-top action local.",
-            rail.contains("GuideCollapsedRailItem(") &&
+            "Navigation collapsed rail should use the shared anchored scrubber while keeping only the scroll-top action local.",
+            rail.contains("RouteStepScrubberRail(") &&
+                scrubber.contains("GuideCollapsedRailItem(") &&
                 rail.contains("NavigationSegmentRailTopAction(") &&
                 !rail.contains("NavigationSegmentRailDetailAction("),
         )
@@ -195,6 +200,25 @@ class GuideSidePanelPolicyTest {
         assertTrue(shouldHideGuideRailItemForTopCard(itemIndex = 2, promotedItemIndex = 2))
         assertFalse(shouldHideGuideRailItemForTopCard(itemIndex = 1, promotedItemIndex = 2))
         assertFalse(shouldHideGuideRailItemForTopCard(itemIndex = 1, promotedItemIndex = null))
+    }
+
+    @Test
+    fun `promoted rail item collapses out of layout instead of leaving a blank selected row`() {
+        val sharedSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")
+                .readText()
+        val collapsedItemSection =
+            sharedSource
+                .substringAfter("fun GuideCollapsedRailItem(")
+                .substringBefore("@Composable\nfun GuideSidePanelStepIcon")
+
+        assertTrue(
+            "The top-card item should be removed from the visible rail flow so the next guide icon sits directly under the top card.",
+            collapsedItemSection.contains("val resolvedHeight = if (isContentHidden) 0.dp else height") &&
+                collapsedItemSection.contains(".height(resolvedHeight)") &&
+                collapsedItemSection.contains("if (!isContentHidden) {") &&
+                collapsedItemSection.contains("HorizontalDivider(color = dividerColor)"),
+        )
     }
 
     @Test

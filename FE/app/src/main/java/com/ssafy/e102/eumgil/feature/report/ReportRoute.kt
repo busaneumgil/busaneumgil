@@ -69,6 +69,8 @@ fun ReportRoute(
                 currentLocationManager = appContainer.currentLocationManager,
                 locationPermissionManager = appContainer.locationPermissionManager,
                 addressResolver = addressResolver,
+                // Task 4.1 — 오프라인 시 제출 버튼을 자동 비활성화하기 위해 네트워크 모니터 주입.
+                networkMonitor = appContainer.networkMonitor,
             )
         }
     val viewModel =

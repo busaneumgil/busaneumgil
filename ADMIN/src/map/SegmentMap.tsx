@@ -38,7 +38,7 @@ interface SegmentMapProps {
     start?: GeoPoint | null;
     end?: GeoPoint | null;
   };
-  toolbarMode?: "editor" | "roadSegmentLegend" | "segmentFeatureLegend";
+  toolbarMode?: "editor" | "roadSegmentLegend" | "segmentFeatureLegend" | "routeAttributeLegend";
   draftEditCount?: number;
   onUndoDraftEdit?: () => void;
   onClearDraftEdits?: () => void;
@@ -65,6 +65,47 @@ const segmentFeatureColors: Record<SegmentFeatureType, string> = {
   BRAILLE_BLOCK: "#7c3aed",
   STAIRS: "#7c2d12",
 };
+type RouteAttributeLayer = "slope" | "width" | "surface" | "walkAccess" | "crosswalk" | "signal" | "audioSignal" | "brailleBlock" | "stairs";
+type RouteLineLayer = "safe" | "fast";
+const routeAttributeLayerTypes: RouteAttributeLayer[] = ["slope", "width", "surface", "walkAccess", "crosswalk", "signal", "audioSignal", "brailleBlock", "stairs"];
+const routeEventLayerTypes: RouteAttributeLayer[] = ["crosswalk", "signal", "audioSignal", "brailleBlock", "stairs"];
+const routeAttributeLabels: Record<RouteAttributeLayer, string> = {
+  slope: "경사도",
+  width: "보도 폭",
+  surface: "노면",
+  walkAccess: "통행 불가",
+  crosswalk: "횡단보도",
+  signal: "신호등",
+  audioSignal: "음향신호기",
+  brailleBlock: "점자블록",
+  stairs: "계단",
+};
+const routeAttributeColors: Record<RouteAttributeLayer, string> = {
+  slope: "#dc2626",
+  width: "#0284c7",
+  surface: "#64748b",
+  walkAccess: "#111827",
+  crosswalk: "#2563eb",
+  signal: "#ca8a04",
+  audioSignal: "#0f766e",
+  brailleBlock: "#7c3aed",
+  stairs: "#7c2d12",
+};
+const routeLineLabels: Record<RouteLineLayer, string> = {
+  safe: "안전 경로",
+  fast: "빠른 경로",
+};
+const routeLineColors: Record<RouteLineLayer, string> = {
+  safe: "#dc2626",
+  fast: "#2563eb",
+};
+interface SegmentStyleOverride {
+  strokeColor?: string;
+  strokeWeight?: number;
+  strokeStyle?: string;
+  opacity?: number;
+  zIndex?: number;
+}
 
 export function SegmentMap({
   payload,
@@ -110,7 +151,7 @@ export function SegmentMap({
   const roadAttributeTooltipRef = useRef<KakaoOverlay | null>(null);
   const segmentOverlayByEdgeRef = useRef<Map<string, KakaoOverlay[]>>(new Map());
   const polygonShapeRef = useRef<KakaoOverlay | null>(null);
-  const centeredPayloadRef = useRef<{ payload?: SegmentPayload; bridgePayload?: BridgePayload }>({});
+  const centeredPayloadKeyRef = useRef<string | null>(null);
   const draftEditsRef = useRef<EditAction[]>(draftEdits);
   const modeRef = useRef<EditorMode>("idle");
   const addTypeRef = useRef<AddType>("SIDE_LINE");
@@ -135,11 +176,27 @@ export function SegmentMap({
     crossWalk: true,
     transitionConnector: true,
   });
+  const [showBridgeGuides, setShowBridgeGuides] = useState(true);
   const [segmentFeatureLayers, setSegmentFeatureLayers] = useState<Record<SegmentFeatureType, boolean>>({
     CROSSWALK: true,
     AUDIO_SIGNAL: true,
     BRAILLE_BLOCK: true,
     STAIRS: true,
+  });
+  const [routeAttributeLayers, setRouteAttributeLayers] = useState<Record<RouteAttributeLayer, boolean>>({
+    slope: true,
+    width: true,
+    surface: true,
+    walkAccess: true,
+    crosswalk: true,
+    signal: true,
+    audioSignal: true,
+    brailleBlock: true,
+    stairs: true,
+  });
+  const [routeLineLayers, setRouteLineLayers] = useState<Record<RouteLineLayer, boolean>>({
+    safe: true,
+    fast: true,
   });
   const detailedSegmentsVisible = mapLevel <= DETAIL_SEGMENT_MAX_LEVEL;
 
@@ -206,6 +263,7 @@ export function SegmentMap({
       ? allSegmentFeatures.filter(shouldShowRoadSegmentLayer)
       : [];
     segmentFeatures.forEach((feature) => {
+      const routeAttributeStyleOverride = toolbarMode === "routeAttributeLegend" ? routeAttributeSegmentStyle(feature, routeAttributeLayers) : undefined;
       const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, (coord, latLng) => {
         if (routePointPickModeRef.current) {
           handleMapCoordinate(coord, latLng);
@@ -230,14 +288,14 @@ export function SegmentMap({
           segmentType: feature.properties.segmentType,
           reason: "ADMIN_click_delete",
         } as EditAction);
-      }, { hitArea: useHitArea });
+      }, { hitArea: useHitArea, style: routeAttributeStyleOverride });
       if (segmentOverlays) {
         overlaysRef.current.push(...segmentOverlays);
         segmentOverlayByEdgeRef.current.set(String(feature.properties.edgeId), segmentOverlays);
       }
     });
 
-    const bridgeFeatures = bridgePayload?.bridges.features ?? [];
+    const bridgeFeatures = showBridgeGuides ? bridgePayload?.bridges.features ?? [] : [];
     bridgeFeatures.forEach((feature) => {
       const bridge = createBridgeOverlay(feature, mapRef.current!);
       if (bridge) overlaysRef.current.push(...bridge);
@@ -252,7 +310,7 @@ export function SegmentMap({
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, mode, roadSegmentLayers, toolbarMode]);
+  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, mode, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
 
   useEffect(() => {
     if (detailedSegmentsVisible) {
@@ -269,7 +327,7 @@ export function SegmentMap({
 
   useEffect(() => {
     renderRouteOverlays();
-  }, [routeLines, mapReady]);
+  }, [routeLineLayers, routeLines, mapReady]);
 
   useEffect(() => {
     renderRoutePointOverlays();
@@ -277,7 +335,7 @@ export function SegmentMap({
 
   useEffect(() => {
     renderSegmentFeatureOverlays();
-  }, [detailedSegmentsVisible, draftEdits, mapReady, payload, segmentFeatureLayers, toolbarMode]);
+  }, [detailedSegmentsVisible, draftEdits, mapReady, payload, routeAttributeLayers, segmentFeatureLayers, toolbarMode]);
 
   useEffect(() => {
     if (!selectedSegment || !detailedSegmentsVisible) {
@@ -345,6 +403,7 @@ export function SegmentMap({
       addPointsRef.current = result.remainingPoints;
       clearTempOverlays();
       setPendingAddCount(result.remainingPoints.length);
+      setMode("idle");
       return;
     }
 
@@ -424,11 +483,11 @@ export function SegmentMap({
   }
 
   function shouldShowRoadSegmentLayer(feature: SegmentFeature) {
-    if (toolbarMode !== "roadSegmentLegend") {
+    if (toolbarMode !== "roadSegmentLegend" && toolbarMode !== "routeAttributeLegend") {
       return true;
     }
     const segmentType = feature.properties.segmentType;
-    if (segmentType === "CROSS_WALK" || segmentType === "SIDE_WALK") {
+    if (segmentType === "CROSS_WALK") {
       return roadSegmentLayers.crossWalk;
     }
     if (segmentType === "TRANSITION_CONNECTOR") {
@@ -441,8 +500,16 @@ export function SegmentMap({
     if (!window.kakao?.maps || !mapRef.current) return;
     routeOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     routeOverlaysRef.current = [];
-    const safeLine = createRoutePolyline(routeLines?.safe ?? [], "#dc2626", 7);
-    const fastLine = createRoutePolyline(routeLines?.fast ?? [], "#2563eb", 5);
+    const safeLine = routeLineLayers.safe ? createRoutePolyline(routeLines?.safe ?? [], routeLineColors.safe, {
+      strokeWeight: 9,
+      strokeOpacity: 0.72,
+      zIndex: 32,
+    }) : null;
+    const fastLine = routeLineLayers.fast ? createRoutePolyline(routeLines?.fast ?? [], routeLineColors.fast, {
+      strokeWeight: 5,
+      strokeOpacity: 0.92,
+      zIndex: 34,
+    }) : null;
     if (safeLine) {
       safeLine.setMap(mapRef.current);
       routeOverlaysRef.current.push(safeLine);
@@ -469,7 +536,20 @@ export function SegmentMap({
     const map = mapRef.current;
     segmentFeatureOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     segmentFeatureOverlaysRef.current = [];
-    if (toolbarMode !== "segmentFeatureLegend" || !shouldRenderDetailedSegments()) return;
+    if (!shouldRenderDetailedSegments()) return;
+    if (toolbarMode === "routeAttributeLegend") {
+      const activeLayers = routeEventLayerTypes.filter((layer) => routeAttributeLayers[layer]);
+      if (!activeLayers.length) return;
+      const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+      segmentFeatures.forEach((feature) => {
+        const overlay = createRouteAttributeEventOverlay(feature, activeLayers);
+        if (!overlay) return;
+        overlay.setMap(map);
+        segmentFeatureOverlaysRef.current.push(overlay);
+      });
+      return;
+    }
+    if (toolbarMode !== "segmentFeatureLegend") return;
     const activeTypes = new Set(segmentFeatureTypes.filter((featureType) => segmentFeatureLayers[featureType]));
     if (!activeTypes.size) return;
     const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
@@ -488,10 +568,11 @@ export function SegmentMap({
   }
 
   function centerMapForPayloadOnce(segmentFeatures: SegmentFeature[], bridgeFeatures: BridgeFeature[]) {
-    if (centeredPayloadRef.current.payload === payload && centeredPayloadRef.current.bridgePayload === bridgePayload) {
+    const nextKey = mapCenterKey(payload, bridgePayload, segmentFeatures, bridgeFeatures);
+    if (!nextKey || centeredPayloadKeyRef.current === nextKey) {
       return;
     }
-    centeredPayloadRef.current = { payload, bridgePayload };
+    centeredPayloadKeyRef.current = nextKey;
     centerMapForPayload(segmentFeatures, bridgeFeatures);
   }
 
@@ -725,7 +806,7 @@ export function SegmentMap({
     const candidates = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current)
       .filter((feature) => {
         const segmentType = feature.properties.segmentType;
-        return segmentType === "SIDE_LINE" || segmentType === "SIDE_WALK";
+        return segmentType === "SIDE_LINE";
       });
     const nearest = nearestPointOnSegments(coord, candidates);
     if (!nearest || nearest.distanceM > 1.5) {
@@ -736,7 +817,11 @@ export function SegmentMap({
     return nearest.coord;
   }
 
-  const segmentFeatureCounts = countSegmentFeatureTypes(visibleSegmentFeatures(payload?.segments.features ?? [], draftEdits));
+  const visibleFeaturesForLegend = visibleSegmentFeatures(payload?.segments.features ?? [], draftEdits);
+  const segmentFeatureCounts = countSegmentFeatureTypes(visibleFeaturesForLegend);
+  const routeAttributeCounts = countRouteAttributeLayers(visibleFeaturesForLegend);
+  const roadSegmentCounts = countRoadSegmentLayers(visibleFeaturesForLegend);
+  const bridgeCandidateCount = bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0;
 
   return (
     <section className="map-shell">
@@ -757,6 +842,9 @@ export function SegmentMap({
             </>
           )}
           <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>
+          <button className={showBridgeGuides ? "selected-tool" : ""} onClick={() => setShowBridgeGuides((visible) => !visible)}>
+            연결 가이드 {bridgeCandidateCount}
+          </button>
           <span className="draft-count-badge">변경 {draftEditCount}건</span>
           <button onClick={onUndoDraftEdit} disabled={!draftEditCount || !onUndoDraftEdit}>Undo</button>
           <button onClick={onClearDraftEdits} disabled={!draftEditCount || !onClearDraftEdits}>Clear</button>
@@ -771,7 +859,7 @@ export function SegmentMap({
           />
           <LegendItem
             color="#2563eb"
-            label="CROSS_WALK / SIDE_WALK"
+            label="CROSS_WALK"
             active={roadSegmentLayers.crossWalk}
             onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, crossWalk: !layers.crossWalk }))}
           />
@@ -781,6 +869,45 @@ export function SegmentMap({
             active={roadSegmentLayers.transitionConnector}
             onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, transitionConnector: !layers.transitionConnector }))}
           />
+        </div>
+      ) : toolbarMode === "routeAttributeLegend" ? (
+        <div className="map-toolbar attribute-legend route-attribute-legend">
+          <LegendItem
+            color="#c9342f"
+            label={`SIDE_LINE ${roadSegmentCounts.sideLine}`}
+            active={roadSegmentLayers.sideLine}
+            onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, sideLine: !layers.sideLine }))}
+          />
+          <LegendItem
+            color="#2563eb"
+            label={`CROSS_WALK ${roadSegmentCounts.crossWalk}`}
+            active={roadSegmentLayers.crossWalk}
+            onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, crossWalk: !layers.crossWalk }))}
+          />
+          <LegendItem
+            color="#64748b"
+            label={`CONNECTOR ${roadSegmentCounts.transitionConnector}`}
+            active={roadSegmentLayers.transitionConnector}
+            onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, transitionConnector: !layers.transitionConnector }))}
+          />
+          {routeAttributeLayerTypes.map((layer) => (
+            <LegendItem
+              key={layer}
+              color={routeAttributeColors[layer]}
+              label={`${routeAttributeLabels[layer]} ${routeAttributeCounts.get(layer) ?? 0}`}
+              active={routeAttributeLayers[layer]}
+              onClick={() => setRouteAttributeLayers((layers) => ({ ...layers, [layer]: !layers[layer] }))}
+            />
+          ))}
+          {(Object.keys(routeLineLabels) as RouteLineLayer[]).map((layer) => (
+            <LegendItem
+              key={layer}
+              color={routeLineColors[layer]}
+              label={routeLineLabels[layer]}
+              active={routeLineLayers[layer]}
+              onClick={() => setRouteLineLayers((layers) => ({ ...layers, [layer]: !layers[layer] }))}
+            />
+          ))}
         </div>
       ) : (
         <div className="map-toolbar attribute-legend">
@@ -829,15 +956,35 @@ function LegendItem({
   );
 }
 
-function createRoutePolyline(points: GeoPoint[], color: string, strokeWeight: number): KakaoOverlay | null {
+function mapCenterKey(
+  payload: SegmentPayload | undefined,
+  bridgePayload: BridgePayload | undefined,
+  segmentFeatures: SegmentFeature[],
+  bridgeFeatures: BridgeFeature[],
+) {
+  const bbox = payload?.bbox ?? bridgePayload?.bbox;
+  if (bbox) return bbox.join(",");
+  const firstCoord = segmentFeatures[0]?.geometry.coordinates[0] ?? bridgeFeatures[0]?.geometry.coordinates[0];
+  return firstCoord ? firstCoord.join(",") : null;
+}
+
+function createRoutePolyline(
+  points: GeoPoint[],
+  color: string,
+  options: {
+    strokeWeight: number;
+    strokeOpacity: number;
+    zIndex: number;
+  },
+): KakaoOverlay | null {
   if (!window.kakao?.maps || points.length < 2) return null;
   return new window.kakao.maps.Polyline({
     path: points.map((point) => new window.kakao!.maps.LatLng(point.lat, point.lng)),
-    strokeWeight,
+    strokeWeight: options.strokeWeight,
     strokeColor: color,
-    strokeOpacity: 0.92,
+    strokeOpacity: options.strokeOpacity,
     strokeStyle: "solid",
-    zIndex: 30,
+    zIndex: options.zIndex,
   });
 }
 
@@ -888,6 +1035,28 @@ function midpointCoord(coords: Coord[]): Coord {
   return coords[Math.floor(coords.length / 2)] ?? coords[0] ?? [0, 0];
 }
 
+function createRouteAttributeEventOverlay(feature: SegmentFeature, activeLayers: RouteAttributeLayer[]): KakaoOverlay | null {
+  if (!window.kakao?.maps) return null;
+  const matchedLayers = activeLayers.filter((layer) => routeAttributeLayerMatches(feature, layer));
+  if (!matchedLayers.length) return null;
+  const marker = document.createElement("div");
+  marker.className = "route-attribute-badge-stack";
+  marker.title = matchedLayers.map((layer) => routeAttributeLabels[layer]).join(", ");
+  matchedLayers.forEach((layer) => {
+    const dot = document.createElement("span");
+    dot.style.backgroundColor = routeAttributeColors[layer];
+    marker.appendChild(dot);
+  });
+  const coord = midpointCoord(feature.geometry.coordinates);
+  return new window.kakao.maps.CustomOverlay({
+    position: new window.kakao.maps.LatLng(coord[1], coord[0]),
+    content: marker,
+    xAnchor: 0.5,
+    yAnchor: 0.5,
+    zIndex: 28,
+  });
+}
+
 function countSegmentFeatureTypes(features: SegmentFeature[]) {
   const counts = new Map<SegmentFeatureType, number>();
   features.forEach((feature) => {
@@ -896,6 +1065,129 @@ function countSegmentFeatureTypes(features: SegmentFeature[]) {
     });
   });
   return counts;
+}
+
+function countRouteAttributeLayers(features: SegmentFeature[]) {
+  const counts = new Map<RouteAttributeLayer, number>();
+  features.forEach((feature) => {
+    routeAttributeLayerTypes.forEach((layer) => {
+      if (routeAttributeLayerMatches(feature, layer)) {
+        counts.set(layer, (counts.get(layer) ?? 0) + 1);
+      }
+    });
+  });
+  return counts;
+}
+
+function countRoadSegmentLayers(features: SegmentFeature[]) {
+  return features.reduce(
+    (counts, feature) => {
+      const segmentType = feature.properties.segmentType;
+      if (segmentType === "CROSS_WALK") {
+        counts.crossWalk += 1;
+      } else if (segmentType === "TRANSITION_CONNECTOR") {
+        counts.transitionConnector += 1;
+      } else {
+        counts.sideLine += 1;
+      }
+      return counts;
+    },
+    { sideLine: 0, crossWalk: 0, transitionConnector: 0 },
+  );
+}
+
+function routeAttributeLayerMatches(feature: SegmentFeature, layer: RouteAttributeLayer) {
+  const properties = feature.properties;
+  switch (layer) {
+    case "slope":
+      return numberOrNull(properties.avgSlopePercent) !== null;
+    case "width":
+      return numberOrNull(properties.widthMeter) !== null || Boolean(properties.widthState);
+    case "surface":
+      return Boolean(properties.surfaceState);
+    case "walkAccess":
+      return isNoState(properties.walkAccess);
+    case "crosswalk":
+      return properties.segmentType === "CROSS_WALK" || properties.featureTypes?.includes("CROSSWALK") === true;
+    case "signal":
+      return isYesState(properties.signalState);
+    case "audioSignal":
+      return isYesState(properties.audioSignalState) || properties.featureTypes?.includes("AUDIO_SIGNAL") === true;
+    case "brailleBlock":
+      return isYesState(properties.brailleBlockState) || properties.featureTypes?.includes("BRAILLE_BLOCK") === true;
+    case "stairs":
+      return isYesState(properties.stairsState) || properties.featureTypes?.includes("STAIRS") === true;
+    default:
+      return false;
+  }
+}
+
+function routeAttributeSegmentStyle(feature: SegmentFeature, layers: Record<RouteAttributeLayer, boolean>): SegmentStyleOverride {
+  const properties = feature.properties;
+  const style: SegmentStyleOverride = {};
+  if (layers.walkAccess && isNoState(properties.walkAccess)) {
+    style.strokeColor = "#111827";
+    style.opacity = 0.95;
+    style.zIndex = 24;
+  } else if (layers.slope) {
+    const slope = numberOrNull(properties.avgSlopePercent);
+    if (slope !== null) {
+      style.strokeColor = slopeColor(slope);
+      style.opacity = 0.9;
+      style.zIndex = 22;
+    }
+  }
+  if (layers.width) {
+    style.strokeWeight = widthStrokeWeight(properties.widthState, properties.widthMeter);
+  }
+  if (layers.surface) {
+    style.strokeStyle = surfaceStrokeStyle(properties.surfaceState);
+  }
+  return style;
+}
+
+function isYesState(value: unknown) {
+  return String(value ?? "").toUpperCase() === "YES";
+}
+
+function isNoState(value: unknown) {
+  return String(value ?? "").toUpperCase() === "NO";
+}
+
+function numberOrNull(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function slopeColor(slopePercent: number) {
+  const absoluteSlope = Math.abs(slopePercent);
+  if (absoluteSlope >= 20) return "#7f1d1d";
+  if (absoluteSlope >= 12) return "#dc2626";
+  if (absoluteSlope >= 8) return "#f97316";
+  if (absoluteSlope >= 4) return "#f59e0b";
+  return "#16a34a";
+}
+
+function widthStrokeWeight(widthState: unknown, widthMeter: unknown) {
+  const state = String(widthState ?? "").toUpperCase();
+  if (state.includes("ADEQUATE_150")) return 8;
+  if (state.includes("ADEQUATE_120")) return 6;
+  if (state.includes("NARROW")) return 3;
+  const meter = numberOrNull(widthMeter);
+  if (meter !== null) {
+    if (meter >= 1.5) return 8;
+    if (meter >= 1.2) return 6;
+    return 3;
+  }
+  return 4;
+}
+
+function surfaceStrokeStyle(surfaceState: unknown) {
+  const state = String(surfaceState ?? "").toUpperCase();
+  if (state.includes("UNPAVED") || state.includes("BAD")) return "shortdash";
+  if (state.includes("UNKNOWN")) return "shortdot";
+  return "solid";
 }
 
 function createBridgeOverlay(feature: BridgeFeature, map: KakaoMap): KakaoOverlay[] | null {
@@ -995,11 +1287,12 @@ function createSegmentOverlay(
   feature: SegmentFeature,
   map: KakaoMap,
   onClick: (coord: Coord, latLng: unknown) => void,
-  options: { draft?: boolean; hitArea?: boolean } = {},
+  options: { draft?: boolean; hitArea?: boolean; style?: SegmentStyleOverride } = {},
 ): KakaoOverlay[] | null {
   const line = createPolyline(feature.geometry.coordinates, feature.properties.segmentType ?? "SIDE_LINE", {
     draft: options.draft,
     opacity: options.draft ? 0.98 : undefined,
+    ...options.style,
   });
   if (!line || !window.kakao?.maps) return null;
   const overlays = [line];
@@ -1037,23 +1330,23 @@ function kakaoLatLngAtCoord(coord: Coord): { getLng: () => number; getLat: () =>
 function createPolyline(
   coordinates: Coord[],
   segmentType: string,
-  options: { draft?: boolean; opacity?: number } = {},
+  options: { draft?: boolean; opacity?: number } & SegmentStyleOverride = {},
 ): KakaoOverlay | null {
   if (!window.kakao?.maps) return null;
 
   const path = coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng));
-  const isCrossWalk = segmentType === "CROSS_WALK" || segmentType === "SIDE_WALK";
-  const strokeColor = isCrossWalk ? "#2563eb" : segmentType === "TRANSITION_CONNECTOR" ? "#64748b" : "#c9342f";
-  const strokeWeight = isCrossWalk ? 5 : 4;
+  const isCrossWalk = segmentType === "CROSS_WALK";
+  const strokeColor = options.strokeColor ?? (isCrossWalk ? "#2563eb" : segmentType === "TRANSITION_CONNECTOR" ? "#64748b" : "#c9342f");
+  const strokeWeight = options.strokeWeight ?? (isCrossWalk ? 5 : 4);
   const opacity = options.opacity ?? (segmentType === "TRANSITION_CONNECTOR" ? 0.45 : 0.88);
-  const zIndex = options.draft ? 18 : segmentType === "TRANSITION_CONNECTOR" ? 8 : isCrossWalk ? 16 : 14;
+  const zIndex = options.zIndex ?? (options.draft ? 18 : segmentType === "TRANSITION_CONNECTOR" ? 8 : isCrossWalk ? 16 : 14);
 
   return new window.kakao.maps.Polyline({
     path,
     strokeWeight,
     strokeColor,
     strokeOpacity: opacity,
-    strokeStyle: options.draft ? "shortdash" : "solid",
+    strokeStyle: options.strokeStyle ?? (options.draft ? "shortdash" : "solid"),
     clickable: true,
     zIndex,
   });

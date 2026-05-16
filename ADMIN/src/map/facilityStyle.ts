@@ -1,4 +1,16 @@
-const categoryColors: Record<string, string> = {
+import type { PlaceCategory } from "../types";
+
+export const facilityCategoryOrder: PlaceCategory[] = [
+  "PUBLIC_OFFICE",
+  "WELFARE",
+  "HEALTHCARE",
+  "TOURIST_SPOT",
+  "FOOD_CAFE",
+  "ACCOMMODATION",
+  "ETC",
+];
+
+const categoryColors: Record<PlaceCategory, string> = {
   PUBLIC_OFFICE: "#2563eb",
   WELFARE: "#16a34a",
   HEALTHCARE: "#dc2626",
@@ -8,7 +20,7 @@ const categoryColors: Record<string, string> = {
   ETC: "#64748b",
 };
 
-const categoryLabels: Record<string, string> = {
+const categoryLabels: Record<PlaceCategory, string> = {
   PUBLIC_OFFICE: "공공",
   WELFARE: "복지",
   HEALTHCARE: "의료",
@@ -19,9 +31,13 @@ const categoryLabels: Record<string, string> = {
 };
 
 export function facilityCategoryColor(category?: string | null): string {
-  return categoryColors[category ?? ""] ?? categoryColors.ETC;
+  return isPlaceCategory(category) ? categoryColors[category] : categoryColors.ETC;
 }
 
 export function facilityCategoryLabel(category?: string | null): string {
-  return categoryLabels[category ?? ""] ?? categoryLabels.ETC;
+  return isPlaceCategory(category) ? categoryLabels[category] : categoryLabels.ETC;
+}
+
+function isPlaceCategory(category?: string | null): category is PlaceCategory {
+  return facilityCategoryOrder.includes(category as PlaceCategory);
 }

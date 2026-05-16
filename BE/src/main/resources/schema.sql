@@ -33,3 +33,23 @@ CREATE INDEX IF NOT EXISTS idx_subway_station_accessibility_features_station
 
 ALTER TABLE IF EXISTS bookmarks
     ALTER COLUMN place_id DROP NOT NULL;
+
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+    log_id BIGSERIAL PRIMARY KEY,
+    actor_user_id UUID,
+    action VARCHAR(80) NOT NULL,
+    target_type VARCHAR(80) NOT NULL,
+    target_id VARCHAR(120),
+    gu VARCHAR(40),
+    dong VARCHAR(80),
+    summary TEXT NOT NULL,
+    before_json JSONB,
+    after_json JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_log_id
+    ON admin_audit_logs (log_id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_filter
+    ON admin_audit_logs (action, gu, dong, actor_user_id, log_id DESC);

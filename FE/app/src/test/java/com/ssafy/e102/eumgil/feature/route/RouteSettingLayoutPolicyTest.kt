@@ -59,7 +59,7 @@ class RouteSettingLayoutPolicyTest {
                 .substringBefore("@Composable\nfun RouteDetailScreen")
         val sheetSection =
             source
-                .substringAfter("private fun RouteSettingRouteSheet(")
+                .substringAfter("private fun RouteSettingTransitResultPane(")
                 .substringBefore("@Composable\nprivate fun RouteOptionSection")
 
         assertTrue(
@@ -96,6 +96,36 @@ class RouteSettingLayoutPolicyTest {
             "Route selection should not leave extra top padding between the blue header and the map stage.",
             screenSection.contains(".padding(top = RouteSettingScreenVerticalPadding)"),
         )
+    }
+
+    @Test
+    fun `route detail scaffold disables default bottom insets so start cta aligns with navigation exit cta`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val detailScreenSection =
+            source
+                .substringAfter("fun RouteDetailScreen(")
+                .substringBefore("@Composable\nprivate fun RouteDetailTopBar")
+        val routeBottomBarSection =
+            source
+                .substringAfter("private fun RouteSettingBottomBar(")
+                .substringBefore("@Composable\nprivate fun RouteSettingCtaContent")
+        val navigationSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val navigationBottomBarSection =
+            navigationSource
+                .substringAfter("private fun NavigationBottomBar(")
+                .substringBefore("@Composable\nprivate fun NavigationMapStage")
+
+        assertTrue(detailScreenSection.contains("contentWindowInsets = WindowInsets(0, 0, 0, 0)"))
+        assertTrue(routeBottomBarSection.contains(".navigationBarsPadding()"))
+        assertTrue(navigationBottomBarSection.contains(".navigationBarsPadding()"))
+        assertTrue(source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp"))
+        assertTrue(navigationSource.contains("NavigationBottomBarHorizontalPadding = EumSpacing.medium + 50.dp"))
+        assertTrue(source.contains("RouteSettingBottomBarBottomGap = 30.dp"))
+        assertTrue(navigationSource.contains("NavigationBottomBarBottomGap = 30.dp"))
     }
 
     @Test
@@ -148,14 +178,13 @@ class RouteSettingLayoutPolicyTest {
                 source.contains("modifier = Modifier.weight(1f)"),
         )
         assertTrue(
-            "Transit mode should keep the bottom sheet, while route failure replaces the map instead of stacking a sheet over it.",
-            screenSection.contains("uiState.shouldShowRouteSheet()") &&
-                source.contains("selectedTravelMode == RouteTravelMode.TRANSIT") &&
-                source.contains("!shouldShowRouteLoadingScreen()") &&
-                source.contains("!shouldShowRouteFailureScreen()") &&
-                source.contains("selectedRoute == null") &&
+            "Transit mode should use a map-free pane, while loading and failure states replace the map and hide the shared CTA.",
+            screenSection.contains("RouteSettingTransitResultPane(") &&
+                screenSection.contains("RouteLoadingScreen(") &&
                 screenSection.contains("RouteFailureScreen(") &&
-                screenSection.contains("if (!showsRouteFailureScreen)") &&
+                source.contains("selectedTravelMode == RouteTravelMode.TRANSIT") &&
+                source.contains("selectedRoute == null") &&
+                screenSection.contains("if (!showsRouteLoadingScreen && !showsRouteFailureScreen)") &&
                 source.contains("routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE") &&
                 source.contains("loadErrorMessage != null"),
         )
@@ -187,6 +216,38 @@ class RouteSettingLayoutPolicyTest {
                 loadingScreen.contains("route_setting_summary_loading_title") &&
                 loadingScreen.contains("route_setting_summary_loading_description") &&
                 loadingScreen.contains("MaterialTheme.colorScheme.background"),
+        )
+    }
+
+    @Test
+    fun `transit route selection renders a scrollable white result pane instead of the map`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("if (isDuribalConfirmDialogVisible)")
+        val transitPaneSection =
+            source
+                .substringAfter("private fun RouteSettingTransitResultPane(")
+                .substringBefore("@Composable\nprivate fun RouteOptionSection")
+
+        assertTrue(
+            "Transit route selection should branch to a dedicated full-height result pane instead of placing a map above a bottom sheet.",
+            screenSection.contains("else if (uiState.selectedTravelMode == RouteTravelMode.TRANSIT)") &&
+                screenSection.contains("RouteSettingTransitResultPane(") &&
+                screenSection.contains("RouteMapStage("),
+        )
+        assertFalse(
+            "The transit result pane should not render the map backdrop.",
+            transitPaneSection.contains("RouteMapBackdrop(") || transitPaneSection.contains("RouteMapControls("),
+        )
+        assertTrue(
+            "Transit options should scroll above the fixed start button on a white surface.",
+            transitPaneSection.contains("color = Color.White") &&
+                transitPaneSection.contains(".verticalScroll(rememberScrollState())") &&
+                transitPaneSection.contains("bottom = RouteSettingBottomBarOverlayClearance"),
         )
     }
 
@@ -254,7 +315,8 @@ class RouteSettingLayoutPolicyTest {
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
                 source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
                 source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarOverlayClearance + RouteWalkPreviewCtaOverlapClearance") &&
-                source.contains("RouteWalkPreviewCtaOverlapClearance = 56.dp"),
+                source.contains("RouteWalkPreviewCtaOverlapClearance = 56.dp") &&
+                source.contains("RouteWalkMapControlsBottomPadding = RouteWalkPreviewCarouselBottomPadding + RouteWalkPreviewCardMinHeight + 70.dp"),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",
@@ -283,6 +345,28 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `walk route map controls sit above the raised preview cards`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val mapStageSection =
+            source
+                .substringAfter("private fun RouteMapStage(")
+                .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
+
+        assertTrue(
+            "Walk preview cards should be raised 70dp above the fixed start button.",
+            source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarOverlayClearance + RouteWalkPreviewCtaOverlapClearance") &&
+                source.contains("RouteWalkPreviewCtaOverlapClearance = 56.dp"),
+        )
+        assertTrue(
+            "Map controls should use a bottom padding derived from the raised preview card plus an extra 70dp gap.",
+            source.contains("RouteWalkMapControlsBottomPadding = RouteWalkPreviewCarouselBottomPadding + RouteWalkPreviewCardMinHeight + 70.dp") &&
+                mapStageSection.contains("bottom = RouteWalkMapControlsBottomPadding"),
+        )
+    }
+
+    @Test
     fun `route search and detail map controls are wired to the overlay viewport controller`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -298,7 +382,7 @@ class RouteSettingLayoutPolicyTest {
         val mapControlsSection =
             source
                 .substringAfter("private fun RouteMapControls(")
-                .substringBefore("@Composable\nprivate fun RouteSettingRouteSheet")
+                .substringBefore("@Composable\nprivate fun RouteSettingTransitResultPane")
         val routeMapBackdropSection =
             source
                 .substringAfter("private fun RouteMapBackdrop(")
@@ -452,13 +536,13 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `transit route sheet reserves room for the shared bottom CTA`() {
+    fun `transit route result pane reserves room for the shared bottom CTA`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
         val routeSheetSection =
             source
-                .substringAfter("private fun RouteSettingRouteSheet(")
+                .substringAfter("private fun RouteSettingTransitResultPane(")
                 .substringBefore("@Composable\nprivate fun RouteOptionSection")
 
         assertTrue(
@@ -488,7 +572,7 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(
             "When route search fails, the screen should render a full failure state instead of the map and keep the start CTA hidden.",
             screenSection.indexOf("RouteFailureScreen(") in 0 until screenSection.indexOf("RouteMapStage(") &&
-                screenSection.contains("if (!showsRouteFailureScreen)") &&
+                screenSection.contains("if (!showsRouteLoadingScreen && !showsRouteFailureScreen)") &&
                 source.contains("private fun RouteFailureScreen("),
         )
         assertTrue(
@@ -514,17 +598,17 @@ class RouteSettingLayoutPolicyTest {
         val routeDetailRailSection =
             routeDetailSource
                 .substringAfter("private fun RouteDetailIconRail(")
-                .substringBefore("private data class RouteDetailRailPromotionSnapshot")
+                .substringBefore("@Composable\nprivate fun RouteDetailCollapsedRailScrollTopAction")
 
         assertTrue(
-            "Route detail collapsed rail must reserve bottom padding from the current viewport height so the arrival icon can become the top card even after a fast fling.",
-            routeDetailRailSection.contains("BoxWithConstraints(") &&
-                routeDetailRailSection.contains("contentPadding = PaddingValues(bottom = routeDetailCollapsedRailEndSnapPadding)"),
+            "Route detail collapsed rail must render through the anchored scrubber so the arrival icon can become the focused top-card step.",
+            routeDetailRailSection.contains("RouteStepScrubberRail(") &&
+                routeDetailRailSection.contains("trailingActionHeight = RouteDetailCollapsedRailItemSize"),
         )
         assertTrue(
-            "Navigation collapsed rail must use the same viewport-derived end padding so the final destination segment can snap fully.",
-            navigationRailSource.contains("val navigationRailEndSnapPadding =") &&
-                navigationRailSource.contains("contentPadding = PaddingValues(bottom = navigationRailEndSnapPadding)"),
+            "Navigation collapsed rail must use the same anchored scrubber so the final destination segment can be focused.",
+            navigationRailSource.contains("RouteStepScrubberRail(") &&
+                navigationRailSource.contains("trailingActionHeight = NavigationSegmentRailTopActionHeight"),
         )
     }
 
@@ -556,7 +640,7 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "Transit option route bar should split walking and public transit path colors.",
-            source.contains("RouteTransitWalkGray = Color(0xFFD9D9D9)") &&
+            source.contains("RouteTransitWalkGray = Color(0xFF99B5D1)") &&
                 source.contains("RouteTransitNavy = Color(0xFF005391)"),
         )
         assertTrue(
@@ -772,6 +856,28 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route detail feature header uses requested warm background and larger title`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val featureHeaderSection =
+            source
+                .substringAfter("private fun RouteDetailBadgeHeader(")
+                .substringBefore("@Composable\nprivate fun RouteDetailScrollTopAction")
+
+        assertTrue(
+            "Opened route detail side rail should use the requested warm feature-card background.",
+            source.contains("RouteDetailFeatureCardContainerColor = Color(0xFFE9ECF3)") &&
+                featureHeaderSection.contains(".background(RouteDetailFeatureCardContainerColor)"),
+        )
+        assertTrue(
+            "The route feature title should be four pixels larger than the previous label-large treatment.",
+            source.contains("RouteDetailFeatureTitleFontSize = 18.sp") &&
+                featureHeaderSection.contains("style = MaterialTheme.typography.labelLarge.copy(fontSize = RouteDetailFeatureTitleFontSize)"),
+        )
+    }
+
+    @Test
     fun `route setting hides walk fallback notice and debug card from the screen`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -819,6 +925,10 @@ class RouteSettingLayoutPolicyTest {
             source
                 .substringAfter("private fun RouteDetailStepsSection(")
                 .substringBefore("@Composable\nprivate fun RouteDetailOriginHeader")
+        val sidePanelCollapsedRailSection =
+            source
+                .substringAfter("RouteDetailIconRail(")
+                .substringBefore("@Composable\nprivate fun RouteDetailTimelinePanelContent")
 
         assertTrue(
             "Detail screen should keep the map visible behind the detail side panel.",
@@ -848,15 +958,21 @@ class RouteSettingLayoutPolicyTest {
                 source.contains("RouteDetailCollapsedRailWidth"),
         )
         assertTrue(
-            "Collapsed detail rail should drive the focused top card and map marker from the top visible icon.",
-            source.contains("onTopVisibleStepChanged = { index ->") &&
-                source.contains("snapshotFlow") &&
-                source.contains("firstVisibleItemIndex"),
+            "Collapsed detail side rail should start directly below the top guide card instead of being covered by it.",
+            detailScreenSection.contains("if (!isDetailSidePanelExpanded) Modifier.padding(top = RouteDetailCollapsedGuideCardMinHeight) else Modifier"),
+        )
+        assertFalse(
+            "Collapsed detail rail must not add status bar padding because the top guide card already owns the top inset.",
+            sidePanelCollapsedRailSection.contains(".statusBarsPadding()"),
         )
         assertTrue(
-            "Collapsed detail rail should expose an up action below the destination item that scrolls and focuses the origin.",
+            "Collapsed detail rail should drive the focused top card and map marker from the anchored scrubber step.",
+            source.contains("onTopVisibleStepChanged = { index ->") &&
+                source.contains("RouteStepScrubberRail("),
+        )
+        assertTrue(
+            "Collapsed detail rail should expose an up action below the destination item that focuses the origin.",
             source.contains("RouteDetailCollapsedRailScrollTopAction(") &&
-                source.contains("listState.animateScrollToItem(0)") &&
                 source.contains("onStepClick(0)"),
         )
         assertTrue(
@@ -1012,6 +1128,33 @@ class RouteSettingLayoutPolicyTest {
                 collapsedCardSection.contains("slideInVertically") &&
                 collapsedCardSection.contains("slideOutVertically"),
         )
+        assertTrue(
+            "Collapsed route-detail guide card should match navigation card scale while using white/neutral detail styling.",
+            collapsedCardSection.contains("color = RouteDetailCollapsedGuideCardContainerColor") &&
+                collapsedCardSection.contains("contentColor = RouteDetailCollapsedGuideCardContentColor") &&
+                collapsedCardSection.contains("secondaryContentColor = RouteDetailCollapsedGuideCardContentColor") &&
+                collapsedCardSection.contains("iconTint = RouteDetailCollapsedGuideCardContentColor") &&
+                source.contains("RouteDetailCollapsedGuideCardContainerColor = Color.White") &&
+                source.contains("RouteDetailCollapsedGuideCardContentColor = Color(0xFF333333)") &&
+                source.contains("RouteDetailCollapsedGuideCardMinHeight = 92.dp") &&
+                source.contains("RouteDetailCollapsedGuideIconSize = 44.dp"),
+        )
+        assertTrue(
+            "Collapsed route-detail guide card should draw only a thin bottom divider so it does not double with the rail.",
+            collapsedCardSection.contains("HorizontalDivider(") &&
+                collapsedCardSection.contains("modifier = Modifier.padding(start = RouteDetailCollapsedRailWidth)") &&
+                collapsedCardSection.contains("thickness = RouteDetailCollapsedGuideCardBottomStrokeWidth") &&
+                source.contains("RouteDetailCollapsedGuideCardBottomStrokeWidth = 0.5.dp") &&
+                source.contains("RouteDetailCollapsedGuideCardBottomStrokeColor = Color(0xFFD9D9D9)"),
+        )
+        assertTrue(
+            "Collapsed route-detail start and arrival card icons should use the colored rail pin assets without tinting.",
+            collapsedCardSection.contains("RouteDetailCollapsedGuideCardIcon(") &&
+                source.contains("targetStep?.kind ?: RouteDetailStepKind.START") &&
+                source.contains("Image(") &&
+                source.contains("routeDetailStepIconRes(kind)") &&
+                source.contains("modifier = Modifier.size(RouteDetailCollapsedGuideIconSize)"),
+        )
     }
 
     @Test
@@ -1133,6 +1276,101 @@ class RouteSettingLayoutPolicyTest {
 
         assertTrue(collapsedCardSection.contains("RouteDetailTransitGuideCardContent("))
         assertTrue(stepRowSection.contains("RouteDetailTransitGuideCardContent("))
+    }
+
+    @Test
+    fun `route detail rail delegates step inspection to the anchored scrubber`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val scrubberSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/RouteStepScrubberRail.kt")
+                .readText()
+        val railSection =
+            source
+                .substringAfter("private fun RouteDetailIconRail(")
+                .substringBefore("@Composable\nprivate fun RouteDetailCollapsedRailScrollTopAction")
+
+        assertTrue(
+            "Route detail rail should use the shared scrubber so scroll position is the focused step source of truth.",
+            railSection.contains("RouteStepScrubberRail(") &&
+                railSection.contains("onFocusedItemChanged = onTopVisibleStepChanged") &&
+                railSection.contains("dividerColor = RouteDetailGuideDividerColor"),
+        )
+        assertTrue(
+            "The shared scrubber should promote the nearest anchored step while dragging.",
+            scrubberSource.contains("snapshotFlow") &&
+                scrubberSource.contains("resolveRouteStepScrubberIndex(") &&
+                scrubberSource.contains("currentOnFocusedItemChanged(index)"),
+        )
+        assertFalse(
+            "Route detail rail items must not force a fixed outer height because hidden top-card items need to collapse out of the rail.",
+            railSection.contains("modifier = Modifier.size(RouteDetailCollapsedRailItemSize)"),
+        )
+        assertTrue(
+            "Route detail scroll-to-top should promote the first guide card.",
+            railSection.contains("RouteDetailCollapsedRailScrollTopAction(") &&
+                railSection.contains("onStepClick(0)"),
+        )
+    }
+
+    @Test
+    fun `route detail rail does not render a separate focused selection block`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val railItemSection =
+            source
+                .substringAfter("private fun RouteDetailIconRail(")
+                .substringBefore("@Composable\nprivate fun RouteDetailCollapsedRailScrollTopAction")
+        val scrubberSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/RouteStepScrubberRail.kt")
+                .readText()
+
+        assertFalse(
+            "The collapsed route-detail rail should behave as a timeline axis; current step is conveyed by the top card and map, not another selected block.",
+            scrubberSource.contains("isFocused =") ||
+                scrubberSource.contains("isSelected =") ||
+                railItemSection.contains("isSelected = isFocused"),
+        )
+        assertTrue(
+            "Route-detail rail should still keep the promoted item's accessibility state in sync with the top card.",
+            railItemSection.contains("stateDescription = if (focusedStepIndex == index) \"focused guide step\" else \"guide step\""),
+        )
+    }
+
+    @Test
+    fun `route detail rail disables fling inertia during step inspection`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val railSection =
+            source
+                .substringAfter("private fun RouteDetailIconRail(")
+                .substringBefore("@Composable\nprivate fun RouteDetailCollapsedRailScrollTopAction")
+        val scrubberSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/RouteStepScrubberRail.kt")
+                .readText()
+
+        assertTrue(
+            "Route detail rail should keep inspection tied to anchored drag position instead of LazyColumn fling inertia.",
+            railSection.contains("RouteStepScrubberRail(") &&
+                scrubberSource.contains("velocityThreshold = { Float.POSITIVE_INFINITY }"),
+        )
+    }
+
+    @Test
+    fun `route detail separates pure walking line color from transit walking line color`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+
+        assertTrue(source.contains("travelMode = selectedRoute?.routeOption.toRouteDetailTravelMode()"))
+        assertTrue(source.contains("private fun RouteDetailPolylineKind.toMapViewportOverlayTone(travelMode: RouteTravelMode)"))
+        assertTrue(
+            source.contains("MapViewportOverlayTone.TRANSIT_WALK") &&
+                source.contains("MapViewportOverlayTone.NAVIGATION_WALK"),
+        )
     }
 
     @Test

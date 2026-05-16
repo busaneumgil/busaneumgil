@@ -156,6 +156,26 @@ class ArrivalViewModelTest {
         }
 
     @Test
+    fun `save route click is ignored when ended route id is missing`() =
+        runTest {
+            val routeBookmarkRepository = FakeRouteBookmarkRepository()
+            val viewModel =
+                createViewModel(
+                    routeBookmarkRepository = routeBookmarkRepository,
+                    routeBookmarkDraft = testUnsavableRouteBookmarkDraft(),
+                )
+            advanceUntilIdle()
+
+            viewModel.onAction(ArrivalUiAction.SaveRouteClicked)
+            advanceUntilIdle()
+
+            assertTrue(routeBookmarkRepository.savedRequests.isEmpty())
+            assertFalse(viewModel.uiState.value.isRouteSaveSelected)
+            assertEquals(null, viewModel.uiState.value.routeSaveBookmarkId)
+            assertFalse(viewModel.uiState.value.isRouteSaveUpdating)
+        }
+
+    @Test
     fun `save route click toggles saved route off on second tap`() =
         runTest {
             val routeBookmarkRepository = FakeRouteBookmarkRepository()

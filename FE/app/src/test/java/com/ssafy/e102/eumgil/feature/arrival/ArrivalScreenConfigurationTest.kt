@@ -167,13 +167,29 @@ class ArrivalScreenConfigurationTest {
     }
 
     @Test
-    fun `arrival evaluation sheet tightens rating action spacing and removes route save dialog`() {
+    fun `arrival evaluation sheet removes rating copy and enlarges stars to keep sheet height`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
 
         assertTrue(
-            "Arrival evaluation sheet should define a tighter placeholder gap between the star row and the action buttons.",
-            source.contains("private val ArrivalEvaluationRatingFeedbackPlaceholderHeight = 8.dp"),
+            "Arrival evaluation sheet should enlarge the star touch targets after removing the extra copy so the sheet height stays visually stable.",
+            source.contains("private val ArrivalRatingButtonSize = 64.dp"),
+        )
+        assertTrue(
+            "Arrival evaluation sheet should almost double the visible star size after removing the question and rating label copy.",
+            source.contains("private val ArrivalRatingIconSize = 56.dp"),
+        )
+        assertTrue(
+            "Arrival evaluation sheet should give the larger star row vertical breathing room so the overall sheet height remains close to the previous layout.",
+            source.contains(".padding(vertical = ArrivalRatingRowVerticalPadding)"),
+        )
+        assertFalse(
+            "Arrival evaluation sheet should remove the question copy from the route-save sheet content.",
+            source.contains("text = stringResource(id = R.string.arrival_evaluation_question)"),
+        )
+        assertFalse(
+            "Arrival evaluation sheet should remove the satisfaction label text that used to mirror the selected star rating.",
+            source.contains("uiState.selectedRatingLabel.labelResId?.let"),
         )
         assertFalse(
             "Arrival screen should no longer render the route save dialog flow after the save action becomes immediate.",
@@ -214,19 +230,35 @@ class ArrivalScreenConfigurationTest {
     }
 
     @Test
-    fun `arrival route save action centers bookmark and label as a single group`() {
+    fun `arrival route save action uses text only button states`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+        val stringsSource =
+            File("src/main/res/values/strings.xml").readText()
 
         assertFalse(
-            "Arrival route save CTA should not split the bookmark icon into a weighted side column because the icon and label must stay centered together.",
-            source.contains("contentAlignment = Alignment.CenterEnd"),
+            "Arrival route save CTA should no longer show a bookmark icon once the button becomes a pure text state control.",
+            source.contains("R.drawable.ic_nav_bookmark_selected"),
+        )
+        assertFalse(
+            "Arrival route save CTA should not keep the outline bookmark icon either once the unsaved state becomes text-only.",
+            source.contains("R.drawable.ic_nav_bookmark_outline"),
+        )
+        assertFalse(
+            "Arrival route save CTA should drop the now-unused route-save icon size constant.",
+            source.contains("private val ArrivalRouteSaveIconSize ="),
         )
         assertTrue(
-            "Arrival route save CTA should keep a simple gap between the bookmark icon and label so the combined group centers inside the button.",
-            source.contains(
-                "modifier = Modifier.size(ArrivalRouteSaveIconSize),\n                            )\n                            Spacer(modifier = Modifier.width(EumSpacing.xxSmall))\n                            Text(",
-            ),
+            "Arrival route save CTA should switch to the saved-state label instead of exposing a cancel label.",
+            source.contains("R.string.arrival_evaluation_route_saved"),
+        )
+        assertTrue(
+            "Arrival route save CTA should keep the unsaved-state label on the outlined white button.",
+            stringsSource.contains("<string name=\"arrival_evaluation_save_route\">경로저장</string>"),
+        )
+        assertTrue(
+            "Arrival route save CTA should show a short saved-state label on the filled blue button.",
+            stringsSource.contains("<string name=\"arrival_evaluation_route_saved\">저장 완료</string>"),
         )
     }
 

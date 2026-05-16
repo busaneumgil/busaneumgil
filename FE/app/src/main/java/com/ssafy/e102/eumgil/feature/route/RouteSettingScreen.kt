@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.calculateBottomPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -2867,7 +2865,10 @@ private fun RouteMapStage(
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
     val mapControlState = rememberMapOverlayViewportControlState()
-    val navigationBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navigationBarBottomInset =
+        with(LocalDensity.current) {
+            WindowInsets.navigationBars.getBottom(this).toDp()
+        }
     val walkPreviewBottomPadding = routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset)
     val mapControlsBottomPadding = routeWalkMapControlsBottomPadding(navigationBarBottomInset)
     Surface(
@@ -3969,14 +3970,23 @@ private fun RouteSettingCtaContent(
                     disabledElevation = 0.dp,
                 ),
         ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onPrimary,
-            )
-            Spacer(modifier = Modifier.width(EumSpacing.xSmall))
-            Text(text = buttonLabel)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                )
+                Text(
+                    text = buttonLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+            }
         }
     }
 }

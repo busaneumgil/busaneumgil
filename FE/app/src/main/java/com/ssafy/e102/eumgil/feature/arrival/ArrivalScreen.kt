@@ -215,9 +215,7 @@ private fun ArrivalCompletionActions(
                 style = MaterialTheme.typography.labelLarge,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
-                modifier = Modifier.weight(1f, fill = false),
             )
-            Spacer(modifier = Modifier.width(24.dp))
         }
         OutlinedButton(
             onClick = onExploreNewRouteClicked,
@@ -240,9 +238,7 @@ private fun ArrivalCompletionActions(
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
-                modifier = Modifier.weight(1f, fill = false),
             )
-            Spacer(modifier = Modifier.width(24.dp))
         }
     }
 }
@@ -538,51 +534,36 @@ private fun ArrivalEvaluationBottomSheet(
                                 ),
                             border = BorderStroke(1.dp, routeSaveAccentColor),
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Box(
-                                    modifier = Modifier.weight(1f),
-                                    contentAlignment = Alignment.CenterEnd,
-                                ) {
-                                    Icon(
-                                        painter =
-                                            painterResource(
-                                                id =
-                                                    if (uiState.isRouteSaveSelected) {
-                                                        R.drawable.ic_nav_bookmark_selected
-                                                    } else {
-                                                        R.drawable.ic_nav_bookmark_outline
-                                                    },
-                                            ),
-                                        contentDescription = null,
-                                        tint = routeSaveAccentColor,
-                                        modifier = Modifier.size(ArrivalRouteSaveIconSize),
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier.weight(1f),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text =
-                                            stringResource(
-                                                id =
-                                                    if (uiState.isRouteSaveSelected) {
-                                                        R.string.arrival_evaluation_route_save_cancel
-                                                    } else {
-                                                        R.string.arrival_evaluation_save_route
-                                                    },
-                                            ),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = routeSaveAccentColor,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                    )
-                                }
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
+                            Icon(
+                                painter =
+                                    painterResource(
+                                        id =
+                                            if (uiState.isRouteSaveSelected) {
+                                                R.drawable.ic_nav_bookmark_selected
+                                            } else {
+                                                R.drawable.ic_nav_bookmark_outline
+                                            },
+                                    ),
+                                contentDescription = null,
+                                tint = routeSaveAccentColor,
+                                modifier = Modifier.size(ArrivalRouteSaveIconSize),
+                            )
+                            Spacer(modifier = Modifier.width(EumSpacing.xxSmall))
+                            Text(
+                                text =
+                                    stringResource(
+                                        id =
+                                            if (uiState.isRouteSaveSelected) {
+                                                R.string.arrival_evaluation_route_save_cancel
+                                            } else {
+                                                R.string.arrival_evaluation_save_route
+                                            },
+                                    ),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = routeSaveAccentColor,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                            )
                         }
 
                         Button(

@@ -199,6 +199,38 @@ class ArrivalScreenConfigurationTest {
     }
 
     @Test
+    fun `arrival completion actions center icon and text as a single group`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertFalse(
+            "Arrival completion CTA labels should not use weight-based centering because the icon and text must stay visually centered as one group.",
+            source.contains("modifier = Modifier.weight(1f, fill = false)"),
+        )
+        assertFalse(
+            "Arrival completion CTA buttons should not add a fake trailing spacer because the icon and label group now centers together.",
+            source.contains("Spacer(modifier = Modifier.width(24.dp))"),
+        )
+    }
+
+    @Test
+    fun `arrival route save action centers bookmark and label as a single group`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()
+
+        assertFalse(
+            "Arrival route save CTA should not split the bookmark icon into a weighted side column because the icon and label must stay centered together.",
+            source.contains("contentAlignment = Alignment.CenterEnd"),
+        )
+        assertTrue(
+            "Arrival route save CTA should keep a simple gap between the bookmark icon and label so the combined group centers inside the button.",
+            source.contains(
+                "modifier = Modifier.size(ArrivalRouteSaveIconSize),\n                            )\n                            Spacer(modifier = Modifier.width(EumSpacing.xxSmall))\n                            Text(",
+            ),
+        )
+    }
+
+    @Test
     fun `arrival completion flow removes snackbar feedback entirely`() {
         val screenSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/arrival/ArrivalScreen.kt").readText()

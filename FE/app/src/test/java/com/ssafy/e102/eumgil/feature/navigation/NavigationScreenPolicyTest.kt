@@ -291,6 +291,31 @@ class NavigationScreenPolicyTest {
     }
 
     @Test
+    fun `exit CTA centers stop icon and label as a single group`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val bottomBarSection =
+            source
+                .substringAfter("private fun NavigationBottomBar(")
+                .substringBefore("@Composable\nprivate fun NavigationExitConfirmDialog")
+
+        assertTrue(
+            "Exit CTA should wrap the stop icon and label in a single row so the combined content stays centered inside the full-width button.",
+            bottomBarSection.contains(
+                "Row(\n                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),\n                        verticalAlignment = Alignment.CenterVertically,\n                    )",
+            ),
+        )
+        assertTrue(
+            "Exit CTA should keep the stop icon and centered titleMedium label together in that row.",
+            bottomBarSection.contains("painter = painterResource(id = R.drawable.ic_control_stop)") &&
+                bottomBarSection.contains(
+                    "text = uiState.exitCta.label,\n                            style = MaterialTheme.typography.titleMedium,",
+                ),
+        )
+    }
+
+    @Test
     fun `hero content renders selected segment as sequence guidance and remaining time`() {
         val heroContent =
             navigationHeroContent(
@@ -509,6 +534,8 @@ class NavigationScreenPolicyTest {
         assertTrue(dialogSection.contains("BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f))"))
         assertTrue(dialogSection.contains("Arrangement.spacedBy(EumSpacing.large)"))
         assertTrue(dialogSection.contains("Arrangement.spacedBy(EumSpacing.medium)"))
+        assertFalse(dialogSection.contains("NavigationExitDialogStopIcon("))
+        assertFalse(dialogSection.contains("NavigationExitDialogConfirmIconSize"))
         assertFalse(dialogSection.contains(".background(MaterialTheme.colorScheme.error)"))
         assertFalse(dialogSection.contains("navigation_exit_confirm_dialog_supporting"))
         assertFalse(dialogSection.contains("navigation_exit_confirm_dialog_eyebrow"))

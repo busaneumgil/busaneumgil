@@ -273,7 +273,7 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "Walk preview cards should use the same navigation-bar inset basis as the shared bottom CTA.",
-            mapStageSection.contains("WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()") &&
+            mapStageSection.contains("WindowInsets.navigationBars.getBottom(this).toDp()") &&
                 mapStageSection.contains("val walkPreviewBottomPadding = routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset)") &&
                 source.contains("RouteWalkPreviewToStartButtonGap = 22.dp"),
         )
@@ -1338,6 +1338,31 @@ class RouteSettingLayoutPolicyTest {
             source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp") &&
                 bottomBarSection.contains("start = RouteSettingBottomBarHorizontalPadding") &&
                 bottomBarSection.contains("end = RouteSettingBottomBarHorizontalPadding"),
+        )
+    }
+
+    @Test
+    fun `route start CTA centers icon and label as a single group`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val ctaSection =
+            source
+                .substringAfter("private fun RouteSettingCtaContent(")
+                .substringBefore("@Composable\nprivate fun RouteMapBackdrop")
+
+        assertTrue(
+            "Route start CTA should wrap the icon and label in a single row so the combined content stays centered inside the full-width button.",
+            ctaSection.contains(
+                "Row(\n                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),\n                verticalAlignment = Alignment.CenterVertically,\n            )",
+            ),
+        )
+        assertTrue(
+            "Route start CTA should keep the navigation-start icon and labelLarge text together in that centered content row.",
+            ctaSection.contains("painter = painterResource(id = R.drawable.ic_route_start_navigation_button)") &&
+                ctaSection.contains(
+                    "Text(\n                    text = buttonLabel,\n                    style = MaterialTheme.typography.labelLarge,",
+                ),
         )
     }
 

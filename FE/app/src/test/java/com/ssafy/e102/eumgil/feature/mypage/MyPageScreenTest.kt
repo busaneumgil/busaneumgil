@@ -117,6 +117,28 @@ class MyPageScreenTest {
     }
 
     @Test
+    fun `duribal call button centers icon and label as a single group`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+        val buttonSection =
+            source
+                .substringAfter("private fun DuribalCallButton(")
+                .substringBefore("@Composable\nprivate fun MyPageMenuRow")
+
+        assertTrue(
+            "Duribal call CTA should wrap its icon and label in a single row so the combined content stays centered inside the full-width button.",
+            buttonSection.contains(
+                "Row(\n            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),\n            verticalAlignment = Alignment.CenterVertically,\n        )",
+            ),
+        )
+        assertFalse(
+            "Duribal call CTA should not rely on text-only start padding because the icon and label are centered together as one group.",
+            buttonSection.contains("modifier = Modifier.padding(start = EumSpacing.small)"),
+        )
+    }
+
+    @Test
     fun `my page screen renders duribal call confirmation dialog with yes and no actions`() {
         val myPageSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")

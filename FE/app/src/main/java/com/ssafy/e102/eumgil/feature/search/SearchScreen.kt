@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -422,34 +423,29 @@ private fun SearchResultsContent(
             .collect { onAction(SearchUiAction.LoadNextPageClicked) }
     }
 
-    LazyColumn(
-        state = listState,
+    Column(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
-        item(key = "search-input") {
-            SearchInputField(
-                query = uiState.query,
-                queryPlaceholderRes = copy.queryPlaceholderRes,
-                showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
-                onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
-                onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
-                onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
-                onSearch = { onAction(SearchUiAction.SearchSubmitted) },
-            )
-        }
-        item(key = "search-sort") {
-            SearchSortControl(
-                selectedSortOption = uiState.sortOption,
-                onSortOptionSelected = { sortOption ->
-                    onAction(SearchUiAction.SortOptionSelected(sortOption = sortOption))
-                },
-            )
-        }
+        SearchInputField(
+            query = uiState.query,
+            queryPlaceholderRes = copy.queryPlaceholderRes,
+            showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
+            onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
+            onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
+            onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
+            onSearch = { onAction(SearchUiAction.SearchSubmitted) },
+        )
+        SearchSortControl(
+            selectedSortOption = uiState.sortOption,
+            onSortOptionSelected = { sortOption ->
+                onAction(SearchUiAction.SortOptionSelected(sortOption = sortOption))
+            },
+        )
 
         when (val resultState = uiState.resultState) {
             SearchResultUiState.Initial ->
-                item(key = "initial-state") {
+                SearchResultStateBox {
                     SearchStateCard(
                         title = stringResource(id = copy.initialTitleRes),
                         description = stringResource(id = copy.initialDescriptionRes),
@@ -461,47 +457,52 @@ private fun SearchResultsContent(
             -> Unit
 
             is SearchResultUiState.Loading ->
-                item(key = "loading-state") {
+                SearchResultStateBox {
                     SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                         description = stringResource(id = R.string.search_screen_loading_description),
                         showIllustration = false,
                         showLoadingIndicator = true,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = EumSpacing.small),
                     )
                 }
 
             is SearchResultUiState.Success -> {
-                item(key = "result-summary") {
-                    Text(
-                        text = stringResource(id = copy.resultSummaryRes, resultState.results.size),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                items(
-                    items = resultState.results,
-                ) { result ->
-                    SearchResultItem(
-                        copy = copy,
-                        result = result,
-                        onClick = {
-                            onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
-                        },
-                    )
-                }
-                if (resultState.isLoadingNextPage) {
-                    item(key = "next-page-loading") {
-                        SearchNextPageLoadingIndicator()
+                LazyColumn(
+                    state = listState,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                ) {
+                    item(key = "result-summary") {
+                        Text(
+                            text = stringResource(id = copy.resultSummaryRes, resultState.results.size),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    items(
+                        items = resultState.results,
+                    ) { result ->
+                        SearchResultItem(
+                            copy = copy,
+                            result = result,
+                            onClick = {
+                                onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
+                            },
+                        )
+                    }
+                    if (resultState.isLoadingNextPage) {
+                        item(key = "next-page-loading") {
+                            SearchNextPageLoadingIndicator()
+                        }
                     }
                 }
             }
 
             is SearchResultUiState.Empty ->
-                item(key = "empty-state") {
+                SearchResultStateBox {
                     SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_empty_result_title),
                         description = stringResource(id = copy.emptyResultDescriptionRes),
@@ -510,13 +511,26 @@ private fun SearchResultsContent(
                 }
 
             is SearchResultUiState.Error ->
-                item(key = "error-state") {
+                SearchResultStateBox {
                     SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_error_title),
                         description = stringResource(id = R.string.search_screen_error_description),
                     )
                 }
         }
+    }
+}
+
+@Composable
+private fun ColumnScope.SearchResultStateBox(content: @Composable () -> Unit) {
+    Box(
+        modifier =
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
     }
 }
 
@@ -1301,7 +1315,7 @@ private val SearchStateIllustrationMinHeight: Dp = 360.dp
 private val SearchStateIllustrationSize: Dp = 128.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 private val SearchStateTitleLineHeight = 34.sp
-private val SearchEmptyResultTitleLineHeight = 40.sp
+private val SearchEmptyResultTitleLineHeight = 34.sp
 
 @Composable
 private fun SearchCenteredStateMessage(
@@ -1316,7 +1330,7 @@ private fun SearchCenteredStateMessage(
     val titleStyle =
         if (useEmptyResultTypography) {
             MaterialTheme.typography.headlineSmall.copy(
-                fontSize = 32.sp,
+                fontSize = 26.sp,
                 lineHeight = SearchEmptyResultTitleLineHeight,
                 fontWeight = FontWeight.Bold,
             )

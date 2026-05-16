@@ -103,6 +103,10 @@ class SearchScreenPolicyTest {
             emptyStateSection.contains("SearchCenteredStateMessage("),
         )
         assertTrue(
+            "Empty search results should be centered inside the remaining result area below the controls.",
+            emptyStateSection.contains("SearchResultStateBox {"),
+        )
+        assertTrue(
             "The centered state should include the Busan Eumgil character asset.",
             emptyMessageSection.contains("R.drawable.manual_galmaegi"),
         )
@@ -181,12 +185,13 @@ class SearchScreenPolicyTest {
                 .substringBefore("@Composable\nprivate fun SearchStateCard")
 
         assertTrue(
-            "Empty result state should opt into the dedicated 32px title typography.",
+            "Empty result state should opt into the dedicated compact title typography.",
             emptyStateSection.contains("useEmptyResultTypography = true"),
         )
         assertTrue(
-            "Empty result title should be 32px bold.",
-            centeredStateSection.contains("fontSize = 32.sp") &&
+            "Empty result title should be compact bold text.",
+            centeredStateSection.contains("fontSize = 26.sp") &&
+                centeredStateSection.contains("lineHeight = SearchEmptyResultTitleLineHeight") &&
                 centeredStateSection.contains("fontWeight = FontWeight.Bold"),
         )
         assertTrue(

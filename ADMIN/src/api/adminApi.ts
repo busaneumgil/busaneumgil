@@ -5,12 +5,14 @@ import type {
   AdminRoadSegmentAttributesUpdateRequest,
   AdminRoutePreviewRequest,
   AdminRoutePreviewResponse,
+  AdminDashboardSummaryResponse,
   AdminHazardReportDetail,
   AdminHazardReportListResponse,
   AdminHazardReportStatusResponse,
   AdminMeResponse,
   AdminAreaAssignmentListResponse,
   AdminAuditLogListResponse,
+  AdminDashboardBottleneckResponse,
   AdminUserListResponse,
   AdminUserResponse,
   FacilityPayload,
@@ -211,6 +213,27 @@ export async function fetchAdminMe(accessToken: string): Promise<AdminMeResponse
 export async function fetchAdminUsers(accessToken: string): Promise<AdminUserResponse[]> {
   const response = await requestAdminJson<AdminUserListResponse>("/admin/users", accessToken);
   return response.users;
+}
+
+export async function fetchAdminDashboardSummary(accessToken: string): Promise<AdminDashboardSummaryResponse> {
+  return requestAdminJson<AdminDashboardSummaryResponse>("/admin/dashboard/summary", accessToken);
+}
+
+export async function fetchAdminDashboardBottlenecks({
+  accessToken,
+  from,
+  to,
+  limit = 12,
+}: {
+  accessToken: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+}): Promise<AdminDashboardBottleneckResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  return requestAdminJson<AdminDashboardBottleneckResponse>(`/admin/dashboard/bottlenecks?${params.toString()}`, accessToken);
 }
 
 export async function updateAdminUserRole(

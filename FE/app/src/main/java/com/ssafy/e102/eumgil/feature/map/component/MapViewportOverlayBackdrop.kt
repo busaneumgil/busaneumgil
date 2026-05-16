@@ -87,7 +87,7 @@ internal fun MapViewportOverlayBackdrop(
                 neutral = Color(0xFFD9D9D9),
                 navy = Color(0xFF005391),
                 navigationWalk = Color(0xFF0061FE),
-                transitWalk = Color(0xFFD9D9D9),
+                transitWalk = Color(0xFF99B5D1),
                 error = MaterialTheme.colorScheme.error,
                 outline = MaterialTheme.colorScheme.outline,
             )
@@ -700,7 +700,7 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
                 label = null,
                 containerColor = Color.White,
                 contentColor = Color.Transparent,
-                borderColor = Color(0xFF8C8C8E),
+                borderColor = tone?.let { markerTone -> Color(markerTone.toSegmentMarkerPalette().strokeColorArgb) } ?: Color(0xFF8C8C8E),
                 size = 18.dp,
                 fontSize = 1.sp,
             )

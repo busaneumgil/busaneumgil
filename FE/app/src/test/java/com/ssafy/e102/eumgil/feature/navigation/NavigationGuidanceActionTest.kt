@@ -99,6 +99,18 @@ class NavigationGuidanceActionTest {
     }
 
     @Test
+    fun `arrival guidance action uses destination pin instead of straight direction`() {
+        assertEquals(NavigationGuidanceAction.ARRIVAL, RouteDetailStepKind.ARRIVAL.toNavigationGuidanceAction())
+        assertEquals(R.drawable.ic_navigation_rail_destination_pin, NavigationGuidanceAction.ARRIVAL.iconRes())
+    }
+
+    @Test
+    fun `alighting guidance action uses a dedicated transit exit icon`() {
+        assertEquals(NavigationGuidanceAction.ALIGHT, RouteDetailStepKind.ALIGHT.toNavigationGuidanceAction())
+        assertEquals(R.drawable.ic_route_alight, NavigationGuidanceAction.ALIGHT.iconRes())
+    }
+
+    @Test
     fun `guidance action icons reuse existing route detail assets for safety types`() {
         assertEquals(R.drawable.ic_route_elevator, NavigationGuidanceAction.valueOf("ELEVATOR").iconRes())
         assertEquals(

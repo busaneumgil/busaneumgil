@@ -4,6 +4,7 @@ import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
+import com.ssafy.e102.eumgil.core.model.RouteGuidanceDirection
 import com.ssafy.e102.eumgil.core.model.RouteLeg
 import com.ssafy.e102.eumgil.core.model.RouteLegRole
 import com.ssafy.e102.eumgil.core.model.RouteLegType
@@ -76,7 +77,7 @@ class NavigationViewModelTest {
 
             assertEquals(NavigationScreenState.Ready, viewModel.uiState.value.screenState)
             assertEquals(1, viewModel.uiState.value.segmentSync.activeSegmentIndex)
-            assertEquals(1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
             assertEquals("450m", viewModel.uiState.value.remainingDistanceLabel)
             assertEquals("8분", viewModel.uiState.value.remainingEtaLabel)
         }
@@ -124,8 +125,58 @@ class NavigationViewModelTest {
 
             assertEquals(0, locationManager.refreshLatestLocationCallCount)
             assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
-            assertEquals(0, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
-            assertEquals("1 / 2", viewModel.uiState.value.focusedSegmentCard?.sequenceLabel)
+            assertEquals(-1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertEquals(-1, viewModel.uiState.value.segmentSync.railItems.firstOrNull()?.index)
+            assertEquals("출발", viewModel.uiState.value.focusedSegmentCard?.heroTitle)
+        }
+
+    @Test
+    fun `navigation start focuses the origin guide card even when origin projection is near the destination`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(
+                testWalkNavigationRequest().copy(
+                    origin =
+                        RouteWaypoint(
+                            name = "?꾩옱 ?꾩튂",
+                            coordinate = WALK_END_POINT,
+                        ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(-1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertTrue(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals("출발", viewModel.uiState.value.focusedSegmentCard?.heroTitle)
+            assertEquals(
+                "현재 위치에서 선택한 경로 안내를 시작합니다.",
+                viewModel.uiState.value.focusedSegmentCard?.heroDescription,
+            )
+        }
+
+    @Test
+    fun `navigation entry keeps origin guide card after the first live location update`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = WALK_MID_POINT.latitude,
+                    longitude = WALK_MID_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertTrue(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals("출발", viewModel.uiState.value.focusedSegmentCard?.heroTitle)
         }
 
     @Test
@@ -262,9 +313,9 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(NavigationMapFocusMode.ACTIVE, viewModel.uiState.value.mapOverlay.mapFocusMode)
+            assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
             assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.currentLocation?.coordinate)
-            assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.focusCoordinate)
+            assertEquals(WALK_START_POINT, viewModel.uiState.value.mapOverlay.focusCoordinate)
         }
 
     @Test
@@ -382,7 +433,7 @@ class NavigationViewModelTest {
 
             val summary = createNavigationSegmentMarkerDebugSummary(viewModel.uiState.value.mapOverlay)
 
-            assertTrue(summary.contains("focusMode=ACTIVE"))
+            assertTrue(summary.contains("focusMode=FOCUSED"))
             assertTrue(summary.contains("count=3"))
             assertTrue(summary.contains("idx=0 seq=1 kind=TRANSIT_WALK polyline=0 first=null"))
             assertTrue(summary.contains("idx=1 seq=2 kind=TRANSIT polyline=2 first=35.180600,129.073500"))
@@ -426,7 +477,141 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `focused guidance over five hundred meters disables camera transition animation`() =
+    fun `navigation adds transit alighting guidance from the response stop coordinate`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testPartialTransitWalkPolylineNavigationRequest())
+            advanceUntilIdle()
+
+            val alightingRailItem =
+                viewModel.uiState.value.segmentSync.railItems.firstOrNull { item ->
+                    item.guidanceAction == NavigationGuidanceAction.ALIGHT
+                }
+            assertEquals("Central Stop \uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4.", alightingRailItem?.instruction)
+            assertEquals("\uD558\uCC28", alightingRailItem?.sidePanelTitle)
+            assertEquals("Central Stop \uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4.", alightingRailItem?.sidePanelDescription)
+            assertEquals(null, alightingRailItem?.transitInfo)
+
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = alightingRailItem?.index ?: -999))
+            advanceUntilIdle()
+
+            assertEquals(NavigationGuidanceAction.ALIGHT, viewModel.uiState.value.focusedSegmentCard?.guidanceAction)
+            assertEquals(PARTIAL_TRANSIT_ALIGHTING_POINT, viewModel.uiState.value.mapOverlay.focusCoordinate)
+            assertTrue(
+                viewModel.uiState.value.mapOverlay.routeSegments.any { segment ->
+                    segment.guidanceMessage == "Central Stop \uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4." &&
+                        segment.segmentStartCoordinate == PARTIAL_TRANSIT_ALIGHTING_POINT
+                },
+            )
+        }
+
+    @Test
+    fun `navigation side panel uses route detail korean copy instead of raw backend english`() =
+        runTest {
+            val viewModel = createViewModel()
+            val request =
+                testPartialTransitWalkPolylineNavigationRequest().let { baseRequest ->
+                    val route = baseRequest.selectedRoute
+                    baseRequest.copy(
+                        selectedRoute =
+                            route.copy(
+                                segments =
+                                    route.segments.map { segment ->
+                                        if (segment.sequence == 1) {
+                                            segment.copy(
+                                                distanceMeters = 105,
+                                                guidanceMessage = "Turn left.",
+                                                guidanceDirection = RouteGuidanceDirection.TURN_LEFT,
+                                                durationFromRouteStartSeconds = 60,
+                                            )
+                                        } else {
+                                            segment
+                                        }
+                                    },
+                            ),
+                    )
+                }
+
+            viewModel.bindNavigationRequest(request)
+            advanceUntilIdle()
+
+            val turnItem = viewModel.uiState.value.segmentSync.railItems.first { item -> item.sequence == 1 }
+
+            assertEquals("105m \uD6C4 \uC88C\uD68C\uC804", turnItem.sidePanelTitle)
+            assertEquals("\uBAA9\uC801\uC9C0\uAE4C\uC9C0 \uC57D 17\uBD84", turnItem.sidePanelDescription)
+        }
+
+    @Test
+    fun `navigation map uses transit leg line ending at alighting stop instead of stale segment line`() =
+        runTest {
+            val viewModel = createViewModel()
+            val staleTransitEnd = GeoCoordinate(latitude = 35.1840, longitude = 129.0790)
+            val request =
+                testPartialTransitWalkPolylineNavigationRequest().let { baseRequest ->
+                    val route = baseRequest.selectedRoute
+                    baseRequest.copy(
+                        selectedRoute =
+                            route.copy(
+                                segments =
+                                    route.segments.map { segment ->
+                                        if (segment.sourceLegSequence == 2) {
+                                            segment.copy(
+                                                polyline =
+                                                    RoutePolyline(
+                                                        points =
+                                                            listOf(
+                                                                PARTIAL_TRANSIT_BOARDING_POINT,
+                                                                staleTransitEnd,
+                                                            ),
+                                                    ),
+                                            )
+                                        } else {
+                                            segment
+                                        }
+                                    },
+                            ),
+                    )
+                }
+
+            viewModel.bindNavigationRequest(request)
+            advanceUntilIdle()
+
+            val transitSegment =
+                viewModel.uiState.value.mapOverlay.routeSegments.first { segment ->
+                    segment.travelKind == NavigationSegmentTravelKind.TRANSIT &&
+                        segment.guidanceMessage == "Ride bus"
+                }
+
+            assertEquals(
+                listOf(PARTIAL_TRANSIT_BOARDING_POINT, PARTIAL_TRANSIT_ALIGHTING_POINT),
+                transitSegment.polyline,
+            )
+            assertEquals(PARTIAL_TRANSIT_ALIGHTING_POINT, transitSegment.segmentEndCoordinate)
+        }
+
+    @Test
+    fun `navigation map restores omitted transit walking leg when backend segments are not leg scoped`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testUnscopedTransitWalkPolylineNavigationRequest())
+            advanceUntilIdle()
+
+            val walkingPolylineStarts =
+                viewModel.uiState.value.mapOverlay.routeSegments
+                    .filter { segment ->
+                        segment.travelKind == NavigationSegmentTravelKind.TRANSIT_WALK &&
+                            segment.polyline.size >= 2
+                    }
+                    .mapNotNull { segment -> segment.polyline.firstOrNull() }
+
+            assertTrue(PARTIAL_TRANSIT_WALK_START_POINT in walkingPolylineStarts)
+            assertTrue(PARTIAL_TRANSIT_FINAL_WALK_START_POINT in walkingPolylineStarts)
+        }
+
+    @Test
+    fun `focused guidance over five hundred meters still animates camera transition`() =
         runTest {
             val viewModel = createViewModel()
 
@@ -435,7 +620,7 @@ class NavigationViewModelTest {
             viewModel.onAction(NavigationUiAction.SegmentTapped(index = 1))
             advanceUntilIdle()
 
-            assertFalse(viewModel.uiState.value.mapOverlay.shouldAnimateCameraTransition)
+            assertTrue(viewModel.uiState.value.mapOverlay.shouldAnimateCameraTransition)
         }
 
     @Test
@@ -454,6 +639,10 @@ class NavigationViewModelTest {
 
             assertEquals(
                 listOf(
+                    MapCoordinate(
+                        latitude = SPARSE_ROUTE_START_POINT.latitude,
+                        longitude = SPARSE_ROUTE_START_POINT.longitude,
+                    ),
                     MapCoordinate(
                         latitude = SPARSE_ROUTE_BRANCH_POINT_1.latitude,
                         longitude = SPARSE_ROUTE_BRANCH_POINT_1.longitude,
@@ -1489,6 +1678,16 @@ private fun testPartialTransitWalkPolylineNavigationRequest(): RouteNavigationRe
                             type = RouteLegType.BUS,
                             role = RouteLegRole.TRANSIT,
                             distanceMeters = 700,
+                            boardingStop =
+                                RouteTransitStop(
+                                    name = "Boarding Stop",
+                                    coordinate = PARTIAL_TRANSIT_BOARDING_POINT,
+                                ),
+                            alightingStop =
+                                RouteTransitStop(
+                                    name = "Central Stop",
+                                    coordinate = PARTIAL_TRANSIT_ALIGHTING_POINT,
+                                ),
                             polyline =
                                 RoutePolyline(
                                     points =
@@ -1558,6 +1757,130 @@ private fun testPartialTransitWalkPolylineNavigationRequest(): RouteNavigationRe
                 searchId = "search-5",
                 routeId = "partial-transit-walk-route-1",
                 sessionId = "session-5",
+            ),
+    )
+
+private fun testUnscopedTransitWalkPolylineNavigationRequest(): RouteNavigationRequest =
+    RouteNavigationRequest(
+        origin =
+            RouteWaypoint(
+                name = "Origin",
+                coordinate = PARTIAL_TRANSIT_WALK_START_POINT,
+            ),
+        destination =
+            RouteWaypoint(
+                name = "Destination",
+                coordinate = PARTIAL_TRANSIT_FINAL_WALK_END_POINT,
+            ),
+        selectedRoute =
+            RouteCandidate(
+                serverRouteId = "unscoped-transit-walk-route-1",
+                routeOption = RouteOption.RECOMMENDED,
+                title = "Unscoped Transit Walk Route",
+                summary =
+                    RouteSummary(
+                        distanceMeters = 1_200,
+                        estimatedTimeMinutes = 18,
+                        riskLevel = RouteRiskLevel.LOW,
+                        durationSeconds = 1_080,
+                    ),
+                preview =
+                    RoutePreviewModel(
+                        polyline =
+                            RoutePolyline(
+                                points =
+                                    listOf(
+                                        PARTIAL_TRANSIT_WALK_START_POINT,
+                                        PARTIAL_TRANSIT_BOARDING_POINT,
+                                        PARTIAL_TRANSIT_ALIGHTING_POINT,
+                                        PARTIAL_TRANSIT_FINAL_WALK_START_POINT,
+                                        PARTIAL_TRANSIT_FINAL_WALK_END_POINT,
+                                    ),
+                            ),
+                        segmentCount = 3,
+                        renderableSegmentCount = 2,
+                    ),
+                legs =
+                    listOf(
+                        RouteLeg(
+                            sequence = 1,
+                            type = RouteLegType.WALK,
+                            role = RouteLegRole.WALK_TO_TRANSIT,
+                            distanceMeters = 300,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            PARTIAL_TRANSIT_WALK_START_POINT,
+                                            PARTIAL_TRANSIT_BOARDING_POINT,
+                                        ),
+                                ),
+                        ),
+                        RouteLeg(
+                            sequence = 2,
+                            type = RouteLegType.BUS,
+                            role = RouteLegRole.TRANSIT,
+                            distanceMeters = 700,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            PARTIAL_TRANSIT_BOARDING_POINT,
+                                            PARTIAL_TRANSIT_ALIGHTING_POINT,
+                                        ),
+                                ),
+                        ),
+                        RouteLeg(
+                            sequence = 3,
+                            type = RouteLegType.WALK,
+                            role = RouteLegRole.WALK_TO_DESTINATION,
+                            distanceMeters = 200,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            PARTIAL_TRANSIT_FINAL_WALK_START_POINT,
+                                            PARTIAL_TRANSIT_FINAL_WALK_END_POINT,
+                                        ),
+                                ),
+                        ),
+                    ),
+                segments =
+                    listOf(
+                        RouteSegment(
+                            sequence = 1,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            PARTIAL_TRANSIT_WALK_START_POINT,
+                                            PARTIAL_TRANSIT_BOARDING_POINT,
+                                        ),
+                                ),
+                            distanceMeters = 300,
+                            guidanceMessage = "Walk to bus stop",
+                        ),
+                        RouteSegment(
+                            sequence = 2,
+                            polyline =
+                                RoutePolyline(
+                                    points =
+                                        listOf(
+                                            PARTIAL_TRANSIT_BOARDING_POINT,
+                                            PARTIAL_TRANSIT_ALIGHTING_POINT,
+                                        ),
+                                ),
+                            distanceMeters = 700,
+                            guidanceMessage = "Ride bus",
+                        ),
+                    ),
+            ),
+        source = RouteSearchSource.serverApi(label = "Unscoped transit walk navigation route"),
+        selectionHandoff =
+            RouteNavigationSelectionHandoff(
+                searchId = "search-6",
+                routeId = "unscoped-transit-walk-route-1",
+                sessionId = "session-6",
             ),
     )
 

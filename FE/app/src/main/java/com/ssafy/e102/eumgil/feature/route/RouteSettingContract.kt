@@ -245,6 +245,7 @@ enum class RouteDetailChipKind {
 
 enum class RouteDetailStepKind {
     START,
+    ALIGHT,
     BUS,
     SUBWAY,
     STRAIGHT,

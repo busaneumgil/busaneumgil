@@ -94,6 +94,23 @@ class NavigationScreenPolicyTest {
     }
 
     @Test
+    fun `navigation bottom bar floats above system nav bar without top divider`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val bottomBarSection =
+            source
+                .substringAfter("private fun NavigationBottomBar(")
+                .substringBefore("@Composable\nprivate fun NavigationExitConfirmDialog")
+        val chromePolicy = navigationBottomBarChromePolicy()
+
+        assertTrue(chromePolicy.usesNavigationBarPadding)
+        assertFalse(chromePolicy.showTopDivider)
+        assertTrue(bottomBarSection.contains(".navigationBarsPadding()"))
+        assertTrue(bottomBarSection.contains("if (chromePolicy.showTopDivider)"))
+    }
+
+    @Test
     fun `hero layout policy keeps compact minimum max height on compact screens`() {
         val policy = navigationHeroLayoutPolicy(480.dp)
 
@@ -111,6 +128,9 @@ class NavigationScreenPolicyTest {
         val guideSidePanelSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")
                 .readText()
+        val scrubberSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/RouteStepScrubberRail.kt")
+                .readText()
 
         assertTrue(
             "Navigation hero icon sizing should route transit actions through a dedicated helper.",
@@ -121,8 +141,9 @@ class NavigationScreenPolicyTest {
             navigationScreenSource.contains("NavigationHeroTransitDirectionIconSize = 40.dp"),
         )
         assertTrue(
-            "Navigation segment rail should delegate collapsed icon sizing to the shared guide side-panel item.",
-            railSource.contains("GuideCollapsedRailItem(") &&
+            "Navigation segment rail should delegate collapsed icon sizing through the shared scrubber item.",
+            railSource.contains("RouteStepScrubberRail(") &&
+                scrubberSource.contains("GuideCollapsedRailItem(") &&
                 guideSidePanelSource.contains("action.collapsedIconSize()"),
         )
         assertTrue(
@@ -144,12 +165,15 @@ class NavigationScreenPolicyTest {
         val railSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
                 .readText()
+        val scrubberSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/RouteStepScrubberRail.kt")
+                .readText()
         val sidePanelPolicy = navigationSidePanelPolicy()
 
         assertTrue(
             "NAV-01 should keep the map as the base layer while the left rail or panel overlays it.",
             source.contains("NavigationMapStage(") &&
-                source.contains("NavigationExpandedSidePanel(") &&
+                source.contains("NavigationGuideSidePanel(") &&
                 source.contains("NavigationSegmentRail("),
         )
         assertTrue(
@@ -170,10 +194,11 @@ class NavigationScreenPolicyTest {
                 source.contains("uiState.segmentSync.railItems.forEach"),
         )
         assertTrue(
-            "Collapsed rail vertical scroll should reuse SegmentTapped so the top visible icon drives the hero card and map focus.",
+            "Collapsed rail scrubber should reuse SegmentTapped so the anchored step drives the hero card and map focus.",
             source.contains("onTopVisibleSegmentChanged = { index ->") &&
-                railSource.contains("snapshotFlow") &&
-                railSource.contains("firstVisibleItemIndex") &&
+                railSource.contains("RouteStepScrubberRail(") &&
+                scrubberSource.contains("snapshotFlow") &&
+                scrubberSource.contains("anchoredDraggable(") &&
                 railSource.contains("onTopVisibleSegmentChanged"),
         )
         assertFalse(
@@ -374,6 +399,55 @@ class NavigationScreenPolicyTest {
             )
 
         assertEquals(56.dp, policy.topDividerStartInset)
+    }
+
+    @Test
+    fun `collapsed navigation rail uses the route detail rail width token`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+
+        assertTrue(source.contains("val railWidth = NavigationSegmentRailWidth"))
+        assertTrue(source.contains("private val NavigationSegmentRailWidth = 58.dp"))
+    }
+
+    @Test
+    fun `navigation rail opens and closes through the shared guide side panel shell`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("if (screenPolicy.showSegmentRail) {")
+                .substringBefore("NavigationBottomBar(")
+
+        assertTrue(screenSection.contains("NavigationGuideSidePanel("))
+        assertTrue(source.contains("GuideSidePanelShell("))
+        assertTrue(source.contains("collapsedWidth = NavigationSegmentRailWidth"))
+        assertTrue(source.contains("expandedWidthFraction = NavigationGuideSidePanelExpandedWidthFraction"))
+        assertTrue(source.contains("private const val NavigationGuideSidePanelExpandedWidthFraction = 0.88f"))
+    }
+
+    @Test
+    fun `focused navigation map inspection animates through camera target instead of fit projection jumps`() {
+        val overlaySource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlay.kt")
+                .readText()
+        val viewModelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationViewModel.kt")
+                .readText()
+        val navigationOverlaySection =
+            overlaySource
+                .substringAfter("internal fun createNavigationViewportOverlayState(")
+                .substringBefore("private fun defaultMapViewportFallbackCamera")
+        val mapOverlayBuilderSection =
+            viewModelSource
+                .substringAfter("private fun RouteNavigationRequest.toMapOverlayUiState(")
+                .substringBefore("private fun RouteCandidate.toFallbackWalkingLegMapSegments")
+
+        assertTrue(navigationOverlaySection.contains("fitToProjection = mapOverlay.mapFocusMode != NavigationMapFocusMode.FOCUSED"))
+        assertTrue(mapOverlayBuilderSection.contains("shouldAnimateCameraTransition = true"))
+        assertFalse(mapOverlayBuilderSection.contains("IMMEDIATE_GUIDANCE_CAMERA_DISTANCE_THRESHOLD_METERS"))
     }
 
     @Test

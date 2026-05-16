@@ -8,6 +8,8 @@ import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
+import com.ssafy.e102.eumgil.core.model.RouteGuidanceFeature
+import com.ssafy.e102.eumgil.core.model.RouteGuidanceType
 import com.ssafy.e102.eumgil.core.model.RouteLeg
 import com.ssafy.e102.eumgil.core.model.RouteLegRole
 import com.ssafy.e102.eumgil.core.model.RouteLegType
@@ -17,13 +19,16 @@ import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSearchData
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
 import com.ssafy.e102.eumgil.core.model.RouteSegment
+import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
+import com.ssafy.e102.eumgil.feature.route.RouteDetailStepKind
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.feature.route.RouteTransitOptionLabelUiState
+import com.ssafy.e102.eumgil.feature.route.toRouteDetailStepKind
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -43,6 +48,11 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+internal const val NavigationOriginSegmentIndex = -1
+private const val NavigationOriginHeroTitle = "\uCD9C\uBC1C"
+private const val NavigationOriginHeroDescription =
+    "\uD604\uC7AC \uC704\uCE58\uC5D0\uC11C \uC120\uD0DD\uD55C \uACBD\uB85C \uC548\uB0B4\uB97C \uC2DC\uC791\uD569\uB2C8\uB2E4."
+
 class NavigationViewModel(
     private val currentLocationManager: CurrentLocationManager,
     private val bookmarkRepository: BookmarkRepository,
@@ -61,7 +71,7 @@ class NavigationViewModel(
     private var lastProcessedLocationEpochMillis: Long? = null
     private var deviationState = NavigationDeviationState()
     private var activeSegmentIndex: Int = 0
-    private var focusedSegmentIndex: Int = 0
+    private var focusedSegmentIndex: Int = NavigationOriginSegmentIndex
     private var isInspectingSegments: Boolean = false
     private var hasPendingActiveChange: Boolean = false
     private var isExitConfirmDialogVisible: Boolean = false
@@ -108,47 +118,48 @@ class NavigationViewModel(
     }
 
     fun bindNavigationRequest(request: RouteNavigationRequest) {
-        navigationRequest = request
+        val normalizedRequest = request.withTransitAlightingGuidanceSegments()
+        navigationRequest = normalizedRequest
         routeSession =
             NavigationRouteSession(
-                route = request.selectedRoute,
-                routeId = request.selectionHandoff?.routeId ?: request.selectedRoute.serverRouteId,
-                sessionId = request.selectionHandoff?.sessionId,
+                route = normalizedRequest.selectedRoute,
+                routeId = normalizedRequest.selectionHandoff?.routeId ?: normalizedRequest.selectedRoute.serverRouteId,
+                sessionId = normalizedRequest.selectionHandoff?.sessionId,
             )
         lastProcessedLocationEpochMillis = null
         deviationState = NavigationDeviationState()
         activeSegmentIndex = 0
-        focusedSegmentIndex = 0
-        isInspectingSegments = false
+        focusedSegmentIndex = NavigationOriginSegmentIndex
+        isInspectingSegments = true
         hasPendingActiveChange = false
         isExitConfirmDialogVisible = false
         isTransitRefreshInFlight = false
         isRerouteInFlight = false
         isEndNavigationInFlight = false
-        latestLocationCoordinate = request.origin.coordinate
-        latestProgress = routeSession?.route?.evaluateProgress(request.origin.coordinate)
+        latestLocationCoordinate = normalizedRequest.origin.coordinate
+        latestProgress = routeSession?.route?.evaluateProgress(normalizedRequest.origin.coordinate)
         val initialRemainingMetrics =
             latestProgress?.let { progress ->
                 routeSession?.route?.resolveRemainingMetrics(
                     progress = progress,
-                    destination = request.destination.coordinate,
+                    destination = normalizedRequest.destination.coordinate,
                     useLowVisionWalkingPace = isLowVisionMode,
                 )
             }
         latestRemainingDistanceMeters =
-            request.selectionHandoff?.initialRemainingDistanceMeters
+            normalizedRequest.selectionHandoff?.initialRemainingDistanceMeters
                 ?.takeIf { distanceMeters -> distanceMeters >= 0 }
                 ?: initialRemainingMetrics?.distanceMeters
-                ?: request.selectedRoute.totalDistanceMeters()
+                ?: normalizedRequest.selectedRoute.totalDistanceMeters()
         latestEstimatedMinutes =
-            request.selectionHandoff?.initialRemainingDurationSeconds
+            normalizedRequest.selectionHandoff?.initialRemainingDurationSeconds
                 ?.takeIf { durationSeconds -> durationSeconds >= 0 }
                 ?.toEtaMinutes()
                 ?: initialRemainingMetrics?.estimatedMinutes
-                ?: request.selectedRoute.summary.estimatedTimeMinutes
+                ?: normalizedRequest.selectedRoute.summary.estimatedTimeMinutes
         latestRemainingMetricsSource =
-            if (request.selectionHandoff?.initialRemainingDistanceMeters != null ||
-                request.selectionHandoff?.initialRemainingDurationSeconds != null
+            if (normalizedRequest.selectionHandoff?.initialRemainingDistanceMeters != null ||
+                normalizedRequest.selectionHandoff?.initialRemainingDurationSeconds != null
             ) {
                 NavigationRemainingMetricsSource.ProjectedRoute
             } else {
@@ -166,7 +177,6 @@ class NavigationViewModel(
         latestTransitPresentation =
             routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
         initialBriefingRequested = false
-        syncActiveSegment(latestProgress?.activeSegmentIndex ?: 0)
         publishNavigationState()
 
         currentLocationManager.startLocationUpdates()
@@ -500,6 +510,13 @@ class NavigationViewModel(
 
     private fun onSegmentTapped(index: Int) {
         val request = routeSession?.route ?: navigationRequest?.selectedRoute ?: return
+        if (index == NavigationOriginSegmentIndex) {
+            focusedSegmentIndex = NavigationOriginSegmentIndex
+            isInspectingSegments = true
+            hasPendingActiveChange = false
+            publishNavigationState()
+            return
+        }
         if (index !in request.segments.indices) return
 
         focusedSegmentIndex = index
@@ -524,7 +541,12 @@ class NavigationViewModel(
         val maxSegmentIndex = runtimeRequest.selectedRoute.segments.lastIndex.coerceAtLeast(0)
 
         activeSegmentIndex = activeSegmentIndex.coerceIn(0, maxSegmentIndex)
-        focusedSegmentIndex = focusedSegmentIndex.coerceIn(0, maxSegmentIndex)
+        focusedSegmentIndex =
+            if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
+                NavigationOriginSegmentIndex
+            } else {
+                focusedSegmentIndex.coerceIn(0, maxSegmentIndex)
+            }
 
         val mapFocusMode =
             if (isInspectingSegments) {
@@ -1575,6 +1597,70 @@ private const val LOW_VISION_ROUTE_CHANGE_ALERT_DISTANCE_METERS = 50
 private const val IMMEDIATE_GUIDANCE_CAMERA_DISTANCE_THRESHOLD_METERS = 500
 private const val PENDING_ACTIVE_SEGMENT_LABEL = "Current segment updated"
 
+private fun RouteNavigationRequest.withTransitAlightingGuidanceSegments(): RouteNavigationRequest {
+    val normalizedRoute = selectedRoute.withTransitAlightingGuidanceSegments()
+    return if (normalizedRoute == selectedRoute) {
+        this
+    } else {
+        copy(selectedRoute = normalizedRoute)
+    }
+}
+
+private fun RouteCandidate.withTransitAlightingGuidanceSegments(): RouteCandidate {
+    val transitLegsMissingAlightingGuidance =
+        legs
+            .filter { leg -> leg.type == RouteLegType.BUS || leg.type == RouteLegType.SUBWAY }
+            .filter { leg -> leg.alightingStop != null }
+            .filterNot { leg ->
+                segments.any { segment ->
+                    segment.sourceLegSequence == leg.sequence &&
+                        segment.guidanceType == RouteGuidanceType.ARRIVING_POINT
+                }
+            }
+    if (transitLegsMissingAlightingGuidance.isEmpty()) return this
+
+    val missingLegsBySequence = transitLegsMissingAlightingGuidance.associateBy(RouteLeg::sequence)
+    val sortedSegments = segments.sortedBy(RouteSegment::sequence)
+    var nextSequence = 1
+    val normalizedSegments =
+        buildList {
+            sortedSegments.forEachIndexed { index, segment ->
+                add(segment.copy(sequence = nextSequence++))
+                val sourceLegSequence = segment.sourceLegSequence ?: return@forEachIndexed
+                val leg = missingLegsBySequence[sourceLegSequence] ?: return@forEachIndexed
+                val hasLaterSegmentForLeg =
+                    sortedSegments.drop(index + 1).any { candidate ->
+                        candidate.sourceLegSequence == sourceLegSequence
+                    }
+                if (!hasLaterSegmentForLeg) {
+                    add(leg.toNavigationAlightingSegment(sequence = nextSequence++))
+                }
+            }
+            missingLegsBySequence.values
+                .filterNot { leg -> sortedSegments.any { segment -> segment.sourceLegSequence == leg.sequence } }
+                .sortedBy(RouteLeg::sequence)
+                .forEach { leg ->
+                    add(leg.toNavigationAlightingSegment(sequence = nextSequence++))
+                }
+        }
+    return copy(segments = normalizedSegments)
+}
+
+private fun RouteLeg.toNavigationAlightingSegment(sequence: Int): RouteSegment {
+    val stop = requireNotNull(alightingStop)
+    return RouteSegment(
+        sequence = sequence,
+        polyline = RoutePolyline(),
+        anchorCoordinate = stop.coordinate,
+        distanceMeters = 0,
+        safetyFlags = RouteSegmentSafetyFlags(),
+        riskLevel = RouteRiskLevel.LOW,
+        guidanceMessage = "${stop.name} \uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4.",
+        sourceLegSequence = this.sequence,
+        guidanceType = RouteGuidanceType.ARRIVING_POINT,
+    )
+}
+
 internal fun haversineDistanceMeters(a: GeoCoordinate, b: GeoCoordinate): Double {
     val dLat = Math.toRadians(b.latitude - a.latitude)
     val dLon = Math.toRadians(b.longitude - a.longitude)
@@ -1610,9 +1696,19 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
 ): NavigationMapOverlayUiState {
     val selectedRoutePolyline = selectedRoute.previewPolyline.points
     val activeSegment = selectedRoute.segments.getOrNull(activeSegmentIndex)
-    val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex)
-    val activeSegmentPolyline = activeSegment?.polyline?.points.orEmpty()
-    val focusedSegmentPolyline = focusedSegment?.polyline?.points.orEmpty()
+    val focusedSegment =
+        if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
+            null
+        } else {
+            selectedRoute.segments.getOrNull(focusedSegmentIndex)
+        }
+    val activeSegmentPolyline = selectedRoute.resolveSegmentDisplayPolyline(activeSegmentIndex)
+    val focusedSegmentPolyline =
+        if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
+            emptyList()
+        } else {
+            selectedRoute.resolveSegmentDisplayPolyline(focusedSegmentIndex)
+        }
     val hasTransitLeg = selectedRoute.hasTransitLeg()
     val activeFocusCoordinate =
         currentLocationCoordinate
@@ -1620,15 +1716,20 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
             ?: selectedRoute.resolveSegmentFocusCoordinate(activeSegmentIndex)
             ?: origin.coordinate
     val inspectedFocusCoordinate =
-        selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
-            ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
-            ?: activeFocusCoordinate
+        if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
+            origin.coordinate
+        } else {
+            selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
+                ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
+                ?: activeFocusCoordinate
+        }
     val segmentRouteSegments =
         selectedRoute.segments.mapIndexed { index, segment ->
             NavigationMapSegmentUiState(
                 sequence = segment.sequence,
-                polyline = segment.polyline.points,
+                polyline = selectedRoute.resolveSegmentDisplayPolyline(index),
                 segmentStartCoordinate = selectedRoute.resolveSegmentStartCoordinate(index),
+                segmentEndCoordinate = selectedRoute.resolveSegmentEndCoordinate(index),
                 distanceMeters = segment.distanceMeters,
                 riskLevel = segment.riskLevel,
                 guidanceMessage = segment.guidanceMessage,
@@ -1664,9 +1765,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
             },
         routeSegments = routeSegments,
         mapFocusMode = mapFocusMode,
-        shouldAnimateCameraTransition =
-            mapFocusMode != NavigationMapFocusMode.FOCUSED ||
-                (focusedSegment?.distanceMeters ?: 0) < IMMEDIATE_GUIDANCE_CAMERA_DISTANCE_THRESHOLD_METERS,
+        shouldAnimateCameraTransition = true,
     )
 }
 
@@ -1680,19 +1779,25 @@ private fun RouteCandidate.toFallbackWalkingLegMapSegments(
         }
     if (renderableWalkingLegs.isEmpty()) return emptyList()
 
-    val hasRenderableWalkingSegment =
-        existingSegments.any { segment ->
-            (segment.travelKind == NavigationSegmentTravelKind.WALK ||
-                segment.travelKind == NavigationSegmentTravelKind.TRANSIT_WALK) &&
-                segment.isRenderable
-        }
-    val hasLegScopedSegments = segments.any { segment -> segment.sourceLegSequence != null }
+    val renderableWalkingSegmentPolylines =
+        existingSegments
+            .filter { segment ->
+                (segment.travelKind == NavigationSegmentTravelKind.WALK ||
+                    segment.travelKind == NavigationSegmentTravelKind.TRANSIT_WALK) &&
+                    segment.isRenderable
+            }
+            .map { segment -> segment.polyline }
+    val hasRenderableWalkingSegment = renderableWalkingSegmentPolylines.isNotEmpty()
     val fallbackWalkingLegs =
-        if (hasTransitLeg && hasLegScopedSegments) {
+        if (hasTransitLeg) {
             renderableWalkingLegs.filterNot { leg ->
-                segments.any { segment ->
-                    segment.sourceLegSequence == leg.sequence && segment.polyline.isRenderable
-                }
+                val legPolyline = leg.polyline.points
+                val hasRenderableScopedSegment =
+                    segments.any { segment ->
+                        segment.sourceLegSequence == leg.sequence && segment.polyline.isRenderable
+                    }
+                hasRenderableScopedSegment ||
+                    renderableWalkingSegmentPolylines.any { polyline -> polyline == legPolyline }
             }
         } else if (hasRenderableWalkingSegment) {
             emptyList()
@@ -1706,6 +1811,7 @@ private fun RouteCandidate.toFallbackWalkingLegMapSegments(
                 sequence = leg.sequence,
                 polyline = leg.polyline.points,
                 segmentStartCoordinate = leg.polyline.points.firstOrNull(),
+                segmentEndCoordinate = leg.polyline.points.lastOrNull(),
                 distanceMeters = leg.distanceMeters ?: 0,
                 riskLevel = RouteRiskLevel.LOW,
                 guidanceMessage = leg.instruction,
@@ -1715,7 +1821,7 @@ private fun RouteCandidate.toFallbackWalkingLegMapSegments(
                     } else {
                         NavigationSegmentTravelKind.WALK
                     },
-                showJunctionMarker = false,
+                showJunctionMarker = true,
             )
         }
 }
@@ -1774,15 +1880,28 @@ private fun RouteNavigationRequest.toSegmentSyncUiState(
     hasPendingActiveChange: Boolean,
     mapFocusMode: NavigationMapFocusMode,
     transitPresentation: NavigationTransitPresentation?,
-): NavigationSegmentSyncUiState =
-    NavigationSegmentSyncUiState(
+): NavigationSegmentSyncUiState {
+    val originRailItem =
+        NavigationSegmentRailItemUiState(
+            index = NavigationOriginSegmentIndex,
+            sequence = 0,
+            instruction = NavigationOriginHeroTitle,
+            distanceLabel = "",
+            riskLabel = "",
+            guidanceAction = NavigationGuidanceAction.START,
+            isFocused = focusedSegmentIndex == NavigationOriginSegmentIndex,
+        )
+
+    return NavigationSegmentSyncUiState(
         activeSegmentIndex = activeSegmentIndex,
         focusedSegmentIndex = focusedSegmentIndex,
         isInspectingSegments = isInspectingSegments,
         mapFocusMode = mapFocusMode,
         hasPendingActiveChange = hasPendingActiveChange,
         railItems =
-            selectedRoute.segments.mapIndexed { index, segment ->
+            listOf(originRailItem) +
+                selectedRoute.segments.mapIndexed { index, segment ->
+                val sidePanelDetail = selectedRoute.toNavigationSidePanelStepDetail(segment)
                 NavigationSegmentRailItemUiState(
                     index = index,
                     sequence = segment.sequence,
@@ -1795,14 +1914,117 @@ private fun RouteNavigationRequest.toSegmentSyncUiState(
                     isCompleted = index < activeSegmentIndex,
                     isRiskUpcoming = index > activeSegmentIndex && segment.riskLevel != RouteRiskLevel.LOW,
                     transitInfo = selectedRoute.resolveFocusedSegmentTransitInfo(segment, transitPresentation),
+                    sidePanelTitle = sidePanelDetail.title,
+                    sidePanelDescription = sidePanelDetail.description,
                 )
             },
     )
+}
+
+private data class NavigationSidePanelStepDetail(
+    val title: String,
+    val description: String?,
+)
+
+private fun RouteCandidate.toNavigationSidePanelStepDetail(segment: RouteSegment): NavigationSidePanelStepDetail {
+    val kind = toRouteDetailStepKind(segment)
+    val sourceLeg = segment.resolveSourceLeg(legs = legs)
+    val routeDurationSeconds = summary.durationSeconds ?: summary.estimatedTimeMinutes * 60
+    return NavigationSidePanelStepDetail(
+        title = segment.navigationSidePanelStepTitle(kind = kind),
+        description =
+            segment.navigationSidePanelStepDescription(
+                kind = kind,
+                sourceLeg = sourceLeg,
+                routeDurationSeconds = routeDurationSeconds,
+            ),
+    )
+}
+
+private fun RouteSegment.navigationSidePanelStepTitle(kind: RouteDetailStepKind): String =
+    when (kind) {
+        RouteDetailStepKind.START -> NavigationOriginHeroTitle
+        RouteDetailStepKind.ALIGHT -> "\uD558\uCC28"
+        RouteDetailStepKind.BUS -> "\uBC84\uC2A4 \uD0D1\uC2B9"
+        RouteDetailStepKind.SUBWAY -> "\uC9C0\uD558\uCCA0 \uD0D1\uC2B9"
+        RouteDetailStepKind.STRAIGHT -> "${guidanceDisplayDistanceMeters()}m \uC9C1\uC9C4 \uC774\uB3D9"
+        RouteDetailStepKind.TURN_LEFT -> "${guidanceDisplayDistanceMeters()}m \uD6C4 \uC88C\uD68C\uC804"
+        RouteDetailStepKind.TURN_RIGHT -> "${guidanceDisplayDistanceMeters()}m \uD6C4 \uC6B0\uD68C\uC804"
+        RouteDetailStepKind.TACTILE_GUIDE -> "\uC810\uC790\uBE14\uB85D \uB530\uB77C \uC774\uB3D9"
+        RouteDetailStepKind.CROSSWALK -> crosswalkSidePanelTitle()
+        RouteDetailStepKind.ELEVATOR -> "\uC5D8\uB9AC\uBCA0\uC774\uD130 \uC774\uC6A9"
+        RouteDetailStepKind.CONSTRUCTION -> "\uACF5\uC0AC \uAD6C\uAC04 \uC9C4\uC785"
+        RouteDetailStepKind.CURB_GAP -> "\uB2E8\uCC28 \uAD6C\uAC04 \uC8FC\uC758"
+        RouteDetailStepKind.STAIRS -> "\uACC4\uB2E8 \uAD6C\uAC04 \uC8FC\uC758"
+        RouteDetailStepKind.ARRIVAL -> "\uBAA9\uC801\uC9C0 \uB3C4\uCC29"
+        RouteDetailStepKind.FALLBACK -> "\uC774\uB3D9 \uACBD\uB85C \uD655\uC778"
+    }
+
+private fun RouteSegment.navigationSidePanelStepDescription(
+    kind: RouteDetailStepKind,
+    sourceLeg: RouteLeg?,
+    routeDurationSeconds: Int?,
+): String? =
+    when (kind) {
+        RouteDetailStepKind.ALIGHT ->
+            guidanceMessage.takeIf(String::hasVisibleHangul)
+                ?: sourceLeg?.alightingStop?.name?.takeIf(String::isNotBlank)?.let { stopName ->
+                    "${stopName} \uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4."
+                }
+                ?: "\uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4."
+
+        RouteDetailStepKind.BUS ->
+            sourceLeg?.routeNo?.takeIf(String::isNotBlank)?.let { routeNo ->
+                "${routeNo}\uBC88 \uBC84\uC2A4\uC5D0 \uD0D1\uC2B9\uD558\uC138\uC694."
+            } ?: "\uBC84\uC2A4\uC5D0 \uD0D1\uC2B9\uD558\uC138\uC694."
+
+        RouteDetailStepKind.SUBWAY ->
+            sourceLeg?.routeNo?.takeIf(String::isNotBlank)?.let { routeNo ->
+                "${routeNo} \uC9C0\uD558\uCCA0\uC5D0 \uD0D1\uC2B9\uD558\uC138\uC694."
+            } ?: "\uC9C0\uD558\uCCA0\uC5D0 \uD0D1\uC2B9\uD558\uC138\uC694."
+
+        RouteDetailStepKind.START -> NavigationOriginHeroDescription
+        RouteDetailStepKind.ARRIVAL -> "\uC548\uB0B4\uAC00 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4"
+        else -> "\uBAA9\uC801\uC9C0\uAE4C\uC9C0 \uC57D ${remainingMinutesToDestination(routeDurationSeconds)}\uBD84"
+    }
+
+private fun RouteSegment.guidanceDisplayDistanceMeters(): Int =
+    (guidanceDistanceMeters ?: distanceMeters).coerceAtLeast(0)
+
+private fun RouteSegment.remainingMinutesToDestination(routeDurationSeconds: Int?): Int {
+    val totalSeconds = routeDurationSeconds ?: return 0
+    val elapsedSeconds = durationFromRouteStartSeconds ?: 0
+    return ((totalSeconds - elapsedSeconds).coerceAtLeast(0) + 59) / 60
+}
+
+private fun RouteSegment.crosswalkSidePanelTitle(): String =
+    when {
+        RouteGuidanceFeature.AUDIO_SIGNAL in guidanceFeatures || safetyFlags.hasAudioSignal ->
+            "\uC74C\uD5A5 \uC2E0\uD638 \uD6A1\uB2E8\uBCF4\uB3C4 \uAC74\uB108\uAE30"
+        RouteGuidanceFeature.SIGNAL in guidanceFeatures || safetyFlags.hasSignal ->
+            "\uC2E0\uD638 \uD6A1\uB2E8\uBCF4\uB3C4 \uAC74\uB108\uAE30"
+        else -> "\uD6A1\uB2E8\uBCF4\uB3C4 \uAC74\uB108\uAE30"
+    }
+
+private fun String.hasVisibleHangul(): Boolean = any { character -> character in '\uAC00'..'\uD7A3' }
 
 private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
     focusedSegmentIndex: Int,
     transitPresentation: NavigationTransitPresentation?,
 ): NavigationFocusedSegmentCardUiState? {
+    if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
+        return NavigationFocusedSegmentCardUiState(
+            sequenceLabel = NavigationOriginHeroTitle,
+            instruction = NavigationOriginHeroTitle,
+            heroTitle = NavigationOriginHeroTitle,
+            heroDescription = NavigationOriginHeroDescription,
+            distanceLabel = "",
+            riskLabel = "",
+            supportingText = selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption),
+            guidanceAction = NavigationGuidanceAction.START,
+        )
+    }
+
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex) ?: return null
     val heroDetail = selectedRoute.toNavigationHeroDetail(focusedSegment)
 
@@ -1823,6 +2045,7 @@ private fun RouteCandidate.resolveFocusedSegmentTransitInfo(
     focusedSegment: RouteSegment,
     transitPresentation: NavigationTransitPresentation?,
 ): NavigationTransitInfoUiState? {
+    if (focusedSegment.guidanceType == RouteGuidanceType.ARRIVING_POINT) return null
     val sourceLeg = focusedSegment.resolveSourceLeg(legs = legs) ?: return null
     if (sourceLeg.type != RouteLegType.BUS && sourceLeg.type != RouteLegType.SUBWAY) return null
 
@@ -1899,6 +2122,49 @@ private fun RouteCandidate.resolveSegmentFocusCoordinate(segmentIndex: Int): Geo
 
     val progressRatio = resolveSegmentMidProgressRatio(segmentIndex = segmentIndex, weights = segmentWeights())
     return fallbackPolyline.coordinateAtProgressRatio(progressRatio)
+}
+
+private fun RouteCandidate.resolveSegmentEndCoordinate(segmentIndex: Int): GeoCoordinate? {
+    val segment = segments.getOrNull(segmentIndex) ?: return null
+    val sourceLeg = segment.resolveSourceLeg(legs = legs)
+
+    if (segment.guidanceType == RouteGuidanceType.ARRIVING_POINT) {
+        return segment.anchorCoordinate ?: sourceLeg?.alightingStop?.coordinate
+    }
+    if (sourceLeg?.type == RouteLegType.BUS || sourceLeg?.type == RouteLegType.SUBWAY) {
+        sourceLeg.alightingStop?.coordinate?.let { return it }
+    }
+    segment.polyline
+        .takeIf(RoutePolyline::isRenderable)
+        ?.points
+        ?.lastOrNull()
+        ?.let { return it }
+    segment.anchorCoordinate?.let { return it }
+    if (sourceLeg?.type == RouteLegType.WALK && segment.isFirstSegmentOfSourceLeg(segmentIndex = segmentIndex, segments = segments)) {
+        sourceLeg.polyline.points.lastOrNull()?.let { return it }
+    }
+    return null
+}
+
+private fun RouteCandidate.resolveSegmentDisplayPolyline(segmentIndex: Int): List<GeoCoordinate> {
+    val segment = segments.getOrNull(segmentIndex) ?: return emptyList()
+    if (segment.guidanceType == RouteGuidanceType.ARRIVING_POINT) return emptyList()
+
+    val sourceLeg = segment.resolveSourceLeg(legs = legs)
+    if (
+        sourceLeg != null &&
+        (sourceLeg.type == RouteLegType.BUS || sourceLeg.type == RouteLegType.SUBWAY) &&
+        sourceLeg.polyline.isRenderable
+    ) {
+        return sourceLeg.polyline.points.withResolvedEndCoordinate(sourceLeg.alightingStop?.coordinate)
+    }
+
+    return segment.polyline.points
+}
+
+private fun List<GeoCoordinate>.withResolvedEndCoordinate(endCoordinate: GeoCoordinate?): List<GeoCoordinate> {
+    if (endCoordinate == null || isEmpty() || last() == endCoordinate) return this
+    return dropLast(1) + endCoordinate
 }
 
 private fun RouteCandidate.segmentWeights(): List<Double> =

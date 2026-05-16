@@ -99,7 +99,7 @@ fun NavigationScreen(
     val screenPolicy = navigationScreenPolicy(uiState)
     val disablesDefaultWindowInsets = navigationUsesEmptyWindowInsets()
     val sidePanelPolicy = navigationSidePanelPolicy()
-    val railWidth = (LocalConfiguration.current.screenWidthDp.dp / 7).coerceIn(48.dp, 60.dp)
+    val railWidth = NavigationSegmentRailWidth
     var isSidePanelExpanded by remember(uiState.screenState) { mutableStateOf(false) }
 
     Box(
@@ -154,42 +154,25 @@ fun NavigationScreen(
                                             .background(NavigationExpandedSidePanelScrimColor),
                                 )
                             }
-                            NavigationExpandedSidePanel(
-                                uiState = uiState,
-                                onCollapse = { isSidePanelExpanded = false },
-                                onSegmentTapped = { index ->
-                                    if (sidePanelPolicy.collapseOnSegmentTap) {
-                                        isSidePanelExpanded = false
-                                    }
-                                    onAction(NavigationUiAction.SegmentTapped(index = index))
-                                },
-                                modifier =
-                                    Modifier
-                                        .align(Alignment.CenterStart)
-                                        .fillMaxHeight(),
-                            )
-                        } else {
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .align(Alignment.CenterStart)
-                                        .fillMaxHeight(),
-                            ) {
-                                NavigationSegmentRail(
-                                    uiState = uiState.segmentSync,
-                                    onSegmentTapped = { index ->
-                                        onAction(NavigationUiAction.SegmentTapped(index = index))
-                                    },
-                                    onTopVisibleSegmentChanged = { index ->
-                                        onAction(NavigationUiAction.SegmentTapped(index = index))
-                                    },
-                                    modifier =
-                                        Modifier
-                                            .width(railWidth)
-                                            .fillMaxHeight(),
-                                )
-                            }
                         }
+                        NavigationGuideSidePanel(
+                            uiState = uiState,
+                            isExpanded = isSidePanelExpanded,
+                            onExpandedChange = { expanded -> isSidePanelExpanded = expanded },
+                            onSegmentTapped = { index ->
+                                if (isSidePanelExpanded && sidePanelPolicy.collapseOnSegmentTap) {
+                                    isSidePanelExpanded = false
+                                }
+                                onAction(NavigationUiAction.SegmentTapped(index = index))
+                            },
+                            onTopVisibleSegmentChanged = { index ->
+                                onAction(NavigationUiAction.SegmentTapped(index = index))
+                            },
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .fillMaxHeight(),
+                        )
                     }
                 }
             }
@@ -223,6 +206,7 @@ private fun NavigationTopBar(
     onBackClick: () -> Unit,
     onCloseClick: () -> Unit,
 ) {
+    val policy = navigationTopBarPolicy()
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.primary,
@@ -237,17 +221,22 @@ private fun NavigationTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
         ) {
-            IconButton(onClick = onBackClick) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_action_back),
-                    contentDescription = stringResource(id = R.string.navigation_back),
-                    tint = Color.White,
-                )
+            if (policy.showBackButton) {
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_action_back),
+                        contentDescription = stringResource(id = R.string.navigation_back),
+                        tint = Color.White,
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.size(48.dp))
             }
             Text(
                 text = navigationRouteSummary(uiState),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
+                fontWeight = policy.titleFontWeight,
                 color = Color.White,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -271,7 +260,7 @@ internal data class NavigationTopBarPolicy(
 
 internal fun navigationTopBarPolicy(): NavigationTopBarPolicy =
     NavigationTopBarPolicy(
-        showBackButton = true,
+        showBackButton = false,
         showBookmarkAction = false,
         titleFontWeight = FontWeight.SemiBold,
     )
@@ -320,6 +309,7 @@ internal data class NavigationSidePanelPolicy(
 internal data class NavigationBottomBarChromePolicy(
     val bottomGap: Dp,
     val usesNavigationBarPadding: Boolean,
+    val showTopDivider: Boolean,
 )
 
 internal fun navigationScreenPolicy(uiState: NavigationUiState): NavigationScreenPolicy =
@@ -373,6 +363,7 @@ internal fun navigationBottomBarChromePolicy(): NavigationBottomBarChromePolicy 
     NavigationBottomBarChromePolicy(
         bottomGap = NavigationBottomBarBottomGap,
         usesNavigationBarPadding = true,
+        showTopDivider = false,
     )
 
 internal enum class NavigationExitDialogShell {
@@ -401,48 +392,73 @@ internal fun navigationExitDialogPolicy(): NavigationExitDialogPolicy =
     )
 
 @Composable
-private fun NavigationExpandedSidePanel(
+private fun NavigationGuideSidePanel(
     uiState: NavigationUiState,
-    onCollapse: () -> Unit,
+    isExpanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSegmentTapped: (Int) -> Unit,
+    onTopVisibleSegmentChanged: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    GuideSidePanelShell(
+        isExpanded = isExpanded,
+        onExpandedChange = onExpandedChange,
+        collapsedWidth = NavigationSegmentRailWidth,
+        expandedWidthFraction = NavigationGuideSidePanelExpandedWidthFraction,
+        stateDescription = if (isExpanded) "expanded guide panel" else "collapsed guide rail",
+        modifier = modifier,
+    ) {
+        if (isExpanded) {
+            NavigationExpandedSidePanelContent(
+                uiState = uiState,
+                onSegmentTapped = onSegmentTapped,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            NavigationSegmentRail(
+                uiState = uiState.segmentSync,
+                onSegmentTapped = onSegmentTapped,
+                onTopVisibleSegmentChanged = onTopVisibleSegmentChanged,
+                modifier =
+                    Modifier
+                        .width(NavigationSegmentRailWidth)
+                        .fillMaxHeight(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun NavigationExpandedSidePanelContent(
+    uiState: NavigationUiState,
     onSegmentTapped: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
-    GuideSidePanelShell(
-        isExpanded = true,
-        onExpandedChange = { expanded ->
-            if (!expanded) {
-                onCollapse()
-            }
-        },
-        expandedWidthFraction = 0.86f,
-        stateDescription = "expanded guide panel",
-        modifier = modifier,
+
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scrollState),
-        ) {
-            uiState.segmentSync.railItems.forEachIndexed { index, item ->
-                NavigationSidePanelRow(
-                    item = item,
-                    isFirst = index == 0,
-                    isLast = index == uiState.segmentSync.railItems.lastIndex,
-                    onClick = { onSegmentTapped(item.index) },
-                )
-            }
-            NavigationExpandedSidePanelScrollTopAction(
-                enabled = uiState.segmentSync.railItems.isNotEmpty(),
-                onClick = {
-                    coroutineScope.launch {
-                        scrollState.animateScrollTo(0)
-                    }
-                },
+        uiState.segmentSync.railItems.forEachIndexed { index, item ->
+            NavigationSidePanelRow(
+                item = item,
+                isFirst = index == 0,
+                isLast = index == uiState.segmentSync.railItems.lastIndex,
+                onClick = { onSegmentTapped(item.index) },
             )
         }
+        NavigationExpandedSidePanelScrollTopAction(
+            enabled = uiState.segmentSync.railItems.isNotEmpty(),
+            onClick = {
+                coroutineScope.launch {
+                    scrollState.animateScrollTo(0)
+                }
+            },
+        )
     }
 }
 
@@ -499,6 +515,8 @@ private fun NavigationSidePanelRow(
 ) {
     val isSelected = item.isFocused || item.isActive
     val transitInfo = item.transitInfo
+    val sidePanelTitle = item.sidePanelTitle.takeIf(String::isNotBlank) ?: item.instruction
+    val sidePanelDescription = item.sidePanelDescription
     val stateLabel =
         when {
             item.isFocused -> "Selected segment"
@@ -511,8 +529,8 @@ private fun NavigationSidePanelRow(
         GuideSidePanelStepRow(
             title =
                 transitInfo?.let { info -> "${info.startName} -> ${info.endName}" }
-                    ?: item.instruction,
-            description = transitInfo?.durationLabel ?: item.distanceLabel,
+                    ?: sidePanelTitle,
+            description = transitInfo?.durationLabel ?: sidePanelDescription ?: item.distanceLabel,
             action = transitInfo?.guidanceAction ?: item.guidanceAction,
             isOrigin = isFirst,
             isDestination = isLast,
@@ -528,7 +546,7 @@ private fun NavigationSidePanelRow(
                 }
             },
             trailingContent = {
-                if (transitInfo == null) item.distanceLabel.takeIf(String::isNotBlank)?.let { distance ->
+                if (transitInfo == null && sidePanelDescription == null) item.distanceLabel.takeIf(String::isNotBlank)?.let { distance ->
                     Text(
                         text = distance,
                         style = MaterialTheme.typography.bodyMedium,
@@ -1004,13 +1022,15 @@ private fun NavigationBottomBar(
             modifier =
                 Modifier.fillMaxWidth(),
         ) {
-            HorizontalDivider(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(start = layoutPolicy.topDividerStartInset),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.82f),
-            )
+            if (chromePolicy.showTopDivider) {
+                HorizontalDivider(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = layoutPolicy.topDividerStartInset),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.82f),
+                )
+            }
             Box(
                 modifier =
                     Modifier
@@ -1377,6 +1397,8 @@ private val NavigationMapMarkerSize = 38.dp
 private val NavigationBottomBarButtonHeight = 50.dp
 private val NavigationBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
 private val NavigationBottomBarBottomGap = 30.dp
+private val NavigationSegmentRailWidth = 58.dp
+private const val NavigationGuideSidePanelExpandedWidthFraction = 0.88f
 private val NavigationExpandedSidePanelScrimColor = Color(0x66000000)
 private val NavigationTransitTagCornerRadius = 10.dp
 private val NavigationTransitTagStrokeWidth = 0.5.dp

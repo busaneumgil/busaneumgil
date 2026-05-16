@@ -239,6 +239,13 @@ class RouteSearchDtoMapperTest {
             route.segments.first().anchorCoordinate,
         )
         assertFalse(route.segments.first().hasRenderablePolyline)
+        val alightingSegment =
+            route.segments.firstOrNull { segment ->
+                segment.guidanceType == RouteGuidanceType.ARRIVING_POINT
+            }
+        assertEquals("Stop B \uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4.", alightingSegment?.guidanceMessage)
+        assertEquals(GeoCoordinate(latitude = 35.1650, longitude = 129.0600), alightingSegment?.anchorCoordinate)
+        assertEquals(route.legs[1].sequence, alightingSegment?.sourceLegSequence)
         assertTrue(route.segments.any { segment -> segment.guidanceMessage == "Audio signal crosswalk ahead." })
         assertTrue(route.segments.any { segment -> segment.guidanceMessage == "Arrive at destination." })
     }

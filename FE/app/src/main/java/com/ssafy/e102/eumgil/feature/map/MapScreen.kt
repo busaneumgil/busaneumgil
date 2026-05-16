@@ -96,6 +96,7 @@ fun MapScreen(
     uiState: MapUiState,
     snackbarHostState: SnackbarHostState,
     onAction: (MapUiAction) -> Unit,
+    onVoiceSearchClick: () -> Unit,
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
     modifier: Modifier = Modifier,
@@ -137,7 +138,9 @@ fun MapScreen(
                         title = searchBarState.title,
                         subtitle = searchBarState.subtitle,
                         accessibilityLabel = searchBarState.accessibilityLabel,
+                        voiceInputAccessibilityLabel = stringResource(id = R.string.search_screen_voice_input),
                         onClick = { onAction(MapUiAction.SearchEntryClicked) },
+                        onVoiceInputClick = onVoiceSearchClick,
                     )
 
                     MapShortcutFilterRow(
@@ -170,7 +173,8 @@ fun MapScreen(
                         recentDestinationSheetState.copy(
                             isVisible =
                                 recentDestinationSheetState.isVisible &&
-                                    facilityDetailSheetUiState.isVisible.not(),
+                                    facilityDetailSheetUiState.isVisible.not() &&
+                                    uiState.isVoiceSearchVisible.not(),
                         ),
                     onViewAllClick = onNavigateToSavedRoutes,
                     onPreviewClick = { placeId ->
@@ -183,7 +187,12 @@ fun MapScreen(
                 )
 
                 FacilityDetailBottomSheetShell(
-                    state = facilityDetailSheetUiState.toShellState(),
+                    state =
+                        facilityDetailSheetUiState.toShellState().copy(
+                            isVisible =
+                                facilityDetailSheetUiState.isVisible &&
+                                    uiState.isVoiceSearchVisible.not(),
+                        ),
                     modifier = Modifier.fillMaxSize(),
                     onPhoneClick =
                         facilityDetailSheetUiState.phoneNumber?.let {

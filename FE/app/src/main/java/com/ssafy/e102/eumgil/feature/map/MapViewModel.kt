@@ -212,6 +212,8 @@ class MapViewModel(
             MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
             MapUiAction.FacilityPhoneClicked -> handleFacilityPhoneClicked()
+            MapUiAction.VoiceSearchClicked -> openVoiceSearch()
+            MapUiAction.VoiceSearchDismissed -> dismissVoiceSearch()
             MapUiAction.FacilitySetDestinationClicked ->
                 handleFacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION)
             is MapUiAction.FacilitySetRouteEndpointClicked ->
@@ -512,6 +514,26 @@ class MapViewModel(
     private fun dismissFacilityDetailSheet() {
         if (!clearSelectedFacilitySelection()) return
         renderSelectedFacilityState()
+    }
+
+    private fun openVoiceSearch() {
+        if (mutableUiState.value.isVoiceSearchVisible) return
+
+        if (clearSelectedFacilitySelection()) {
+            renderSelectedFacilityState()
+        }
+
+        mutableUiState.update { state ->
+            state.copy(isVoiceSearchVisible = true)
+        }
+    }
+
+    private fun dismissVoiceSearch() {
+        if (!mutableUiState.value.isVoiceSearchVisible) return
+
+        mutableUiState.update { state ->
+            state.copy(isVoiceSearchVisible = false)
+        }
     }
 
     private fun handleFacilitySetRouteEndpointClicked(editingTarget: RouteEditingTarget) {

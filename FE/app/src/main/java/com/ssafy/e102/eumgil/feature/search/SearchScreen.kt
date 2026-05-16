@@ -611,31 +611,47 @@ private fun SearchVoiceInputScreen(
             destination = backgroundDestination,
             modifier = Modifier.fillMaxSize(),
         )
-        ModalBottomSheet(
-            onDismissRequest = { onAction(SearchUiAction.VoiceInputDismissed) },
-            sheetState = bottomSheetState,
-            dragHandle = null,
-            shape =
-                RoundedCornerShape(
-                    topStart = searchVoiceInputSheetTopCornerRadius(),
-                    topEnd = searchVoiceInputSheetTopCornerRadius(),
-                    bottomEnd = 0.dp,
-                    bottomStart = 0.dp,
-                ),
-            containerColor = searchVoiceInputSheetContainerColor(),
-            scrimColor = Color.Black.copy(alpha = 0.38f),
-        ) {
-            SearchVoiceInputContent(
-                uiState = uiState,
-                copy = copy,
-                onAction = onAction,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .background(searchVoiceInputSheetContainerColor())
-                        .padding(horizontal = 24.dp, vertical = 12.dp),
-            )
-        }
+        SearchVoiceInputBottomSheet(
+            uiState = uiState,
+            onAction = onAction,
+            bottomSheetState = bottomSheetState,
+            copy = copy,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SearchVoiceInputBottomSheet(
+    uiState: SearchUiState,
+    onAction: (SearchUiAction) -> Unit,
+    bottomSheetState: androidx.compose.material3.SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    copy: SearchCopyUiState = resolveSearchCopyUiState(uiState.editingTarget),
+) {
+    ModalBottomSheet(
+        onDismissRequest = { onAction(SearchUiAction.VoiceInputDismissed) },
+        sheetState = bottomSheetState,
+        dragHandle = null,
+        shape =
+            RoundedCornerShape(
+                topStart = searchVoiceInputSheetTopCornerRadius(),
+                topEnd = searchVoiceInputSheetTopCornerRadius(),
+                bottomEnd = 0.dp,
+                bottomStart = 0.dp,
+            ),
+        containerColor = searchVoiceInputSheetContainerColor(),
+        scrimColor = Color.Black.copy(alpha = 0.38f),
+    ) {
+        SearchVoiceInputContent(
+            uiState = uiState,
+            copy = copy,
+            onAction = onAction,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(searchVoiceInputSheetContainerColor())
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+        )
     }
 }
 

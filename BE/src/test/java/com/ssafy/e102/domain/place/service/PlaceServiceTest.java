@@ -62,6 +62,8 @@ import com.ssafy.e102.global.geo.dto.GeoPointResponse;
 
 class PlaceServiceTest {
 
+	private static final String BUSAN_SEARCH_RECT = "128.75,34.85,129.35,35.40";
+
 	@Mock
 	private PlaceRepository placeRepository;
 
@@ -125,6 +127,7 @@ class PlaceServiceTest {
 			35.1686,
 			129.0576,
 			1000,
+			BUSAN_SEARCH_RECT,
 			1,
 			10,
 			"accuracy")))
@@ -191,6 +194,7 @@ class PlaceServiceTest {
 			35.1,
 			128.9,
 			null,
+			BUSAN_SEARCH_RECT,
 			1,
 			15,
 			"accuracy")))
@@ -216,6 +220,44 @@ class PlaceServiceTest {
 		assertThat(response.places())
 			.extracting(PlaceSearchItemResponse::address)
 			.allMatch(address -> address.startsWith("부산"));
+	}
+
+	@Test
+	@DisplayName("관련도순 장소 검색은 부산 bbox를 카카오 요청에 전달한다")
+	void searchPlacesConstrainsRelevanceSearchToBusanRect() {
+		KakaoPlaceDocument busanPlace = new KakaoPlaceDocument(
+			"busan",
+			"삼성전기 부산사업장",
+			"부산 강서구 녹산산업중로 333",
+			"회사",
+			"",
+			4072,
+			new GeoPointResponse(35.1002, 128.9002));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기",
+			35.1,
+			128.9,
+			null,
+			BUSAN_SEARCH_RECT,
+			1,
+			15,
+			"accuracy")))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(busanPlace), 1, true));
+		when(placeRepository.findAllByProviderPlaceIdIn(List.of("busan")))
+			.thenReturn(List.of());
+
+		PlaceSearchResponse response = placeService.searchPlaces(
+			"삼성전기",
+			"35.1",
+			"128.9",
+			null,
+			null,
+			"relevance",
+			"15");
+
+		assertThat(response.places())
+			.extracting(PlaceSearchItemResponse::name)
+			.containsExactly("삼성전기 부산사업장");
 	}
 
 	@Test
@@ -327,6 +369,7 @@ class PlaceServiceTest {
 			null,
 			null,
 			null,
+			BUSAN_SEARCH_RECT,
 			1,
 			10,
 			"accuracy")))
@@ -346,6 +389,7 @@ class PlaceServiceTest {
 			null,
 			null,
 			null,
+			BUSAN_SEARCH_RECT,
 			2,
 			10,
 			"accuracy")))
@@ -1117,6 +1161,7 @@ class PlaceServiceTest {
 			null,
 			null,
 			null,
+			BUSAN_SEARCH_RECT,
 			1,
 			10,
 			"accuracy")))

@@ -80,6 +80,51 @@ class KakaoLocalClientTest {
 	}
 
 	@Test
+	@DisplayName("카카오 키워드 검색 API는 rect 제한 검색 파라미터를 전달한다")
+	void searchKeywordCallsKakaoKeywordSearchWithRect() {
+		server.expect(requestTo("https://dapi.kakao.com/v2/local/search/keyword.json"
+			+ "?query=%EC%82%BC%EC%84%B1%EC%A0%84%EA%B8%B0&page=1&size=15&rect=128.75,34.85,129.35,35.40&sort=accuracy"))
+			.andExpect(method(HttpMethod.GET))
+			.andExpect(header(HttpHeaders.AUTHORIZATION, "KakaoAK test-rest-api-key"))
+			.andRespond(withSuccess("""
+				{
+					"meta": {
+						"pageable_count": 1,
+						"is_end": true
+					},
+					"documents": [
+						{
+							"id": "1",
+							"place_name": "삼성전기 부산사업장",
+							"road_address_name": "부산 강서구 녹산산업중로 333",
+							"address_name": "부산 강서구 송정동 1600",
+							"category_name": "회사",
+							"phone": "",
+							"x": "128.9",
+							"y": "35.1",
+							"distance": ""
+						}
+					]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		KakaoPlaceSearchResult result = client.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기",
+			null,
+			null,
+			null,
+			"128.75,34.85,129.35,35.40",
+			1,
+			15,
+			"accuracy"));
+
+		assertThat(result.documents())
+			.extracting(KakaoPlaceDocument::placeName)
+			.containsExactly("삼성전기 부산사업장");
+		server.verify();
+	}
+
+	@Test
 	@DisplayName("카카오 좌표 주소 변환 API를 경도 x, 위도 y로 호출하고 도로명 주소를 우선 반환한다")
 	void reverseGeocodeCallsKakaoCoordToAddress() {
 		server.expect(requestTo("https://dapi.kakao.com/v2/local/geo/coord2address.json"

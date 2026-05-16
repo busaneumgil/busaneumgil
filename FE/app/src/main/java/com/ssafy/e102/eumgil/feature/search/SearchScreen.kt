@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -641,6 +642,7 @@ internal fun SearchVoiceInputBottomSheet(
             ),
         containerColor = searchVoiceInputSheetContainerColor(),
         scrimColor = Color.Black.copy(alpha = 0.38f),
+        windowInsets = SearchVoiceInputBottomSheetWindowInsets,
     ) {
         SearchVoiceInputContent(
             uiState = uiState,
@@ -650,6 +652,7 @@ internal fun SearchVoiceInputBottomSheet(
                 Modifier
                     .fillMaxWidth()
                     .background(searchVoiceInputSheetContainerColor())
+                    .navigationBarsPadding()
                     .padding(horizontal = 24.dp, vertical = 12.dp),
         )
     }
@@ -1316,6 +1319,8 @@ private val SearchResultPlaceIconSize: Dp = 32.dp
 private val SearchStateIllustrationMinHeight: Dp = 360.dp
 private val SearchStateIllustrationSize: Dp = 128.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
+
+private val SearchVoiceInputBottomSheetWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 private val SearchStateTitleLineHeight = 34.sp
 private val SearchEmptyResultTitleLineHeight = 40.sp
 

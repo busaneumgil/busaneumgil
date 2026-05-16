@@ -98,6 +98,7 @@ fun FacilityDetailBottomSheetShell(
     ) {
         val detailScrollState = rememberScrollState()
         val sheetMaxHeight = maxHeight * 0.9f
+        val detailContentMaxHeight = maxHeight * FacilityDetailContentMaxHeightFraction
         val maxSheetOffsetPx = sheetHeightPx.toFloat().coerceAtLeast(0f)
         val collapseThresholdPx = (sheetHeightPx * 0.25f).coerceAtLeast(collapseThresholdMinPx)
         val animatedSheetOffsetPx by animateFloatAsState(
@@ -229,7 +230,7 @@ fun FacilityDetailBottomSheetShell(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            if (!isCollapsed) {
+                            if (!isCollapsed && state.address.isNotBlank()) {
                                 Text(
                                     text = state.address,
                                     style = MaterialTheme.typography.bodyMedium,
@@ -237,6 +238,8 @@ fun FacilityDetailBottomSheetShell(
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                 )
+                            }
+                            if (!isCollapsed) {
                                 val phoneNumber = state.phoneNumber?.takeIf { it.isNotBlank() }
                                 if (phoneNumber != null && onPhoneClick != null) {
                                     val phoneActionDescription =
@@ -297,7 +300,7 @@ fun FacilityDetailBottomSheetShell(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .weight(1f, fill = true)
+                                    .heightIn(max = detailContentMaxHeight)
                                     .verticalScroll(detailScrollState),
                             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                             content = detailContent,
@@ -319,3 +322,4 @@ fun FacilityDetailBottomSheetShell(
 }
 
 private val FacilityDetailCollapsedMinHeight = 188.dp
+private const val FacilityDetailContentMaxHeightFraction = 0.32f

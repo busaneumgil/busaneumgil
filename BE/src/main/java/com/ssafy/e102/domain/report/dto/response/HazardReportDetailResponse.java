@@ -18,16 +18,14 @@ public record HazardReportDetailResponse(
 
 	public static HazardReportDetailResponse of(
 		HazardReport hazardReport,
-		GeoPointConverter geoPointConverter) {
+		GeoPointConverter geoPointConverter,
+		List<String> imageUrls) {
 		return new HazardReportDetailResponse(
 			hazardReport.getReportId(),
 			hazardReport.getReportType(),
 			hazardReport.getDescription(),
 			geoPointConverter.toResponse(hazardReport.getReportPoint()),
 			hazardReport.getCreatedAt(),
-			hazardReport.getImages()
-				.stream()
-				.map(image -> image.getImageUrl())
-				.toList());
+			imageUrls);
 	}
 }

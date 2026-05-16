@@ -38,6 +38,8 @@ import com.ssafy.e102.eumgil.data.repository.DefaultRouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultFacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultPlacesRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultReportRepository
+import com.ssafy.e102.eumgil.data.repository.HazardReportImageUploader
+import com.ssafy.e102.eumgil.data.repository.NoOpHazardReportImageUploader
 import com.ssafy.e102.eumgil.data.repository.DefaultRouteRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
@@ -249,12 +251,19 @@ object RepositoryModule {
         reportOutboxDao: ReportOutboxDao,
         hazardReportsRemoteDataSource: HazardReportsRemoteDataSource? = null,
         accessTokenProvider: suspend () -> String? = { null },
+        imageUploader: HazardReportImageUploader = NoOpHazardReportImageUploader,
+        // Task 5.9 — 401 + A4010 자동 재발급/재시도용 인프라. 둘 다 주입되면 Repository가 runner를 사용한다.
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): ReportRepository =
         DefaultReportRepository(
             reportDraftDao = reportDraftDao,
             reportOutboxDao = reportOutboxDao,
             hazardReportsRemoteDataSource = hazardReportsRemoteDataSource,
             accessTokenProvider = accessTokenProvider,
+            imageUploader = imageUploader,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 
     fun provideVoiceAnalyzeRepository(

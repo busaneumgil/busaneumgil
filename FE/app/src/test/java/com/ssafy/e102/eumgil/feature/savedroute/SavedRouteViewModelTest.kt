@@ -508,7 +508,7 @@ class SavedRouteViewModelTest {
             viewModel.onAction(SavedRouteUiAction.EditClicked)
             viewModel.onAction(SavedRouteUiAction.PlaceDeleteClicked(placeId = "bookmark-place-1"))
             viewModel.onAction(SavedRouteUiAction.PlaceDeleteClicked(placeId = "bookmark-place-2"))
-            viewModel.onAction(SavedRouteUiAction.EditDoneClicked)
+            viewModel.onAction(SavedRouteUiAction.DeleteSelectedClicked)
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.isEditMode)
@@ -525,7 +525,7 @@ class SavedRouteViewModelTest {
         }
 
     @Test
-    fun `edit mode defers place bookmark deletion until done`() =
+    fun `edit mode defers place bookmark deletion until selected delete`() =
         runTest {
             val bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark()))
             val viewModel =
@@ -546,7 +546,7 @@ class SavedRouteViewModelTest {
             assertEquals(1, viewModel.uiState.value.placeContent.places.size)
             assertEquals(1, bookmarkRepository.bookmarks.value.size)
 
-            viewModel.onAction(SavedRouteUiAction.EditDoneClicked)
+            viewModel.onAction(SavedRouteUiAction.DeleteSelectedClicked)
             advanceUntilIdle()
 
             assertFalse(viewModel.uiState.value.isEditMode)
@@ -556,7 +556,7 @@ class SavedRouteViewModelTest {
         }
 
     @Test
-    fun `edit mode defers route bookmark deletion until done`() =
+    fun `edit mode defers route bookmark deletion until selected delete`() =
         runTest {
             val routeBookmarkRepository =
                 FakeRouteBookmarkRepository(
@@ -580,12 +580,36 @@ class SavedRouteViewModelTest {
             assertEquals(1, viewModel.uiState.value.routeContent.routes.size)
             assertEquals(1, routeBookmarkRepository.routeBookmarks.value.size)
 
-            viewModel.onAction(SavedRouteUiAction.EditDoneClicked)
+            viewModel.onAction(SavedRouteUiAction.DeleteSelectedClicked)
             advanceUntilIdle()
 
             assertFalse(viewModel.uiState.value.isEditMode)
             assertEquals(SavedBookmarkContentState.EMPTY, viewModel.uiState.value.routeContent.screenState)
             assertEquals(emptyList<SavedRouteBookmarkUiModel>(), viewModel.uiState.value.routeContent.routes)
+        }
+
+    @Test
+    fun `edit done exits edit mode without deleting selected bookmarks`() =
+        runTest {
+            val bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark()))
+            val viewModel =
+                SavedRouteViewModel(
+                    bookmarkRepository = bookmarkRepository,
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(SavedRouteUiAction.EditClicked)
+            viewModel.onAction(SavedRouteUiAction.PlaceDeleteClicked(placeId = "bookmark-place-1"))
+            viewModel.onAction(SavedRouteUiAction.EditDoneClicked)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isEditMode)
+            assertTrue(viewModel.uiState.value.pendingPlaceRemovalIds.isEmpty())
+            assertEquals(1, bookmarkRepository.bookmarks.value.size)
+            assertEquals(SavedBookmarkContentState.CONTENT, viewModel.uiState.value.placeContent.screenState)
         }
 
     @Test

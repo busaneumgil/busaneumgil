@@ -166,6 +166,22 @@ object EumgilDatabaseMigrations {
             }
         }
 
+    /**
+     * v10 — Task 5.5: 제보 outbox에 사진 업로드 흐름을 영속화.
+     *
+     * `photosJson` — 사용자가 첨부한 사진 local URI/메타데이터 목록(JSON). 제출 시점에 이 목록으로
+     * presigned URL을 요청하고 S3에 업로드한다.
+     * `imageObjectKeysJson` — 업로드 성공한 사진들의 S3 object key 목록(JSON). 부분 성공해도
+     * 성공한 key는 보존되어 재시도 시 중복 업로드를 피할 수 있다.
+     */
+    val MIGRATION_9_10: Migration =
+        object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE reportOutbox ADD COLUMN photosJson TEXT")
+                database.execSQL("ALTER TABLE reportOutbox ADD COLUMN imageObjectKeysJson TEXT")
+            }
+        }
+
     val all: Array<Migration> =
         arrayOf(
             MIGRATION_1_2,
@@ -176,5 +192,6 @@ object EumgilDatabaseMigrations {
             MIGRATION_6_7,
             MIGRATION_7_8,
             MIGRATION_8_9,
+            MIGRATION_9_10,
         )
 }

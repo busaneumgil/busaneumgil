@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
-import type { FacilityFeature, FacilityPayload } from "../types";
+import type { AccessibilityFeatureType, AdminPlaceDetailResponse, FacilityFeature, FacilityPayload, PlaceCategory } from "../types";
 import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
-import { facilityCategoryColor, facilityCategoryLabel } from "./facilityStyle";
+import { facilityCategoryColor, facilityCategoryLabel, facilityCategoryOrder } from "./facilityStyle";
 import { roadviewUnavailableMessage } from "./roadviewMode";
 import type { RoadviewDockState } from "./SegmentMap";
 
@@ -10,7 +10,10 @@ interface FacilityMapProps {
   loading: boolean;
   error?: Error | null;
   selectedFeature: FacilityFeature | null;
+  selectedDetail?: AdminPlaceDetailResponse;
+  selectedCategories?: readonly PlaceCategory[];
   onSelectFeature: (feature: FacilityFeature) => void;
+  onClearSelection?: () => void;
   roadviewContainerRef: RefObject<HTMLDivElement | null>;
   onRoadviewChange: (state: RoadviewDockState) => void;
   locationPickEnabled?: boolean;
@@ -25,7 +28,10 @@ export function FacilityMap({
   loading,
   error,
   selectedFeature,
+  selectedDetail,
+  selectedCategories = facilityCategoryOrder,
   onSelectFeature,
+  onClearSelection,
   roadviewContainerRef,
   onRoadviewChange,
   locationPickEnabled = false,
@@ -44,6 +50,7 @@ export function FacilityMap({
   const onSelectFeatureRef = useRef(onSelectFeature);
   const locationPickEnabledRef = useRef(locationPickEnabled);
   const onPickLocationRef = useRef(onPickLocation);
+  const centeredPayloadKeyRef = useRef<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -110,20 +117,12 @@ export function FacilityMap({
       });
       if (overlay) overlaysRef.current.push(overlay);
     });
+    if (selectedFeature && selectedCategories.includes(selectedFeature.properties.category)) {
+      drawSelectedFeature(selectedFeature);
+    }
 
-    const bbox = payload?.bbox;
-    if (bbox && window.kakao.maps.LatLngBounds && mapRef.current.setBounds) {
-      const bounds = new window.kakao.maps.LatLngBounds();
-      bounds.extend(new window.kakao.maps.LatLng(bbox[1], bbox[0]));
-      bounds.extend(new window.kakao.maps.LatLng(bbox[3], bbox[2]));
-      mapRef.current.setBounds(bounds);
-      return;
-    }
-    const firstCoord = features[0]?.geometry.coordinates;
-    if (firstCoord) {
-      mapRef.current.setCenter(new window.kakao.maps.LatLng(firstCoord[1], firstCoord[0]));
-    }
-  }, [mapReady, payload]);
+    centerMapForPayloadOnce(features);
+  }, [mapReady, payload, selectedCategories, selectedFeature]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -134,6 +133,47 @@ export function FacilityMap({
     }
     drawSelectedFeature(selectedFeature);
   }, [mapReady, selectedFeature]);
+
+  useEffect(() => {
+    if (!mapReady || !containerRef.current) return;
+
+    let frame = 0;
+    const relayout = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        relayoutMap();
+      });
+    };
+    const timers = [0, 120, 360, 800].map((delay) => window.setTimeout(relayout, delay));
+
+    const observer = new ResizeObserver(relayout);
+    observer.observe(containerRef.current);
+    window.addEventListener("resize", relayout);
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      observer.disconnect();
+      window.removeEventListener("resize", relayout);
+      window.cancelAnimationFrame(frame);
+    };
+  }, [mapReady]);
+
+  function relayoutMap() {
+    const map = mapRef.current;
+    if (!map) return;
+    const center = map.getCenter?.();
+    map.relayout?.();
+    if (center) {
+      map.setCenter(center);
+    }
+  }
+
+  function queueMapRelayout() {
+    window.requestAnimationFrame(() => {
+      relayoutMap();
+      window.setTimeout(relayoutMap, 140);
+    });
+  }
 
   function hideTooltip() {
     tooltipRef.current?.setMap(null);
@@ -173,6 +213,29 @@ export function FacilityMap({
       fillOpacity: 0.25,
       zIndex: 20,
     });
+  }
+
+  function centerMapForPayloadOnce(features: FacilityFeature[]) {
+    if (!window.kakao?.maps || !mapRef.current) return;
+    const bbox = payload?.bbox;
+    const firstCoord = features[0]?.geometry.coordinates;
+    const nextKey = bbox ? bbox.join(",") : firstCoord?.join(",");
+    if (!nextKey || centeredPayloadKeyRef.current === nextKey) {
+      return;
+    }
+    centeredPayloadKeyRef.current = nextKey;
+    if (bbox && window.kakao.maps.LatLngBounds && mapRef.current.setBounds) {
+      const bounds = new window.kakao.maps.LatLngBounds();
+      bounds.extend(new window.kakao.maps.LatLng(bbox[1], bbox[0]));
+      bounds.extend(new window.kakao.maps.LatLng(bbox[3], bbox[2]));
+      mapRef.current.setBounds(bounds);
+      queueMapRelayout();
+      return;
+    }
+    if (firstCoord) {
+      mapRef.current.setCenter(new window.kakao.maps.LatLng(firstCoord[1], firstCoord[0]));
+      queueMapRelayout();
+    }
   }
 
   function closeRoadviewPanel() {
@@ -251,15 +314,25 @@ export function FacilityMap({
   }
 
   const visibleCounts = payload?.summary?.visibleCategoryCounts ?? {};
+  const visibleCategories = facilityCategoryOrder.filter((category) => (visibleCounts[category] ?? 0) > 0);
+  const legendCategories = selectedCategories.length > 0 ? selectedCategories : visibleCategories;
 
   return (
     <section className="map-shell">
       <div ref={containerRef} className="map-canvas" />
-      <div className="map-toolbar attribute-legend">
-        {["PUBLIC_OFFICE", "WELFARE", "HEALTHCARE", "TOURIST_SPOT", "FOOD_CAFE", "ACCOMMODATION", "ETC"].map((category) => (
-          <LegendItem key={category} color={facilityCategoryColor(category)} label={`${facilityCategoryLabel(category)} ${visibleCounts[category] ?? 0}`} />
+      <div className="map-toolbar attribute-legend facility-map-legend">
+        <strong>선택 카테고리 {selectedCategories.length}개</strong>
+        {legendCategories.map((category) => (
+          <LegendItem key={category} color={facilityCategoryColor(category)} label={`${facilityCategoryLabel(category)} ${visibleCounts[category] ?? 0}개`} />
         ))}
       </div>
+      {selectedFeature && (
+        <SelectedFacilityMapCard
+          feature={selectedFeature}
+          detail={selectedDetail}
+          onClose={onClearSelection}
+        />
+      )}
       <div className="map-status">
         {loading
           ? "loading..."
@@ -267,9 +340,52 @@ export function FacilityMap({
             ? `편의시설 오류: ${error.message}`
             : mapError
               ? `지도 오류: ${mapError}`
-              : `${payload?.summary?.visibleFacilityCount ?? payload?.facilities.features.length ?? 0} facilities${selectedFeature ? ` · selected ${selectedFeature.properties.placeId}` : ""}`}
+              : `표시 시설 ${payload?.summary?.visibleFacilityCount ?? payload?.facilities.features.length ?? 0}개${selectedFeature ? ` · 선택 ${selectedFeature.properties.placeId}` : ""}`}
       </div>
     </section>
+  );
+}
+
+function SelectedFacilityMapCard({
+  feature,
+  detail,
+  onClose,
+}: {
+  feature: FacilityFeature;
+  detail?: AdminPlaceDetailResponse;
+  onClose?: () => void;
+}) {
+  const availableFeatures = detail?.accessibilityFeatures
+    .filter((item) => item.isAvailable)
+    .slice(0, 4) ?? [];
+
+  return (
+    <article className="facility-selected-map-card">
+      <div className="facility-selected-map-card__thumb" aria-hidden="true">
+        <span>{facilityCategoryLabel(feature.properties.category).slice(0, 1)}</span>
+      </div>
+      <div className="facility-selected-map-card__content">
+        <div className="facility-selected-map-card__title-row">
+          <strong>{detail?.name ?? (feature.properties.name || `place ${feature.properties.placeId}`)}</strong>
+          <span style={{ color: facilityCategoryColor(detail?.category ?? feature.properties.category) }}>
+            {facilityCategoryLabel(detail?.category ?? feature.properties.category)}
+          </span>
+        </div>
+        <p>{detail?.address ?? (feature.properties.address || "-")}</p>
+        <div className="facility-selected-feature-row">
+          {availableFeatures.length > 0
+            ? availableFeatures.map((item) => (
+              <span key={item.featureType}>{facilityMapFeatureLabel(item.featureType)}</span>
+            ))
+            : <span>상세정보 수정 패널에서 접근성 정보를 확인하세요</span>}
+        </div>
+      </div>
+      {onClose && (
+        <button className="facility-selected-map-card__close" type="button" aria-label="선택 시설 닫기" onClick={onClose}>
+          x
+        </button>
+      )}
+    </article>
   );
 }
 
@@ -304,13 +420,42 @@ function createFacilityOverlay(
   return overlay;
 }
 
-function LegendItem({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="legend-item">
+function LegendItem({ color, label, active = true, onClick }: { color: string; label: string; active?: boolean; onClick?: () => void }) {
+  const content = (
+    <>
       <span style={{ background: color }} />
       {label}
-    </span>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button type="button" className={`legend-item legend-toggle ${active ? "active" : ""}`} onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return <span className={`legend-item ${active ? "active" : ""}`}>{content}</span>;
+}
+
+function facilityMapFeatureLabel(featureType: AccessibilityFeatureType) {
+  switch (featureType) {
+    case "accessibleEntrance":
+      return "단차 없는 출입";
+    case "elevator":
+      return "엘리베이터";
+    case "accessibleToilet":
+      return "장애인 화장실";
+    case "accessibleParking":
+      return "장애인 주차";
+    case "chargingStation":
+      return "충전 가능";
+    case "accessibleRoom":
+      return "객실 이용";
+    case "guidanceFacility":
+      return "안내시설";
+  }
 }
 
 function escapeHtml(value: string): string {

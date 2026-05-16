@@ -20,5 +20,5 @@ public record CreateHazardReportRequest(
 	GeoPointRequest reportPoint,
 
 	@Size(max = 5, message = "제보 이미지는 최대 5장까지 등록할 수 있습니다.")
-	List<@NotBlank(message = "제보 이미지 URL은 비어 있을 수 없습니다.") String> imageUrls) {
+	List<@NotBlank(message = "제보 이미지 object key는 비어 있을 수 없습니다.") String> imageObjectKeys) {
 }

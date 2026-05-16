@@ -210,6 +210,8 @@ private fun RouteStep.toLowVisionBriefingSegment(
         anchorCoordinate = anchorCoordinate,
         distanceMeters = distanceMeters,
         guidanceMessage = instruction,
+        guidanceDirection = guidanceDirection,
+        guidanceFeatures = guidanceFeatures,
         sourceLegSequence = sourceLegSequence,
         sourceStepSequence = this.sequence,
     )
@@ -247,10 +249,20 @@ private fun NavigationGuidanceAction.toBriefingStepIcon(): LowVisionRouteBriefin
 
         NavigationGuidanceAction.BUS,
         NavigationGuidanceAction.SUBWAY,
+        NavigationGuidanceAction.ALIGHT,
         NavigationGuidanceAction.CROSSWALK,
             -> LowVisionRouteBriefingStepIcon.TRANSIT
 
-        NavigationGuidanceAction.STRAIGHT -> LowVisionRouteBriefingStepIcon.STRAIGHT
+        NavigationGuidanceAction.STRAIGHT,
+        NavigationGuidanceAction.START,
+        NavigationGuidanceAction.ARRIVAL,
+        NavigationGuidanceAction.TACTILE_GUIDE,
+        NavigationGuidanceAction.ELEVATOR,
+        NavigationGuidanceAction.CONSTRUCTION,
+        NavigationGuidanceAction.CURB_GAP,
+        NavigationGuidanceAction.STAIRS,
+        NavigationGuidanceAction.FALLBACK,
+            -> LowVisionRouteBriefingStepIcon.STRAIGHT
     }
 
 private fun Int.toBriefingDistanceLabel(): String =

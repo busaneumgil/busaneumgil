@@ -362,12 +362,21 @@ private fun String.containsKnownMetricUnit(): Boolean =
 
 private fun NavigationGuidanceAction.toLowVisionNavigationActionPhrase(): String =
     when (this) {
+        NavigationGuidanceAction.ARRIVAL -> "\uBAA9\uC801\uC9C0\uC5D0 \uB3C4\uCC29\uD588\uC2B5\uB2C8\uB2E4"
+        NavigationGuidanceAction.START -> "\uCD9C\uBC1C\uC9C0\uC785\uB2C8\uB2E4"
+        NavigationGuidanceAction.ALIGHT -> "\uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4"
         NavigationGuidanceAction.BUS -> "\uBC84\uC2A4\uB97C \uC774\uC6A9\uD558\uC138\uC694"
         NavigationGuidanceAction.SUBWAY -> "\uC9C0\uD558\uCCA0\uC744 \uC774\uC6A9\uD558\uC138\uC694"
         NavigationGuidanceAction.STRAIGHT -> "\uC9C1\uC9C4\uD558\uC138\uC694"
         NavigationGuidanceAction.TURN_LEFT -> "\uC88C\uD68C\uC804\uD558\uC138\uC694"
         NavigationGuidanceAction.TURN_RIGHT -> "\uC6B0\uD68C\uC804\uD558\uC138\uC694"
         NavigationGuidanceAction.CROSSWALK -> "\uD6A1\uB2E8\uBCF4\uB3C4\uB97C \uAC74\uB108\uC138\uC694"
+        NavigationGuidanceAction.TACTILE_GUIDE -> "\uC810\uC790\uBE14\uB85D\uC744 \uB530\uB77C \uC774\uB3D9\uD558\uC138\uC694"
+        NavigationGuidanceAction.ELEVATOR -> "\uC5D8\uB9AC\uBCA0\uC774\uD130\uB97C \uC774\uC6A9\uD558\uC138\uC694"
+        NavigationGuidanceAction.CONSTRUCTION -> "\uACF5\uC0AC \uAD6C\uAC04\uC744 \uC8FC\uC758\uD558\uC138\uC694"
+        NavigationGuidanceAction.CURB_GAP -> "\uB2E8\uCC28\uB97C \uC8FC\uC758\uD558\uC138\uC694"
+        NavigationGuidanceAction.STAIRS -> "\uACC4\uB2E8\uC744 \uC8FC\uC758\uD558\uC138\uC694"
+        NavigationGuidanceAction.FALLBACK -> "\uC138\uBD80 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uC138\uC694"
     }
 
 private fun Double.toKilometerText(): String {

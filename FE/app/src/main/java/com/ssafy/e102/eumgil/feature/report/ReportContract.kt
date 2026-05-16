@@ -20,6 +20,9 @@ data class ReportUiState(
     val outboxState: ReportOutboxState = ReportOutboxState.NotSaved,
     val submitState: ReportSubmitState = ReportSubmitState.Idle,
     val submittedAtMillis: Long? = null,
+    // Task 4.1 — 단말 네트워크 연결성. 오프라인이면 서버 제출 자체를 막아 무의미한 retry를 피한다.
+    // 기본값 true: 정보가 없을 때는 사용자가 시도할 수 있게 두는 게 더 자연스럽다.
+    val isOnline: Boolean = true,
 ) {
     val isDraftSavable: Boolean
         get() = reportType.value != null ||
@@ -38,7 +41,9 @@ data class ReportUiState(
             reportType.error == null &&
             location.error == null &&
             photo.error == null &&
-            description.error == null
+            description.error == null &&
+            // Task 4.1 — 오프라인일 때는 사용자가 버튼을 눌러도 결국 실패하므로 미리 disabled 처리.
+            isOnline
 }
 
 enum class ReportStep {
@@ -280,11 +285,6 @@ sealed interface ReportUiEvent {
 
     data class AnnounceForAccessibility(
         val message: String,
-    ) : ReportUiEvent
-
-    data class NavigateToReportComplete(
-        val reportId: Long? = null,
-        val outboxId: String? = null,
     ) : ReportUiEvent
 
     data object NavigateToReportHistory : ReportUiEvent

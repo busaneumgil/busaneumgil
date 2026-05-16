@@ -173,6 +173,27 @@ class LowVisionNavigationRouteTest {
         }
 
     @Test
+    fun `low vision navigation request returns null when route select search expired`() =
+        runBlocking {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            destinationSelectionRepository.updateSelectedDestination(
+                PlaceDestination(
+                    placeId = "real-place-id",
+                    name = "Real Place",
+                    address = "Busan",
+                    latitude = 35.2,
+                    longitude = 129.2,
+                ),
+            )
+            val routeRepository = ExpiredSelectRouteRepository()
+
+            val request = routeRepository.buildLowVisionNavigationRequest(destinationSelectionRepository)
+
+            assertNull(request)
+            assertEquals("fresh-search", routeRepository.lastSearchId)
+        }
+
+    @Test
     fun `low vision navigation still returns route request when search id is missing`() =
         runBlocking {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -527,6 +548,54 @@ private class SelectFailureFallbackRouteRepository : RouteRepository {
     ): RouteSessionData {
         lastSearchId = searchId
         throw IllegalStateException("select route failed")
+    }
+
+    override suspend fun refreshTransit(
+        routeId: String,
+        legSequence: Int,
+    ): RouteTransitRefreshData = throw IllegalStateException("refresh failed")
+
+    override suspend fun reroute(
+        routeId: String,
+        currentPoint: com.ssafy.e102.eumgil.core.model.GeoCoordinate,
+    ): RouteRerouteData = throw IllegalStateException("reroute failed")
+
+    override suspend fun endRoute(routeId: String): RouteSessionData =
+        throw IllegalStateException("end route failed")
+
+    override suspend fun rateRoute(
+        sessionId: String,
+        score: Int,
+    ): RouteRatingData = throw IllegalStateException("rating failed")
+}
+
+private class ExpiredSelectRouteRepository : RouteRepository {
+    var lastSearchId: String? = null
+
+    override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("cached route search should not be used for low vision navigation start")
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        lowVisionRouteSearchData(
+            query = query,
+            searchId = "fresh-search",
+            routeId = "fresh-route",
+            distanceMeters = 120.0,
+        )
+
+    override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData =
+        error("transit route search was not expected")
+
+    override suspend fun selectRoute(
+        routeId: String,
+        searchId: String,
+    ): RouteSessionData {
+        lastSearchId = searchId
+        throw RouteApiException(
+            httpStatusCode = 404,
+            status = "RT4041",
+            message = "route search expired",
+        )
     }
 
     override suspend fun refreshTransit(

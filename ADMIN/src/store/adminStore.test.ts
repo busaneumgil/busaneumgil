@@ -11,14 +11,38 @@ describe("adminStore role model", () => {
     expect(useAdminStore.getState().role).toBe("ADMIN");
   });
 
-  it("starts from the real editing workspace instead of a placeholder dashboard", () => {
-    expect(useAdminStore.getState().page).toBe("network");
+  it("starts from the operations dashboard", () => {
+    expect(useAdminStore.getState().page).toBe("home");
   });
 
   it("models second MVP workspaces as task tabs", () => {
-    const pages: AdminPage[] = ["network", "facilities", "hazards", "users", "logs"];
+    const pages: AdminPage[] = [
+      "home",
+      "routeStats",
+      "bottleneckMonitoring",
+      "movementPatternAnalysis",
+      "routeTuning",
+      "network",
+      "users",
+      "facilities",
+      "hazards",
+      "notices",
+      "logs",
+    ];
 
-    expect(pages).toEqual(["network", "facilities", "hazards", "users", "logs"]);
+    expect(pages).toEqual([
+      "home",
+      "routeStats",
+      "bottleneckMonitoring",
+      "movementPatternAnalysis",
+      "routeTuning",
+      "network",
+      "users",
+      "facilities",
+      "hazards",
+      "notices",
+      "logs",
+    ]);
   });
 
   it("persists draft edits locally until they are cleared or applied", () => {

@@ -69,6 +69,8 @@ fun ReportRoute(
                 currentLocationManager = appContainer.currentLocationManager,
                 locationPermissionManager = appContainer.locationPermissionManager,
                 addressResolver = addressResolver,
+                // Task 4.1 — 오프라인 시 제출 버튼을 자동 비활성화하기 위해 네트워크 모니터 주입.
+                networkMonitor = appContainer.networkMonitor,
             )
         }
     val viewModel =
@@ -152,8 +154,6 @@ fun ReportRoute(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                     )
                 }
-                is ReportUiEvent.NavigateToReportComplete -> Unit
-                // NavigateToReportComplete: 현재 화면 내 step 전환과 중복이라 무시 (후속 정리 대상)
             }
         }
     }

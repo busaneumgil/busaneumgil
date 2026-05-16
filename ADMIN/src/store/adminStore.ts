@@ -52,7 +52,7 @@ const initialAssignmentId = areaAssignmentId(defaultGu, defaultDong);
 
 export const useAdminStore = create<AdminState>((set) => ({
   role: "ADMIN",
-  page: "network",
+  page: "home",
   selectedAssignmentId: initialAssignmentId,
   selectedGu: defaultGu,
   selectedDong: defaultDong,

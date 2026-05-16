@@ -118,25 +118,29 @@ class MyPageScreenTest {
 
     @Test
     fun `my page screen renders duribal call confirmation dialog with yes and no actions`() {
-        val source =
+        val myPageSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+        val dialogSource =
+            File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/component/dialog/EumDuribalCallConfirmDialog.kt")
                 .readText()
 
         assertTrue(
             "MyPageScreen should render the duribal confirmation dialog when the route marks it visible.",
-            source.contains("if (isDuribalConfirmDialogVisible)"),
+            myPageSource.contains("if (isDuribalConfirmDialogVisible)"),
         )
         assertTrue(
-            "The duribal confirmation dialog should use the dedicated alert dialog composable.",
-            source.contains("private fun DuribalCallConfirmDialog"),
+            "MyPageScreen should reuse the shared duribal confirmation dialog component.",
+            myPageSource.contains("EumDuribalCallConfirmDialog(") &&
+                myPageSource.contains("EumDuribalCallConfirmDismissStyle.SecondaryButton"),
         )
         assertTrue(
-            "The dialog should expose a positive confirmation action.",
-            source.contains("my_page_duribal_call_dialog_confirm"),
+            "The shared dialog should expose a positive confirmation action.",
+            dialogSource.contains("my_page_duribal_call_dialog_confirm"),
         )
         assertTrue(
-            "The dialog should expose a negative dismiss action.",
-            source.contains("my_page_duribal_call_dialog_dismiss"),
+            "The shared dialog should expose a negative dismiss action.",
+            dialogSource.contains("my_page_duribal_call_dialog_dismiss"),
         )
     }
 }

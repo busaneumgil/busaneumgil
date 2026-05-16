@@ -129,9 +129,20 @@ data class RouteSelectedRouteUiState(
     val detailAccessibilityChips: List<RouteDetailChipUiState> = emptyList(),
     val detailHighlights: List<RouteDetailHighlightUiState> = emptyList(),
     val detailSteps: List<RouteDetailStepUiState> = emptyList(),
+    val detailPolylines: List<RouteDetailPolylineUiState> = emptyList(),
     val detailFallbackMessage: String? = null,
     val lowFloorReservations: List<LowFloorBusReservation> = emptyList(),
 )
+
+data class RouteDetailPolylineUiState(
+    val points: List<GeoCoordinate>,
+    val kind: RouteDetailPolylineKind = RouteDetailPolylineKind.WALK,
+)
+
+enum class RouteDetailPolylineKind {
+    WALK,
+    TRANSIT,
+}
 
 data class RouteSummaryMetricUiState(
     val label: String,
@@ -234,6 +245,7 @@ enum class RouteDetailChipKind {
 
 enum class RouteDetailStepKind {
     START,
+    ALIGHT,
     BUS,
     SUBWAY,
     STRAIGHT,
@@ -257,6 +269,13 @@ enum class RouteOptionBadge {
     SIGNAL_CROSSWALK,
     CURB_GAP,
     UNSIGNALIZED_CROSSWALK,
+    LOW_SLOPE,
+    MIDDLE_SLOPE,
+    STAIR,
+    CROSSWALK,
+    ELEVATOR,
+    NARROW_SIDEWALK,
+    UNPAVED,
 }
 
 sealed interface RouteSettingUiAction {

@@ -47,12 +47,14 @@ import kotlin.math.sqrt
 @Composable
 internal fun MapViewportOverlayBackdrop(
     overlayState: MapViewportOverlayState,
+    zoomLevel: Int = ROUTE_DETAIL_OVERLAY_MIN_ZOOM_LEVEL,
     modifier: Modifier = Modifier,
     horizontalPadding: Dp = 24.dp,
     verticalPadding: Dp = 24.dp,
     contentDescription: String? = null,
     onPointClick: (String) -> Unit = {},
 ) {
+    val showDetailedRouteOverlay = shouldShowDetailedRouteOverlay(zoomLevel)
     val backgroundBrush =
         Brush.verticalGradient(
             colors =
@@ -83,7 +85,9 @@ internal fun MapViewportOverlayBackdrop(
                 secondary = MaterialTheme.colorScheme.secondary,
                 tertiary = Color(0xFFF9AB4D),
                 neutral = Color(0xFFD9D9D9),
-                navy = Color(0xFF304583),
+                navy = Color(0xFF005391),
+                navigationWalk = Color(0xFF0061FE),
+                transitWalk = Color(0xFF99B5D1),
                 error = MaterialTheme.colorScheme.error,
                 outline = MaterialTheme.colorScheme.outline,
             )
@@ -93,12 +97,15 @@ internal fun MapViewportOverlayBackdrop(
             overlayState.polylines.forEach { polyline ->
                 drawViewportPolyline(
                     overlay = polyline,
+                    showDetailedRouteOverlay = showDetailedRouteOverlay,
                     bounds = projectionBounds,
                     canvasSize = size,
                     palette = palette,
                 )
             }
-            overlayState.points.forEach { point ->
+            overlayState.points
+                .filter { point -> showDetailedRouteOverlay || !point.isDetailedRouteOverlayMarker() }
+                .forEach { point ->
                 drawViewportPointHalo(
                     overlay = point,
                     bounds = projectionBounds,
@@ -108,7 +115,9 @@ internal fun MapViewportOverlayBackdrop(
             }
         }
 
-        overlayState.points.forEach { point ->
+        overlayState.points
+            .filter { point -> showDetailedRouteOverlay || !point.isDetailedRouteOverlayMarker() }
+            .forEach { point ->
             val markerSpec = point.toViewportPointMarkerSpec() ?: return@forEach
             val projectedPoint = projectionBounds.project(point.coordinate)
 
@@ -160,6 +169,7 @@ private fun DrawScope.drawViewportGrid(outline: Color) {
 
 private fun DrawScope.drawViewportPolyline(
     overlay: MapViewportPolylineOverlay,
+    showDetailedRouteOverlay: Boolean,
     bounds: ViewportProjectionBounds,
     canvasSize: Size,
     palette: ViewportOverlayPalette,
@@ -263,7 +273,7 @@ private fun DrawScope.drawViewportPolyline(
             )
         }
     }
-    if (overlay.showDirectionArrows) {
+    if (showDetailedRouteOverlay && overlay.showDirectionArrows) {
         drawViewportPolylineDirectionArrows(
             overlay = overlay,
             bounds = bounds,
@@ -281,53 +291,60 @@ private fun DrawScope.drawViewportPolylineDirectionArrows(
         overlay.points.map { coordinate ->
             bounds.project(coordinate).toOffset(canvasSize)
         }
-    val insetPx = RouteDirectionArrowInsetDp.dp.toPx()
-    val intervalPx = RouteDirectionArrowIntervalDp.dp.toPx()
-    val minSegmentPx = RouteDirectionArrowMinSegmentDp.dp.toPx()
-    val arrowLengthPx = RouteDirectionArrowLengthDp.dp.toPx()
-    val arrowHalfWidthPx = RouteDirectionArrowHalfWidthDp.dp.toPx()
+    val intervalPx = ROUTE_DIRECTION_ARROW_TARGET_SPACING_DP.dp.toPx()
+    val edgePaddingPx = ROUTE_DIRECTION_ARROW_EDGE_PADDING_DP.dp.toPx()
+    val arrowLengthPx = ROUTE_DIRECTION_ARROW_LENGTH_DP.dp.toPx()
+    val arrowHalfWidthPx = ROUTE_DIRECTION_ARROW_HALF_WIDTH_DP.dp.toPx()
 
-    projectedPoints.zipWithNext().forEach { (start, end) ->
-        val deltaX = end.x - start.x
-        val deltaY = end.y - start.y
-        val segmentLength = sqrt((deltaX * deltaX) + (deltaY * deltaY))
-        if (segmentLength < minSegmentPx) return@forEach
-
+    sampleRouteDirectionArrowPlacements(
+        points = projectedPoints,
+        intervalDistance = intervalPx.toDouble(),
+        edgePaddingDistance = edgePaddingPx.toDouble(),
+        minimumPlacementCount = 1,
+        measureDistance = { start, end ->
+            val deltaX = end.x - start.x
+            val deltaY = end.y - start.y
+            sqrt((deltaX * deltaX) + (deltaY * deltaY)).toDouble()
+        },
+        interpolatePoint = { start, end, fraction ->
+            Offset(
+                x = start.x + ((end.x - start.x) * fraction.toFloat()),
+                y = start.y + ((end.y - start.y) * fraction.toFloat()),
+            )
+        },
+    ).forEach { placement ->
+        // The fallback surface keeps a fixed north-up projection, so the projected segment angle
+        // already matches the final on-screen arrow direction without an extra bearing correction.
+        val deltaX = placement.segmentEnd.x - placement.segmentStart.x
+        val deltaY = placement.segmentEnd.y - placement.segmentStart.y
         val angle = atan2(deltaY, deltaX)
         val unitX = cos(angle)
         val unitY = sin(angle)
         val normalX = -unitY
         val normalY = unitX
-        var distance = insetPx
-
-        while (distance < segmentLength - insetPx) {
-            val tip = Offset(
-                x = start.x + (unitX * distance),
-                y = start.y + (unitY * distance),
-            )
-            val base = Offset(
+        val tip = placement.point
+        val base =
+            Offset(
                 x = tip.x - (unitX * arrowLengthPx),
                 y = tip.y - (unitY * arrowLengthPx),
             )
-            val arrowPath =
-                Path().apply {
-                    moveTo(tip.x, tip.y)
-                    lineTo(
-                        base.x + (normalX * arrowHalfWidthPx),
-                        base.y + (normalY * arrowHalfWidthPx),
-                    )
-                    lineTo(
-                        base.x - (normalX * arrowHalfWidthPx),
-                        base.y - (normalY * arrowHalfWidthPx),
-                    )
-                    close()
-                }
-            drawPath(
-                path = arrowPath,
-                color = Color.White.copy(alpha = 0.92f),
-            )
-            distance += intervalPx
-        }
+        val arrowPath =
+            Path().apply {
+                moveTo(tip.x, tip.y)
+                lineTo(
+                    base.x + (normalX * arrowHalfWidthPx),
+                    base.y + (normalY * arrowHalfWidthPx),
+                )
+                lineTo(
+                    base.x - (normalX * arrowHalfWidthPx),
+                    base.y - (normalY * arrowHalfWidthPx),
+                )
+                close()
+            }
+        drawPath(
+            path = arrowPath,
+            color = Color.White.copy(alpha = 0.92f),
+        )
     }
 }
 
@@ -369,8 +386,8 @@ private fun DrawScope.drawViewportPointHalo(
 
         MapViewportPointKind.FOCUS_HALO ->
             drawCircle(
-                color = palette.primary.copy(alpha = 0.18f),
-                radius = 24.dp.toPx(),
+                color = FocusedGuidanceMarkerHaloColor,
+                radius = FocusedGuidanceMarkerHaloRadius.toPx(),
                 center = projectedPoint,
             )
 
@@ -386,6 +403,8 @@ private data class ViewportOverlayPalette(
     val tertiary: Color,
     val neutral: Color,
     val navy: Color,
+    val navigationWalk: Color,
+    val transitWalk: Color,
     val error: Color,
     val outline: Color,
 )
@@ -554,7 +573,7 @@ private fun ViewportPointMarker(
         tonalElevation = if (point.isSelected) 4.dp else 0.dp,
         shadowElevation = if (point.isSelected) 10.dp else 6.dp,
         border =
-            BorderStroke(if (point.isSelected) 2.dp else 1.dp, spec.borderColor),
+            BorderStroke(if (point.isSelected) 2.dp else spec.borderWidth, spec.borderColor),
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (point.kind == MapViewportPointKind.CAMERA_FOCUS) {
@@ -593,6 +612,8 @@ private fun MapViewportOverlayTone.toColor(palette: ViewportOverlayPalette): Col
         MapViewportOverlayTone.TERTIARY -> palette.tertiary
         MapViewportOverlayTone.NEUTRAL -> palette.neutral
         MapViewportOverlayTone.NAVY -> palette.navy
+        MapViewportOverlayTone.NAVIGATION_WALK -> palette.navigationWalk
+        MapViewportOverlayTone.TRANSIT_WALK -> palette.transitWalk
         MapViewportOverlayTone.ERROR -> palette.error
     }
 
@@ -602,7 +623,9 @@ private fun MapViewportOverlayTone.toCasingColor(palette: ViewportOverlayPalette
         MapViewportOverlayTone.SECONDARY -> palette.secondary.copy(red = 0.04f, green = 0.47f, blue = 0.36f)
         MapViewportOverlayTone.TERTIARY -> palette.tertiary.copy(red = 0.72f, green = 0.36f, blue = 0.09f)
         MapViewportOverlayTone.NEUTRAL -> Color(0xFF6B7280)
-        MapViewportOverlayTone.NAVY -> Color(0xFF172554)
+        MapViewportOverlayTone.NAVY -> palette.navy
+        MapViewportOverlayTone.NAVIGATION_WALK -> palette.navigationWalk
+        MapViewportOverlayTone.TRANSIT_WALK -> palette.transitWalk
         MapViewportOverlayTone.ERROR -> palette.error.copy(red = 0.62f, green = 0.16f, blue = 0.16f)
     }
 
@@ -644,8 +667,8 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
         MapViewportPointKind.FACILITY -> categoryType?.toFacilityMarkerSpec(isSelected)
         MapViewportPointKind.ORIGIN ->
             ViewportPointMarkerSpec(
-                label = label ?: "O",
-                containerColor = Color(0xFF006BE0),
+                label = label ?: "출발",
+                containerColor = Color(0xFF4D8FF9),
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 borderColor = MaterialTheme.colorScheme.surface,
                 size = 38.dp,
@@ -654,8 +677,8 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
 
         MapViewportPointKind.DESTINATION ->
             ViewportPointMarkerSpec(
-                label = label ?: "D",
-                containerColor = Color(0xFFF14337),
+                label = label ?: "도착",
+                containerColor = Color(0xFFF94D4D),
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 borderColor = MaterialTheme.colorScheme.surface,
                 size = 38.dp,
@@ -677,8 +700,10 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
                 label = null,
                 containerColor = Color.White,
                 contentColor = Color.Transparent,
-                borderColor = Color(0xFF8C8C8E),
-                size = 18.dp,
+                borderColor = GuidanceJunctionMarkerStrokeColor,
+                size = 20.dp,
+                isDiamond = false,
+                borderWidth = GuidanceJunctionMarkerStrokeWidth,
                 fontSize = 1.sp,
             )
 
@@ -730,6 +755,9 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
         MapViewportPointKind.FOCUS_HALO -> null
     }
 
+private fun MapViewportPointOverlay.isDetailedRouteOverlayMarker(): Boolean =
+    kind == MapViewportPointKind.SEGMENT_JUNCTION
+
 @Composable
 private fun MapMarkerCategoryType.toFacilityMarkerSpec(isSelected: Boolean): ViewportPointMarkerSpec {
     val palette = toFacilityPalette()
@@ -765,6 +793,7 @@ private data class ViewportPointMarkerSpec(
     val isDiamond: Boolean = false,
     val isRotated: Boolean = false,
     val fontSize: androidx.compose.ui.unit.TextUnit,
+    val borderWidth: Dp = 1.dp,
 )
 
 private data class FacilityMarkerPalette(
@@ -772,6 +801,9 @@ private data class FacilityMarkerPalette(
     val content: Color,
     val border: Color,
 )
+
+private val GuidanceJunctionMarkerStrokeWidth = 2.dp
+private val GuidanceJunctionMarkerStrokeColor = Color(0xFF9CA3AF)
 
 private fun MapMarkerCategoryType.toFacilityPalette(): FacilityMarkerPalette =
     when (category) {
@@ -895,3 +927,5 @@ private const val RouteDirectionArrowIntervalDp = 20
 private const val RouteDirectionArrowMinSegmentDp = 44
 private const val RouteDirectionArrowLengthDp = 10
 private const val RouteDirectionArrowHalfWidthDp = 5
+private val FocusedGuidanceMarkerHaloColor = Color(0x804D8FF9)
+private val FocusedGuidanceMarkerHaloRadius = 13.dp

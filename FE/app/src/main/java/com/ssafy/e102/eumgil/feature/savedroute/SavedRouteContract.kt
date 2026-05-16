@@ -74,6 +74,8 @@ sealed interface SavedRouteUiAction {
 
     data object EditDoneClicked : SavedRouteUiAction
 
+    data object DeleteSelectedClicked : SavedRouteUiAction
+
     data object ExploreMapClicked : SavedRouteUiAction
 
     data object RouteSettingClicked : SavedRouteUiAction

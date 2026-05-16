@@ -7,6 +7,8 @@ import com.ssafy.e102.eumgil.core.location.CurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.NoOpCurrentLocationAddressResolver
+import com.ssafy.e102.eumgil.core.network.AlwaysOnlineNetworkMonitor
+import com.ssafy.e102.eumgil.core.network.NetworkMonitor
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
@@ -14,6 +16,7 @@ import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
+import com.ssafy.e102.eumgil.data.repository.ReportOutboxPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
@@ -37,8 +40,10 @@ class ReportViewModel(
     private val currentLocationManager: CurrentLocationManager,
     private val locationPermissionManager: LocationPermissionManager,
     private val addressResolver: CurrentLocationAddressResolver = NoOpCurrentLocationAddressResolver,
+    // Task 4.1 — 단말 네트워크 가용성 관찰자. 기본값은 항상 online으로 보고하는 no-op (테스트 더블 호환).
+    private val networkMonitor: NetworkMonitor = AlwaysOnlineNetworkMonitor,
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(ReportUiState())
+    private val mutableUiState = MutableStateFlow(ReportUiState(isOnline = networkMonitor.isCurrentlyOnline))
     val uiState: StateFlow<ReportUiState> = mutableUiState.asStateFlow()
 
     private val mutableUiEvent = MutableSharedFlow<ReportUiEvent>()
@@ -56,6 +61,19 @@ class ReportViewModel(
 
     init {
         loadLatestDraft()
+        observeNetworkAvailability()
+    }
+
+    /**
+     * Task 4.1 — 단말 네트워크 가용성을 ViewModel 수명동안 구독해 `isOnline`을 갱신한다.
+     * 사용자가 비행기 모드를 토글해도 제출 버튼 상태가 즉시 반영된다.
+     */
+    private fun observeNetworkAvailability() {
+        viewModelScope.launch {
+            networkMonitor.observeOnlineState().collect { online ->
+                mutableUiState.update { state -> state.copy(isOnline = online) }
+            }
+        }
     }
 
     fun onAction(action: ReportUiAction) {
@@ -712,12 +730,6 @@ class ReportViewModel(
                 submittedAtMillis = System.currentTimeMillis(),
             )
         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 서버에 등록되었습니다."))
-        emitUiEvent(
-            ReportUiEvent.NavigateToReportComplete(
-                reportId = serverReportId,
-                outboxId = outboxId,
-            ),
-        )
     }
 
     private suspend fun handleServerSubmitSkipped(
@@ -742,12 +754,6 @@ class ReportViewModel(
                 submittedAtMillis = System.currentTimeMillis(),
             )
         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 로컬 outbox에 저장되었습니다."))
-        emitUiEvent(
-            ReportUiEvent.NavigateToReportComplete(
-                reportId = null,
-                outboxId = outboxId,
-            ),
-        )
     }
 
     private fun handleServerSubmitFailure(
@@ -819,6 +825,7 @@ class ReportViewModel(
             currentLocationManager: CurrentLocationManager,
             locationPermissionManager: LocationPermissionManager,
             addressResolver: CurrentLocationAddressResolver = NoOpCurrentLocationAddressResolver,
+            networkMonitor: NetworkMonitor = AlwaysOnlineNetworkMonitor,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -829,6 +836,7 @@ class ReportViewModel(
                             currentLocationManager = currentLocationManager,
                             locationPermissionManager = locationPermissionManager,
                             addressResolver = addressResolver,
+                            networkMonitor = networkMonitor,
                         ) as T
                     }
 
@@ -926,10 +934,19 @@ private fun ReportUiState.toOutboxData(): ReportOutboxData {
         photoUri = firstPhoto?.localUri,
         photoMimeType = firstPhoto?.mimeType,
         photoSizeBytes = firstPhoto?.sizeBytes,
+        // Task 5.5 — 첨부 사진 전체를 outbox에 보존. 제출 시점에 presigned 업로드 대상으로 사용.
+        photos = photo.values.map { it.toOutboxPhotoData() },
         createdAtMillis = now,
         updatedAtMillis = now,
     )
 }
+
+private fun ReportPhoto.toOutboxPhotoData(): ReportOutboxPhotoData =
+    ReportOutboxPhotoData(
+        localUri = localUri,
+        mimeType = mimeType,
+        sizeBytes = sizeBytes,
+    )
 
 private fun ReportDraftData.toUiState(): ReportUiState {
     val reportType = reportCategory.toReportType()

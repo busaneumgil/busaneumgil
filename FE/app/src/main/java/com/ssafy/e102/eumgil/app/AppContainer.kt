@@ -10,6 +10,8 @@ import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.model.resolveAccountScopeKey
+import com.ssafy.e102.eumgil.core.network.AndroidNetworkMonitor
+import com.ssafy.e102.eumgil.core.network.NetworkMonitor
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.FacilitySeedLocalDataSource
 import com.ssafy.e102.eumgil.data.local.datasource.InitSettingsLocalDataSource
@@ -27,6 +29,7 @@ import com.ssafy.e102.eumgil.data.remote.HttpJsonTimeoutConfig
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.FavoriteRoutesRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportImagesRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.KtorVoiceAnalyzeRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.PlacesRemoteDataSource
@@ -40,6 +43,7 @@ import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSocialProvider
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.CompositeSocialAccessTokenProvider
+import com.ssafy.e102.eumgil.data.repository.DefaultHazardReportImageUploader
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
@@ -121,6 +125,9 @@ class AppContainer(
     }
     private val hazardReportsRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         HazardReportsRemoteDataSource(httpJsonClient = httpJsonClient)
+    }
+    private val hazardReportImagesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
+        HazardReportImagesRemoteDataSource(httpJsonClient = httpJsonClient)
     }
     private val placesRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
         PlacesRemoteDataSource(
@@ -318,6 +325,15 @@ class AppContainer(
             accessTokenProvider = {
                 authSessionRepository.getAuthGateState().authSession?.accessToken
             },
+            // Task 5.5 — 제보 제출 직전 사진 presigned 업로드 흐름.
+            imageUploader =
+                DefaultHazardReportImageUploader(
+                    contentResolver = appContext.contentResolver,
+                    remoteDataSource = hazardReportImagesRemoteDataSource,
+                ),
+            // Task 5.9 — 401(A4010) 발생 시 /auth/reissue 후 동일 요청을 1회 재시도하기 위해 인증 인프라 주입.
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
     }
 
@@ -335,6 +351,11 @@ class AppContainer(
 
     val currentLocationManager: CurrentLocationManager by lazy(LazyThreadSafetyMode.NONE) {
         AndroidCurrentLocationManager(context = appContext)
+    }
+
+    // Task 4.1 — 단말 네트워크 가용성을 관찰해 ReportViewModel이 오프라인 시 제출 버튼을 자동 비활성화하도록 한다.
+    val networkMonitor: NetworkMonitor by lazy(LazyThreadSafetyMode.NONE) {
+        AndroidNetworkMonitor(context = appContext)
     }
 
     private companion object {

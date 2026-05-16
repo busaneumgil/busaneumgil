@@ -1,12 +1,16 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
 import androidx.compose.ui.unit.dp
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.feature.navigation.component.NavigationSegmentRailTransitIconSize
+import com.ssafy.e102.eumgil.feature.navigation.component.railIconSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Test
 import java.io.File
+import org.junit.Test
 
 class NavigationScreenPolicyTest {
     @Test
@@ -67,7 +71,7 @@ class NavigationScreenPolicyTest {
     }
 
     @Test
-    fun `screen policy keeps rail visible when detail action must remain reachable`() {
+    fun `screen policy does not show an empty rail only for the removed detail action`() {
         val policy =
             navigationScreenPolicy(
                 NavigationUiState(
@@ -76,7 +80,7 @@ class NavigationScreenPolicyTest {
                 ),
             )
 
-        assertTrue(policy.showSegmentRail)
+        assertFalse(policy.showSegmentRail)
     }
 
     @Test
@@ -87,6 +91,23 @@ class NavigationScreenPolicyTest {
         assertEquals(128.dp, policy.maxHeight)
         assertEquals(44.dp, policy.directionIconSize)
         assertFalse(policy.showBottomDivider)
+    }
+
+    @Test
+    fun `navigation bottom bar floats above system nav bar without top divider`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val bottomBarSection =
+            source
+                .substringAfter("private fun NavigationBottomBar(")
+                .substringBefore("@Composable\nprivate fun NavigationExitConfirmDialog")
+        val chromePolicy = navigationBottomBarChromePolicy()
+
+        assertTrue(chromePolicy.usesNavigationBarPadding)
+        assertFalse(chromePolicy.showTopDivider)
+        assertTrue(bottomBarSection.contains(".navigationBarsPadding()"))
+        assertTrue(bottomBarSection.contains("if (chromePolicy.showTopDivider)"))
     }
 
     @Test
@@ -104,6 +125,12 @@ class NavigationScreenPolicyTest {
         val railSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
                 .readText()
+        val guideSidePanelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")
+                .readText()
+        val scrubberSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/RouteStepScrubberRail.kt")
+                .readText()
 
         assertTrue(
             "Navigation hero icon sizing should route transit actions through a dedicated helper.",
@@ -111,16 +138,23 @@ class NavigationScreenPolicyTest {
         )
         assertTrue(
             "Navigation hero should document the slightly reduced transit icon token.",
-            navigationScreenSource.contains("private val NavigationHeroTransitDirectionIconSize = 40.dp"),
+            navigationScreenSource.contains("NavigationHeroTransitDirectionIconSize = 40.dp"),
         )
         assertTrue(
-            "Navigation segment rail should route transit actions through a dedicated helper.",
-            railSource.contains(".size(item.guidanceAction.railIconSize())"),
+            "Navigation segment rail should delegate collapsed icon sizing through the shared scrubber item.",
+            railSource.contains("RouteStepScrubberRail(") &&
+                scrubberSource.contains("GuideCollapsedRailItem(") &&
+                guideSidePanelSource.contains("action.collapsedIconSize()"),
         )
         assertTrue(
-            "Navigation segment rail should document the slightly reduced transit icon token.",
-            railSource.contains("private val NavigationSegmentRailTransitIconSize = 30.dp"),
+            "Shared collapsed rail icons should document the slightly reduced transit icon token.",
+            guideSidePanelSource.contains("private val GuideCollapsedRailTransitIconSize = 22.dp"),
         )
+        assertEquals(NavigationHeroTransitDirectionIconSize, NavigationGuidanceAction.BUS.heroIconSize(defaultSize = 44.dp))
+        assertEquals(NavigationHeroTransitDirectionIconSize, NavigationGuidanceAction.SUBWAY.heroIconSize(defaultSize = 44.dp))
+        assertEquals(44.dp, NavigationGuidanceAction.STRAIGHT.heroIconSize(defaultSize = 44.dp))
+        assertEquals(NavigationSegmentRailTransitIconSize, NavigationGuidanceAction.BUS.railIconSize())
+        assertTrue(NavigationGuidanceAction.STRAIGHT.railIconSize() > NavigationGuidanceAction.BUS.railIconSize())
     }
 
     @Test
@@ -128,48 +162,90 @@ class NavigationScreenPolicyTest {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
                 .readText()
+        val railSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/component/NavigationSegmentRail.kt")
+                .readText()
+        val scrubberSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/RouteStepScrubberRail.kt")
+                .readText()
+        val sidePanelPolicy = navigationSidePanelPolicy()
 
         assertTrue(
             "NAV-01 should keep the map as the base layer while the left rail or panel overlays it.",
             source.contains("NavigationMapStage(") &&
-                source.contains("NavigationExpandedSidePanel(") &&
+                source.contains("NavigationGuideSidePanel(") &&
                 source.contains("NavigationSegmentRail("),
         )
         assertTrue(
             "The side panel should support horizontal swipe collapse.",
-            source.contains("Orientation.Horizontal") &&
-                source.contains("NavigationSidePanelSwipeThresholdPx"),
+            source.contains("GuideSidePanelShell("),
         )
         assertTrue(
-            "Rows should collapse the panel and reuse SegmentTapped so map focus stays on the existing ViewModel path.",
-            source.contains("isSidePanelExpanded = false") &&
-                source.contains("NavigationUiAction.SegmentTapped(index = index)"),
+            "Rows should keep the panel open and reuse SegmentTapped so every rail interaction can preview that step.",
+            source.contains("NavigationUiAction.SegmentTapped(index = index)"),
         )
+        assertEquals(NavigationSidePanelSwipeAxis.Horizontal, sidePanelPolicy.swipeAxis)
+        assertEquals(80f, sidePanelPolicy.swipeThresholdPx, 0f)
+        assertFalse(sidePanelPolicy.collapseOnSegmentTap)
         assertTrue(
             "Transit guidance actions should use the same side panel row path as walk guidance.",
-            source.contains("item.guidanceAction.iconRes()") &&
+            source.contains("GuideSidePanelStepRow(") &&
                 source.contains("uiState.segmentSync.railItems.forEach"),
+        )
+        assertTrue(
+            "Collapsed rail scrubber should reuse SegmentTapped so the anchored step drives the hero card and map focus.",
+            source.contains("onTopVisibleSegmentChanged = { index ->") &&
+                railSource.contains("RouteStepScrubberRail(") &&
+                scrubberSource.contains("snapshotFlow") &&
+                scrubberSource.contains("anchoredDraggable(") &&
+                railSource.contains("onTopVisibleSegmentChanged"),
         )
         assertFalse(
             "Expanded side panel rows should not keep the radio-like current-location button.",
             source
                 .substringAfter("private fun NavigationSidePanelRow(")
-                .substringBefore("@Composable\nprivate fun NavigationSidePanelExpandHandle")
+                .substringBefore("private fun navigationRouteSummary")
                 .contains("ic_map_current_location"),
         )
-        assertFalse(
-            "Expanded side panel should not render a duplicate progress header.",
+        assertFalse(sidePanelPolicy.showsProgressHeader)
+    }
+
+    @Test
+    fun `navigation map controls and expanded rail top action are wired`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val mapStageSection =
+            source
+                .substringAfter("private fun NavigationMapStage(")
+                .substringBefore("@Composable\nprivate fun NavigationMapBackdrop")
+        val mapControlsSection =
+            source
+                .substringAfter("private fun NavigationMapControls(")
+                .substringBefore("@Composable\nprivate fun NavigationBottomBar")
+        val expandedPanelSection =
             source
                 .substringAfter("private fun NavigationExpandedSidePanel(")
                 .substringBefore("@Composable\nprivate fun NavigationSidePanelRow")
-                .contains("navigationRouteSummary(uiState)"),
-        )
+
+        assertTrue(mapStageSection.contains("rememberMapOverlayViewportControlState()"))
+        assertTrue(mapStageSection.contains("mapControlState.zoomIn()"))
+        assertTrue(mapStageSection.contains("mapControlState.zoomOut()"))
+        assertTrue(mapStageSection.contains("mapControlState.recenter()"))
+        assertTrue(mapControlsSection.contains("onActionClick = onActionClick"))
+        assertTrue(mapControlsSection.contains("onZoomInClick = onZoomInClick"))
+        assertTrue(mapControlsSection.contains("onZoomOutClick = onZoomOutClick"))
+        assertTrue(expandedPanelSection.contains("scrollState.animateScrollTo(0)"))
+        assertTrue(expandedPanelSection.contains("NavigationExpandedSidePanelScrollTopAction("))
     }
 
     @Test
     fun `navigation side panel and exit CTA match route detail reference shell`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val guideSidePanelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/guidance/component/GuideSidePanel.kt")
                 .readText()
         val expandedPanelSection =
             source
@@ -178,40 +254,44 @@ class NavigationScreenPolicyTest {
         val rowSection =
             source
                 .substringAfter("private fun NavigationSidePanelRow(")
-                .substringBefore("@Composable\nprivate fun NavigationSidePanelStepIcon")
+                .substringBefore("private fun navigationRouteSummary")
         val bottomBarSection =
             source
                 .substringAfter("private fun NavigationBottomBar(")
                 .substringBefore("@Composable\nprivate fun NavigationMapStage")
+        val sidePanelPolicy = navigationSidePanelPolicy()
+        val bottomBarChromePolicy = navigationBottomBarChromePolicy()
 
+        assertTrue(sidePanelPolicy.showsExpandedScrim)
         assertTrue(
-            "Expanded guidance panel should use the dimmed map scrim shown in the reference side-sheet state.",
-            source.contains("NavigationExpandedSidePanelScrimColor"),
-        )
-        assertTrue(
-            "Expanded panel rows should use the same start/end and turn icons as the collapsed rail.",
+            "Expanded panel rows should use the shared start/end and turn icon row as the collapsed rail.",
             expandedPanelSection.contains("isFirst = index == 0") &&
                 expandedPanelSection.contains("isLast = index == uiState.segmentSync.railItems.lastIndex") &&
-                rowSection.contains("NavigationSidePanelStepIcon("),
+                rowSection.contains("GuideSidePanelStepRow(") &&
+                guideSidePanelSource.contains("fun GuideSidePanelStepIcon("),
         )
+        assertEquals(30.dp, bottomBarChromePolicy.bottomGap)
+        assertTrue(bottomBarChromePolicy.usesNavigationBarPadding)
         assertTrue(
             "Exit CTA should share the full-width bottom placement and 30dp bottom gap used by route start.",
             bottomBarSection.contains(".fillMaxWidth()") &&
-                bottomBarSection.contains("bottom = NavigationBottomBarBottomGap") &&
+                bottomBarSection.contains("bottom = chromePolicy.bottomGap") &&
                 source.contains("NavigationBottomBarBottomGap = 30.dp"),
         )
         assertFalse(
-            "Exit CTA should not add navigation bar inset on top of the explicit 30dp app-bottom gap.",
-            bottomBarSection.contains(".navigationBarsPadding()"),
-        )
-        assertFalse(
             "Exit CTA text should not be squeezed by the old fixed-width button.",
-            bottomBarSection.contains(".width(NavigationBottomBarButtonWidth)"),
+            source.contains(".width(NavigationBottomBarButtonWidth)"),
+        )
+        assertTrue(
+            "Exit CTA should use the same 50dp narrower horizontal inset as the route start CTA.",
+            source.contains("NavigationBottomBarHorizontalPadding = EumSpacing.medium + 50.dp") &&
+                bottomBarSection.contains("start = NavigationBottomBarHorizontalPadding") &&
+                bottomBarSection.contains("end = NavigationBottomBarHorizontalPadding"),
         )
     }
 
     @Test
-    fun `hero content prioritizes focused segment guidance over the active step card`() {
+    fun `hero content renders selected segment as sequence guidance and remaining time`() {
         val heroContent =
             navigationHeroContent(
                 NavigationUiState(
@@ -228,8 +308,8 @@ class NavigationScreenPolicyTest {
                             sequenceLabel = "2 / 3",
                             instruction = "Cross the street and head toward the elevator",
                             heroTitle = "횡단보도 건너기",
-                            heroDescription = "Cross the street and head toward the elevator",
-                            distanceLabel = "80m",
+                            heroDescription = "목적지까지 약 8분",
+                            distanceLabel = "목적지까지 약 8분",
                             riskLabel = "Low",
                             supportingText = "Focused segment",
                             guidanceAction = NavigationGuidanceAction.CROSSWALK,
@@ -239,8 +319,73 @@ class NavigationScreenPolicyTest {
 
         assertEquals(NavigationGuidanceAction.CROSSWALK, heroContent.guidanceAction)
         assertEquals("횡단보도 건너기", heroContent.title)
-        assertEquals("Cross the street and head toward the elevator", heroContent.description)
-        assertEquals("80m", heroContent.distanceLabel)
+        assertEquals("목적지까지 약 8분", heroContent.description)
+        assertEquals("목적지까지 약 8분", heroContent.distanceLabel)
+    }
+
+    @Test
+    fun `navigation hero animates selected card changes without replacing the fixed three line card`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val heroSection =
+            source
+                .substringAfter("private fun NavigationHeroCard(")
+                .substringBefore("@Composable\nprivate fun NavigationHeroDirectionIcon")
+
+        assertTrue(
+            "Hero content changes should use vertical AnimatedContent so scroll-driven guidance changes are visible.",
+            heroSection.contains("AnimatedContent(") &&
+                heroSection.contains("slideInVertically") &&
+                heroSection.contains("slideOutVertically"),
+        )
+        assertTrue(
+            "Bus and subway boarding guidance should use the same transit detail content as the opened side rail card.",
+            heroSection.contains("presentation.content.transitInfo?.let") &&
+                heroSection.contains("NavigationTransitHeroContent("),
+        )
+        assertTrue(
+            "The hero content model should prefer selected rail transit info and otherwise use the live active step transit info.",
+            source.contains("transitInfo = focusedSegmentCard?.transitInfo ?: uiState.stepCard.transitInfo"),
+        )
+    }
+
+    @Test
+    fun `navigation screen returns selected side rail preview to live guidance`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+
+        assertTrue(
+            "Selected rail preview should automatically return to current live guidance after five seconds without another rail interaction.",
+            source.contains("LaunchedEffect(uiState.segmentSync.isInspectingSegments, inspectionInteractionVersion)") &&
+                source.contains("delay(NavigationInspectAutoReturnMillis)") &&
+                source.contains("NavigationInspectAutoReturnMillis = 5_000L") &&
+                source.contains("NavigationUiAction.ReturnToActiveSegmentClicked"),
+        )
+        assertTrue(
+            "Closing the side rail should immediately restore the current live guidance card.",
+            source.contains("onExpandedChange = { expanded ->") &&
+                source.contains("} else {\n                                    onAction(NavigationUiAction.ReturnToActiveSegmentClicked)\n                                }"),
+        )
+    }
+
+    @Test
+    fun `navigation transit rail cards reuse the same transit info model as the top card`() {
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val viewModelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationViewModel.kt")
+                .readText()
+        val contractSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationContract.kt")
+                .readText()
+
+        assertTrue(contractSource.contains("val transitInfo: NavigationTransitInfoUiState? = null"))
+        assertTrue(viewModelSource.contains("transitInfo = selectedRoute.resolveFocusedSegmentTransitInfo(segment, transitPresentation)"))
+        assertTrue(screenSource.contains("NavigationTransitSidePanelContent("))
+        assertTrue(screenSource.contains("item.transitInfo"))
     }
 
     @Test
@@ -277,6 +422,55 @@ class NavigationScreenPolicyTest {
     }
 
     @Test
+    fun `collapsed navigation rail uses the route detail rail width token`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+
+        assertTrue(source.contains("val railWidth = NavigationSegmentRailWidth"))
+        assertTrue(source.contains("private val NavigationSegmentRailWidth = 58.dp"))
+    }
+
+    @Test
+    fun `navigation rail opens and closes through the shared guide side panel shell`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("if (screenPolicy.showSegmentRail) {")
+                .substringBefore("NavigationBottomBar(")
+
+        assertTrue(screenSection.contains("NavigationGuideSidePanel("))
+        assertTrue(source.contains("GuideSidePanelShell("))
+        assertTrue(source.contains("collapsedWidth = NavigationSegmentRailWidth"))
+        assertTrue(source.contains("expandedWidthFraction = NavigationGuideSidePanelExpandedWidthFraction"))
+        assertTrue(source.contains("private const val NavigationGuideSidePanelExpandedWidthFraction = 0.88f"))
+    }
+
+    @Test
+    fun `focused navigation map inspection animates through camera target instead of fit projection jumps`() {
+        val overlaySource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlay.kt")
+                .readText()
+        val viewModelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationViewModel.kt")
+                .readText()
+        val navigationOverlaySection =
+            overlaySource
+                .substringAfter("internal fun createNavigationViewportOverlayState(")
+                .substringBefore("private fun defaultMapViewportFallbackCamera")
+        val mapOverlayBuilderSection =
+            viewModelSource
+                .substringAfter("private fun RouteNavigationRequest.toMapOverlayUiState(")
+                .substringBefore("private fun RouteCandidate.toFallbackWalkingLegMapSegments")
+
+        assertTrue(navigationOverlaySection.contains("fitToProjection = mapOverlay.mapFocusMode != NavigationMapFocusMode.FOCUSED"))
+        assertTrue(mapOverlayBuilderSection.contains("shouldAnimateCameraTransition = true"))
+        assertFalse(mapOverlayBuilderSection.contains("IMMEDIATE_GUIDANCE_CAMERA_DISTANCE_THRESHOLD_METERS"))
+    }
+
+    @Test
     fun `bottom bar layout policy keeps full width divider when segment rail is hidden`() {
         val policy =
             navigationBottomBarLayoutPolicy(
@@ -285,5 +479,48 @@ class NavigationScreenPolicyTest {
             )
 
         assertEquals(0.dp, policy.topDividerStartInset)
+    }
+
+    @Test
+    fun `exit dialog policy follows navigation design tokens`() {
+        val policy = navigationExitDialogPolicy()
+
+        assertEquals(NavigationExitDialogShell.Dialog, policy.shell)
+        assertEquals(360.dp, policy.maxWidth)
+        assertEquals(EumRadius.scaleL, policy.containerCornerRadius)
+        assertEquals(EumRadius.scaleM, policy.buttonCornerRadius)
+        assertEquals(48.dp, policy.primaryButtonHeight)
+        assertEquals(44.dp, policy.secondaryButtonHeight)
+        assertEquals(10.dp, policy.shadowElevation)
+    }
+
+    @Test
+    fun `exit dialog uses custom dialog shell instead of default alert dialog`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val dialogSection =
+            source
+                .substringAfter("private fun NavigationExitConfirmDialog(")
+                .substringBefore("private fun DrawScope.drawNavigationMapGrid")
+
+        assertTrue(dialogSection.contains("Dialog("))
+        assertTrue(dialogSection.contains("navigationExitDialogPolicy()"))
+        assertTrue(dialogSection.contains("BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f))"))
+        assertTrue(dialogSection.contains("Arrangement.spacedBy(EumSpacing.large)"))
+        assertTrue(dialogSection.contains("Arrangement.spacedBy(EumSpacing.medium)"))
+        assertFalse(dialogSection.contains(".background(MaterialTheme.colorScheme.error)"))
+        assertFalse(dialogSection.contains("navigation_exit_confirm_dialog_supporting"))
+        assertFalse(dialogSection.contains("navigation_exit_confirm_dialog_eyebrow"))
+        assertFalse(dialogSection.contains("AlertDialog("))
+    }
+
+    @Test
+    fun `screen scaffold disables default window insets to avoid header gap`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        assertTrue(navigationUsesEmptyWindowInsets())
+        assertTrue(source.contains(".statusBarsPadding()"))
     }
 }

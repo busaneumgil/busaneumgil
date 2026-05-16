@@ -27,7 +27,18 @@ export interface TokenResponse {
 export type WorkStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
 export type AssignmentType = "ROAD_NETWORK" | "FACILITY";
 
-export type AdminPage = "network" | "routeTuning" | "facilities" | "hazards" | "users" | "logs";
+export type AdminPage =
+  | "home"
+  | "network"
+  | "routeTuning"
+  | "routeStats"
+  | "bottleneckMonitoring"
+  | "movementPatternAnalysis"
+  | "facilities"
+  | "hazards"
+  | "notices"
+  | "users"
+  | "logs";
 
 export type EditableSegmentType = "SIDE_LINE" | "CROSS_WALK";
 export type SegmentFeatureType = "CROSSWALK" | "AUDIO_SIGNAL" | "BRAILLE_BLOCK" | "STAIRS";
@@ -77,8 +88,10 @@ export interface SegmentFeature {
     edgeId: number | string;
     fromNodeId?: number | string;
     toNodeId?: number | string;
-    segmentType?: EditableSegmentType | "SIDE_WALK" | "TRANSITION_CONNECTOR" | string;
+    segmentType?: EditableSegmentType | "TRANSITION_CONNECTOR" | string;
     lengthMeter?: number | string;
+    avgSlopePercent?: number | string | null;
+    widthMeter?: number | string | null;
     walkAccess?: string | null;
     brailleBlockState?: string | null;
     audioSignalState?: string | null;
@@ -134,10 +147,14 @@ export interface BridgeFeature {
 
 export interface BridgePayload {
   summary?: {
+    componentCount?: number;
+    endpointCount?: number;
     bridgeCandidateCount?: number | null;
     visibleBridgeCandidateCount?: number;
     bridgeMaxDistanceMeter?: number;
+    bridgeAutoDistanceMeter?: number;
   };
+  bbox?: [number, number, number, number] | null;
   bridges: {
     type: "FeatureCollection";
     features: BridgeFeature[];
@@ -430,6 +447,107 @@ export interface AdminAuditLogListResponse {
   size: number;
   nextCursor: number | null;
   hasNext: boolean;
+}
+
+export interface AdminDashboardSummaryResponse {
+  period: {
+    from: string;
+    to: string;
+  };
+  users: {
+    totalUsers: number;
+    newUsers: number;
+    adminUsers: number;
+    routeActiveUsers7d: number;
+    userTypeCounts: Record<string, number>;
+  };
+  routes: {
+    totalNavigationSessions: number;
+    navigationStarted: number;
+    navigationCompleted: number;
+    navigationCompletionRate: number;
+    averageNavigationMinutes: number;
+    rerouteCount: number;
+    activeRouteSessions: number;
+    averageRouteSpeedMps: number;
+    dailyMovement: AdminDashboardDailyMovementMetric[];
+  };
+  reports: {
+    totalReports: number;
+    newReports: number;
+    pendingReports: number;
+    approvedReports: number;
+    rejectedReports: number;
+    reportTypeCounts: Record<string, number>;
+  };
+  dataQuality: {
+    roadSegments: number;
+    facilities: number;
+    roadNetworkAssignments: number;
+    facilityAssignments: number;
+    roadNetworkCompletedRate: number;
+    facilityCompletedRate: number;
+  };
+  operations: {
+    recentAuditLogs: AdminAuditLog[];
+    recentReports: AdminDashboardRecentReport[];
+  };
+  telemetry: {
+    enabled: boolean;
+    message: string;
+  };
+}
+
+export interface AdminDashboardDailyMovementMetric {
+  date: string;
+  routeCount: number;
+  activeUserCount: number;
+}
+
+export interface AdminDashboardRecentReport extends GeoPoint {
+  reportId: number;
+  reportType: HazardReportType;
+  description: string | null;
+  status: HazardReportStatus;
+  createdAt: string;
+}
+
+export interface AdminDashboardBottleneckResponse {
+  period: {
+    from: string;
+    to: string;
+  };
+  telemetryBased: boolean;
+  source: string;
+  topBottlenecks: AdminDashboardTopBottleneck[];
+  hotspots: AdminDashboardBottleneckHotspot[];
+  routeSegments: AdminDashboardBottleneckRouteSegment[];
+}
+
+export interface AdminDashboardTopBottleneck {
+  rank: number;
+  id: string;
+  name: string;
+  averageSpeedMps: number;
+  reportCount: number;
+  sampleCount: number;
+}
+
+export interface AdminDashboardBottleneckHotspot extends GeoPoint {
+  id: string;
+  name: string;
+  averageSpeedMps: number;
+  reportCount: number;
+  sampleCount: number;
+}
+
+export interface AdminDashboardBottleneckRouteSegment {
+  id: string;
+  name: string;
+  points: GeoPoint[];
+  averageSpeedMps: number;
+  reportCount: number;
+  sampleCount: number;
 }
 
 export interface AdminHazardReportSummary {

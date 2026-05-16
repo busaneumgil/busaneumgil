@@ -29,7 +29,6 @@ require_env_value DB_URL
 require_env_value DB_USERNAME
 require_env_value DB_PASSWORD
 require_env_value REDIS_HOST
-require_env_value S3_ENDPOINT
 require_env_value S3_BUCKET
 require_env_value S3_ACCESS_KEY
 require_env_value S3_SECRET_KEY

@@ -1,6 +1,10 @@
 package com.ssafy.e102.eumgil.data.route
 
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.RouteBadge
+import com.ssafy.e102.eumgil.core.model.RouteGuidanceDirection
+import com.ssafy.e102.eumgil.core.model.RouteGuidanceFeature
+import com.ssafy.e102.eumgil.core.model.RouteGuidanceType
 import com.ssafy.e102.eumgil.core.model.RouteLegRole
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteTransportMode
@@ -235,8 +239,147 @@ class RouteSearchDtoMapperTest {
             route.segments.first().anchorCoordinate,
         )
         assertFalse(route.segments.first().hasRenderablePolyline)
+        val alightingSegment =
+            route.segments.firstOrNull { segment ->
+                segment.guidanceType == RouteGuidanceType.ARRIVING_POINT
+            }
+        assertEquals("Stop B \uD558\uCC28\uC9C0\uC810\uC785\uB2C8\uB2E4.", alightingSegment?.guidanceMessage)
+        assertEquals(GeoCoordinate(latitude = 35.1650, longitude = 129.0600), alightingSegment?.anchorCoordinate)
+        assertEquals(route.legs[1].sequence, alightingSegment?.sourceLegSequence)
         assertTrue(route.segments.any { segment -> segment.guidanceMessage == "Audio signal crosswalk ahead." })
         assertTrue(route.segments.any { segment -> segment.guidanceMessage == "Arrive at destination." })
+    }
+
+    @Test
+    fun `guidance event metadata and backend badges are preserved for detail guidance`() {
+        val result =
+            RouteSearchResponseDto(
+                routes =
+                    listOf(
+                        RouteDto(
+                            routeId = "walk-meta",
+                            transportMode = "WALK",
+                            routeOption = "SAFE",
+                            title = "Accessible Walk",
+                            distanceMeter = 300.0,
+                            estimatedTimeMinute = 10,
+                            badges = listOf("LOW_SLOPE", "CROSSWALK", "STAIR"),
+                            legs =
+                                listOf(
+                                    RouteLegDto(
+                                        sequence = 1,
+                                        type = "WALK",
+                                        role = "WALK_ONLY",
+                                        instruction = "Walk to destination",
+                                        distanceMeter = 300.0,
+                                        estimatedTimeMinute = 10,
+                                        guidanceEvents =
+                                            listOf(
+                                                RouteGuidanceEventDto(
+                                                    sequence = 1,
+                                                    type = null,
+                                                    direction = "TURN_LEFT",
+                                                    distanceFromLegStartMeter = 40.0,
+                                                    durationFromRouteStartSecond = 80,
+                                                ),
+                                                RouteGuidanceEventDto(
+                                                    sequence = 2,
+                                                    type = "CROSSWALK",
+                                                    direction = "STRAIGHT",
+                                                    features = listOf("SIGNAL"),
+                                                    distanceFromLegStartMeter = 100.0,
+                                                    durationFromRouteStartSecond = 160,
+                                                ),
+                                                RouteGuidanceEventDto(
+                                                    sequence = 3,
+                                                    type = "STRAIGHT",
+                                                    direction = "STRAIGHT",
+                                                    distanceFromLegStartMeter = 120.0,
+                                                    durationFromRouteStartSecond = 220,
+                                                ),
+                                                RouteGuidanceEventDto(
+                                                    sequence = 4,
+                                                    type = "DESTINATION",
+                                                    distanceFromLegStartMeter = 300.0,
+                                                    durationFromRouteStartSecond = 600,
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).toDomain(
+                query = testRouteSearchQuery(routeOptions = listOf(RouteOption.SAFE)),
+                geometryParser = geometryParser,
+            )
+
+        val route = result.routes.single()
+        val segments = route.segments
+
+        assertEquals(listOf(RouteBadge.LOW_SLOPE, RouteBadge.CROSSWALK, RouteBadge.STAIR), route.badges)
+        assertEquals(RouteGuidanceDirection.TURN_LEFT, segments[0].guidanceDirection)
+        assertEquals(40, segments[0].guidanceDistanceMeters)
+        assertEquals(RouteGuidanceType.CROSSWALK, segments[1].guidanceType)
+        assertEquals(listOf(RouteGuidanceFeature.SIGNAL), segments[1].guidanceFeatures)
+        assertEquals(100, segments[1].guidanceDistanceMeters)
+        assertEquals(RouteGuidanceType.STRAIGHT, segments[2].guidanceType)
+        assertEquals(180, segments[2].guidanceDistanceMeters)
+        assertEquals(RouteGuidanceType.DESTINATION, segments[3].guidanceType)
+        assertEquals(0, segments[3].guidanceDistanceMeters)
+        assertEquals(600, segments[3].durationFromRouteStartSeconds)
+    }
+
+    @Test
+    fun `turn guidance distance uses previous event gap instead of leg cumulative distance`() {
+        val result =
+            RouteSearchResponseDto(
+                routes =
+                    listOf(
+                        RouteDto(
+                            routeId = "walk-cumulative-turn",
+                            transportMode = "WALK",
+                            routeOption = "SAFE",
+                            title = "Cumulative Turn Route",
+                            distanceMeter = 1_200.0,
+                            estimatedTimeMinute = 20,
+                            legs =
+                                listOf(
+                                    RouteLegDto(
+                                        sequence = 1,
+                                        type = "WALK",
+                                        role = "WALK_ONLY",
+                                        distanceMeter = 1_200.0,
+                                        guidanceEvents =
+                                            listOf(
+                                                RouteGuidanceEventDto(
+                                                    sequence = 1,
+                                                    type = "STRAIGHT",
+                                                    direction = "STRAIGHT",
+                                                    distanceFromLegStartMeter = 920.0,
+                                                    durationFromRouteStartSecond = 600,
+                                                ),
+                                                RouteGuidanceEventDto(
+                                                    sequence = 2,
+                                                    type = null,
+                                                    direction = "TURN_LEFT",
+                                                    distanceFromLegStartMeter = 1_000.0,
+                                                    durationFromRouteStartSecond = 660,
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).toDomain(
+                query = testRouteSearchQuery(routeOptions = listOf(RouteOption.SAFE)),
+                geometryParser = geometryParser,
+            )
+
+        val turnSegment = result.routes.single().segments[1]
+
+        assertEquals(RouteGuidanceDirection.TURN_LEFT, turnSegment.guidanceDirection)
+        assertEquals(80, turnSegment.distanceMeters)
+        assertEquals(80, turnSegment.guidanceDistanceMeters)
     }
 
     @Test

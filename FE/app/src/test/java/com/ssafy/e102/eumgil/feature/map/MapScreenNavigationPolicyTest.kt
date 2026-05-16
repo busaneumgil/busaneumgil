@@ -73,4 +73,30 @@ class MapScreenNavigationPolicyTest {
                 !pickerActionSection.contains("Row("),
         )
     }
+
+    @Test
+    fun `route endpoint picker renders dedicated map selection scaffold`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt")
+                .readText()
+
+        assertTrue(
+            "Map picker mode should use a dedicated scaffold instead of the map home overlays.",
+            source.contains("RouteEndpointMapPickerScaffold(") &&
+                source.contains("RouteEndpointMapPickerTopOverlay(") &&
+                source.contains("RouteEndpointMapPickerBottomSheet("),
+        )
+        assertTrue(
+            "Map picker should keep the route endpoint marker fixed at the visual center.",
+            source.contains("MapPickerCenterMarker(") &&
+                source.contains(".align(Alignment.Center)"),
+        )
+        assertTrue(
+            "Map picker should reuse the project centered top bar and dedicated copy.",
+            source.contains("EumCenteredTopBar(") &&
+                source.contains("R.string.map_route_endpoint_picker_title") &&
+                source.contains("R.string.map_route_endpoint_picker_instruction") &&
+                source.contains("R.string.map_route_endpoint_picker_select_action"),
+        )
+    }
 }

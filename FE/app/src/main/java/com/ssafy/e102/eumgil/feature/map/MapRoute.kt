@@ -179,10 +179,14 @@ fun MapRoute(
 
     LaunchedEffect(
         uiState.facilityDetailSheetState.isVisible,
+        uiState.routeEndpointMapPickerState,
         uiState.isVoiceSearchVisible,
         onFacilityDetailVisibilityChanged,
     ) {
-        onFacilityDetailVisibilityChanged(uiState.facilityDetailSheetState.isVisible)
+        onFacilityDetailVisibilityChanged(
+            uiState.facilityDetailSheetState.isVisible ||
+                uiState.routeEndpointMapPickerState != null,
+        )
     }
 
     LaunchedEffect(uiState.isVoiceSearchVisible, onVoiceSearchVisibilityChanged) {

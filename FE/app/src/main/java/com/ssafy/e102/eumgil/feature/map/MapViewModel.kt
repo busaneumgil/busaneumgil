@@ -434,10 +434,7 @@ class MapViewModel(
             MAP_VIEW_MODEL_LOG_TAG,
             "Map tapped lat=${coordinate.latitude.toLogCoordinate()} lng=${coordinate.longitude.toLogCoordinate()} clickType=${payload.clickType.name} provider=${payload.provider.orEmpty()} providerPlaceId=${payload.providerPlaceId.orEmpty()}",
         )
-        if (routeEndpointMapPickerState != null) {
-            handleRouteEndpointMapPickerTapped(payload)
-            return
-        }
+        if (routeEndpointMapPickerState != null) return
         if (payload.clickType == MapTapClickType.ADDRESS) {
             clearSelectedFacilitySelection()
             renderSelectedFacilityState()
@@ -488,27 +485,32 @@ class MapViewModel(
             }
     }
 
-    private fun handleRouteEndpointMapPickerTapped(payload: MapTapPayload) {
+    private fun updateRouteEndpointMapPickerCandidate(payload: MapTapPayload) {
+        val currentPickerState = routeEndpointMapPickerState ?: return
         val coordinate = payload.coordinate
+        val previousCoordinate = currentPickerState.candidateCoordinate
+        val isSameCoordinate = previousCoordinate?.isApproximatelySameCoordinate(coordinate) == true
+        if (
+            isSameCoordinate &&
+            (currentPickerState.candidateDetail != null || currentPickerState.isResolvingCandidate)
+        ) {
+            return
+        }
+
         mapTapDetailRequestId += 1L
         val requestId = mapTapDetailRequestId
         val fallbackDetail = payload.toRouteEndpointPickerMapTapDetail()
 
-        selectedMapPinCoordinate = coordinate
-        clearSelectedFacilitySelection(clearMapTapSelection = false)
-        selectedMapTapDetail = fallbackDetail
-        selectedMapTapNameHint = fallbackDetail.name
-        mapTapDetailErrorMessage = null
-        isMapTapDetailLoading = false
-        selectedFacilityBookmarkState =
-            SelectedFacilityBookmarkState(
-                facilityId = fallbackDetail.bookmarkCacheKey(),
-                isBookmarked = fallbackDetail.isBookmarked,
+        routeEndpointMapPickerState =
+            currentPickerState.copy(
+                candidateCoordinate = coordinate,
+                candidateDetail = fallbackDetail,
+                isResolvingCandidate = placesRepository != null,
+                candidateErrorMessage = null,
             )
-        renderSelectedFacilityState()
+        renderUiState()
 
         val placesRepository = placesRepository ?: return
-        if (payload.clickType != MapTapClickType.POI) return
 
         mapTapDetailLookupJob?.cancel()
         mapTapDetailLookupJob =
@@ -518,22 +520,24 @@ class MapViewModel(
                 }.onSuccess { detail ->
                     if (requestId != mapTapDetailRequestId) return@onSuccess
                     val normalizedDetail = detail?.withFallbackCoordinate(coordinate) ?: fallbackDetail
-                    selectedMapTapDetail = normalizedDetail
-                    selectedFacilityBookmarkState =
-                        SelectedFacilityBookmarkState(
-                            facilityId = normalizedDetail.bookmarkCacheKey(),
-                            isBookmarked = normalizedDetail.isBookmarked,
+                    routeEndpointMapPickerState =
+                        routeEndpointMapPickerState?.copy(
+                            candidateCoordinate = coordinate,
+                            candidateDetail = normalizedDetail,
+                            isResolvingCandidate = false,
+                            candidateErrorMessage = null,
                         )
-                    renderSelectedFacilityState()
+                    renderUiState()
                 }.onFailure {
                     if (requestId != mapTapDetailRequestId) return@onFailure
-                    selectedMapTapDetail = fallbackDetail
-                    selectedFacilityBookmarkState =
-                        SelectedFacilityBookmarkState(
-                            facilityId = fallbackDetail.bookmarkCacheKey(),
-                            isBookmarked = fallbackDetail.isBookmarked,
+                    routeEndpointMapPickerState =
+                        routeEndpointMapPickerState?.copy(
+                            candidateCoordinate = coordinate,
+                            candidateDetail = fallbackDetail,
+                            isResolvingCandidate = false,
+                            candidateErrorMessage = MAP_TAP_DETAIL_LOAD_FAILURE_MESSAGE,
                         )
-                    renderSelectedFacilityState()
+                    renderUiState()
                 }
             }
     }
@@ -588,12 +592,18 @@ class MapViewModel(
             renderSelectedFacilityState()
         }
         renderUiState()
+        updateRouteEndpointMapPickerCandidate(
+            MapTapPayload(coordinate = mutableUiState.value.cameraTarget.center),
+        )
     }
 
     private fun dismissRouteEndpointMapPicker() {
         if (routeEndpointMapPickerState == null) return
 
         routeEndpointMapPickerState = null
+        mapTapDetailLookupJob?.cancel()
+        mapTapDetailLookupJob = null
+        mapTapDetailRequestId += 1L
         clearSelectedFacilitySelection()
         renderSelectedFacilityState()
         renderUiState()
@@ -620,8 +630,25 @@ class MapViewModel(
     }
 
     private fun handleFacilitySetRouteEndpointClicked(editingTarget: RouteEditingTarget) {
-        val shouldBypassRouteSettingPermissionGate = routeEndpointMapPickerState != null
-        val resolvedEditingTarget = routeEndpointMapPickerState?.editingTarget ?: editingTarget
+        val pickerState = routeEndpointMapPickerState
+        val shouldBypassRouteSettingPermissionGate = pickerState != null
+        val resolvedEditingTarget = pickerState?.editingTarget ?: editingTarget
+        val pickerDestination = pickerState?.candidateDetail?.toPlaceDestinationOrNull()
+        if (pickerDestination != null) {
+            routeEndpointMapPickerState = null
+            mapTapDetailLookupJob?.cancel()
+            mapTapDetailLookupJob = null
+            clearSelectedFacilitySelection()
+            renderSelectedFacilityState()
+            destinationSelectionRepository.setEditingTarget(resolvedEditingTarget)
+            destinationSelectionRepository.updateSelectionForEditingTarget(pickerDestination)
+            renderUiState()
+            navigateToRouteSettingIfRouteEndpointsReady(
+                locationPermissionPrechecked = shouldBypassRouteSettingPermissionGate,
+            )
+            return
+        }
+
         val preview = selectedDestinationPreview
         if (preview != null) {
             clearSelectedFacilitySelection()
@@ -1138,6 +1165,7 @@ class MapViewModel(
         isSelectedMapPinVisibleInViewport: Boolean?,
     ) {
         var ignoredStaleProgrammaticCallback = false
+        val isRouteEndpointPickerActive = routeEndpointMapPickerState != null
         mutableUiState.update { state ->
             val currentTarget = state.cameraTarget
             val isAlignedWithRequestedCenter = currentTarget.center.isApproximatelySameCoordinate(center)
@@ -1166,6 +1194,7 @@ class MapViewModel(
                     isRecenterButtonActive = if (isUserGesture) false else state.isRecenterButtonActive,
                     isSearchHereVisible =
                         when {
+                            isRouteEndpointPickerActive -> false
                             isUserGesture && placesRepository != null -> true
                             !isUserGesture -> false
                             else -> state.isSearchHereVisible
@@ -1174,6 +1203,11 @@ class MapViewModel(
             }
         }
         if (ignoredStaleProgrammaticCallback) return
+
+        if (routeEndpointMapPickerState != null) {
+            updateRouteEndpointMapPickerCandidate(MapTapPayload(coordinate = center))
+            return
+        }
 
         // Automatic camera sync can report the preview pin as offscreen before the viewport stabilizes.
         if (isUserGesture && isSelectedMapPinVisibleInViewport == false && clearOffscreenSelectedMapPinState()) {

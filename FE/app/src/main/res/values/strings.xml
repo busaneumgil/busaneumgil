@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="map_route_endpoint_picker_title">지도에서 선택</string>
+    <string name="map_route_endpoint_picker_back">뒤로가기</string>
+    <string name="map_route_endpoint_picker_instruction">지도를 움직여 아이콘을 원하는 위치로 옮기세요</string>
+    <string name="map_route_endpoint_picker_center_marker">지도 중심 선택 위치</string>
+    <string name="map_route_endpoint_picker_resolving_label">주소 확인 중</string>
+    <string name="map_route_endpoint_picker_select_action">선택</string>
     <string name="map_route_endpoint_picker_set_origin_action">이 위치를 출발지로 설정</string>
     <string name="map_route_endpoint_picker_set_destination_action">이 위치를 도착지로 설정</string>
     <string name="search_screen_map_picker_action">지도에서 직접 선택</string>

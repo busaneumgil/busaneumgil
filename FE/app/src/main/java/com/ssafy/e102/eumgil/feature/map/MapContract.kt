@@ -37,6 +37,10 @@ data class MapUiState(
 
 data class RouteEndpointMapPickerState(
     val editingTarget: RouteEditingTarget,
+    val candidateCoordinate: MapCoordinate? = null,
+    val candidateDetail: MapTappedPlaceDetail? = null,
+    val isResolvingCandidate: Boolean = false,
+    val candidateErrorMessage: String? = null,
 )
 
 data class MapFacilityDetailSheetState(

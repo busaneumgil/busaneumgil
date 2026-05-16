@@ -490,7 +490,13 @@ private fun SearchResultsContent(
                         copy = copy,
                         result = result,
                         onClick = {
-                            onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
+                            onAction(
+                                if (uiState.selectionMode == SearchSelectionMode.APPLY_TO_ROUTE) {
+                                    SearchUiAction.SearchResultClicked(result = result)
+                                } else {
+                                    SearchUiAction.SearchResultPreviewClicked(result = result)
+                                },
+                            )
                         },
                     )
                 }
@@ -789,6 +795,7 @@ private fun SearchResultSection(
     copy: SearchCopyUiState,
     resultState: SearchResultUiState,
     onAction: (SearchUiAction) -> Unit,
+    selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
@@ -833,7 +840,13 @@ private fun SearchResultSection(
                         copy = copy,
                         result = result,
                         onClick = {
-                            onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
+                            onAction(
+                                if (selectionMode == SearchSelectionMode.APPLY_TO_ROUTE) {
+                                    SearchUiAction.SearchResultClicked(result = result)
+                                } else {
+                                    SearchUiAction.SearchResultPreviewClicked(result = result)
+                                },
+                            )
                         },
                     )
                 }

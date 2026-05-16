@@ -688,6 +688,44 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `voice transcript keeps apply to route selection mode in results navigation`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = FakeSearchRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+            viewModel.onAction(
+                SearchUiAction.VoiceTranscriptReceived(
+                    transcript = "recognized speech",
+                    searchQuery = "Busan Station",
+                ),
+            )
+            advanceTimeBy(VOICE_INPUT_RESULT_PREVIEW_DELAY_MILLIS)
+            runCurrent()
+
+            assertEquals(
+                SearchUiEvent.NavigateToResults(
+                    query = "Busan Station",
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+                uiEvent.await(),
+            )
+        }
+
+    @Test
     fun `voice transcript without resolved query previews first then analyzes before navigation`() =
         runTest {
             val result =

@@ -47,6 +47,27 @@ class SearchViewModelEditingTargetTest {
         }
 
     @Test
+    fun `selection mode configuration updates ui state`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.DESTINATION,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+
+            assertEquals(SearchSelectionMode.APPLY_TO_ROUTE, viewModel.uiState.value.selectionMode)
+        }
+
+    @Test
     fun `search submit keeps destination editing target in results navigation`() =
         runTest {
             val viewModel =
@@ -67,6 +88,39 @@ class SearchViewModelEditingTargetTest {
                 SearchUiEvent.NavigateToResults(
                     query = "city hall",
                     editingTarget = RouteEditingTarget.DESTINATION,
+                ),
+                uiEvent.await(),
+            )
+        }
+
+    @Test
+    fun `search submit keeps apply to route selection mode in results navigation`() =
+        runTest {
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+            viewModel.onAction(SearchUiAction.QueryChanged(query = "city hall"))
+            viewModel.onAction(SearchUiAction.SearchSubmitted)
+            advanceUntilIdle()
+
+            assertEquals(
+                SearchUiEvent.NavigateToResults(
+                    query = "city hall",
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
                 ),
                 uiEvent.await(),
             )

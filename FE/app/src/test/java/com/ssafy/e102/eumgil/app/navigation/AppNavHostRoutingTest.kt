@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -108,6 +110,43 @@ class AppNavHostRoutingTest {
             RouteSettingRoute.Setting.createRoute(
                 initialRouteOption = RouteOption.SAFE,
                 locationPermissionPrechecked = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `search route defaults stay compatible with previous paths`() {
+        assertEquals("search", SearchRoute.Entry.createRoute())
+        assertEquals("search/voice", SearchRoute.VoiceInput.createRoute())
+        assertEquals("search/results/Busan%20Station", SearchRoute.Results.createRoute("Busan Station"))
+    }
+
+    @Test
+    fun `search routes preserve non default selection mode and editing target`() {
+        assertEquals(
+            "search?selectionMode=APPLY_TO_ROUTE",
+            SearchRoute.Entry.createRoute(selectionMode = SearchSelectionMode.APPLY_TO_ROUTE),
+        )
+        assertEquals(
+            "search?editingTarget=ORIGIN&selectionMode=APPLY_TO_ROUTE",
+            SearchRoute.Entry.createRoute(
+                editingTarget = RouteEditingTarget.ORIGIN,
+                selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+            ),
+        )
+        assertEquals(
+            "search/voice?editingTarget=ORIGIN&selectionMode=APPLY_TO_ROUTE",
+            SearchRoute.VoiceInput.createRoute(
+                editingTarget = RouteEditingTarget.ORIGIN,
+                selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+            ),
+        )
+        assertEquals(
+            "search/results/Busan%20Station?editingTarget=ORIGIN&selectionMode=APPLY_TO_ROUTE",
+            SearchRoute.Results.createRoute(
+                query = "Busan Station",
+                editingTarget = RouteEditingTarget.ORIGIN,
+                selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
             ),
         )
     }

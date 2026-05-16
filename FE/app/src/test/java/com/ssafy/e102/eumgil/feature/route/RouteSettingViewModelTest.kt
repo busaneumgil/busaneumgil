@@ -35,6 +35,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.RouteRemoteDataSource
 import com.ssafy.e102.eumgil.data.repository.DefaultRouteRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRatingData
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRerouteData
 import com.ssafy.e102.eumgil.data.repository.RouteSessionData
@@ -42,6 +43,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.route.RouteSearchRequestDto
 import com.ssafy.e102.eumgil.data.route.RouteSearchResponseDto
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -824,6 +826,34 @@ class RouteSettingViewModelTest {
             assertEquals(initialOrigin, restoredState.origin)
             assertEquals(initialDestination, restoredState.destination)
             assertEquals(initialPreviewPoints, restoredState.routePreviewMap.polyline)
+        }
+
+    @Test
+    fun `waypoint search opens search in apply to route mode`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+            runCurrent()
+
+            viewModel.onAction(RouteSettingUiAction.WaypointClicked(RouteEditingTarget.ORIGIN))
+            advanceUntilIdle()
+
+            val event = uiEvent.await()
+            assertTrue(event is RouteSettingUiEvent.NavigateToSearch)
+            val navigateToSearch = event as RouteSettingUiEvent.NavigateToSearch
+            assertEquals(RouteEditingTarget.ORIGIN, navigateToSearch.editingTarget)
+            assertEquals(SearchSelectionMode.APPLY_TO_ROUTE, navigateToSearch.selectionMode)
+            assertEquals(RouteEditingTarget.ORIGIN, destinationSelectionRepository.editingTarget.value)
         }
 
     @Test

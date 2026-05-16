@@ -42,6 +42,7 @@ import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteFailureKind
 import com.ssafy.e102.eumgil.feature.navigation.haversineDistanceMeters
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -793,7 +794,12 @@ class RouteSettingViewModel(
 
     private fun openWaypointSearch(editingTarget: RouteEditingTarget) {
         destinationSelectionRepository.setEditingTarget(editingTarget)
-        emitUiEvent(RouteSettingUiEvent.NavigateToSearch(editingTarget))
+        emitUiEvent(
+            RouteSettingUiEvent.NavigateToSearch(
+                editingTarget = editingTarget,
+                selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+            ),
+        )
     }
 
     private fun originPlaceId(): String =

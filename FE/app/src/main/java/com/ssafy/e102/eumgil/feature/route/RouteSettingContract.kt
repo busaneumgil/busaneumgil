@@ -9,6 +9,7 @@ import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 
 data class RouteSettingUiState(
     val isLoading: Boolean = true,
@@ -313,6 +314,7 @@ sealed interface RouteSettingUiEvent {
 
     data class NavigateToSearch(
         val editingTarget: RouteEditingTarget,
+        val selectionMode: SearchSelectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
     ) : RouteSettingUiEvent
 
     data class NavigateToRouteDetail(

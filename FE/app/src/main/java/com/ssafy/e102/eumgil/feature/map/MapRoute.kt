@@ -198,7 +198,7 @@ fun MapRoute(
             onNavigateBack = {
                 viewModel.onAction(MapUiAction.VoiceSearchDismissed)
             },
-            onNavigateToResults = { query, editingTarget ->
+            onNavigateToResults = { query, editingTarget, _ ->
                 viewModel.onAction(MapUiAction.VoiceSearchDismissed)
                 onNavigateToSearchResults(query, editingTarget)
             },

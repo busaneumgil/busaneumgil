@@ -76,7 +76,11 @@ class SearchViewModel(
     fun onAction(action: SearchUiAction) {
         when (action) {
             SearchUiAction.BackClicked -> emitUiEvent(SearchUiEvent.NavigateBack)
-            is SearchUiAction.EditingTargetConfigured -> configureEditingTarget(action.editingTarget)
+            is SearchUiAction.EditingTargetConfigured ->
+                configureSearchEntry(
+                    editingTarget = action.editingTarget,
+                    selectionMode = action.selectionMode,
+                )
             is SearchUiAction.EntryRouteEntered -> enterEntryRoute(preserveState = action.preserveState)
             SearchUiAction.VoiceInputClicked -> emitUiEvent(SearchUiEvent.NavigateToVoiceInput)
             SearchUiAction.VoiceRouteEntered -> enterVoiceRoute()
@@ -92,7 +96,11 @@ class SearchViewModel(
                     searchQuery = action.searchQuery,
                 )
             is SearchUiAction.QueryChanged -> updateQuery(action.query)
-            is SearchUiAction.ResultsRouteEntered -> enterResultsRoute(action.query)
+            is SearchUiAction.ResultsRouteEntered ->
+                enterResultsRoute(
+                    query = action.query,
+                    selectionMode = action.selectionMode,
+                )
             is SearchUiAction.RecentSearchClicked -> submitSearch(keyword = action.keyword)
             is SearchUiAction.RecentSearchDeleteClicked -> deleteRecentSearch(action.keyword)
             SearchUiAction.RecentSearchClearAllClicked -> clearRecentSearches()
@@ -144,10 +152,16 @@ class SearchViewModel(
         emitUiEvent(SearchUiEvent.NavigateToRouteBriefing)
     }
 
-    private fun configureEditingTarget(editingTarget: com.ssafy.e102.eumgil.data.repository.RouteEditingTarget) {
+    private fun configureSearchEntry(
+        editingTarget: com.ssafy.e102.eumgil.data.repository.RouteEditingTarget,
+        selectionMode: SearchSelectionMode,
+    ) {
         destinationSelectionRepository.setEditingTarget(editingTarget)
         mutableUiState.update { state ->
-            state.copy(editingTarget = editingTarget)
+            state.copy(
+                editingTarget = editingTarget,
+                selectionMode = selectionMode,
+            )
         }
     }
 
@@ -450,9 +464,16 @@ class SearchViewModel(
         }
     }
 
-    private fun enterResultsRoute(query: String) {
+    private fun enterResultsRoute(
+        query: String,
+        selectionMode: SearchSelectionMode,
+    ) {
         val normalizedQuery = query.trim()
         if (normalizedQuery.isEmpty()) return
+
+        mutableUiState.update { state ->
+            state.copy(selectionMode = selectionMode)
+        }
 
         val resultState = mutableUiState.value.resultState
         if (resultState.hasResultQuery(normalizedQuery)) {
@@ -498,6 +519,7 @@ class SearchViewModel(
                 SearchUiEvent.NavigateToResults(
                     query = normalizedQuery,
                     editingTarget = destinationSelectionRepository.editingTarget.value,
+                    selectionMode = mutableUiState.value.selectionMode,
                 ),
             )
         }

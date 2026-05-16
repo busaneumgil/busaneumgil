@@ -26,12 +26,13 @@ import kotlinx.coroutines.flow.collect
 @Composable
 fun SearchEntryRoute(
     onNavigateBack: () -> Unit,
-    onNavigateToResults: (String, RouteEditingTarget) -> Unit,
+    onNavigateToResults: (String, RouteEditingTarget, SearchSelectionMode) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
     onNavigateToMapPreview: () -> Unit,
     onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    initialSelectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     preserveEntryStateOnReentry: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -39,6 +40,7 @@ fun SearchEntryRoute(
         destination = SearchScreenDestination.Entry,
         initialQuery = null,
         initialEditingTarget = initialEditingTarget,
+        initialSelectionMode = initialSelectionMode,
         preserveEntryStateOnReentry = preserveEntryStateOnReentry,
         onNavigateBack = onNavigateBack,
         onNavigateToResults = onNavigateToResults,
@@ -54,18 +56,20 @@ fun SearchEntryRoute(
 fun SearchResultsRoute(
     initialQuery: String,
     onNavigateBack: () -> Unit,
-    onNavigateToResults: (String, RouteEditingTarget) -> Unit,
+    onNavigateToResults: (String, RouteEditingTarget, SearchSelectionMode) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
     onNavigateToMapPreview: () -> Unit,
     onNavigateToRouteBriefing: () -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    initialSelectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     modifier: Modifier = Modifier,
 ) {
     SearchRouteContent(
         destination = SearchScreenDestination.Results,
         initialQuery = initialQuery,
         initialEditingTarget = initialEditingTarget,
+        initialSelectionMode = initialSelectionMode,
         onNavigateBack = onNavigateBack,
         onNavigateToResults = onNavigateToResults,
         onNavigateToVoiceInput = onNavigateToVoiceInput,
@@ -79,12 +83,14 @@ fun SearchResultsRoute(
 @Composable
 fun SearchVoiceInputRoute(
     onNavigateBack: () -> Unit,
-    onNavigateToResults: (String, RouteEditingTarget) -> Unit,
+    onNavigateToResults: (String, RouteEditingTarget, SearchSelectionMode) -> Unit,
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    initialSelectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     modifier: Modifier = Modifier,
 ) {
     SearchVoiceInputExperience(
         initialEditingTarget = initialEditingTarget,
+        initialSelectionMode = initialSelectionMode,
         onNavigateBack = onNavigateBack,
         onNavigateToResults = onNavigateToResults,
     ) { uiState, onAction ->
@@ -102,9 +108,10 @@ private fun SearchRouteContent(
     destination: SearchScreenDestination,
     initialQuery: String?,
     initialEditingTarget: RouteEditingTarget,
+    initialSelectionMode: SearchSelectionMode,
     preserveEntryStateOnReentry: Boolean = false,
     onNavigateBack: () -> Unit,
-    onNavigateToResults: (String, RouteEditingTarget) -> Unit,
+    onNavigateToResults: (String, RouteEditingTarget, SearchSelectionMode) -> Unit,
     onNavigateToVoiceInput: () -> Unit,
     onNavigateToRouteSetting: () -> Unit,
     onNavigateToMapPreview: () -> Unit,
@@ -116,8 +123,13 @@ private fun SearchRouteContent(
     val viewModel = rememberSearchViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel, initialEditingTarget) {
-        viewModel.onAction(SearchUiAction.EditingTargetConfigured(editingTarget = initialEditingTarget))
+    LaunchedEffect(viewModel, initialEditingTarget, initialSelectionMode) {
+        viewModel.onAction(
+            SearchUiAction.EditingTargetConfigured(
+                editingTarget = initialEditingTarget,
+                selectionMode = initialSelectionMode,
+            ),
+        )
     }
 
     LaunchedEffect(viewModel, destination, preserveEntryStateOnReentry) {
@@ -130,9 +142,14 @@ private fun SearchRouteContent(
         }
     }
 
-    LaunchedEffect(viewModel, initialQuery) {
+    LaunchedEffect(viewModel, initialQuery, initialSelectionMode) {
         if (initialQuery != null) {
-            viewModel.onAction(SearchUiAction.ResultsRouteEntered(query = initialQuery))
+            viewModel.onAction(
+                SearchUiAction.ResultsRouteEntered(
+                    query = initialQuery,
+                    selectionMode = initialSelectionMode,
+                ),
+            )
         }
     }
 
@@ -151,7 +168,8 @@ private fun SearchRouteContent(
             when (event) {
                 SearchUiEvent.NavigateBack -> onNavigateBack()
                 SearchUiEvent.NavigateToVoiceInput -> onNavigateToVoiceInput()
-                is SearchUiEvent.NavigateToResults -> onNavigateToResults(event.query, event.editingTarget)
+                is SearchUiEvent.NavigateToResults ->
+                    onNavigateToResults(event.query, event.editingTarget, event.selectionMode)
                 SearchUiEvent.StartVoiceCapture -> onStartVoiceCapture()
                 SearchUiEvent.StopVoiceCapture -> onStopVoiceCapture()
                 SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
@@ -173,8 +191,9 @@ private fun SearchRouteContent(
 @Composable
 internal fun SearchVoiceInputExperience(
     initialEditingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    initialSelectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     onNavigateBack: () -> Unit,
-    onNavigateToResults: (String, RouteEditingTarget) -> Unit,
+    onNavigateToResults: (String, RouteEditingTarget, SearchSelectionMode) -> Unit,
     content: @Composable (SearchUiState, (SearchUiAction) -> Unit) -> Unit,
 ) {
     val context = LocalContext.current
@@ -192,8 +211,13 @@ internal fun SearchVoiceInputExperience(
     val currentCompletedUtteranceCount by rememberUpdatedState(ttsState.completedUtteranceCount)
     val currentVoiceInputPrompt by rememberUpdatedState(voiceInputPrompt)
 
-    LaunchedEffect(searchViewModel, initialEditingTarget) {
-        searchViewModel.onAction(SearchUiAction.EditingTargetConfigured(editingTarget = initialEditingTarget))
+    LaunchedEffect(searchViewModel, initialEditingTarget, initialSelectionMode) {
+        searchViewModel.onAction(
+            SearchUiAction.EditingTargetConfigured(
+                editingTarget = initialEditingTarget,
+                selectionMode = initialSelectionMode,
+            ),
+        )
     }
 
     LaunchedEffect(searchViewModel, sttViewModel) {
@@ -247,7 +271,7 @@ internal fun SearchVoiceInputExperience(
 
                 is SearchUiEvent.NavigateToResults -> {
                     sttViewModel.stopListening()
-                    currentOnNavigateToResults(event.query, event.editingTarget)
+                    currentOnNavigateToResults(event.query, event.editingTarget, event.selectionMode)
                 }
 
                 SearchUiEvent.StartVoiceCapture -> sttViewModel.startListening()

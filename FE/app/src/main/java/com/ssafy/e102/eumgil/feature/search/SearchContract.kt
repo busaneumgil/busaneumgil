@@ -5,10 +5,16 @@ import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 
+enum class SearchSelectionMode {
+    PREVIEW_ON_MAP,
+    APPLY_TO_ROUTE,
+}
+
 data class SearchUiState(
     val query: String = "",
     val hasEditedQuery: Boolean = false,
     val editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    val selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     val recentSearches: List<RecentSearch> = emptyList(),
     val sortOption: SearchSortOption = SearchSortOption.RELEVANCE,
     val resultState: SearchResultUiState = SearchResultUiState.Initial,
@@ -38,6 +44,7 @@ sealed interface SearchUiAction {
 
     data class EditingTargetConfigured(
         val editingTarget: RouteEditingTarget,
+        val selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     ) : SearchUiAction
 
     data class EntryRouteEntered(
@@ -61,6 +68,7 @@ sealed interface SearchUiAction {
 
     data class ResultsRouteEntered(
         val query: String,
+        val selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     ) : SearchUiAction
 
     data class QueryChanged(
@@ -116,6 +124,7 @@ sealed interface SearchUiEvent {
     data class NavigateToResults(
         val query: String,
         val editingTarget: RouteEditingTarget,
+        val selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     ) : SearchUiEvent
 
     data object StartVoiceCapture : SearchUiEvent

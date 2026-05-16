@@ -41,6 +41,7 @@ import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
 import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
 import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputRoute
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
@@ -141,12 +142,21 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(SearchRoute.Entry.ARG_SELECTION_MODE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
     ) { backStackEntry ->
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.Entry.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val initialSelectionMode =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.Entry.ARG_SELECTION_MODE)
+                .toSearchSelectionModeOrDefault()
         val preserveEntryStateOnReentry =
             backStackEntry.savedStateHandle.get<Boolean>(SEARCH_PRESERVE_ENTRY_STATE_KEY) == true
         backStackEntry.savedStateHandle.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, false)
@@ -154,11 +164,11 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
-            onNavigateToResults = { query, editingTarget ->
-                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget))
+            onNavigateToResults = { query, editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget, selectionMode))
             },
             onNavigateToVoiceInput = {
-                navController.navigate(SearchRoute.VoiceInput.createRoute(initialEditingTarget)) {
+                navController.navigate(SearchRoute.VoiceInput.createRoute(initialEditingTarget, initialSelectionMode)) {
                     launchSingleTop = true
                 }
             },
@@ -186,6 +196,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             initialEditingTarget = initialEditingTarget,
+            initialSelectionMode = initialSelectionMode,
             preserveEntryStateOnReentry = preserveEntryStateOnReentry,
         )
     }
@@ -202,12 +213,21 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(SearchRoute.Results.ARG_SELECTION_MODE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
     ) { backStackEntry ->
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.Results.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val initialSelectionMode =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.Results.ARG_SELECTION_MODE)
+                .toSearchSelectionModeOrDefault()
         SearchResultsRoute(
             initialQuery = backStackEntry.arguments?.getString(SearchRoute.Results.ARG_QUERY).orEmpty(),
             onNavigateBack = {
@@ -216,13 +236,13 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     ?.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, true)
                 navController.popBackStack()
             },
-            onNavigateToResults = { query, editingTarget ->
-                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+            onNavigateToResults = { query, editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget, selectionMode)) {
                     launchSingleTop = true
                 }
             },
             onNavigateToVoiceInput = {
-                navController.navigate(SearchRoute.VoiceInput.createRoute(initialEditingTarget)) {
+                navController.navigate(SearchRoute.VoiceInput.createRoute(initialEditingTarget, initialSelectionMode)) {
                     launchSingleTop = true
                 }
             },
@@ -250,6 +270,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             initialEditingTarget = initialEditingTarget,
+            initialSelectionMode = initialSelectionMode,
         )
     }
 
@@ -262,12 +283,21 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(SearchRoute.VoiceInput.ARG_SELECTION_MODE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
     ) { backStackEntry ->
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.VoiceInput.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val initialSelectionMode =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.VoiceInput.ARG_SELECTION_MODE)
+                .toSearchSelectionModeOrDefault()
         val context = LocalContext.current
         val micPermissionLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
@@ -288,8 +318,8 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     ?.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, true)
                 navController.popBackStack()
             },
-            onNavigateToResults = { query, editingTarget ->
-                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+            onNavigateToResults = { query, editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget, selectionMode)) {
                     launchSingleTop = true
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = false
@@ -297,6 +327,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             initialEditingTarget = initialEditingTarget,
+            initialSelectionMode = initialSelectionMode,
         )
     }
 
@@ -401,8 +432,8 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
             },
-            onNavigateToSearch = { editingTarget ->
-                navController.navigate(SearchRoute.Entry.createRoute(editingTarget)) {
+            onNavigateToSearch = { editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Entry.createRoute(editingTarget, selectionMode)) {
                     launchSingleTop = true
                 }
             },
@@ -763,6 +794,11 @@ private fun String?.toRouteEditingTargetOrDefault(): RouteEditingTarget =
     this
         ?.let { value -> runCatching { RouteEditingTarget.valueOf(value) }.getOrNull() }
         ?: RouteEditingTarget.DESTINATION
+
+private fun String?.toSearchSelectionModeOrDefault(): SearchSelectionMode =
+    this
+        ?.let { value -> runCatching { SearchSelectionMode.valueOf(value) }.getOrNull() }
+        ?: SearchSelectionMode.PREVIEW_ON_MAP
 
 @androidx.compose.runtime.Composable
 internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {

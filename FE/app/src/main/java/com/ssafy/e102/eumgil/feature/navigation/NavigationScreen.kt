@@ -45,6 +45,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -88,6 +89,7 @@ import com.ssafy.e102.eumgil.feature.map.component.createNavigationViewportOverl
 import com.ssafy.e102.eumgil.feature.map.component.rememberMapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.navigation.component.NavigationSegmentRail
 import com.ssafy.e102.eumgil.feature.route.RouteTransitOptionLabelUiState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -101,6 +103,14 @@ fun NavigationScreen(
     val sidePanelPolicy = navigationSidePanelPolicy()
     val railWidth = NavigationSegmentRailWidth
     var isSidePanelExpanded by remember(uiState.screenState) { mutableStateOf(false) }
+    var inspectionInteractionVersion by remember(uiState.screenState) { mutableStateOf(0) }
+
+    LaunchedEffect(uiState.segmentSync.isInspectingSegments, inspectionInteractionVersion) {
+        if (uiState.segmentSync.isInspectingSegments) {
+            delay(NavigationInspectAutoReturnMillis)
+            onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
+        }
+    }
 
     Box(
         modifier = modifier.fillMaxSize(),
@@ -158,14 +168,31 @@ fun NavigationScreen(
                         NavigationGuideSidePanel(
                             uiState = uiState,
                             isExpanded = isSidePanelExpanded,
-                            onExpandedChange = { expanded -> isSidePanelExpanded = expanded },
+                            onExpandedChange = { expanded ->
+                                isSidePanelExpanded = expanded
+                                if (expanded) {
+                                    inspectionInteractionVersion += 1
+                                    onAction(
+                                        NavigationUiAction.SegmentTapped(
+                                            index =
+                                                uiState.segmentSync.focusedSegmentIndex
+                                                    .takeIf { index -> index != NavigationOriginSegmentIndex }
+                                                    ?: uiState.segmentSync.activeSegmentIndex,
+                                        ),
+                                    )
+                                } else {
+                                    onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
+                                }
+                            },
                             onSegmentTapped = { index ->
                                 if (isSidePanelExpanded && sidePanelPolicy.collapseOnSegmentTap) {
                                     isSidePanelExpanded = false
                                 }
+                                inspectionInteractionVersion += 1
                                 onAction(NavigationUiAction.SegmentTapped(index = index))
                             },
                             onTopVisibleSegmentChanged = { index ->
+                                inspectionInteractionVersion += 1
                                 onAction(NavigationUiAction.SegmentTapped(index = index))
                             },
                             modifier =
@@ -283,11 +310,11 @@ internal data class NavigationHeroContentUiState(
     val title: String,
     val description: String,
     val distanceLabel: String,
+    val transitInfo: NavigationTransitInfoUiState? = null,
 )
 
 private data class NavigationHeroPresentation(
     val content: NavigationHeroContentUiState,
-    val transitInfo: NavigationTransitInfoUiState?,
 )
 
 internal data class NavigationBottomBarLayoutPolicy(
@@ -326,7 +353,7 @@ internal fun navigationSidePanelPolicy(): NavigationSidePanelPolicy =
         swipeAxis = NavigationSidePanelSwipeAxis.Horizontal,
         swipeThresholdPx = 80f,
         showsExpandedScrim = true,
-        collapseOnSegmentTap = true,
+        collapseOnSegmentTap = false,
         showsProgressHeader = false,
     )
 
@@ -348,6 +375,7 @@ internal fun navigationHeroContent(uiState: NavigationUiState): NavigationHeroCo
         title = focusedSegmentCard?.heroTitle ?: uiState.stepCard.heroTitle,
         description = focusedSegmentCard?.heroDescription ?: uiState.stepCard.heroDescription,
         distanceLabel = focusedSegmentCard?.distanceLabel ?: uiState.stepCard.distanceLabel,
+        transitInfo = focusedSegmentCard?.transitInfo ?: uiState.stepCard.transitInfo,
     )
 }
 
@@ -456,6 +484,9 @@ private fun NavigationExpandedSidePanelContent(
             onClick = {
                 coroutineScope.launch {
                     scrollState.animateScrollTo(0)
+                }
+                uiState.segmentSync.railItems.firstOrNull()?.let { item ->
+                    onSegmentTapped(item.index)
                 }
             },
         )
@@ -577,11 +608,9 @@ private fun NavigationHeroCard(
     onAction: (NavigationUiAction) -> Unit,
 ) {
     val heroContent = navigationHeroContent(uiState)
-    val focusedSegmentCard = uiState.focusedSegmentCard
     val heroPresentation =
         NavigationHeroPresentation(
             content = heroContent,
-            transitInfo = focusedSegmentCard?.transitInfo,
         )
     val layoutPolicy = navigationHeroLayoutPolicy(LocalConfiguration.current.screenHeightDp.dp)
 
@@ -614,7 +643,7 @@ private fun NavigationHeroCard(
                     },
                     modifier = Modifier.weight(1f),
                 ) { presentation ->
-                    presentation.transitInfo?.let { transitInfo ->
+                    presentation.content.transitInfo?.let { transitInfo ->
                         NavigationTransitHeroContent(
                             transitInfo = transitInfo,
                             modifier = Modifier.fillMaxWidth(),
@@ -624,27 +653,27 @@ private fun NavigationHeroCard(
                         horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        NavigationHeroDirectionIcon(
-                            guidanceAction = presentation.content.guidanceAction,
-                            iconSize = layoutPolicy.directionIconSize,
-                        )
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text = presentation.content.title,
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                maxLines = 1,
+                            NavigationHeroDirectionIcon(
+                                guidanceAction = presentation.content.guidanceAction,
+                                iconSize = layoutPolicy.directionIconSize,
                             )
-                            Text(
-                                text = presentation.content.description,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                maxLines = 2,
-                            )
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                Text(
+                                    text = presentation.content.title,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    text = presentation.content.description,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    maxLines = 2,
+                                )
+                            }
                         }
-                    }
                 }
                 NavigationVoiceControl(
                     uiState = uiState,
@@ -1399,6 +1428,7 @@ private val NavigationBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
 private val NavigationBottomBarBottomGap = 30.dp
 private val NavigationSegmentRailWidth = 58.dp
 private const val NavigationGuideSidePanelExpandedWidthFraction = 0.88f
+private const val NavigationInspectAutoReturnMillis = 5_000L
 private val NavigationExpandedSidePanelScrimColor = Color(0x66000000)
 private val NavigationTransitTagCornerRadius = 10.dp
 private val NavigationTransitTagStrokeWidth = 0.5.dp

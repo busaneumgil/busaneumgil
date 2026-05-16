@@ -181,13 +181,12 @@ class NavigationScreenPolicyTest {
             source.contains("GuideSidePanelShell("),
         )
         assertTrue(
-            "Rows should collapse the panel and reuse SegmentTapped so map focus stays on the existing ViewModel path.",
-            source.contains("isSidePanelExpanded = false") &&
-                source.contains("NavigationUiAction.SegmentTapped(index = index)"),
+            "Rows should keep the panel open and reuse SegmentTapped so every rail interaction can preview that step.",
+            source.contains("NavigationUiAction.SegmentTapped(index = index)"),
         )
         assertEquals(NavigationSidePanelSwipeAxis.Horizontal, sidePanelPolicy.swipeAxis)
         assertEquals(80f, sidePanelPolicy.swipeThresholdPx, 0f)
-        assertTrue(sidePanelPolicy.collapseOnSegmentTap)
+        assertFalse(sidePanelPolicy.collapseOnSegmentTap)
         assertTrue(
             "Transit guidance actions should use the same side panel row path as walk guidance.",
             source.contains("GuideSidePanelStepRow(") &&
@@ -292,7 +291,7 @@ class NavigationScreenPolicyTest {
     }
 
     @Test
-    fun `hero content prioritizes focused segment guidance over the active step card`() {
+    fun `hero content renders selected segment as sequence guidance and remaining time`() {
         val heroContent =
             navigationHeroContent(
                 NavigationUiState(
@@ -309,8 +308,8 @@ class NavigationScreenPolicyTest {
                             sequenceLabel = "2 / 3",
                             instruction = "Cross the street and head toward the elevator",
                             heroTitle = "횡단보도 건너기",
-                            heroDescription = "Cross the street and head toward the elevator",
-                            distanceLabel = "80m",
+                            heroDescription = "목적지까지 약 8분",
+                            distanceLabel = "목적지까지 약 8분",
                             riskLabel = "Low",
                             supportingText = "Focused segment",
                             guidanceAction = NavigationGuidanceAction.CROSSWALK,
@@ -320,12 +319,12 @@ class NavigationScreenPolicyTest {
 
         assertEquals(NavigationGuidanceAction.CROSSWALK, heroContent.guidanceAction)
         assertEquals("횡단보도 건너기", heroContent.title)
-        assertEquals("Cross the street and head toward the elevator", heroContent.description)
-        assertEquals("80m", heroContent.distanceLabel)
+        assertEquals("목적지까지 약 8분", heroContent.description)
+        assertEquals("목적지까지 약 8분", heroContent.distanceLabel)
     }
 
     @Test
-    fun `navigation hero animates focused card changes and does not pin transit card during inspection`() {
+    fun `navigation hero animates selected card changes without replacing the fixed three line card`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
                 .readText()
@@ -341,12 +340,33 @@ class NavigationScreenPolicyTest {
                 heroSection.contains("slideOutVertically"),
         )
         assertTrue(
-            "Focused rail inspection should show transit detail only when the focused segment itself is bus/subway.",
-            heroSection.contains("focusedSegmentCard?.transitInfo"),
+            "Bus and subway boarding guidance should use the same transit detail content as the opened side rail card.",
+            heroSection.contains("presentation.content.transitInfo?.let") &&
+                heroSection.contains("NavigationTransitHeroContent("),
         )
-        assertFalse(
-            "The active step transit summary must not pin the top card during normal entry or inspection.",
-            heroSection.contains("uiState.stepCard.transitInfo"),
+        assertTrue(
+            "The hero content model should prefer selected rail transit info and otherwise use the live active step transit info.",
+            source.contains("transitInfo = focusedSegmentCard?.transitInfo ?: uiState.stepCard.transitInfo"),
+        )
+    }
+
+    @Test
+    fun `navigation screen returns selected side rail preview to live guidance`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+
+        assertTrue(
+            "Selected rail preview should automatically return to current live guidance after five seconds without another rail interaction.",
+            source.contains("LaunchedEffect(uiState.segmentSync.isInspectingSegments, inspectionInteractionVersion)") &&
+                source.contains("delay(NavigationInspectAutoReturnMillis)") &&
+                source.contains("NavigationInspectAutoReturnMillis = 5_000L") &&
+                source.contains("NavigationUiAction.ReturnToActiveSegmentClicked"),
+        )
+        assertTrue(
+            "Closing the side rail should immediately restore the current live guidance card.",
+            source.contains("onExpandedChange = { expanded ->") &&
+                source.contains("} else {\n                                    onAction(NavigationUiAction.ReturnToActiveSegmentClicked)\n                                }"),
         )
     }
 

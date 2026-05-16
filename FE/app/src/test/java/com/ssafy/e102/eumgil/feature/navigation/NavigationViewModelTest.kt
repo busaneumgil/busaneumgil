@@ -73,13 +73,25 @@ class NavigationViewModelTest {
                     recordedAtEpochMillis = 1_000L,
                 ),
             )
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = WALK_MID_POINT.latitude,
+                    longitude = WALK_MID_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 2_500L,
+                ),
+            )
             advanceUntilIdle()
 
             assertEquals(NavigationScreenState.Ready, viewModel.uiState.value.screenState)
             assertEquals(1, viewModel.uiState.value.segmentSync.activeSegmentIndex)
-            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertEquals(1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
             assertEquals("450m", viewModel.uiState.value.remainingDistanceLabel)
             assertEquals("8분", viewModel.uiState.value.remainingEtaLabel)
+            assertEquals("2 / 2", viewModel.uiState.value.progressLabel)
+            assertEquals("목적지까지 약 8분", viewModel.uiState.value.stepCard.heroDescription)
         }
 
     @Test
@@ -106,7 +118,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `navigation entry keeps first guide card instead of replaying cached latest location`() =
+    fun `navigation entry shows live first step card instead of selected origin preview`() =
         runTest {
             val locationManager =
                 FakeCurrentLocationManager(
@@ -124,14 +136,18 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(0, locationManager.refreshLatestLocationCallCount)
-            assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
-            assertEquals(-1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
             assertEquals(-1, viewModel.uiState.value.segmentSync.railItems.firstOrNull()?.index)
-            assertEquals("출발", viewModel.uiState.value.focusedSegmentCard?.heroTitle)
+            assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
+            assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
+            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("목적지까지 약 15분", viewModel.uiState.value.stepCard.heroDescription)
         }
 
     @Test
-    fun `navigation start focuses the origin guide card even when origin projection is near the destination`() =
+    fun `navigation start keeps live card even when origin projection is near the destination`() =
         runTest {
             val viewModel = createViewModel()
 
@@ -146,18 +162,16 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
-            assertEquals(-1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
-            assertTrue(viewModel.uiState.value.segmentSync.isInspectingSegments)
-            assertEquals("출발", viewModel.uiState.value.focusedSegmentCard?.heroTitle)
-            assertEquals(
-                "현재 위치에서 선택한 경로 안내를 시작합니다.",
-                viewModel.uiState.value.focusedSegmentCard?.heroDescription,
-            )
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
+            assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
+            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
         }
 
     @Test
-    fun `navigation entry keeps origin guide card after the first live location update`() =
+    fun `navigation entry waits for stable route proximity before live guide card`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val viewModel = createViewModel(locationManager = locationManager)
@@ -173,10 +187,102 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(1, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.activeSegmentIndex)
             assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
-            assertTrue(viewModel.uiState.value.segmentSync.isInspectingSegments)
-            assertEquals("출발", viewModel.uiState.value.focusedSegmentCard?.heroTitle)
+            assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
+            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
+
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = WALK_MID_POINT.latitude,
+                    longitude = WALK_MID_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 2_500L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
+            assertEquals("2 / 2", viewModel.uiState.value.progressLabel)
+            assertEquals("600m 후 우회전입니다", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("목적지까지 약 8분", viewModel.uiState.value.stepCard.heroDescription)
+        }
+
+    @Test
+    fun `navigation stays on route detail guide while current location is outside selected route`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = OFF_ROUTE_POINT.latitude,
+                    longitude = OFF_ROUTE_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = OFF_ROUTE_POINT.latitude,
+                    longitude = OFF_ROUTE_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 2_500L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
+            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("목적지까지 약 15분", viewModel.uiState.value.stepCard.heroDescription)
+        }
+
+    @Test
+    fun `navigation falls back to route detail guide when current location leaves selected route`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = WALK_MID_POINT.latitude,
+                    longitude = WALK_MID_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = WALK_MID_POINT.latitude,
+                    longitude = WALK_MID_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 2_500L,
+                ),
+            )
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = OFF_ROUTE_POINT.latitude,
+                    longitude = OFF_ROUTE_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 4_000L,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
+            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("목적지까지 약 15분", viewModel.uiState.value.stepCard.heroDescription)
         }
 
     @Test
@@ -199,6 +305,14 @@ class NavigationViewModelTest {
                     longitude = TRANSIT_BOARDING_POINT.longitude,
                     accuracyMeters = 5f,
                     recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = TRANSIT_BOARDING_POINT.latitude,
+                    longitude = TRANSIT_BOARDING_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 2_500L,
                 ),
             )
             advanceUntilIdle()
@@ -244,6 +358,14 @@ class NavigationViewModelTest {
                     recordedAtEpochMillis = 1_000L,
                 ),
             )
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = TRANSIT_BOARDING_POINT.latitude,
+                    longitude = TRANSIT_BOARDING_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 2_500L,
+                ),
+            )
             advanceUntilIdle()
 
             assertEquals(listOf("transit-route-1" to 2), routeRepository.transitRefreshCalls)
@@ -251,15 +373,38 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `transit navigation entry shows regular guidance instead of pinned transit summary card`() =
+    fun `active transit boarding guidance exposes the same transit summary used by the rail card`() =
         runTest {
-            val viewModel = createViewModel()
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
 
             viewModel.bindNavigationRequest(testTransitNavigationRequest())
             advanceUntilIdle()
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = TRANSIT_BOARDING_POINT.latitude,
+                    longitude = TRANSIT_BOARDING_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 1_000L,
+                ),
+            )
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = TRANSIT_BOARDING_POINT.latitude,
+                    longitude = TRANSIT_BOARDING_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 2_500L,
+                ),
+            )
+            advanceUntilIdle()
 
-            assertEquals(null, viewModel.uiState.value.stepCard.transitInfo)
-            assertEquals(NavigationGuidanceAction.STRAIGHT, viewModel.uiState.value.stepCard.guidanceAction)
+            val transitInfo =
+                viewModel.uiState.value.stepCard.transitInfo
+                    ?: error("Active transit boarding step should expose transit detail info.")
+            assertEquals(NavigationGuidanceAction.BUS, transitInfo.guidanceAction)
+            assertEquals("Bus Stop", transitInfo.startName)
+            assertEquals("Destination Stop", transitInfo.endName)
+            assertEquals("15", transitInfo.durationLabel?.filter(Char::isDigit))
         }
 
     @Test
@@ -313,9 +458,35 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
+            assertEquals(NavigationMapFocusMode.ACTIVE, viewModel.uiState.value.mapOverlay.mapFocusMode)
             assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.currentLocation?.coordinate)
-            assertEquals(WALK_START_POINT, viewModel.uiState.value.mapOverlay.focusCoordinate)
+            assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.focusCoordinate)
+        }
+
+    @Test
+    fun `segment tap switches top card to selected step preview until returning to active guidance`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 1))
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals("2 / 2", viewModel.uiState.value.focusedSegmentCard?.sequenceLabel)
+            assertEquals("우회전", viewModel.uiState.value.focusedSegmentCard?.heroTitle)
+            assertEquals("목적지까지 약 15분", viewModel.uiState.value.focusedSegmentCard?.heroDescription)
+            assertEquals("목적지까지 약 15분", viewModel.uiState.value.focusedSegmentCard?.distanceLabel)
+
+            viewModel.onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
+            assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
+            assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
+            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
         }
 
     @Test
@@ -433,7 +604,7 @@ class NavigationViewModelTest {
 
             val summary = createNavigationSegmentMarkerDebugSummary(viewModel.uiState.value.mapOverlay)
 
-            assertTrue(summary.contains("focusMode=FOCUSED"))
+            assertTrue(summary.contains("focusMode=ACTIVE"))
             assertTrue(summary.contains("count=3"))
             assertTrue(summary.contains("idx=0 seq=1 kind=TRANSIT_WALK polyline=0 first=null"))
             assertTrue(summary.contains("idx=1 seq=2 kind=TRANSIT polyline=2 first=35.180600,129.073500"))
@@ -764,7 +935,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `accurate repeated off route updates reroute and end latest route id on completion`() =
+    fun `accurate repeated off route updates stay on selected route detail guide`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val routeRepository =
@@ -803,8 +974,8 @@ class NavigationViewModelTest {
             viewModel.onAction(NavigationUiAction.NavigationCompleteClicked)
             advanceUntilIdle()
 
-            assertEquals(1, routeRepository.rerouteCalls.size)
-            assertEquals(listOf("rerouted-route-1"), routeRepository.endRouteCalls)
+            assertTrue(routeRepository.rerouteCalls.isEmpty())
+            assertEquals(listOf("walk-route-1"), routeRepository.endRouteCalls)
             assertEquals("ended-session", viewModel.currentRatingSessionId())
             assertEquals(
                 listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToArrival),
@@ -838,13 +1009,21 @@ class NavigationViewModelTest {
                     recordedAtEpochMillis = 1_000L,
                 ),
             )
+            locationManager.emitLocation(
+                LocationSnapshot(
+                    latitude = WALK_PRE_TURN_POINT.latitude,
+                    longitude = WALK_PRE_TURN_POINT.longitude,
+                    accuracyMeters = 5f,
+                    recordedAtEpochMillis = 2_500L,
+                ),
+            )
             advanceUntilIdle()
 
             assertEquals(NavigationUiEvent.PlayRouteChangeAlert, eventDeferred.await())
         }
 
     @Test
-    fun `low vision far off route uses fresh walk search metrics when destination is walkable`() =
+    fun `low vision far off route keeps selected route detail metrics when destination is walkable`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val routeRepository =
@@ -878,14 +1057,14 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals("710m", viewModel.uiState.value.remainingDistanceLabel)
-            assertEquals("13\uBD84", viewModel.uiState.value.remainingEtaLabel)
-            assertEquals(1, routeRepository.freshWalkQueries.size)
+            assertEquals("2.2km", viewModel.uiState.value.remainingDistanceLabel)
+            assertEquals("22\uBD84", viewModel.uiState.value.remainingEtaLabel)
+            assertTrue(routeRepository.freshWalkQueries.isEmpty())
             assertTrue(routeRepository.freshTransitQueries.isEmpty())
         }
 
     @Test
-    fun `low vision far off route uses fresh transit search metrics when destination is beyond walking range`() =
+    fun `low vision far off route keeps selected route detail metrics when destination is beyond walking range`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val routeRepository =
@@ -927,14 +1106,14 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals("3.6km", viewModel.uiState.value.remainingDistanceLabel)
-            assertEquals("34\uBD84", viewModel.uiState.value.remainingEtaLabel)
-            assertEquals(1, routeRepository.freshWalkQueries.size)
-            assertEquals(1, routeRepository.freshTransitQueries.size)
+            assertEquals("2.2km", viewModel.uiState.value.remainingDistanceLabel)
+            assertEquals("22\uBD84", viewModel.uiState.value.remainingEtaLabel)
+            assertTrue(routeRepository.freshWalkQueries.isEmpty())
+            assertTrue(routeRepository.freshTransitQueries.isEmpty())
         }
 
     @Test
-    fun `low vision far off route shows dashes when fresh remaining route search is unavailable`() =
+    fun `low vision far off route keeps selected route detail metrics when fresh remaining route search is unavailable`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val routeRepository =
@@ -962,12 +1141,12 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals("-", viewModel.uiState.value.remainingDistanceLabel)
-            assertEquals("-", viewModel.uiState.value.remainingEtaLabel)
+            assertEquals("2.2km", viewModel.uiState.value.remainingDistanceLabel)
+            assertEquals("22\uBD84", viewModel.uiState.value.remainingEtaLabel)
         }
 
     @Test
-    fun `low vision far off route throttles fresh remaining route search for small movement`() =
+    fun `low vision far off route suppresses fresh remaining route search for small movement`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val routeRepository =
@@ -1011,9 +1190,9 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(1, routeRepository.freshWalkQueries.size)
-            assertEquals("710m", viewModel.uiState.value.remainingDistanceLabel)
-            assertEquals("13\uBD84", viewModel.uiState.value.remainingEtaLabel)
+            assertTrue(routeRepository.freshWalkQueries.isEmpty())
+            assertEquals("2.2km", viewModel.uiState.value.remainingDistanceLabel)
+            assertEquals("22\uBD84", viewModel.uiState.value.remainingEtaLabel)
 
             locationManager.emitLocation(
                 LocationSnapshot(
@@ -1025,7 +1204,7 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(2, routeRepository.freshWalkQueries.size)
+            assertTrue(routeRepository.freshWalkQueries.isEmpty())
         }
 }
 

@@ -52,6 +52,16 @@ internal const val NavigationOriginSegmentIndex = -1
 private const val NavigationOriginHeroTitle = "\uCD9C\uBC1C"
 private const val NavigationOriginHeroDescription =
     "\uD604\uC7AC \uC704\uCE58\uC5D0\uC11C \uC120\uD0DD\uD55C \uACBD\uB85C \uC548\uB0B4\uB97C \uC2DC\uC791\uD569\uB2C8\uB2E4."
+private const val NAVIGATION_GUIDANCE_ENTER_RADIUS_METERS = 5
+private const val NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS = 25.0
+private const val NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS = 40.0
+private const val NAVIGATION_ROUTE_JOIN_STABLE_UPDATE_COUNT = 2
+private const val NAVIGATION_ROUTE_JOIN_STABLE_DURATION_MILLIS = 3_000L
+
+private enum class NavigationGuidanceMode {
+    RouteDetail,
+    Realtime,
+}
 
 class NavigationViewModel(
     private val currentLocationManager: CurrentLocationManager,
@@ -78,6 +88,9 @@ class NavigationViewModel(
     private var isTransitRefreshInFlight: Boolean = false
     private var isRerouteInFlight: Boolean = false
     private var isEndNavigationInFlight: Boolean = false
+    private var guidanceMode: NavigationGuidanceMode = NavigationGuidanceMode.RouteDetail
+    private var routeJoinStableUpdateCount: Int = 0
+    private var routeJoinStableSinceEpochMillis: Long? = null
     private var latestLocationCoordinate: GeoCoordinate? = null
     private var latestProgress: NavigationProgressSnapshot? = null
     private var latestRemainingDistanceMeters: Int? = null
@@ -128,14 +141,17 @@ class NavigationViewModel(
             )
         lastProcessedLocationEpochMillis = null
         deviationState = NavigationDeviationState()
-        activeSegmentIndex = 0
+        activeSegmentIndex = NavigationOriginSegmentIndex
         focusedSegmentIndex = NavigationOriginSegmentIndex
-        isInspectingSegments = true
+        isInspectingSegments = false
         hasPendingActiveChange = false
         isExitConfirmDialogVisible = false
         isTransitRefreshInFlight = false
         isRerouteInFlight = false
         isEndNavigationInFlight = false
+        guidanceMode = NavigationGuidanceMode.RouteDetail
+        routeJoinStableUpdateCount = 0
+        routeJoinStableSinceEpochMillis = null
         latestLocationCoordinate = normalizedRequest.origin.coordinate
         latestProgress = routeSession?.route?.evaluateProgress(normalizedRequest.origin.coordinate)
         val initialRemainingMetrics =
@@ -294,7 +310,15 @@ class NavigationViewModel(
 
         val progress = latestProgress
         if (progress != null) {
-            if (isLowVisionMode && !progress.shouldUseProjectedRemainingMetrics()) {
+            val nextGuidanceMode =
+                resolveGuidanceMode(
+                    currentCoordinate = currentCoordinate,
+                    progress = progress,
+                    recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
+                )
+            if (nextGuidanceMode == NavigationGuidanceMode.RouteDetail) {
+                applyRouteDetailGuidance(currentSession)
+            } else if (isLowVisionMode && !progress.shouldUseProjectedRemainingMetrics()) {
                 applyLowVisionActualRemainingMetrics(
                     current = currentCoordinate,
                     destination = destinationCoordinate,
@@ -311,19 +335,88 @@ class NavigationViewModel(
                 latestEstimatedMinutes = remainingMetrics.estimatedMinutes
                 latestRemainingMetricsSource = remainingMetrics.source
             }
-            maybePlayLowVisionRouteChangeAlert(currentSession.route, progress)
-            syncActiveSegment(progress.activeSegmentIndex)
             latestTransitPresentation = currentSession.resolveTransitPresentation(progress.activeLegIndex)
-            maybeRefreshTransit(currentSession, progress, snapshot)
-            maybeRequestReroute(currentSession, progress, snapshot)
+            if (nextGuidanceMode == NavigationGuidanceMode.Realtime) {
+                maybePlayLowVisionRouteChangeAlert(currentSession.route, progress)
+                syncActiveSegment(progress.activeSegmentIndex)
+                maybeRefreshTransit(currentSession, progress, snapshot)
+                maybeRequestReroute(currentSession, progress, snapshot)
+            }
         } else {
-            latestRemainingDistanceMeters = currentSession.route.totalDistanceMeters()
-            latestEstimatedMinutes = currentSession.route.summary.estimatedTimeMinutes
-            latestRemainingMetricsSource = NavigationRemainingMetricsSource.ProjectedRoute
-            latestTransitPresentation = currentSession.resolveTransitPresentation(activeLegIndex = 0)
+            guidanceMode = NavigationGuidanceMode.RouteDetail
+            resetRouteJoinStability()
+            applyRouteDetailGuidance(currentSession)
         }
 
         publishNavigationState()
+    }
+
+    private fun resolveGuidanceMode(
+        currentCoordinate: GeoCoordinate,
+        progress: NavigationProgressSnapshot,
+        recordedAtEpochMillis: Long,
+    ): NavigationGuidanceMode {
+        val originDistanceMeters =
+            navigationRequest
+                ?.origin
+                ?.coordinate
+                ?.let { origin -> haversineDistanceMeters(currentCoordinate, origin) }
+                ?: Double.POSITIVE_INFINITY
+        val isInsideRealtimeEntryDistance =
+            progress.distanceToRouteMeters <= NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS ||
+                originDistanceMeters <= NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS
+        val isOutsideRouteDetailDistance =
+            progress.distanceToRouteMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS &&
+                originDistanceMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS
+
+        return when (guidanceMode) {
+            NavigationGuidanceMode.Realtime -> {
+                if (isOutsideRouteDetailDistance) {
+                    guidanceMode = NavigationGuidanceMode.RouteDetail
+                    resetRouteJoinStability()
+                } else if (isInsideRealtimeEntryDistance) {
+                    resetRouteJoinStability()
+                }
+                guidanceMode
+            }
+            NavigationGuidanceMode.RouteDetail -> {
+                if (isInsideRealtimeEntryDistance) {
+                    routeJoinStableUpdateCount += 1
+                    val stableSince =
+                        routeJoinStableSinceEpochMillis
+                            ?: recordedAtEpochMillis.also { firstStableEpochMillis ->
+                                routeJoinStableSinceEpochMillis = firstStableEpochMillis
+                            }
+                    val isStableEnough =
+                        routeJoinStableUpdateCount >= NAVIGATION_ROUTE_JOIN_STABLE_UPDATE_COUNT ||
+                            recordedAtEpochMillis - stableSince >= NAVIGATION_ROUTE_JOIN_STABLE_DURATION_MILLIS
+                    if (isStableEnough) {
+                        guidanceMode = NavigationGuidanceMode.Realtime
+                        resetRouteJoinStability()
+                    }
+                } else if (isOutsideRouteDetailDistance) {
+                    resetRouteJoinStability()
+                }
+                guidanceMode
+            }
+        }
+    }
+
+    private fun resetRouteJoinStability() {
+        routeJoinStableUpdateCount = 0
+        routeJoinStableSinceEpochMillis = null
+    }
+
+    private fun applyRouteDetailGuidance(currentSession: NavigationRouteSession) {
+        latestRemainingDistanceMeters = currentSession.route.totalDistanceMeters()
+        latestEstimatedMinutes = currentSession.route.summary.estimatedTimeMinutes
+        latestRemainingMetricsSource = NavigationRemainingMetricsSource.ProjectedRoute
+        latestTransitPresentation = currentSession.resolveTransitPresentation(activeLegIndex = 0)
+        if (!isInspectingSegments) {
+            activeSegmentIndex = NavigationOriginSegmentIndex
+            focusedSegmentIndex = NavigationOriginSegmentIndex
+            hasPendingActiveChange = false
+        }
     }
 
     private fun applyLowVisionActualRemainingMetrics(
@@ -540,7 +633,12 @@ class NavigationViewModel(
         val screenState = runtimeRequest.toScreenState()
         val maxSegmentIndex = runtimeRequest.selectedRoute.segments.lastIndex.coerceAtLeast(0)
 
-        activeSegmentIndex = activeSegmentIndex.coerceIn(0, maxSegmentIndex)
+        activeSegmentIndex =
+            if (activeSegmentIndex == NavigationOriginSegmentIndex) {
+                NavigationOriginSegmentIndex
+            } else {
+                activeSegmentIndex.coerceIn(0, maxSegmentIndex)
+            }
         focusedSegmentIndex =
             if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
                 NavigationOriginSegmentIndex
@@ -597,10 +695,15 @@ class NavigationViewModel(
                         transitPresentation = latestTransitPresentation,
                     ),
                 focusedSegmentCard =
-                    runtimeRequest.toFocusedSegmentCardUiState(
-                        focusedSegmentIndex = focusedSegmentIndex,
-                        transitPresentation = latestTransitPresentation,
-                    ),
+                    if (isInspectingSegments) {
+                        runtimeRequest.toFocusedSegmentCardUiState(
+                            focusedSegmentIndex = focusedSegmentIndex,
+                            estimatedMinutes = latestEstimatedMinutes,
+                            transitPresentation = latestTransitPresentation,
+                        )
+                    } else {
+                        null
+                    },
                 pendingActiveChangeLabel =
                     if (hasPendingActiveChange) {
                         PENDING_ACTIVE_SEGMENT_LABEL
@@ -630,7 +733,12 @@ class NavigationViewModel(
         if (nextActiveSegmentIndex == activeSegmentIndex) return
 
         activeSegmentIndex = nextActiveSegmentIndex
-        if (isInspectingSegments) {
+        val activeSegment = routeSession?.route?.segments?.getOrNull(activeSegmentIndex)
+        if (isInspectingSegments && activeSegment?.isRiskPrioritySegment() == true) {
+            focusedSegmentIndex = activeSegmentIndex
+            isInspectingSegments = false
+            hasPendingActiveChange = false
+        } else if (isInspectingSegments) {
             hasPendingActiveChange = focusedSegmentIndex != activeSegmentIndex
         } else {
             focusedSegmentIndex = activeSegmentIndex
@@ -1695,14 +1803,24 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
     mapFocusMode: NavigationMapFocusMode,
 ): NavigationMapOverlayUiState {
     val selectedRoutePolyline = selectedRoute.previewPolyline.points
-    val activeSegment = selectedRoute.segments.getOrNull(activeSegmentIndex)
+    val activeSegment =
+        if (activeSegmentIndex == NavigationOriginSegmentIndex) {
+            null
+        } else {
+            selectedRoute.segments.getOrNull(activeSegmentIndex)
+        }
     val focusedSegment =
         if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
             null
         } else {
             selectedRoute.segments.getOrNull(focusedSegmentIndex)
         }
-    val activeSegmentPolyline = selectedRoute.resolveSegmentDisplayPolyline(activeSegmentIndex)
+    val activeSegmentPolyline =
+        if (activeSegmentIndex == NavigationOriginSegmentIndex) {
+            emptyList()
+        } else {
+            selectedRoute.resolveSegmentDisplayPolyline(activeSegmentIndex)
+        }
     val focusedSegmentPolyline =
         if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
             emptyList()
@@ -1711,10 +1829,14 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         }
     val hasTransitLeg = selectedRoute.hasTransitLeg()
     val activeFocusCoordinate =
-        currentLocationCoordinate
-            ?: selectedRoute.resolveSegmentStartCoordinate(activeSegmentIndex)
-            ?: selectedRoute.resolveSegmentFocusCoordinate(activeSegmentIndex)
-            ?: origin.coordinate
+        if (activeSegmentIndex == NavigationOriginSegmentIndex) {
+            currentLocationCoordinate ?: origin.coordinate
+        } else {
+            currentLocationCoordinate
+                ?: selectedRoute.resolveSegmentStartCoordinate(activeSegmentIndex)
+                ?: selectedRoute.resolveSegmentFocusCoordinate(activeSegmentIndex)
+                ?: origin.coordinate
+        }
     val inspectedFocusCoordinate =
         if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
             origin.coordinate
@@ -2010,15 +2132,18 @@ private fun String.hasVisibleHangul(): Boolean = any { character -> character in
 
 private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
     focusedSegmentIndex: Int,
+    estimatedMinutes: Int?,
     transitPresentation: NavigationTransitPresentation?,
 ): NavigationFocusedSegmentCardUiState? {
+    val totalStepCount = selectedRoute.segments.size.coerceAtLeast(1)
+    val remainingTimeLabel = estimatedMinutes.toDestinationRemainingTimeLabel()
     if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
         return NavigationFocusedSegmentCardUiState(
-            sequenceLabel = NavigationOriginHeroTitle,
+            sequenceLabel = "1 / $totalStepCount",
             instruction = NavigationOriginHeroTitle,
             heroTitle = NavigationOriginHeroTitle,
-            heroDescription = NavigationOriginHeroDescription,
-            distanceLabel = "",
+            heroDescription = remainingTimeLabel,
+            distanceLabel = remainingTimeLabel,
             riskLabel = "",
             supportingText = selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption),
             guidanceAction = NavigationGuidanceAction.START,
@@ -2029,11 +2154,11 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
     val heroDetail = selectedRoute.toNavigationHeroDetail(focusedSegment)
 
     return NavigationFocusedSegmentCardUiState(
-        sequenceLabel = "${focusedSegment.sequence} / ${selectedRoute.segments.size.coerceAtLeast(1)}",
+        sequenceLabel = "${focusedSegment.sequence} / $totalStepCount",
         instruction = focusedSegment.guidanceMessage,
         heroTitle = heroDetail.title,
-        heroDescription = heroDetail.description,
-        distanceLabel = focusedSegment.distanceMeters.toNavigationDistanceLabel(),
+        heroDescription = remainingTimeLabel,
+        distanceLabel = remainingTimeLabel,
         riskLabel = focusedSegment.riskLevel.toRiskLabel(),
         supportingText = selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption),
         guidanceAction = heroDetail.guidanceAction,
@@ -2394,13 +2519,14 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
     remainingMetricsSource: NavigationRemainingMetricsSource,
     transitPresentation: NavigationTransitPresentation?,
 ): NavigationStepCardUiState {
+    val totalStepCount = selectedRoute.segments.size.coerceAtLeast(1)
+    val remainingTimeLabel = estimatedMinutes.toDestinationRemainingTimeLabel()
     val primarySegment =
         selectedRoute.segments.getOrNull(activeSegmentIndex)
             ?: selectedRoute.segments.firstOrNull { segment ->
                 segment.guidanceMessage.isNotBlank()
             }
             ?: selectedRoute.segments.firstOrNull()
-    val heroDetail = primarySegment?.let(selectedRoute::toNavigationHeroDetail)
     val remainingMetricPresentation =
         navigationRemainingMetricPresentation(
             distanceMeters = remainingDistanceMeters ?: selectedRoute.summary.distanceMeters,
@@ -2408,16 +2534,46 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
             source = remainingMetricsSource,
         )
 
+    if (activeSegmentIndex == NavigationOriginSegmentIndex) {
+        return NavigationStepCardUiState(
+            sectionLabel = "현재 안내",
+            statusLabel = selectedRoute.routeOption.toRouteOptionLabel(),
+            emphasisLabel = selectedRoute.summary.riskLevel.toRiskLabel(),
+            distanceLabel = remainingTimeLabel,
+            heroTitle = NavigationOriginHeroTitle,
+            heroDescription = remainingTimeLabel,
+            instruction = NavigationOriginHeroDescription,
+            supportingText = selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption),
+            guidanceAction = NavigationGuidanceAction.START,
+            transitInfo = null,
+            metrics =
+                listOf(
+                    NavigationStepMetricUiState(
+                        label = "남은 거리",
+                        value = remainingMetricPresentation.distanceLabel,
+                    ),
+                    NavigationStepMetricUiState(
+                        label = "남은 시간",
+                        value = remainingMetricPresentation.etaLabel,
+                    ),
+                    NavigationStepMetricUiState(
+                        label = "진행 단계",
+                        value = "1 / $totalStepCount",
+                    ),
+                ),
+        )
+    }
+
     return NavigationStepCardUiState(
-        sectionLabel = "다음 안내",
+        sectionLabel = "현재 안내",
         statusLabel = selectedRoute.routeOption.toRouteOptionLabel(),
         emphasisLabel = (primarySegment?.riskLevel ?: selectedRoute.summary.riskLevel).toRiskLabel(),
-        distanceLabel =
-            primarySegment?.distanceMeters?.toNavigationDistanceLabel()
-                ?: selectedRoute.summary.distanceMeters.toNavigationDistanceLabel(),
-        heroTitle = heroDetail?.title ?: "경로 안내",
+        distanceLabel = estimatedMinutes.toDestinationRemainingTimeLabel(),
+        heroTitle =
+            primarySegment?.let { segment -> selectedRoute.toLiveGuidanceText(segment) }
+                ?: "경로 안내를 준비하고 있습니다",
         heroDescription =
-            heroDetail?.description ?: "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 경로 안내를 준비하고 있습니다.",
+            estimatedMinutes.toDestinationRemainingTimeLabel(),
         instruction =
             primarySegment?.guidanceMessage
                 ?.trim()
@@ -2426,8 +2582,10 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
         supportingText =
             transitPresentation?.supportingText ?: "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 " +
                 "${selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption)} 경로를 따라 이동합니다.",
-        guidanceAction = heroDetail?.guidanceAction ?: NavigationGuidanceAction.STRAIGHT,
-        transitInfo = null,
+        guidanceAction =
+            primarySegment?.let { segment -> selectedRoute.toNavigationHeroDetail(segment).guidanceAction }
+                ?: NavigationGuidanceAction.STRAIGHT,
+        transitInfo = primarySegment?.let { segment -> selectedRoute.resolveFocusedSegmentTransitInfo(segment, transitPresentation) },
         metrics =
             listOf(
                 NavigationStepMetricUiState(
@@ -2440,10 +2598,83 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
                 ),
                 NavigationStepMetricUiState(
                     label = "진행 단계",
-                    value = "${activeSegmentIndex + 1} / ${selectedRoute.segments.size.coerceAtLeast(1)}",
+                    value = "${activeSegmentIndex + 1} / $totalStepCount",
                 ),
             ),
     )
+}
+
+private fun Int?.toDestinationRemainingTimeLabel(): String =
+    this
+        ?.takeIf { minutes -> minutes >= 0 }
+        ?.let { minutes -> "목적지까지 약 ${minutes.coerceAtLeast(1)}분" }
+        ?: "목적지까지 확인 중"
+
+private fun RouteCandidate.toLiveGuidanceText(segment: RouteSegment): String {
+    val heroDetail = toNavigationHeroDetail(segment)
+    val distanceMeters = segment.guidanceDisplayDistanceMeters()
+    val isArrived = distanceMeters <= NAVIGATION_GUIDANCE_ENTER_RADIUS_METERS
+    if (isArrived) {
+        return heroDetail.guidanceAction.toImmediateGuidanceText(heroDetail.title)
+    }
+
+    return heroDetail.guidanceAction.toUpcomingGuidanceText(
+        distanceLabel = distanceMeters.toNavigationDistanceLabel(),
+        fallbackTitle = heroDetail.title,
+    )
+}
+
+private fun NavigationGuidanceAction.toImmediateGuidanceText(fallbackTitle: String): String =
+    when (this) {
+        NavigationGuidanceAction.CROSSWALK -> "횡단보도를 건너세요"
+        NavigationGuidanceAction.TURN_LEFT -> "좌회전하세요"
+        NavigationGuidanceAction.TURN_RIGHT -> "우회전하세요"
+        NavigationGuidanceAction.STRAIGHT -> "직진 이동하세요"
+        NavigationGuidanceAction.CURB_GAP -> "단차 구간입니다"
+        NavigationGuidanceAction.STAIRS -> "계단 구간입니다"
+        NavigationGuidanceAction.CONSTRUCTION -> "공사 구간입니다"
+        NavigationGuidanceAction.ELEVATOR -> "엘리베이터를 이용하세요"
+        NavigationGuidanceAction.BUS -> "버스에 탑승하세요"
+        NavigationGuidanceAction.SUBWAY -> "지하철에 탑승하세요"
+        NavigationGuidanceAction.ALIGHT -> "하차하세요"
+        NavigationGuidanceAction.ARRIVAL -> "목적지에 도착했습니다"
+        NavigationGuidanceAction.START -> "출발합니다"
+        else -> fallbackTitle
+    }
+
+private fun NavigationGuidanceAction.toUpcomingGuidanceText(
+    distanceLabel: String,
+    fallbackTitle: String,
+): String =
+    when (this) {
+        NavigationGuidanceAction.CROSSWALK -> "${distanceLabel} 앞 횡단보도가 있습니다"
+        NavigationGuidanceAction.TURN_LEFT -> "${distanceLabel} 후 좌회전입니다"
+        NavigationGuidanceAction.TURN_RIGHT -> "${distanceLabel} 후 우회전입니다"
+        NavigationGuidanceAction.STRAIGHT -> "${distanceLabel} 후 직진 이동입니다"
+        NavigationGuidanceAction.CURB_GAP -> "${distanceLabel} 후 단차 구간입니다"
+        NavigationGuidanceAction.STAIRS -> "${distanceLabel} 후 계단 구간입니다"
+        NavigationGuidanceAction.CONSTRUCTION -> "${distanceLabel} 후 공사 구간입니다"
+        NavigationGuidanceAction.ELEVATOR -> "${distanceLabel} 후 엘리베이터 이용입니다"
+        NavigationGuidanceAction.BUS -> "${distanceLabel} 후 버스 탑승입니다"
+        NavigationGuidanceAction.SUBWAY -> "${distanceLabel} 후 지하철 탑승입니다"
+        NavigationGuidanceAction.ALIGHT -> "${distanceLabel} 후 하차입니다"
+        NavigationGuidanceAction.ARRIVAL -> "${distanceLabel} 후 목적지 도착입니다"
+        NavigationGuidanceAction.START -> "${distanceLabel} 후 출발입니다"
+        else -> "${distanceLabel} 후 $fallbackTitle"
+    }
+
+private fun RouteSegment.isRiskPrioritySegment(): Boolean {
+    if (riskLevel != RouteRiskLevel.LOW) return true
+    return when (toNavigationGuidanceAction()) {
+        NavigationGuidanceAction.CROSSWALK,
+        NavigationGuidanceAction.CURB_GAP,
+        NavigationGuidanceAction.STAIRS,
+        NavigationGuidanceAction.CONSTRUCTION,
+        NavigationGuidanceAction.TACTILE_GUIDE,
+        NavigationGuidanceAction.ELEVATOR,
+        -> true
+        else -> false
+    }
 }
 
 private fun RouteNavigationRequest.toEmptyStepCardUiState(): NavigationStepCardUiState =

@@ -95,6 +95,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDialog
 import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDismissStyle
@@ -196,15 +197,25 @@ fun RouteSettingScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
         ) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(RouteSettingContentGap),
-            ) {
+            if (uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
+                RouteSettingTransitResultPane(
+                    uiState = uiState,
+                    onLowFloorReservationClick = onLowFloorReservationClick,
+                    onDuribalCallClick = onDuribalCallClick,
+                    onDuribalCancelClick = { isDuribalPromptDismissed = true },
+                    showDuribalCallPrompt = !isDuribalPromptDismissed,
+                    onOptionClick = { routeOption ->
+                        onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+                    },
+                    onOptionDetailClick = { routeOption ->
+                        onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
                 RouteMapStage(
                     uiState = uiState,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxSize(),
                     onOptionClick = { routeOption ->
                         onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
                     },
@@ -212,21 +223,6 @@ fun RouteSettingScreen(
                         onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
                     },
                 )
-                if (uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
-                    RouteSettingRouteSheet(
-                        uiState = uiState,
-                        onLowFloorReservationClick = onLowFloorReservationClick,
-                        onDuribalCallClick = onDuribalConfirm,
-                        onDuribalCancelClick = { isDuribalPromptDismissed = true },
-                        showDuribalCallPrompt = !isDuribalPromptDismissed,
-                        onOptionClick = { routeOption ->
-                            onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
-                        },
-                        onOptionDetailClick = { routeOption ->
-                            onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
-                        },
-                    )
-                }
             }
             RouteSettingBottomBar(
                 buttonLabel = uiState.cta.label,
@@ -237,7 +233,7 @@ fun RouteSettingScreen(
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
-        }
+    }
 
     if (isDuribalConfirmDialogVisible) {
         EumDuribalCallConfirmDialog(
@@ -921,7 +917,7 @@ private fun RouteDetailBadgeHeader(
         modifier =
             modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .background(RouteDetailFeatureCardContainerColor)
                 .padding(
                     horizontal = EumSpacing.large,
                     vertical = EumSpacing.medium,
@@ -930,7 +926,7 @@ private fun RouteDetailBadgeHeader(
     ) {
         Text(
             text = "경로 특징",
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = RouteDetailFeatureTitleFontSize),
             color = MaterialTheme.colorScheme.onSurface,
         )
         FlowRow(
@@ -2905,14 +2901,24 @@ private fun RouteMapStage(
                     )
             }
 
+            val mapControlsModifier =
+                if (uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()) {
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(
+                            end = EumSpacing.small,
+                            bottom = RouteWalkMapControlsBottomPadding,
+                        )
+                } else {
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = EumSpacing.small)
+                }
             RouteMapControls(
                 onActionClick = { mapControlState.recenter() },
                 onZoomInClick = { mapControlState.zoomIn() },
                 onZoomOutClick = { mapControlState.zoomOut() },
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = EumSpacing.small),
+                modifier = mapControlsModifier,
             )
 
             if (uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()) {
@@ -3147,7 +3153,7 @@ private fun RouteMapControls(
 }
 
 @Composable
-private fun RouteSettingRouteSheet(
+private fun RouteSettingTransitResultPane(
     uiState: RouteSettingUiState,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     onDuribalCallClick: () -> Unit,
@@ -3155,27 +3161,24 @@ private fun RouteSettingRouteSheet(
     showDuribalCallPrompt: Boolean,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape =
-            RoundedCornerShape(
-                topStart = RouteBottomSheetTopCornerRadius,
-                topEnd = RouteBottomSheetTopCornerRadius,
-                bottomStart = 0.dp,
-                bottomEnd = 0.dp,
-            ),
+        modifier = modifier.fillMaxSize(),
         color = Color.White,
-        shadowElevation = RouteBottomSheetElevation,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier =
-                Modifier.padding(
-                    start = EumSpacing.small,
-                    end = EumSpacing.small,
-                    top = RouteSettingSheetVerticalPadding,
-                    bottom = RouteSettingBottomBarOverlayClearance,
-                ),
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = EumSpacing.small,
+                        end = EumSpacing.small,
+                        top = RouteSettingSheetVerticalPadding,
+                        bottom = RouteSettingBottomBarOverlayClearance,
+                    ),
             verticalArrangement = Arrangement.spacedBy(RouteSettingSheetGap),
         ) {
             RouteOptionSection(
@@ -4798,7 +4801,6 @@ private val RouteSearchHeaderEmphasizedContentColor = EumTextPrimary
 private val RouteSearchHeaderInactiveContentColor = Color.White
 private val RouteSearchHeaderDisabledContentColor = Color.White.copy(alpha = 0.54f)
 private val RouteSearchHeaderDividerColor = EumPrimary600.copy(alpha = 0.16f)
-private val RouteSettingContentGap = 6.dp
 private val RouteWaypointCardVerticalPadding = 8.dp
 private val RouteWaypointGap = 4.dp
 private val RouteWaypointIndicatorGap = 12.dp
@@ -4903,7 +4905,10 @@ private val RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
 private val RouteSettingBottomBarBottomGap = 30.dp
 private val RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
 private val RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance
-private val RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp
+private val RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 70.dp
+private val RouteWalkMapControlsBottomPadding = RouteWalkPreviewCarouselBottomPadding + RouteWalkPreviewCardMinHeight + 70.dp
+private val RouteDetailFeatureCardContainerColor = Color(0xFFE9ECF3)
+private val RouteDetailFeatureTitleFontSize = 18.sp
 private val RouteDetailExpandedSidePanelScrimColor = Color(0x66000000)
 private val RoutePreviewMarkerSize = 38.dp
 private const val MIN_ROUTE_PREVIEW_LATITUDE_SPAN = 0.0035

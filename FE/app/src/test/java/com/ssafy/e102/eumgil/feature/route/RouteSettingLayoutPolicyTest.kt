@@ -59,7 +59,7 @@ class RouteSettingLayoutPolicyTest {
                 .substringBefore("@Composable\nfun RouteDetailScreen")
         val sheetSection =
             source
-                .substringAfter("private fun RouteSettingRouteSheet(")
+                .substringAfter("private fun RouteSettingTransitResultPane(")
                 .substringBefore("@Composable\nprivate fun RouteOptionSection")
 
         assertTrue(
@@ -177,7 +177,39 @@ class RouteSettingLayoutPolicyTest {
                 source.contains("optionCards.take(RouteWalkPreviewVisibleCardCount)") &&
                 source.contains("modifier = Modifier.weight(1f)"),
         )
-        assertTrue("Transit mode should keep the bottom sheet from the previous slice.", screenSection.contains("uiState.selectedTravelMode == RouteTravelMode.TRANSIT"))
+        assertTrue("Transit mode should render the map-free result pane directly under the header.", screenSection.contains("RouteSettingTransitResultPane("))
+    }
+
+    @Test
+    fun `transit route selection renders a scrollable white result pane instead of the map`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("if (isDuribalConfirmDialogVisible)")
+        val transitPaneSection =
+            source
+                .substringAfter("private fun RouteSettingTransitResultPane(")
+                .substringBefore("@Composable\nprivate fun RouteOptionSection")
+
+        assertTrue(
+            "Transit route selection should branch to a dedicated full-height result pane instead of placing a map above a bottom sheet.",
+            screenSection.contains("if (uiState.selectedTravelMode == RouteTravelMode.TRANSIT)") &&
+                screenSection.contains("RouteSettingTransitResultPane(") &&
+                screenSection.contains("RouteMapStage("),
+        )
+        assertFalse(
+            "The transit result pane should not render the map backdrop.",
+            transitPaneSection.contains("RouteMapBackdrop(") || transitPaneSection.contains("RouteMapControls("),
+        )
+        assertTrue(
+            "Transit options should scroll above the fixed start button on a white surface.",
+            transitPaneSection.contains("color = Color.White") &&
+                transitPaneSection.contains(".verticalScroll(rememberScrollState())") &&
+                transitPaneSection.contains("bottom = RouteSettingBottomBarOverlayClearance"),
+        )
     }
 
     @Test
@@ -243,7 +275,7 @@ class RouteSettingLayoutPolicyTest {
             "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
                 source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
-                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp"),
+                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 70.dp"),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",
@@ -272,6 +304,27 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `walk route map controls sit above the raised preview cards`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val mapStageSection =
+            source
+                .substringAfter("private fun RouteMapStage(")
+                .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
+
+        assertTrue(
+            "Walk preview cards should be raised 70dp above the fixed start button.",
+            source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 70.dp"),
+        )
+        assertTrue(
+            "Map controls should use a bottom padding derived from the raised preview card plus an extra 70dp gap.",
+            source.contains("RouteWalkMapControlsBottomPadding = RouteWalkPreviewCarouselBottomPadding + RouteWalkPreviewCardMinHeight + 70.dp") &&
+                mapStageSection.contains("bottom = RouteWalkMapControlsBottomPadding"),
+        )
+    }
+
+    @Test
     fun `route search and detail map controls are wired to the overlay viewport controller`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -287,7 +340,7 @@ class RouteSettingLayoutPolicyTest {
         val mapControlsSection =
             source
                 .substringAfter("private fun RouteMapControls(")
-                .substringBefore("@Composable\nprivate fun RouteSettingRouteSheet")
+                .substringBefore("@Composable\nprivate fun RouteSettingTransitResultPane")
         val routeMapBackdropSection =
             source
                 .substringAfter("private fun RouteMapBackdrop(")
@@ -441,13 +494,13 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `transit route sheet reserves room for the shared bottom CTA`() {
+    fun `transit route result pane reserves room for the shared bottom CTA`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
         val routeSheetSection =
             source
-                .substringAfter("private fun RouteSettingRouteSheet(")
+                .substringAfter("private fun RouteSettingTransitResultPane(")
                 .substringBefore("@Composable\nprivate fun RouteOptionSection")
 
         assertTrue(
@@ -745,6 +798,28 @@ class RouteSettingLayoutPolicyTest {
         assertFalse(
             "Detail summary should not keep a card border in the refactored flat layout.",
             summarySection.contains("border = BorderStroke"),
+        )
+    }
+
+    @Test
+    fun `route detail feature header uses requested warm background and larger title`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val featureHeaderSection =
+            source
+                .substringAfter("private fun RouteDetailBadgeHeader(")
+                .substringBefore("@Composable\nprivate fun RouteDetailScrollTopAction")
+
+        assertTrue(
+            "Opened route detail side rail should use the requested warm feature-card background.",
+            source.contains("RouteDetailFeatureCardContainerColor = Color(0xFFE9ECF3)") &&
+                featureHeaderSection.contains(".background(RouteDetailFeatureCardContainerColor)"),
+        )
+        assertTrue(
+            "The route feature title should be four pixels larger than the previous label-large treatment.",
+            source.contains("RouteDetailFeatureTitleFontSize = 18.sp") &&
+                featureHeaderSection.contains("style = MaterialTheme.typography.labelLarge.copy(fontSize = RouteDetailFeatureTitleFontSize)"),
         )
     }
 

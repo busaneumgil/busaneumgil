@@ -187,9 +187,7 @@ fun RouteDetailEntryRoute(
     RouteDetailScreen(
         uiState = uiState,
         onBackClick = onNavigateBack,
-        onCloseClick = {
-            viewModel.onAction(RouteSettingUiAction.CloseClicked)
-        },
+        onCloseClick = onNavigateToMap,
         onStartClick = {
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
         },

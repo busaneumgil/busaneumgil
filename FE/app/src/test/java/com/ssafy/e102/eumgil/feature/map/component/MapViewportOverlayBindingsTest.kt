@@ -770,7 +770,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding marks transit alighting and reconnects to the following walk start`() {
+    fun `navigation binding keeps transit alighting and following walk polylines without a synthetic connector`() {
         val boarding = GeoCoordinate(latitude = 35.170, longitude = 129.050)
         val strayTransitPolylineEnd = GeoCoordinate(latitude = 35.185, longitude = 129.070)
         val alighting = GeoCoordinate(latitude = 35.180, longitude = 129.060)
@@ -815,17 +815,14 @@ class MapViewportOverlayBindingsTest {
         )
         assertEquals(MapViewportOverlayTone.NAVY, junctionPoints.first().tone)
         assertEquals(MapViewportOverlayTone.NEUTRAL, junctionPoints.last().tone)
-        assertTrue(
-            overlayState.polylines.any { polyline ->
-                polyline.overlayId == "navigation-transfer-connection-0" &&
-                    polyline.tone == MapViewportOverlayTone.TRANSIT_WALK &&
-                    polyline.points ==
-                    listOf(
-                        MapCoordinate(latitude = alighting.latitude, longitude = alighting.longitude),
-                        MapCoordinate(latitude = walkStart.latitude, longitude = walkStart.longitude),
-                    )
-            },
+        assertEquals(
+            listOf(
+                "navigation-route-segment-1",
+                "navigation-route-segment-2",
+            ),
+            overlayState.polylines.map(MapViewportPolylineOverlay::overlayId),
         )
+        assertTrue(overlayState.polylines.none { polyline -> polyline.overlayId.startsWith("navigation-transfer-connection") })
     }
 
     @Test
@@ -972,9 +969,10 @@ class MapViewportOverlayBindingsTest {
             projectionPoints.map { it.kind },
         )
         assertEquals(MapCoordinate(latitude = 35.176, longitude = 129.060), projectionPoints.first().coordinate)
+        assertTrue(overlayState.polylines.none(MapViewportPolylineOverlay::includeInProjection))
         assertTrue(
             overlayState.polylines.any { polyline ->
-                polyline.overlayId == "navigation-focused" && polyline.includeInProjection
+                polyline.overlayId == "navigation-route-segment-2" && polyline.showDirectionArrows
             },
         )
     }
@@ -1121,7 +1119,7 @@ class MapViewportOverlayBindingsTest {
             ),
         )
         assertTrue(summary.contains("projectionPoints=[navigation-focus:FOCUS_HALO]"))
-        assertTrue(summary.contains("projectionPolylines=[navigation-focused:FOCUSED_SEGMENT]"))
+        assertTrue(summary.contains("projectionPolylines=[]"))
     }
 
     @Test
@@ -1183,6 +1181,62 @@ class MapViewportOverlayBindingsTest {
             baselineTones,
         )
         assertEquals(MapViewportOverlayTone.NAVY, overlayState.polylines.last().tone)
+    }
+
+    @Test
+    fun `navigation binding does not duplicate active transit line when detailed baseline segments exist`() {
+        val sharedTransitPolyline =
+            listOf(
+                GeoCoordinate(latitude = 35.180, longitude = 129.070),
+                GeoCoordinate(latitude = 35.185, longitude = 129.075),
+            )
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline = sharedTransitPolyline,
+                                    distanceMeters = 500,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Transit",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                    isActive = true,
+                                ),
+                                NavigationMapSegmentUiState(
+                                    sequence = 2,
+                                    polyline = emptyList(),
+                                    segmentStartCoordinate = sharedTransitPolyline.last(),
+                                    distanceMeters = 0,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Alight",
+                                    travelKind = NavigationSegmentTravelKind.TRANSIT,
+                                    isFocused = true,
+                                ),
+                            ),
+                        activeSegmentPolyline = sharedTransitPolyline,
+                        focusedSegmentPolyline = emptyList(),
+                        activeSegmentTravelKind = NavigationSegmentTravelKind.TRANSIT,
+                        focusedSegmentTravelKind = NavigationSegmentTravelKind.TRANSIT,
+                        focusCoordinate = sharedTransitPolyline.last(),
+                        mapFocusMode = NavigationMapFocusMode.FOCUSED,
+                    ),
+            )
+
+        assertEquals(
+            listOf(MapViewportPolylineStyle.ROUTE_BASELINE),
+            overlayState.polylines.map { it.style },
+        )
+        assertEquals(
+            sharedTransitPolyline.map { coordinate ->
+                MapCoordinate(latitude = coordinate.latitude, longitude = coordinate.longitude)
+            },
+            overlayState.polylines.single().points,
+        )
+        assertTrue(overlayState.polylines.single().showDirectionArrows)
     }
 
     @Test

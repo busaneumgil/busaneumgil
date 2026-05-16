@@ -542,9 +542,6 @@ class MapViewModel(
             clearSelectedFacilitySelection()
             renderSelectedFacilityState()
             destinationSelectionRepository.setEditingTarget(editingTarget)
-            if (editingTarget == RouteEditingTarget.DESTINATION) {
-                destinationSelectionRepository.clearSelectedOriginSilently()
-            }
             destinationSelectionRepository.updateSelectionForEditingTarget(preview.destination)
             navigateToRouteSettingIfRouteEndpointsReady()
             return
@@ -557,9 +554,6 @@ class MapViewModel(
         clearSelectedFacilitySelection()
         renderSelectedFacilityState()
         destinationSelectionRepository.setEditingTarget(editingTarget)
-        if (editingTarget == RouteEditingTarget.DESTINATION) {
-            destinationSelectionRepository.clearSelectedOriginSilently()
-        }
         destinationSelectionRepository.updateSelectionForEditingTarget(destination)
         navigateToRouteSettingIfRouteEndpointsReady()
     }

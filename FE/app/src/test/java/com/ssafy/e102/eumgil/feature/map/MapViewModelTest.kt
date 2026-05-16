@@ -588,7 +588,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `search preview destination CTA clears existing origin for current location default`() =
+    fun `search preview destination CTA keeps existing origin`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
@@ -631,7 +631,7 @@ class MapViewModelTest {
                     viewModel.uiEvent.first()
                 }
 
-            assertNull(destinationSelectionRepository.selectedOrigin.value)
+            assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             assertEquals(destination, destinationSelectionRepository.selectedDestination.value)
             assertEquals(MapUiEvent.NavigateToRouteSetting, event)
         }
@@ -692,6 +692,15 @@ class MapViewModelTest {
     fun `map tapped place destination CTA opens route setting`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val origin =
+                PlaceDestination(
+                    placeId = "origin-keep-detail",
+                    name = "Existing Origin",
+                    address = "1 Origin-ro, Busan",
+                    latitude = 35.1200,
+                    longitude = 129.0400,
+                    category = PlaceCategory.OTHER,
+                )
             val tappedCoordinate = MapCoordinate(latitude = 35.1151, longitude = 129.0414)
             val mapTapDetail =
                 testMapTappedDetail(
@@ -714,6 +723,7 @@ class MapViewModelTest {
                     bookmarkRepository = FakeBookmarkRepository(),
                     placesRepository = FakePlacesRepository(mapTapDetail = mapTapDetail),
                 )
+            destinationSelectionRepository.updateSelectedOrigin(origin)
 
             viewModel.onAction(
                 MapUiAction.MapTapped(
@@ -735,6 +745,7 @@ class MapViewModelTest {
                     viewModel.uiEvent.first()
                 }
 
+            assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             val selectedDestination = destinationSelectionRepository.selectedDestination.value
             assertEquals(mapTapDetail.bookmarkTargetId, selectedDestination?.placeId)
             assertEquals(mapTapDetail.name, selectedDestination?.name)

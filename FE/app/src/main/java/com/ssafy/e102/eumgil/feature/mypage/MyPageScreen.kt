@@ -47,6 +47,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDialog
+import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDismissStyle
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
@@ -55,6 +57,10 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 fun MyPageScreen(
     uiState: MyPageUiState,
     onAction: (MyPageUiAction) -> Unit,
+    isDuribalConfirmDialogVisible: Boolean,
+    onDuribalCallClick: () -> Unit,
+    onDuribalConfirmDismiss: () -> Unit,
+    onDuribalConfirm: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
@@ -94,6 +100,8 @@ fun MyPageScreen(
                 },
             )
 
+            DuribalCallButton(onClick = onDuribalCallClick)
+
             Button(
                 onClick = { onAction(MyPageUiAction.LogoutClicked) },
                 enabled = !uiState.isLogoutLoading,
@@ -122,6 +130,14 @@ fun MyPageScreen(
                 )
             }
         }
+    }
+
+    if (isDuribalConfirmDialogVisible) {
+        EumDuribalCallConfirmDialog(
+            onDismiss = onDuribalConfirmDismiss,
+            onConfirm = onDuribalConfirm,
+            dismissStyle = EumDuribalCallConfirmDismissStyle.SecondaryButton,
+        )
     }
 }
 
@@ -264,6 +280,35 @@ private fun MainMenuSection(
                 onClick = onMenuClick,
             )
         }
+    }
+}
+
+@Composable
+private fun DuribalCallButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp),
+        shape = RoundedCornerShape(EumRadius.medium),
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_mypage_duribal_call),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.onPrimary,
+        )
+        Text(
+            text = stringResource(id = R.string.my_page_duribal_call_button),
+            modifier = Modifier.padding(start = EumSpacing.small),
+            style = MaterialTheme.typography.titleSmall,
+        )
     }
 }
 

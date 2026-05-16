@@ -33,6 +33,7 @@ import com.ssafy.e102.domain.place.service.PlaceService;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.place.type.PlaceClickType;
 import com.ssafy.e102.domain.place.type.PlaceDetailType;
+import com.ssafy.e102.domain.place.type.PlaceMarkerKind;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
@@ -120,7 +121,8 @@ class PlaceControllerTest {
 				"부산광역시",
 				new GeoPointResponse(35.1686, 129.0576),
 				List.of(),
-				true))));
+				true,
+				PlaceMarkerKind.DEFAULT))));
 
 		mockMvc.perform(get("/places")
 			.principal(authentication)
@@ -131,7 +133,8 @@ class PlaceControllerTest {
 			.param("featureType", "accessibleToilet"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.places[0].placeId").value(10))
-			.andExpect(jsonPath("$.data.places[0].isBookmarked").value(true));
+			.andExpect(jsonPath("$.data.places[0].isBookmarked").value(true))
+			.andExpect(jsonPath("$.data.places[0].markerKind").value("DEFAULT"));
 
 		verify(placeService).getPlaces(userId, "35.1686", "129.0576", "500", "TOURIST_SPOT", "accessibleToilet");
 		SecurityContextHolder.clearContext();

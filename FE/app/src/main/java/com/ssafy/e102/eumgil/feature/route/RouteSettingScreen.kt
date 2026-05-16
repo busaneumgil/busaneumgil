@@ -152,6 +152,8 @@ fun RouteSettingScreen(
     onLowFloorReservationConfirm: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val showsRouteLoadingScreen = uiState.shouldShowRouteLoadingScreen()
+    val showsRouteFailureScreen = uiState.shouldShowRouteFailureScreen()
     val ctaSupportingText =
         if (uiState.cta.isEnabled) {
             null
@@ -198,7 +200,17 @@ fun RouteSettingScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
         ) {
-            if (uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
+            if (showsRouteLoadingScreen) {
+                RouteLoadingScreen(
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else if (showsRouteFailureScreen) {
+                RouteFailureScreen(
+                    uiState = uiState,
+                    onDuribalCallClick = onDuribalCallClick,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else if (uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
                 RouteSettingTransitResultPane(
                     uiState = uiState,
                     onLowFloorReservationClick = onLowFloorReservationClick,
@@ -225,14 +237,16 @@ fun RouteSettingScreen(
                     },
                 )
             }
-            RouteSettingBottomBar(
-                buttonLabel = uiState.cta.label,
-                enabled = uiState.isStartEnabled,
-                supportingText = ctaSupportingText,
-                selectedRoute = uiState.selectedRoute,
-                onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
+            if (!showsRouteLoadingScreen && !showsRouteFailureScreen) {
+                RouteSettingBottomBar(
+                    buttonLabel = uiState.cta.label,
+                    enabled = uiState.isStartEnabled,
+                    supportingText = ctaSupportingText,
+                    selectedRoute = uiState.selectedRoute,
+                    onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
     }
 
@@ -2901,6 +2915,7 @@ private fun RouteMapStage(
                     RouteMapMessageCard(
                         title = routePreviewFallbackTitle(previewMap.status),
                         description = routePreviewFallbackDescription(previewMap),
+                        showNoRouteImage = previewMap.status == RoutePreviewMapStatus.NO_ROUTE,
                         modifier =
                             Modifier
                                 .align(Alignment.BottomStart)
@@ -2951,6 +2966,7 @@ private fun RouteMapStage(
 private fun RouteMapMessageCard(
     title: String,
     description: String,
+    showNoRouteImage: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -2963,17 +2979,27 @@ private fun RouteMapMessageCard(
         Column(
             modifier = Modifier.padding(EumSpacing.small),
             verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalAlignment = if (showNoRouteImage) Alignment.CenterHorizontally else Alignment.Start,
         ) {
+            if (showNoRouteImage) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_status_warning),
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold,
+                textAlign = if (showNoRouteImage) TextAlign.Center else TextAlign.Start,
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = if (showNoRouteImage) TextAlign.Center else TextAlign.Start,
             )
         }
     }
@@ -3137,6 +3163,22 @@ private fun RouteWalkPreviewBadgeRow(
     }
 }
 
+private fun RouteSettingUiState.shouldShowRouteSheet(): Boolean =
+    selectedTravelMode == RouteTravelMode.TRANSIT &&
+        !shouldShowRouteLoadingScreen() &&
+        !shouldShowRouteFailureScreen()
+
+private fun RouteSettingUiState.shouldShowRouteLoadingScreen(): Boolean =
+    isLoading && optionCards.isEmpty()
+
+private fun RouteSettingUiState.shouldShowRouteFailureScreen(): Boolean =
+    selectedRoute == null &&
+        (
+            routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE ||
+                routePreviewMap.status == RoutePreviewMapStatus.ERROR ||
+                loadErrorMessage != null
+        )
+
 @Composable
 private fun RouteMapControls(
     onActionClick: () -> Unit = {},
@@ -3218,6 +3260,13 @@ private fun RouteOptionSection(
             uiState.isLoading && uiState.optionCards.isEmpty() ->
                 RouteSearchLoadingState()
 
+            uiState.routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE ->
+                RouteFailureFallbackState(
+                    title = stringResource(id = R.string.route_setting_no_route_result_title),
+                    description = stringResource(id = R.string.route_setting_no_route_result_description),
+                    onDuribalCallClick = onDuribalCallClick,
+                )
+
             uiState.loadErrorMessage != null && uiState.showsDuribalCallAction && showDuribalCallPrompt ->
                 RouteDuribalCallPromptCard(
                     onCallClick = onDuribalCallClick,
@@ -3225,11 +3274,10 @@ private fun RouteOptionSection(
                 )
 
             uiState.loadErrorMessage != null ->
-                RouteStateCard(
+                RouteFailureFallbackState(
                     title = stringResource(id = R.string.route_setting_summary_error_title),
                     description = uiState.loadErrorMessage,
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.32f),
-                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.24f),
+                    onDuribalCallClick = onDuribalCallClick,
                 )
 
             uiState.optionCards.isEmpty() ->
@@ -3256,6 +3304,149 @@ private fun RouteOptionSection(
                 }
         }
     }
+}
+
+@Composable
+private fun RouteLoadingScreen(
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(44.dp),
+                strokeWidth = 4.dp,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
+            Text(
+                text = stringResource(id = R.string.route_setting_summary_loading_title),
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.small))
+            Text(
+                text = stringResource(id = R.string.route_setting_summary_loading_description),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteFailureScreen(
+    uiState: RouteSettingUiState,
+    onDuribalCallClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isNoRoute = uiState.routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE
+    val title =
+        if (isNoRoute) {
+            stringResource(id = R.string.route_setting_no_route_result_title)
+        } else {
+            stringResource(id = R.string.route_setting_summary_error_title)
+        }
+    val description =
+        if (isNoRoute) {
+            stringResource(id = R.string.route_setting_no_route_result_description)
+        } else {
+            uiState.loadErrorMessage ?: stringResource(id = R.string.route_setting_summary_error_title)
+        }
+    val showsDuribalCallAction = uiState.selectedTravelMode == RouteTravelMode.TRANSIT
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_status_warning),
+                contentDescription = null,
+                modifier = Modifier.size(72.dp),
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.small))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
+            if (showsDuribalCallAction) {
+                Button(
+                    onClick = onDuribalCallClick,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = RouteSettingBottomBarButtonHeight),
+                    shape = RoundedCornerShape(RouteStandardCardCornerRadius),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.route_setting_duribal_call_prompt_call),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteFailureFallbackState(
+    title: String,
+    description: String,
+    onDuribalCallClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    RouteStateCard(
+        title = title,
+        description = description,
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.surface,
+        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.32f),
+        actionLabel = stringResource(id = R.string.route_setting_duribal_call_prompt_call),
+        onActionClick = onDuribalCallClick,
+        leadingContent = {
+            Image(
+                painter = painterResource(id = R.drawable.ic_status_warning),
+                contentDescription = null,
+                modifier = Modifier.size(56.dp),
+            )
+        },
+    )
 }
 
 @Composable
@@ -4227,6 +4418,7 @@ private fun RouteStateCard(
     borderColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
     actionLabel: String? = null,
     onActionClick: (() -> Unit)? = null,
+    leadingContent: (@Composable () -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -4238,16 +4430,22 @@ private fun RouteStateCard(
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            horizontalAlignment = if (leadingContent != null) Alignment.CenterHorizontally else Alignment.Start,
         ) {
+            leadingContent?.invoke()
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                textAlign = if (leadingContent != null) TextAlign.Center else TextAlign.Start,
+                modifier = Modifier.fillMaxWidth(),
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = if (leadingContent != null) TextAlign.Center else TextAlign.Start,
+                modifier = Modifier.fillMaxWidth(),
             )
             if (actionLabel != null && onActionClick != null) {
                 TextButton(onClick = onActionClick) {

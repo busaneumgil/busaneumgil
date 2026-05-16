@@ -94,7 +94,7 @@ class SavedRouteViewModelTest {
         }
 
     @Test
-    fun `place click requests preview and navigates to map`() =
+    fun `place click requests destination preview and navigates to map`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
@@ -376,7 +376,7 @@ class SavedRouteViewModelTest {
                 )
 
             advanceUntilIdle()
-            val uiEvent = async { viewModel.uiEvent.first() }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SavedRouteUiAction.RouteGuideClicked(bookmarkId = "route-bookmark-1"))
             advanceUntilIdle()
@@ -397,12 +397,14 @@ class SavedRouteViewModelTest {
     fun `place click resets editingTarget to DESTINATION on handoff`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             destinationSelectionRepository.setEditingTarget(RouteEditingTarget.ORIGIN)
             val viewModel =
                 SavedRouteViewModel(
                     bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
                     routeBookmarkRepository = FakeRouteBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
                 )
 
             advanceUntilIdle()
@@ -412,7 +414,7 @@ class SavedRouteViewModelTest {
 
             assertEquals(
                 RouteEditingTarget.DESTINATION,
-                destinationSelectionRepository.editingTarget.value,
+                destinationPreviewRepository.pendingPreview.value?.editingTarget,
             )
         }
 
@@ -431,7 +433,7 @@ class SavedRouteViewModelTest {
                 )
 
             advanceUntilIdle()
-            val uiEvent = async { viewModel.uiEvent.first() }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SavedRouteUiAction.RouteGuideClicked(bookmarkId = "route-bookmark-1"))
             advanceUntilIdle()

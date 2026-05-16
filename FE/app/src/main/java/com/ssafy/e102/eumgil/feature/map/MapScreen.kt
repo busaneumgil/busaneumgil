@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -758,26 +759,27 @@ private fun FacilityDetailAccessibilityTagSection(
     modifier: Modifier = Modifier,
 ) {
     if (tags.isEmpty()) return
+    val hasOverflow = tags.size > FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT
+    val visibleTags = tags.take(FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT)
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
     ) {
-        tags.chunked(2).forEach { rowLabels ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-            ) {
-                rowLabels.forEach { label ->
-                    FacilityDetailTagCard(
-                        label = label,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-
-                if (rowLabels.size == 1) {
-                    Box(modifier = Modifier.weight(1f))
-                }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        ) {
+            visibleTags.forEach { label ->
+                FacilityDetailTagCard(
+                    label = label,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (hasOverflow) {
+                FacilityDetailTagOverflowPill(
+                    hiddenTagCount = tags.size - FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT,
+                )
             }
         }
     }
@@ -798,8 +800,8 @@ private fun FacilityDetailTagCard(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
-                    .padding(horizontal = EumSpacing.small),
+                    .height(FacilityDetailAccessibilityTagHeight)
+                    .padding(horizontal = EumSpacing.xSmall),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
@@ -814,8 +816,38 @@ private fun FacilityDetailTagCard(
             }
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FacilityDetailTagOverflowPill(
+    hiddenTagCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .widthIn(min = FacilityDetailAccessibilityOverflowMinWidth)
+                .height(FacilityDetailAccessibilityTagHeight),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = EumSpacing.small),
+            contentAlignment = androidx.compose.ui.Alignment.Center,
+        ) {
+            Text(
+                text = stringResource(id = R.string.map_facility_detail_accessibility_more, hiddenTagCount),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
             )
         }
     }
@@ -1395,8 +1427,8 @@ private fun coordinateText(location: MapCoordinate): String =
 @DrawableRes
 private fun mapTapDetailPlaceIconRes(detail: MapTappedPlaceDetail): Int =
     when (detail.category) {
-        null -> R.drawable.ic_place_other
-        PlaceCategory.OTHER -> R.drawable.ic_place_other
+        null -> R.drawable.ic_map_selected_pin_blue
+        PlaceCategory.OTHER -> R.drawable.ic_map_selected_pin_blue
         else -> recentDestinationIcon(detail.category)
     }
 
@@ -1446,7 +1478,6 @@ private fun mapTapDetailAccessibilityLabels(
     return orderedRawKeys
         .mapNotNull(::recentDestinationTagLabel)
         .distinct()
-        .take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
 }
 
 private fun MapTappedPlaceDetail.hasValidCoordinate(): Boolean =
@@ -1542,7 +1573,6 @@ private fun facilityDetailAccessibilityLabels(
             .mapNotNull(::selectedFilterAccessibilityTag)
             .filter { tag -> tag in detail.accessibilityTags }
 
-    // TODO: Keep the active filter tag visible while this sheet shows only three accessibility tags.
     return buildList {
         detail.brailleBlockType?.let { brailleBlockType ->
             add(brailleBlockTypeLabel(brailleBlockType))
@@ -1554,7 +1584,7 @@ private fun facilityDetailAccessibilityLabels(
                     accessibilityTagLabel(tag)
                 },
         )
-    }.distinct().take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)
+    }.distinct()
 }
 
 private fun selectedFilterAccessibilityTag(category: FacilityCategory): AccessibilityTag? =
@@ -1710,7 +1740,7 @@ private fun facilityDetailPlaceIconRes(category: FacilityCategory): Int =
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        FacilityCategory.OTHER -> R.drawable.ic_place_other
+        FacilityCategory.OTHER -> R.drawable.ic_map_selected_pin_blue
     }
 
 @DrawableRes
@@ -1728,13 +1758,15 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
         PlaceCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         PlaceCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         PlaceCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        PlaceCategory.OTHER -> R.drawable.ic_place_other
-        null -> R.drawable.ic_place_other
+        PlaceCategory.OTHER -> R.drawable.ic_map_selected_pin_blue
+        null -> R.drawable.ic_map_selected_pin_blue
     }
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEGREES_TO_RADIANS = PI / 180.0
-private const val MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS = 3
+private const val FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT = 3
 private const val MAX_FACILITY_DETAIL_TRANSIT_ARRIVALS = 3
+private val FacilityDetailAccessibilityTagHeight = 34.dp
+private val FacilityDetailAccessibilityOverflowMinWidth = 52.dp
 private val MapActionLabelDefaultFontSize = 14.sp
 private val MapActionLabelMinFontSize = 12.sp

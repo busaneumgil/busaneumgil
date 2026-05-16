@@ -375,7 +375,8 @@ public class AdminMapService {
 		nodesById.keySet()
 			.forEach(nodeId -> {
 				Long root = unionFind.find(nodeId);
-				componentByNodeId.put(nodeId, componentIndexes.computeIfAbsent(root, ignored -> componentIndexes.size() + 1));
+				componentByNodeId.put(nodeId,
+					componentIndexes.computeIfAbsent(root, ignored -> componentIndexes.size() + 1));
 			});
 		List<BridgeEndpoint> endpoints = nodesById.values()
 			.stream()
@@ -444,7 +445,8 @@ public class AdminMapService {
 				continue;
 			}
 			if (nearest == null || closestPoint.distanceMeter() < nearest.distanceMeter()
-				|| closestPoint.distanceMeter() == nearest.distanceMeter() && segment.edgeId() < nearest.segment().edgeId()) {
+				|| closestPoint.distanceMeter() == nearest.distanceMeter()
+					&& segment.edgeId() < nearest.segment().edgeId()) {
 				nearest = new ClosestBridgeTarget(segment, closestPoint.coord(), closestPoint.distanceMeter());
 			}
 		}

@@ -95,6 +95,46 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
+    fun `facility detail accessibility tags show three with noninteractive overflow count`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val stringsSource =
+            File("src/main/res/values/strings.xml").readText()
+
+        assertTrue(
+            "Collapsed facility detail accessibility row should show at most three tags.",
+            source.contains("private const val FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT = 3") &&
+                source.contains("tags.take(FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT)"),
+        )
+        assertTrue(
+            "Facility detail accessibility overflow should be rendered as a visible +N pill.",
+            source.contains("FacilityDetailTagOverflowPill(") &&
+                source.contains("map_facility_detail_accessibility_more") &&
+                source.contains("hiddenTagCount = tags.size - FACILITY_DETAIL_COLLAPSED_ACCESSIBILITY_TAG_LIMIT"),
+        )
+        assertFalse(
+            "Facility detail accessibility overflow should not behave as a toggle.",
+            source.contains("map_facility_detail_accessibility_collapse") ||
+                source.contains("onClick = { isExpanded") ||
+                source.contains("isExpanded by remember(tags)"),
+        )
+        assertFalse(
+            "Accessibility labels should not be truncated before rendering because +N needs the real overflow count.",
+            source.contains("MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS") ||
+                source.contains(".take(MAX_FACILITY_DETAIL_ACCESSIBILITY_TAGS)"),
+        )
+        assertTrue(
+            "Overflow count string should include visible +N only.",
+            stringsSource.contains("map_facility_detail_accessibility_more\">+%1\$d"),
+        )
+        assertFalse(
+            "Overflow count should not expose stale expand or collapse strings.",
+            stringsSource.contains("map_facility_detail_accessibility_more_a11y") ||
+                stringsSource.contains("map_facility_detail_accessibility_collapse"),
+        )
+    }
+
+    @Test
     fun `facility detail bottom sheet shell removes divider chrome and hides empty detail spacing`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/FacilityDetailBottomSheetShell.kt").readText()
@@ -395,16 +435,16 @@ class MapFacilityDetailSheetConfigurationTest {
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
 
         assertTrue(
-            "Other facility category should map to a dedicated place icon asset in the detail sheet.",
-            source.contains("FacilityCategory.OTHER -> R.drawable.ic_place_other"),
+            "Other facility category should map to the pin icon in the detail sheet.",
+            source.contains("FacilityCategory.OTHER -> R.drawable.ic_map_selected_pin_blue"),
         )
         assertTrue(
-            "Recent destinations should reuse the dedicated other place icon.",
-            source.contains("PlaceCategory.OTHER -> R.drawable.ic_place_other"),
+            "Recent destinations should reuse the pin icon for other places.",
+            source.contains("PlaceCategory.OTHER -> R.drawable.ic_map_selected_pin_blue"),
         )
         assertTrue(
-            "Dedicated other place drawable should exist for detail and recent destination surfaces.",
-            File("src/main/res/drawable/ic_place_other.png").exists(),
+            "Pin drawable should exist for detail and recent destination other surfaces.",
+            File("src/main/res/drawable/ic_map_selected_pin_blue.xml").exists(),
         )
     }
 
@@ -418,8 +458,8 @@ class MapFacilityDetailSheetConfigurationTest {
                 .substringBefore("private const val EARTH_RADIUS_METERS")
 
         assertTrue(
-            "Recent destinations should render missing categories with the dedicated other place icon so uncategorized entries stay visually aligned with the other category.",
-            recentDestinationIconSection.contains("null -> R.drawable.ic_place_other"),
+            "Recent destinations should render missing categories with the pin icon so uncategorized entries stay visually aligned with the other category.",
+            recentDestinationIconSection.contains("null -> R.drawable.ic_map_selected_pin_blue"),
         )
     }
 
@@ -437,12 +477,12 @@ class MapFacilityDetailSheetConfigurationTest {
             mapTapIconSection.contains("when (detail.category)"),
         )
         assertTrue(
-            "Map tap place detail should map the explicit other category to the dedicated other place icon.",
-            mapTapIconSection.contains("PlaceCategory.OTHER -> R.drawable.ic_place_other"),
+            "Map tap place detail should map the explicit other category to the pin icon.",
+            mapTapIconSection.contains("PlaceCategory.OTHER -> R.drawable.ic_map_selected_pin_blue"),
         )
         assertTrue(
-            "Map tap place detail should map null categories to the dedicated other place icon.",
-            mapTapIconSection.contains("null -> R.drawable.ic_place_other"),
+            "Map tap place detail should map null categories to the pin icon.",
+            mapTapIconSection.contains("null -> R.drawable.ic_map_selected_pin_blue"),
         )
         assertTrue(
             "Recognized place categories should continue reusing the recent destination icon mapping.",

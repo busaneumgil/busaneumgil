@@ -12,6 +12,8 @@ data class SavedRouteUiState(
     val isApplyingEditChanges: Boolean = false,
     val pendingPlaceRemovalIds: Set<String> = emptySet(),
     val pendingRouteRemovalIds: Set<String> = emptySet(),
+    val placeSortOrder: SavedBookmarkSortOrder = SavedBookmarkSortOrder.NEAREST,
+    val routeSortOrder: SavedBookmarkSortOrder = SavedBookmarkSortOrder.RECENT,
 )
 
 data class SavedPlaceContentUiState(
@@ -37,6 +39,7 @@ data class SavedPlaceUiModel(
     val provider: String? = null,
     val providerPlaceId: String? = null,
     val providerCategory: String? = null,
+    val distanceMeters: Int? = null,
 )
 
 data class SavedRouteBookmarkUiModel(
@@ -65,6 +68,11 @@ enum class SavedBookmarkContentState {
     ERROR,
 }
 
+enum class SavedBookmarkSortOrder {
+    NEAREST,
+    RECENT,
+}
+
 sealed interface SavedRouteUiAction {
     data class TabSelected(
         val tab: SavedBookmarkTab,
@@ -81,6 +89,10 @@ sealed interface SavedRouteUiAction {
     data object RouteSettingClicked : SavedRouteUiAction
 
     data object RetryClicked : SavedRouteUiAction
+
+    data class SortOrderSelected(
+        val sortOrder: SavedBookmarkSortOrder,
+    ) : SavedRouteUiAction
 
     data class PlaceClicked(
         val placeId: String,

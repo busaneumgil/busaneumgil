@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.RouteBookmark
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDetail
 import com.ssafy.e102.eumgil.core.model.RouteSearchSource
@@ -109,7 +110,8 @@ class SavedRouteViewModel(
             SavedRouteUiAction.ExploreMapClicked -> emitUiEvent(SavedRouteUiEvent.NavigateToMap)
             SavedRouteUiAction.RouteSettingClicked -> emitUiEvent(SavedRouteUiEvent.NavigateToRouteSetting())
             SavedRouteUiAction.RetryClicked -> retryCurrentTab()
-            is SavedRouteUiAction.PlaceClicked -> handoffPlace(action.placeId, SavedRouteUiEvent.NavigateToMap)
+            is SavedRouteUiAction.SortOrderSelected -> selectSortOrder(action.sortOrder)
+            is SavedRouteUiAction.PlaceClicked -> previewPlace(action.placeId)
             is SavedRouteUiAction.PlaceRouteGuideClicked ->
                 handoffPlace(
                     placeId = action.placeId,
@@ -249,6 +251,23 @@ class SavedRouteViewModel(
         }
     }
 
+    private fun selectSortOrder(sortOrder: SavedBookmarkSortOrder) {
+        mutableUiState.update { state ->
+            when (state.selectedTab) {
+                SavedBookmarkTab.PLACE ->
+                    state.copy(
+                        placeSortOrder = sortOrder,
+                        placeContent = state.placeContent.copy(places = sortedPlaceBookmarks(sortOrder)),
+                    )
+                SavedBookmarkTab.ROUTE ->
+                    state.copy(
+                        routeSortOrder = sortOrder,
+                        routeContent = state.routeContent.copy(routes = sortedRouteBookmarks(sortOrder)),
+                    )
+            }
+        }
+    }
+
     private fun observeAccountScope() {
         viewModelScope.launch {
             authSessionRepository
@@ -332,7 +351,7 @@ class SavedRouteViewModel(
                                             } else {
                                                 SavedBookmarkContentState.CONTENT
                                             },
-                                        routes = latestRoutes,
+                                        routes = sortedRouteBookmarks(mutableUiState.value.routeSortOrder),
                                         errorMessage = ROUTE_BOOKMARK_LOAD_FAILURE_MESSAGE,
                                     ),
                             )
@@ -350,7 +369,7 @@ class SavedRouteViewModel(
                                             } else {
                                                 SavedBookmarkContentState.CONTENT
                                             },
-                                        routes = latestRoutes,
+                                        routes = sortedRouteBookmarks(state.routeSortOrder),
                                         errorMessage = null,
                                     ),
                             )
@@ -430,6 +449,30 @@ class SavedRouteViewModel(
         viewModelScope.launch {
             mutableUiEvent.emit(event)
         }
+    }
+
+    private fun previewPlace(placeId: String) {
+        val place = latestPlaces.firstOrNull { savedPlace -> savedPlace.placeId == placeId } ?: return
+        val destination = place.toPlaceDestination()
+        if (!destination.hasValidCoordinate()) {
+            mutableUiState.update { state ->
+                state.copy(
+                    placeContent =
+                        state.placeContent.copy(
+                            errorMessage = INVALID_PLACE_COORDINATE_MESSAGE,
+                        ),
+                )
+            }
+            emitUiEvent(SavedRouteUiEvent.ShowSnackbar(INVALID_PLACE_COORDINATE_MESSAGE))
+            return
+        }
+
+        destinationPreviewRepository.requestPreview(
+            destination = destination,
+            editingTarget = RouteEditingTarget.DESTINATION,
+            detailType = MapPlaceDetailType.INTERNAL_PLACE,
+        )
+        emitUiEvent(SavedRouteUiEvent.NavigateToMap)
     }
 
     private fun handoffRouteBookmark(bookmarkId: String) {
@@ -516,10 +559,7 @@ class SavedRouteViewModel(
     }
 
     private fun publishPlaceBookmarks(clearErrorMessage: Boolean) {
-        latestPlaces =
-            latestPlaceBookmarks.toSavedPlaceUiModels(
-                currentLocation = latestLocationCoordinate.takeIf { isLowVisionMode },
-            )
+        latestPlaces = sortedPlaceBookmarks(mutableUiState.value.placeSortOrder)
         if (isLowVisionMode) {
             lastPublishedLowVisionPlaceLocationCoordinate = latestLocationCoordinate
             lastPublishedLowVisionPlaceIds = latestPlaces.map(SavedPlaceUiModel::placeId)
@@ -545,11 +585,43 @@ class SavedRouteViewModel(
         }
     }
 
+    private fun sortedPlaceBookmarks(sortOrder: SavedBookmarkSortOrder): List<SavedPlaceUiModel> {
+        val placeModels =
+            latestPlaceBookmarks.toSavedPlaceUiModels(
+                currentLocation = latestLocationCoordinate,
+            )
+        return when (sortOrder) {
+            SavedBookmarkSortOrder.NEAREST ->
+                if (latestLocationCoordinate == null) {
+                    placeModels
+                } else {
+                    placeModels.sortedWith(
+                        compareBy<SavedPlaceUiModel> { place -> place.distanceMeters ?: Int.MAX_VALUE }
+                            .thenBy { place -> place.name },
+                    )
+                }
+            SavedBookmarkSortOrder.RECENT -> placeModels
+        }
+    }
+
+    private fun sortedRouteBookmarks(sortOrder: SavedBookmarkSortOrder): List<SavedRouteBookmarkUiModel> =
+        when (sortOrder) {
+            SavedBookmarkSortOrder.NEAREST ->
+                latestRoutes.sortedWith(
+                    compareBy<SavedRouteBookmarkUiModel> { route -> route.distanceMeters ?: Int.MAX_VALUE }
+                        .thenBy { route -> route.routeName },
+                )
+            SavedBookmarkSortOrder.RECENT -> latestRoutes
+        }
+
     private fun shouldRefreshLowVisionPlaceBookmarks(nextLocationCoordinate: GeoCoordinate?): Boolean {
         val currentCoordinate = nextLocationCoordinate ?: return false
         val nextPlaceIds =
             latestPlaceBookmarks.toSavedPlaceUiModels(
                 currentLocation = currentCoordinate,
+            ).sortedWith(
+                compareBy<SavedPlaceUiModel> { place -> place.distanceMeters ?: Int.MAX_VALUE }
+                    .thenBy { place -> place.name },
             ).map(SavedPlaceUiModel::placeId)
         if (nextPlaceIds != lastPublishedLowVisionPlaceIds) {
             val lastPublishedCoordinate = lastPublishedLowVisionPlaceLocationCoordinate ?: return true
@@ -617,6 +689,9 @@ private fun BookmarkData.toSavedPlaceUiModel(): SavedPlaceUiModel =
         providerPlaceId = providerPlaceId,
         providerCategory = providerCategory,
     )
+
+private fun BookmarkData.toSavedPlaceUiModel(distanceMeters: Int?): SavedPlaceUiModel =
+    toSavedPlaceUiModel().copy(distanceMeters = distanceMeters)
 
 private fun RouteBookmark.toSavedRouteBookmarkUiModel(): SavedRouteBookmarkUiModel =
     SavedRouteBookmarkUiModel(
@@ -699,16 +774,11 @@ private fun List<BookmarkData>.toSavedPlaceUiModels(currentLocation: GeoCoordina
         return map(BookmarkData::toSavedPlaceUiModel)
     }
 
-    return mapIndexed { index, bookmark ->
-        SavedPlaceSortCandidate(
-            index = index,
-            bookmark = bookmark,
-            distanceMeters = haversineDistanceMeters(currentLocation, bookmark.toGeoCoordinate()),
+    return map { bookmark ->
+        bookmark.toSavedPlaceUiModel(
+            distanceMeters = haversineDistanceMeters(currentLocation, bookmark.toGeoCoordinate()).toInt(),
         )
-    }.sortedWith(
-        compareBy<SavedPlaceSortCandidate> { candidate -> candidate.distanceMeters }
-            .thenBy { candidate -> candidate.index },
-    ).map { candidate -> candidate.bookmark.toSavedPlaceUiModel() }
+    }
 }
 
 private fun Set<String>.toggled(value: String): Set<String> =
@@ -717,12 +787,6 @@ private fun Set<String>.toggled(value: String): Set<String> =
     } else {
         this + value
     }
-
-private data class SavedPlaceSortCandidate(
-    val index: Int,
-    val bookmark: BookmarkData,
-    val distanceMeters: Double,
-)
 
 private fun LocationSnapshot.toGeoCoordinate(): GeoCoordinate =
     GeoCoordinate(

@@ -96,11 +96,12 @@ fun MyPageScreen(
             )
 
             MainMenuSection(
-                onDuribalCallClick = onDuribalCallClick,
                 onMenuClick = { menuItem ->
                     onAction(MyPageUiAction.MainMenuClicked(menuItem = menuItem))
                 },
             )
+
+            DuribalCallButton(onClick = onDuribalCallClick)
 
             Button(
                 onClick = { onAction(MyPageUiAction.LogoutClicked) },
@@ -247,7 +248,6 @@ private fun ProfileCard(
 
 @Composable
 private fun MainMenuSection(
-    onDuribalCallClick: () -> Unit,
     onMenuClick: (MyPageMenuItem) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
@@ -256,7 +256,6 @@ private fun MainMenuSection(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        DuribalCallButton(onClick = onDuribalCallClick)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(EumRadius.medium),

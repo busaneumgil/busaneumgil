@@ -5,6 +5,7 @@ import java.util.Set;
 
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
+import com.ssafy.e102.domain.place.type.PlaceMarkerKind;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
 
@@ -15,10 +16,11 @@ public record PlaceMarkerResponse(
 	String address,
 	GeoPointResponse point,
 	List<PlaceAccessibilityFeatureResponse> accessibilityFeatures,
-	boolean isBookmarked) {
+	boolean isBookmarked,
+	PlaceMarkerKind markerKind) {
 
 	public static PlaceMarkerResponse of(Place place, Set<Long> bookmarkedPlaceIds,
-		GeoPointConverter geoPointConverter) {
+		GeoPointConverter geoPointConverter, PlaceMarkerKind markerKind) {
 		return new PlaceMarkerResponse(
 			place.getPlaceId(),
 			place.getName(),
@@ -29,6 +31,7 @@ public record PlaceMarkerResponse(
 				.stream()
 				.map(PlaceAccessibilityFeatureResponse::from)
 				.toList(),
-			bookmarkedPlaceIds.contains(place.getPlaceId()));
+			bookmarkedPlaceIds.contains(place.getPlaceId()),
+			markerKind);
 	}
 }

@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import com.kakao.vectormap.label.TransformMethod
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.core.model.PlaceMarkerKind
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
@@ -334,7 +335,12 @@ internal fun createKakaoMarkerRenderStates(
                     latitude = marker.coordinate.latitude,
                     longitude = marker.coordinate.longitude,
                     category = marker.categoryType.category,
-                    glyphResId = facilityMarkerGlyphResId(marker.categoryType.category),
+                    glyphResId =
+                        facilityMarkerGlyphResId(
+                            category = marker.categoryType.category,
+                            markerKind = marker.markerKind,
+                            selectedFilterCategory = marker.selectedFilterCategory,
+                        ),
                     rank = if (isSelected) KAKAO_SELECTED_MARKER_RANK else KAKAO_DEFAULT_MARKER_RANK,
                     clickTargetId = marker.markerId,
                     isSelected = isSelected,
@@ -1340,7 +1346,34 @@ private fun MapViewportOverlayTone.toKakaoRouteLinePalette(): KakaoRouteLinePale
 
 // Kakao labels render raw drawable bounds, so map markers must use compact icon assets.
 @DrawableRes
-internal fun facilityMarkerGlyphResId(category: FacilityCategory): Int =
+internal fun facilityMarkerGlyphResId(
+    category: FacilityCategory,
+    markerKind: PlaceMarkerKind = PlaceMarkerKind.DEFAULT,
+    selectedFilterCategory: FacilityCategory? = null,
+): Int =
+    selectedFilterCategory?.let(::facilityMarkerAccessibilityGlyphResId)
+        ?: facilityMarkerKindGlyphResId(markerKind)
+        ?: facilityMarkerCategoryGlyphResId(category)
+
+@DrawableRes
+private fun facilityMarkerKindGlyphResId(markerKind: PlaceMarkerKind): Int? =
+    when (markerKind) {
+        PlaceMarkerKind.BUS_STOP -> R.drawable.ic_place_bus
+        PlaceMarkerKind.SUBWAY_STATION -> R.drawable.ic_place_subway
+        PlaceMarkerKind.DEFAULT -> null
+    }
+
+@DrawableRes
+private fun facilityMarkerAccessibilityGlyphResId(category: FacilityCategory): Int? =
+    when (category) {
+        FacilityCategory.TOILET -> R.drawable.ic_accessibility_tag_accessible_toilet
+        FacilityCategory.ELEVATOR -> R.drawable.ic_accessibility_tag_elevator
+        FacilityCategory.CHARGING_STATION -> R.drawable.ic_accessibility_tag_charging_station
+        else -> null
+    }
+
+@DrawableRes
+private fun facilityMarkerCategoryGlyphResId(category: FacilityCategory): Int =
     when (category) {
         FacilityCategory.TOILET -> R.drawable.ic_place_restroom
         FacilityCategory.ELEVATOR -> R.drawable.ic_lowvision_category_elevator
@@ -1354,7 +1387,7 @@ internal fun facilityMarkerGlyphResId(category: FacilityCategory): Int =
         FacilityCategory.BRAILLE_BLOCK -> R.drawable.ic_route_tactile_blocks
         FacilityCategory.RESTAURANT -> R.drawable.ic_place_restaurant
         FacilityCategory.TOURIST_ATTRACTION -> R.drawable.ic_place_tourist_spot
-        FacilityCategory.OTHER -> R.drawable.ic_place_other
+        FacilityCategory.OTHER -> R.drawable.ic_map_selected_pin_blue
     }
 
 internal fun resolveKakaoFacilityMarkerSizeDp(

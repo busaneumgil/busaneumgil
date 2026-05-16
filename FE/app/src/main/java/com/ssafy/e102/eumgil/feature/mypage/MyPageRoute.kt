@@ -7,8 +7,11 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -16,6 +19,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.external.createDuribalDialIntent as createDuribalDialIntentCore
 import kotlinx.coroutines.launch
 
 @Composable
@@ -50,6 +54,7 @@ fun MyPageRoute(
     val snackbarHostState = remember { SnackbarHostState() }
     val preparingMessage = stringResource(id = R.string.my_page_preparing_message)
     val coroutineScope = rememberCoroutineScope()
+    var isDuribalConfirmDialogVisible by rememberSaveable { mutableStateOf(false) }
 
     fun showSnackbar(message: String) {
         coroutineScope.launch {
@@ -78,10 +83,19 @@ fun MyPageRoute(
     MyPageScreen(
         uiState = uiState,
         onAction = viewModel::onAction,
+        isDuribalConfirmDialogVisible = isDuribalConfirmDialogVisible,
+        onDuribalCallClick = { isDuribalConfirmDialogVisible = true },
+        onDuribalConfirmDismiss = { isDuribalConfirmDialogVisible = false },
+        onDuribalConfirm = {
+            isDuribalConfirmDialogVisible = false
+            context.startActivity(createDuribalDialIntentCore())
+        },
         snackbarHostState = snackbarHostState,
         modifier = modifier,
     )
 }
+
+internal fun createDuribalDialIntent() = createDuribalDialIntentCore()
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =
     when (this) {

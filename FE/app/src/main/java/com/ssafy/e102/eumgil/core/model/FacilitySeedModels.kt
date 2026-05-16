@@ -115,6 +115,7 @@ data class FacilityMarkerSeed(
     val coordinate: GeoCoordinate,
     val category: FacilityCategory,
     val filterCategories: Set<FacilityCategory> = setOf(category),
+    val markerKind: PlaceMarkerKind = PlaceMarkerKind.DEFAULT,
     val accessibilityTags: List<AccessibilityTag> = emptyList(),
     val brailleBlockType: BrailleBlockType? = null,
 )

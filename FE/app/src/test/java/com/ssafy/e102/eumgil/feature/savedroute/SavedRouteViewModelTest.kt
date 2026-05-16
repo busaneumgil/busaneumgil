@@ -24,6 +24,7 @@ import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
@@ -93,14 +94,16 @@ class SavedRouteViewModelTest {
         }
 
     @Test
-    fun `place click stores destination and navigates to map`() =
+    fun `place click requests destination preview and navigates to map`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             val viewModel =
                 SavedRouteViewModel(
                     bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
                     routeBookmarkRepository = FakeRouteBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
                 )
 
             advanceUntilIdle()
@@ -109,11 +112,13 @@ class SavedRouteViewModelTest {
             viewModel.onAction(SavedRouteUiAction.PlaceClicked(placeId = "bookmark-place-1"))
             advanceUntilIdle()
 
-            val destination = destinationSelectionRepository.selectedDestination.value
+            val preview = destinationPreviewRepository.pendingPreview.value
+            val destination = preview?.destination
 
             assertEquals(SavedRouteUiEvent.NavigateToMap, uiEvent.await())
             assertEquals("bookmark-place-1", destination?.placeId)
             assertEquals(PlaceCategory.ELEVATOR, destination?.category)
+            assertNull(destinationSelectionRepository.selectedDestination.value)
         }
 
     @Test
@@ -365,7 +370,7 @@ class SavedRouteViewModelTest {
                 )
 
             advanceUntilIdle()
-            val uiEvent = async { viewModel.uiEvent.first() }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SavedRouteUiAction.RouteGuideClicked(bookmarkId = "route-bookmark-1"))
             advanceUntilIdle()
@@ -386,12 +391,14 @@ class SavedRouteViewModelTest {
     fun `place click resets editingTarget to DESTINATION on handoff`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             destinationSelectionRepository.setEditingTarget(RouteEditingTarget.ORIGIN)
             val viewModel =
                 SavedRouteViewModel(
                     bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
                     routeBookmarkRepository = FakeRouteBookmarkRepository(),
                     destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
                 )
 
             advanceUntilIdle()
@@ -401,7 +408,7 @@ class SavedRouteViewModelTest {
 
             assertEquals(
                 RouteEditingTarget.DESTINATION,
-                destinationSelectionRepository.editingTarget.value,
+                destinationPreviewRepository.pendingPreview.value?.editingTarget,
             )
         }
 
@@ -420,7 +427,7 @@ class SavedRouteViewModelTest {
                 )
 
             advanceUntilIdle()
-            val uiEvent = async { viewModel.uiEvent.first() }
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
 
             viewModel.onAction(SavedRouteUiAction.RouteGuideClicked(bookmarkId = "route-bookmark-1"))
             advanceUntilIdle()

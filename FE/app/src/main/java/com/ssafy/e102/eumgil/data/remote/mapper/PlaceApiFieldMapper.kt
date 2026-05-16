@@ -3,10 +3,18 @@ package com.ssafy.e102.eumgil.data.remote.mapper
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureAvailability
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureType
+import com.ssafy.e102.eumgil.core.model.PlaceMarkerKind
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceAccessibilityFeatureDto
 
 internal object PlaceApiFieldMapper {
     fun toPlaceCategory(value: String): PlaceCategory = toPlaceCategoryOrNull(value) ?: PlaceCategory.OTHER
+
+    fun toPlaceMarkerKind(value: String?): PlaceMarkerKind =
+        when (value?.trim()?.uppercase()) {
+            "BUS_STOP" -> PlaceMarkerKind.BUS_STOP
+            "SUBWAY_STATION" -> PlaceMarkerKind.SUBWAY_STATION
+            else -> PlaceMarkerKind.DEFAULT
+        }
 
     fun toPlaceCategoryOrNull(value: String?): PlaceCategory? =
         when (value?.trim()?.uppercase()) {

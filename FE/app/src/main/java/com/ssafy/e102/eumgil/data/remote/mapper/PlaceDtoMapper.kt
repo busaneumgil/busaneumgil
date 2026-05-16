@@ -42,6 +42,7 @@ internal object PlaceDtoMapper {
                 latitude = placeDto.point.lat,
                 longitude = placeDto.point.lng,
                 category = PlaceApiFieldMapper.toPlaceCategory(placeDto.category),
+                markerKind = PlaceApiFieldMapper.toPlaceMarkerKind(placeDto.markerKind),
                 features = features,
                 isBookmarked = placeDto.isBookmarked,
                 accessibilityTags = PlaceApiFieldMapper.toAccessibilityTagKeys(features),
@@ -140,6 +141,7 @@ internal object PlaceDtoMapper {
             placeId = optLong("placeId"),
             name = optString("name"),
             category = optString("category"),
+            markerKind = optString("markerKind", "DEFAULT"),
             address = optNullableString("address"),
             point =
                 PlacePointDto(

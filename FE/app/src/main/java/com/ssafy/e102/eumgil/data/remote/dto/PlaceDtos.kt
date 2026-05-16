@@ -8,6 +8,7 @@ data class PlaceSummaryDto(
     val placeId: Long,
     val name: String,
     val category: String,
+    val markerKind: String = "DEFAULT",
     val address: String?,
     val point: PlacePointDto,
     val accessibilityFeatures: List<PlaceAccessibilityFeatureDto>,

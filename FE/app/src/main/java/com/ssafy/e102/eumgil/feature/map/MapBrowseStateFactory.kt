@@ -22,12 +22,19 @@ internal object MapBrowseStateFactory {
         val normalizedSelection = normalizeSelection(selection = selection, browseData = browseData)
         val markers =
             browseData.allMarkers.map { marker ->
+                val matchesSelection = marker.matches(normalizedSelection)
                 marker.toMapMarkerUiModel(
                     displayState =
-                        if (marker.matches(normalizedSelection)) {
+                        if (matchesSelection) {
                             MapMarkerDisplayState.VISIBLE
                         } else {
                             MapMarkerDisplayState.HIDDEN_BY_FILTER
+                        },
+                    selectedFilterCategory =
+                        if (matchesSelection) {
+                            marker.selectedFilterCategory(normalizedSelection)
+                        } else {
+                            null
                         },
                 )
             }
@@ -225,7 +232,10 @@ internal object MapBrowseStateFactory {
         return selection.selectedBrailleBlockTypes.isEmpty() || brailleBlockType in selection.selectedBrailleBlockTypes
     }
 
-    private fun FacilityMarkerSeed.toMapMarkerUiModel(displayState: MapMarkerDisplayState): MapMarkerUiModel =
+    private fun FacilityMarkerSeed.toMapMarkerUiModel(
+        displayState: MapMarkerDisplayState,
+        selectedFilterCategory: FacilityCategory?,
+    ): MapMarkerUiModel =
         MapMarkerUiModel(
             markerId = facilityId,
             name = name,
@@ -239,9 +249,18 @@ internal object MapBrowseStateFactory {
                     category = category,
                     brailleBlockType = brailleBlockType,
                 ),
+            markerKind = markerKind,
+            selectedFilterCategory = selectedFilterCategory,
             accessibilityTags = accessibilityTags,
             displayState = displayState,
         )
+
+    private fun FacilityMarkerSeed.selectedFilterCategory(selection: MapFilterSelectionState): FacilityCategory? {
+        if (selection.isShowingAllCategories || selection.selectedFacilityCategories.isEmpty()) return null
+        return FEATURE_MARKER_ICON_PRIORITY.firstOrNull { category ->
+            category in selection.selectedFacilityCategories && category in filterCategories
+        }
+    }
 
     private fun categoryFilterPriority(category: FacilityCategory): Int =
         when (category) {
@@ -264,4 +283,11 @@ internal object MapBrowseStateFactory {
         category != FacilityCategory.OTHER &&
             category != FacilityCategory.RESTAURANT &&
             category != FacilityCategory.TOURIST_ATTRACTION
+
+    private val FEATURE_MARKER_ICON_PRIORITY =
+        listOf(
+            FacilityCategory.TOILET,
+            FacilityCategory.ELEVATOR,
+            FacilityCategory.CHARGING_STATION,
+        )
 }

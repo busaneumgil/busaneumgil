@@ -67,6 +67,7 @@ class SocialAccessTokenProviderTest {
                 FakeKakaoLoginClient(
                     isKakaoTalkLoginAvailable = true,
                     talkToken = fakeOAuthToken(accessToken = "kakao-talk-access-token"),
+                    talkError = null,
                 )
             val provider =
                 KakaoSocialAccessTokenProvider(

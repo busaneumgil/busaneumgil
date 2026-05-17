@@ -69,14 +69,15 @@ class MyPageViewModelTest {
                     authLogoutRepository = logoutRepository,
                     userProfileRepository = FakeUserProfileRepository(),
                 )
-            val event = async { viewModel.uiEvent.first() }
+            val event = backgroundScope.async { viewModel.uiEvent.first() }
             val loadingStates =
-                async {
+                backgroundScope.async {
                     viewModel.uiState
                         .map { state -> state.isLogoutLoading }
                         .take(3)
                         .toList()
                 }
+            runCurrent()
 
             viewModel.onAction(MyPageUiAction.LogoutClicked)
             runCurrent()

@@ -81,6 +81,10 @@ class MapScreenNavigationPolicyTest {
                 .readText()
 
         assertTrue(
+            "Facility detail route CTA should keep using the destination route label from the map screen.",
+            source.contains("R.string.map_facility_detail_set_destination_action"),
+        )
+        assertTrue(
             "Map picker mode should use a dedicated scaffold instead of the map home overlays.",
             source.contains("RouteEndpointMapPickerScaffold(") &&
                 source.contains("RouteEndpointMapPickerTopOverlay(") &&

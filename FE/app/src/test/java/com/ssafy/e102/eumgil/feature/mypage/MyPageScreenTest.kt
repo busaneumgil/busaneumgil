@@ -191,8 +191,8 @@ class MyPageScreenTest {
             "Duribal confirmation dialog should expose explicit yes and no actions for the restored CTA flow.",
             dialogSource.contains("onConfirm") &&
                 dialogSource.contains("onDismiss") &&
-                dialogSource.contains("confirmButtonText") &&
-                dialogSource.contains("dismissButtonText"),
+                dialogSource.contains("my_page_duribal_call_dialog_confirm") &&
+                dialogSource.contains("my_page_duribal_call_dialog_dismiss"),
         )
     }
 

@@ -64,7 +64,7 @@ class OnboardingNavGraphRoutingTest {
 
     @Test
     fun `terms guide intent opens the configured notion page with new task flag`() {
-        val intent = requireNotNull(createTermsGuideDetailIntent(TermsGuideStep.SENSITIVE))
+        val intent = requireNotNull(resolveTermsGuideDetailIntentSpec(TermsGuideStep.SENSITIVE))
 
         assertEquals(Intent.ACTION_VIEW, intent.action)
         assertEquals(
@@ -78,7 +78,7 @@ class OnboardingNavGraphRoutingTest {
     fun `location terms intent opens the configured notion page with new task flag`() {
         val intent =
             requireNotNull(
-                createLocationTermsDetailIntent(LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE),
+                resolveLocationTermsDetailIntentSpec(LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE),
             )
 
         assertEquals(Intent.ACTION_VIEW, intent.action)
@@ -91,7 +91,7 @@ class OnboardingNavGraphRoutingTest {
 
     @Test
     fun `location terms intent returns null for over fourteen item without detail url`() {
-        assertNull(createLocationTermsDetailIntent(LocationTermsItem.OVER_FOURTEEN))
+        assertNull(resolveLocationTermsDetailIntentSpec(LocationTermsItem.OVER_FOURTEEN))
     }
 
     @Test

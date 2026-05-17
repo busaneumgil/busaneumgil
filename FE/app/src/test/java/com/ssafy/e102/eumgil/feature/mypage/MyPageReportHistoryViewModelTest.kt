@@ -9,6 +9,7 @@ import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
 import com.ssafy.e102.eumgil.feature.report.ReportType
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -138,7 +139,8 @@ class MyPageReportHistoryViewModelTest {
         runTest {
             val repository = FakeReportHistoryRepository()
             val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
-            val event = async { viewModel.uiEvent.first() }
+            val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            advanceUntilIdle()
 
             viewModel.onAction(MyPageReportHistoryUiAction.ReportCtaClicked)
             advanceUntilIdle()
@@ -151,7 +153,8 @@ class MyPageReportHistoryViewModelTest {
         runTest {
             val repository = FakeReportHistoryRepository()
             val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
-            val event = async { viewModel.uiEvent.first() }
+            val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            advanceUntilIdle()
 
             viewModel.onAction(MyPageReportHistoryUiAction.BackClicked)
             advanceUntilIdle()

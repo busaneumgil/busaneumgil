@@ -16,11 +16,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -138,18 +134,16 @@ class BookmarkRepositoryTest {
                     authSessionRepository = authSessionRepository,
                 )
 
-            val emissions = mutableListOf<List<BookmarkData>>()
-            val collection = async { repository.observeBookmarks().take(2).toList(emissions) }
-            yield()
+            val firstScopeBookmarks = repository.observeBookmarks().first()
 
             authSessionRepository.updateAuthSession(
                 authSession = AuthSession(accessToken = "token-b", userId = "user-b"),
                 isProfileCompleted = true,
             )
-            collection.await()
+            val secondScopeBookmarks = repository.observeBookmarks().first()
 
-            assertEquals(listOf("place-a"), emissions[0].map(BookmarkData::placeId))
-            assertEquals(listOf("place-b"), emissions[1].map(BookmarkData::placeId))
+            assertEquals(listOf("place-a"), firstScopeBookmarks.map(BookmarkData::placeId))
+            assertEquals(listOf("place-b"), secondScopeBookmarks.map(BookmarkData::placeId))
         }
 
     @Test

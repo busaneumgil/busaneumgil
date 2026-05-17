@@ -471,7 +471,7 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `voice input click emits voice route navigation`() =
+    fun `voice input click requests parent voice input callback`() =
         runTest {
             val viewModel =
                 SearchViewModel(

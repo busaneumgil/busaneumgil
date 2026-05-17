@@ -48,11 +48,21 @@ import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
 import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
 
-fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
+fun NavGraphBuilder.mainNavGraph(
+    navController: NavHostController,
+    onOpenVoiceAssistant: (RouteEditingTarget) -> Unit,
+) {
     composable(route = TopLevelRoute.Map.route) { backStackEntry ->
         val shouldResetForHomeEntry by
             backStackEntry.savedStateHandle
                 .getStateFlow(MAP_HOME_REENTRY_RESET_KEY, false)
+                .collectAsStateWithLifecycle()
+        val facilityDetailDismissRequestId by
+            backStackEntry.savedStateHandle
+                .getStateFlow(
+                    MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY,
+                    MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID,
+                )
                 .collectAsStateWithLifecycle()
         val routeEndpointMapPickerTargetName by
             backStackEntry.savedStateHandle
@@ -88,6 +98,10 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onFacilityDetailVisibilityChanged = { isVisible ->
                 backStackEntry.savedStateHandle[MAP_FACILITY_DETAIL_VISIBLE_KEY] = isVisible
+            },
+            facilityDetailDismissRequestId = facilityDetailDismissRequestId,
+            onFacilityDetailDismissRequestConsumed = { requestId ->
+                backStackEntry.savedStateHandle.consumeMapFacilityDetailDismissRequest(requestId)
             },
             onVoiceSearchVisibilityChanged = { isVisible ->
                 backStackEntry.savedStateHandle[MAP_VOICE_SEARCH_VISIBLE_KEY] = isVisible
@@ -177,9 +191,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 navController.navigate(SearchRoute.Results.createRoute(query, editingTarget, selectionMode))
             },
             onNavigateToVoiceInput = {
-                navController.navigate(SearchRoute.VoiceInput.createRoute(initialEditingTarget, initialSelectionMode)) {
-                    launchSingleTop = true
-                }
+                onOpenVoiceAssistant(initialEditingTarget)
             },
             onNavigateToRouteSetting = { locationPermissionPrechecked ->
                 navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked) {
@@ -254,9 +266,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             onNavigateToVoiceInput = {
-                navController.navigate(SearchRoute.VoiceInput.createRoute(initialEditingTarget, initialSelectionMode)) {
-                    launchSingleTop = true
-                }
+                onOpenVoiceAssistant(initialEditingTarget)
             },
             onNavigateToRouteSetting = { locationPermissionPrechecked ->
                 navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked) {
@@ -692,6 +702,9 @@ internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): B
 
 private const val SEARCH_PRESERVE_ENTRY_STATE_KEY: String = "searchPreserveEntryState"
 private const val MAP_HOME_REENTRY_RESET_KEY: String = "mapHomeReentryReset"
+private const val MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY: String = "mapFacilityDetailDismissRequestId"
+private const val MAP_FACILITY_DETAIL_DISMISS_CONSUMED_ID_KEY: String = "mapFacilityDetailDismissConsumedId"
+internal const val MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID: Long = 0L
 private const val MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY: String = "mapRouteEndpointPickerTarget"
 internal const val MAP_VOICE_SEARCH_VISIBLE_KEY: String = "mapVoiceSearchVisible"
 
@@ -829,6 +842,31 @@ internal fun SavedStateHandle.consumeMapHomeReentryReset(): Boolean {
         set(MAP_HOME_REENTRY_RESET_KEY, false)
     }
     return shouldReset
+}
+
+internal fun SavedStateHandle.requestMapFacilityDetailDismiss(): Long {
+    val nextRequestId =
+        (get<Long>(MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY)
+            ?: MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID) + 1L
+    set(MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY, nextRequestId)
+    return nextRequestId
+}
+
+internal fun SavedStateHandle.consumeMapFacilityDetailDismissRequest(requestId: Long): Boolean {
+    if (requestId <= MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID) return false
+
+    val currentRequestId =
+        get<Long>(MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY)
+            ?: MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID
+    if (currentRequestId != requestId) return false
+
+    val consumedRequestId =
+        get<Long>(MAP_FACILITY_DETAIL_DISMISS_CONSUMED_ID_KEY)
+            ?: MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID
+    if (requestId <= consumedRequestId) return false
+
+    set(MAP_FACILITY_DETAIL_DISMISS_CONSUMED_ID_KEY, requestId)
+    return true
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

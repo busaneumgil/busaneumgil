@@ -1,6 +1,5 @@
 package com.ssafy.e102.eumgil.app.navigation
 
-import android.net.Uri
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
@@ -71,7 +70,7 @@ sealed interface OnboardingRoute : AppRoute {
         override val route: String = "onboarding/permission/{$ARG_NEXT_ROUTE}"
 
         fun createRoute(nextRoute: String): String =
-            "onboarding/permission/${Uri.encode(nextRoute)}"
+            "onboarding/permission/${nextRoute.navArgEncode()}"
     }
 }
 
@@ -163,7 +162,7 @@ sealed interface LowVisionRoute : AppRoute {
         override val route: String = "low_vision/voice_search/{$ARG_QUERY}"
 
         fun createRoute(query: String): String =
-            "low_vision/voice_search/${Uri.encode(query.ifBlank { " " })}"
+            "low_vision/voice_search/${query.ifBlank { " " }.navArgEncode()}"
     }
 }
 
@@ -186,6 +185,11 @@ sealed interface SearchRoute : AppRoute {
             )
     }
 
+    /**
+     * Legacy search voice route kept for compatibility.
+     *
+     * New search microphone entry points open the global voice assistant instead of navigating here.
+     */
     data object VoiceInput : SearchRoute {
         const val ARG_EDITING_TARGET: String = Entry.ARG_EDITING_TARGET
         const val ARG_SELECTION_MODE: String = Entry.ARG_SELECTION_MODE
@@ -219,7 +223,7 @@ sealed interface SearchRoute : AppRoute {
             selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
         ): String =
             buildSearchRoute(
-                baseRoute = "search/results/${Uri.encode(query)}",
+                baseRoute = "search/results/${query.navArgEncode()}",
                 editingTarget = editingTarget,
                 selectionMode = selectionMode,
             )
@@ -248,7 +252,7 @@ sealed interface RouteSettingRoute : AppRoute {
                         add("$ARG_AUTO_START_NAVIGATION=true")
                     }
                     initialRouteOption?.let { routeOption ->
-                        add("$ARG_INITIAL_ROUTE_OPTION=${Uri.encode(routeOption.name)}")
+                        add("$ARG_INITIAL_ROUTE_OPTION=${routeOption.name.navArgEncode()}")
                     }
                     if (locationPermissionPrechecked) {
                         add("$ARG_LOCATION_PERMISSION_PRECHECKED=true")
@@ -281,7 +285,7 @@ sealed interface RouteSettingRoute : AppRoute {
                         add("$ARG_AUTO_START_NAVIGATION=true")
                     }
                     initialRouteOption?.let { routeOption ->
-                        add("$ARG_INITIAL_ROUTE_OPTION=${Uri.encode(routeOption.name)}")
+                        add("$ARG_INITIAL_ROUTE_OPTION=${routeOption.name.navArgEncode()}")
                     }
                 }
 

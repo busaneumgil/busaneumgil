@@ -10,7 +10,7 @@ class MobilitySubtypeButtonStyleTest {
         val style = mobilitySubtypeButtonStyleFor(selected = true)
 
         assertEquals(Color.White, style.containerColor)
-        assertEquals(Color(0xFF2563EB), style.selectedContainerColor)
+        assertEquals(Color(0xFFDBEAFE), style.selectedContainerColor)
         assertEquals(Color(0xFF2563EB), style.borderColor)
         assertEquals(Color(0xFF2563EB), style.titleColor)
         assertEquals(Color(0xFF374151), style.descriptionColor)

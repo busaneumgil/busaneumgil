@@ -1043,12 +1043,13 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertEquals(MapCameraSource.CURRENT_LOCATION, viewModel.uiState.value.cameraTarget.source)
+            val refreshCountBeforeReentry = locationManager.refreshLatestLocationCallCount
 
             locationManager.updateLocation(null)
             viewModel.onHomeReentered()
-            advanceUntilIdle()
+            runCurrent()
 
-            assertEquals(2, locationManager.refreshLatestLocationCallCount)
+            assertEquals(refreshCountBeforeReentry + 1, locationManager.refreshLatestLocationCallCount)
             assertEquals(0L, viewModel.uiState.value.rendererSessionKey)
             assertEquals(MapCameraSource.CURRENT_LOCATION, viewModel.uiState.value.cameraTarget.source)
             assertEquals(currentLocation.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
@@ -1079,14 +1080,15 @@ class MapViewModelTest {
             viewModel.onRouteStarted()
             advanceUntilIdle()
             assertEquals(MapCameraSource.CURRENT_LOCATION, viewModel.uiState.value.cameraTarget.source)
+            val refreshCountBeforeReentry = locationManager.refreshLatestLocationCallCount
 
             viewModel.onRouteStopped()
             locationManager.updateLocation(null)
 
             viewModel.onHomeReentered()
-            advanceUntilIdle()
+            runCurrent()
 
-            assertEquals(2, locationManager.refreshLatestLocationCallCount)
+            assertEquals(refreshCountBeforeReentry + 1, locationManager.refreshLatestLocationCallCount)
             assertEquals(0L, viewModel.uiState.value.rendererSessionKey)
             assertEquals(MapCameraSource.CURRENT_LOCATION, viewModel.uiState.value.cameraTarget.source)
             assertEquals(currentLocation.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
@@ -1225,7 +1227,7 @@ class MapViewModelTest {
                 )
 
             viewModel.onRouteStarted()
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(MapCameraSource.DEFAULT_BUSAN, viewModel.uiState.value.cameraTarget.source)
             assertEquals(MapDefaults.BUSAN_CENTER.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
@@ -1590,7 +1592,14 @@ class MapViewModelTest {
 
             viewModel.onAction(MapUiAction.MarkerTapped(markerId))
             advanceUntilIdle()
-            viewModel.onAction(MapUiAction.MapTapped(MapTapPayload(coordinate = tappedCoordinate)))
+            viewModel.onAction(
+                MapUiAction.MapTapped(
+                    MapTapPayload(
+                        coordinate = tappedCoordinate,
+                        clickType = MapTapClickType.POI,
+                    ),
+                ),
+            )
             advanceUntilIdle()
 
             assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
@@ -1628,7 +1637,13 @@ class MapViewModelTest {
 
             advanceUntilIdle()
 
-            viewModel.onAction(MapUiAction.MapTapped(MapTapPayload(coordinate = tappedCoordinate)))
+            viewModel.onAction(
+                MapUiAction.MapTapped(
+                    MapTapPayload(
+                        coordinate = tappedCoordinate,
+                    ),
+                ),
+            )
             advanceUntilIdle()
 
             assertTrue(placesRepository.mapTapDetailRequests.isEmpty())
@@ -1965,7 +1980,6 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             val markerId = viewModel.uiState.value.markerOverlayState.markers.first().markerId
-
             viewModel.onAction(
                 MapUiAction.MapTapped(
                     MapTapPayload(

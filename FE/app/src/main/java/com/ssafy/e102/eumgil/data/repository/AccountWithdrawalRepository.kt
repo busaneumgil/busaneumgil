@@ -121,7 +121,13 @@ class ServerAccountWithdrawalRepository(
                 is AuthenticatedRequestResult.Success -> result.value
             }
         } catch (exception: UserApiException) {
-            AccountWithdrawalResult.Failure(message = exception.message)
+            if (exception.isAlreadyWithdrawn()) {
+                runCatching { localDataCleaner.clearAfterWithdrawal() }
+                authSessionRepository.clearAuthSession()
+                AccountWithdrawalResult.Success(message = DEFAULT_WITHDRAW_SUCCESS_MESSAGE)
+            } else {
+                AccountWithdrawalResult.Failure(message = exception.message)
+            }
         } catch (exception: Exception) {
             AccountWithdrawalResult.Failure(
                 message = exception.message ?: DEFAULT_WITHDRAW_ERROR_MESSAGE,
@@ -131,9 +137,14 @@ class ServerAccountWithdrawalRepository(
 
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_FORBIDDEN = 403
+private const val HTTP_NOT_FOUND = 404
+private const val USER_NOT_FOUND_STATUS = "U4040"
 private const val DEFAULT_WITHDRAW_SUCCESS_MESSAGE = "회원탈퇴가 완료되었습니다."
 private const val DEFAULT_WITHDRAW_ERROR_MESSAGE = "회원탈퇴 처리에 실패했습니다. 다시 시도해주세요."
 
 private fun isAuthenticationFailure(throwable: Throwable): Boolean =
     throwable is UserApiException &&
         (throwable.httpStatusCode == HTTP_UNAUTHORIZED || throwable.httpStatusCode == HTTP_FORBIDDEN)
+
+private fun UserApiException.isAlreadyWithdrawn(): Boolean =
+    httpStatusCode == HTTP_NOT_FOUND && status == USER_NOT_FOUND_STATUS

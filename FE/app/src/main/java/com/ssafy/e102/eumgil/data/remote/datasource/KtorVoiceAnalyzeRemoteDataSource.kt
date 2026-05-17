@@ -15,7 +15,7 @@ class KtorVoiceAnalyzeRemoteDataSource(
         text: String,
         mode: String,
         history: List<VoiceAnalyzeHistoryDto>,
-        currentRoute: String? = null,
+        currentRoute: String?,
     ): VoiceAnalyzeResponseDto {
         try {
             val historyArray = JSONArray().apply {

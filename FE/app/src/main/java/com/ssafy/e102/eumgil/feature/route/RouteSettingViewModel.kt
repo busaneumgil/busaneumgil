@@ -111,6 +111,7 @@ class RouteSettingViewModel(
             RouteSettingUiAction.WaypointsSwapClicked -> swapWaypoints()
             RouteSettingUiAction.StartNavigationClicked -> startNavigation()
             RouteSettingUiAction.RouteRefreshClicked -> refreshSelectedRoute()
+            RouteSettingUiAction.CurrentLocationClicked -> requestCurrentLocationRefresh()
         }
     }
 
@@ -274,6 +275,21 @@ class RouteSettingViewModel(
         currentLocationManager.startLocationUpdates()
         if (forceReload) {
             reloadAutomaticOriginIfMissing()
+        }
+    }
+
+    private fun requestCurrentLocationRefresh() {
+        val permissionManager = locationPermissionManager
+        if (permissionManager == null) {
+            currentLocationManager.startLocationUpdates()
+            currentLocationManager.refreshLatestLocation()
+            return
+        }
+
+        permissionManager.refreshPermissionState()
+        if (permissionManager.permissionState.value is LocationPermissionState.Granted) {
+            currentLocationManager.startLocationUpdates()
+            currentLocationManager.refreshLatestLocation()
         }
     }
 

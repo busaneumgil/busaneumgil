@@ -11,6 +11,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL -o graphhopper-web.jar "https://repo1.maven.org/maven2/com/graphhopper/graphhopper-web/${GRAPHHOPPER_VERSION}/graphhopper-web-${GRAPHHOPPER_VERSION}.jar"
+RUN curl -fsSL -o postgresql.jar "https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.5/postgresql-42.7.5.jar"
 
 COPY INF/graphhopper/config-local.yml /opt/graphhopper/config-local.yml
 COPY INF/graphhopper/config-runtime.yml /opt/graphhopper/config-runtime.yml
@@ -26,7 +27,7 @@ COPY scripts/db/load_accessibility_features.py /usr/local/bin/load-accessibility
 COPY INF/graphhopper/plugin/src /opt/graphhopper/plugin/src
 
 RUN mkdir -p /opt/graphhopper/plugin/classes \
-    && javac -cp /opt/graphhopper/graphhopper-web.jar \
+    && javac -cp /opt/graphhopper/graphhopper-web.jar:/opt/graphhopper/postgresql.jar \
       -d /opt/graphhopper/plugin/classes \
       $(find /opt/graphhopper/plugin/src -name '*.java' | sort) \
     && jar --create --file /opt/graphhopper/plugin/ieum-graphhopper-plugin.jar \

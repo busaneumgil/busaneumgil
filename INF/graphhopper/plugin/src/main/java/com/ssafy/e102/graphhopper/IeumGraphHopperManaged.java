@@ -18,9 +18,11 @@ public class IeumGraphHopperManaged implements Managed {
     private static final Logger log = LoggerFactory.getLogger(IeumGraphHopperManaged.class);
 
     private final GraphHopper graphHopper;
+    private final RoutingSegmentOverrideStore routingSegmentOverrideStore;
 
     public IeumGraphHopperManaged(GraphHopperConfig configuration) {
-        this.graphHopper = new GraphHopper()
+        this.routingSegmentOverrideStore = new RoutingSegmentOverrideStore();
+        this.graphHopper = new IeumGraphHopper(routingSegmentOverrideStore)
             .setImportRegistry(new IeumImportRegistry())
             .init(configuration);
     }
@@ -30,6 +32,7 @@ public class IeumGraphHopperManaged implements Managed {
         // 첫 실행이면 OSM/PBF를 읽어 graph-cache를 만들고, 이미 cache가 있으면 바로 로드한다.
         // 이 시점에 registry와 tag parser가 동작해 `ieum:*` tag가 edge flag에 저장된다.
         graphHopper.importOrLoad();
+        routingSegmentOverrideStore.reload();
         log.info(
             "loaded ieum graph at:{}, data_reader_file:{}, encoded values:{}, {} bytes for edge flags, {}",
             graphHopper.getGraphHopperLocation(),
@@ -42,6 +45,10 @@ public class IeumGraphHopperManaged implements Managed {
 
     public GraphHopper getGraphHopper() {
         return graphHopper;
+    }
+
+    public RoutingSegmentOverrideStore getRoutingSegmentOverrideStore() {
+        return routingSegmentOverrideStore;
     }
 
     @Override

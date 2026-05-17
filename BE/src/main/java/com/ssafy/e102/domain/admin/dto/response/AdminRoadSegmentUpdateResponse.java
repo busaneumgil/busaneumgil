@@ -6,8 +6,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record AdminRoadSegmentUpdateResponse(
 	@Schema(description = "DB에 저장된 최신 segment 속성")
 	AdminRoadSegmentPropertiesResponse segment,
-	@Schema(description = "실시간 GraphHopper 경로 반영 상태")
-	AdminRoutingPatchStatus routingPatchStatus,
-	@Schema(description = "실시간 GraphHopper 경로 반영 메시지")
-	String routingPatchMessage) {
+	@Schema(description = "즉시 경로 반영 처리 상태")
+	AdminRoutingApplyStatus routingApplyStatus,
+	@Schema(description = "즉시 경로 반영 처리 메시지")
+	String routingApplyMessage) {
 }

@@ -54,7 +54,7 @@ import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkSummaryResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNodePropertiesResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentPropertiesResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentUpdateResponse;
-import com.ssafy.e102.domain.admin.dto.response.AdminRoutingPatchStatus;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.admin.type.AdminAreaAssignmentType;
 import com.ssafy.e102.domain.place.entity.Place;
@@ -66,16 +66,18 @@ import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
+import com.ssafy.e102.domain.route.entity.RoutingSegmentOverride;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
 import com.ssafy.e102.domain.route.repository.RoadNodeRepository;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
+import com.ssafy.e102.domain.route.repository.RoutingSegmentOverrideRepository;
 import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
 import com.ssafy.e102.domain.route.type.AccessibilityState;
 import com.ssafy.e102.domain.route.type.SegmentFeatureType;
 import com.ssafy.e102.domain.route.type.SegmentType;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient;
-import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperPatchResult;
-import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperPatchStatus;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadStatus;
 import com.ssafy.e102.global.exception.BusinessException;
 import com.ssafy.e102.global.exception.CommonErrorCode;
 import com.ssafy.e102.global.geo.GeoPointConverter;
@@ -95,6 +97,7 @@ public class AdminMapService {
 	private final RoadNodeRepository roadNodeRepository;
 	private final RoadSegmentRepository roadSegmentRepository;
 	private final SegmentFeatureRepository segmentFeatureRepository;
+	private final RoutingSegmentOverrideRepository routingSegmentOverrideRepository;
 	private final PlaceRepository placeRepository;
 	private final PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository;
 	private final GeoPointConverter geoPointConverter;
@@ -109,6 +112,7 @@ public class AdminMapService {
 		RoadNodeRepository roadNodeRepository,
 		RoadSegmentRepository roadSegmentRepository,
 		SegmentFeatureRepository segmentFeatureRepository,
+		RoutingSegmentOverrideRepository routingSegmentOverrideRepository,
 		PlaceRepository placeRepository,
 		PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository,
 		GeoPointConverter geoPointConverter,
@@ -121,6 +125,7 @@ public class AdminMapService {
 		this.roadNodeRepository = roadNodeRepository;
 		this.roadSegmentRepository = roadSegmentRepository;
 		this.segmentFeatureRepository = segmentFeatureRepository;
+		this.routingSegmentOverrideRepository = routingSegmentOverrideRepository;
 		this.placeRepository = placeRepository;
 		this.placeAccessibilityFeatureRepository = placeAccessibilityFeatureRepository;
 		this.geoPointConverter = geoPointConverter;
@@ -280,35 +285,19 @@ public class AdminMapService {
 		String gu,
 		String dong,
 		AdminRoadSegmentAttributesUpdateRequest request) {
-		adminService.requireCanEditArea(userId, gu, dong, AdminAreaAssignmentType.ROAD_NETWORK);
-		if (!roadSegmentRepository.existsIntersectingGuByEdgeId(edgeId, gu)) {
-			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "??? ??? segment???????????????.");
-		}
-		RoadSegment roadSegment = roadSegmentRepository.findById(edgeId)
-			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "segment????? ????????."));
-		AdminRoadSegmentPropertiesResponse before = toRoadSegmentProperties(roadSegment);
-		roadSegment.updateAttributes(
-			request.walkAccess(),
-			request.brailleBlockState(),
-			request.audioSignalState(),
-			request.widthState(),
-			request.surfaceState(),
-			request.stairsState(),
-			request.signalState());
-		AdminRoadSegmentPropertiesResponse after = toRoadSegmentProperties(roadSegment);
-		adminAuditLogService.record(
-			userId,
-			"ROAD_SEGMENT_ATTRIBUTES_UPDATE",
-			"ROAD_SEGMENT",
-			String.valueOf(edgeId),
-			gu,
-			dong,
-			"??? segment ??? ????edgeId=" + edgeId,
-			before,
-			after);
-		return after;
+		RoadSegmentUpdateContext updateContext = Objects.requireNonNull(
+			transactionTemplate.execute(transactionStatus -> updateRoadSegmentAttributesInTransaction(
+				userId,
+				edgeId,
+				gu,
+				dong,
+				request)));
+		GraphHopperReloadResult routingApplyResult = resolveRoutingApplyResult(updateContext);
+		return new AdminRoadSegmentUpdateResponse(
+			updateContext.after(),
+			toAdminRoutingApplyStatus(routingApplyResult.status()),
+			routingApplyResult.message());
 	}
-
 	@Transactional
 	public AdminPlaceDetailResponse updatePlace(
 		UUID userId,
@@ -686,7 +675,7 @@ public class AdminMapService {
 		String dong,
 		AdminRoadSegmentAttributesUpdateRequest request) {
 		adminService.requireCanEditArea(userId, gu, dong, AdminAreaAssignmentType.ROAD_NETWORK);
-		if (!roadSegmentRepository.existsIntersectingAreaByEdgeId(edgeId, gu, dong)) {
+		if (!roadSegmentRepository.existsIntersectingGuByEdgeId(edgeId, gu)) {
 			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "담당 구/동의 segment만 수정할 수 있습니다.");
 		}
 		RoadSegment roadSegment = roadSegmentRepository.findById(edgeId)
@@ -711,25 +700,42 @@ public class AdminMapService {
 			"보행 segment 속성 변경 edgeId=" + edgeId,
 			before,
 			after);
-		return new RoadSegmentUpdateContext(before, after, request.walkAccess());
+		applyRoutingOverride(edgeId, request);
+		return new RoadSegmentUpdateContext(before, after, request.walkAccess(), Boolean.TRUE.equals(request.applyRoutingImmediately()));
 	}
 
-	private GraphHopperPatchResult resolveRoutingPatchResult(Long edgeId, RoadSegmentUpdateContext updateContext) {
+	private void applyRoutingOverride(Long edgeId, AdminRoadSegmentAttributesUpdateRequest request) {
+		if (!Boolean.TRUE.equals(request.applyRoutingImmediately())) {
+			return;
+		}
+		if (request.walkAccess() == null) {
+			return;
+		}
+		if (request.walkAccess() == AccessibilityState.NO) {
+			routingSegmentOverrideRepository.save(RoutingSegmentOverride.of(edgeId, AccessibilityState.NO));
+			return;
+		}
+		if (request.walkAccess() == AccessibilityState.YES || request.walkAccess() == AccessibilityState.UNKNOWN) {
+			routingSegmentOverrideRepository.deleteById(edgeId);
+		}
+	}
+
+	private GraphHopperReloadResult resolveRoutingApplyResult(RoadSegmentUpdateContext updateContext) {
+		if (!updateContext.applyRoutingImmediately()) {
+			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "immediate routing apply disabled");
+		}
 		if (updateContext.requestedWalkAccess() == null) {
-			return new GraphHopperPatchResult(GraphHopperPatchStatus.SKIPPED, "walk_access update not requested");
+			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "walk_access update not requested; runtime override unchanged");
 		}
-		if (updateContext.before().walkAccess() == updateContext.after().walkAccess()) {
-			return new GraphHopperPatchResult(GraphHopperPatchStatus.SKIPPED, "walk_access unchanged");
-		}
-		return graphHopperAdminClient.patchWalkAccess(edgeId, updateContext.after().walkAccess());
+		return graphHopperAdminClient.reloadRoutingOverrides();
 	}
 
-	private AdminRoutingPatchStatus toAdminRoutingPatchStatus(GraphHopperPatchStatus patchStatus) {
-		return switch (patchStatus) {
-			case SKIPPED -> AdminRoutingPatchStatus.SKIPPED;
-			case APPLIED -> AdminRoutingPatchStatus.APPLIED;
-			case APPLIED_WITH_WARNING -> AdminRoutingPatchStatus.APPLIED_WITH_WARNING;
-			case FAILED -> AdminRoutingPatchStatus.FAILED;
+	private AdminRoutingApplyStatus toAdminRoutingApplyStatus(GraphHopperReloadStatus applyStatus) {
+		return switch (applyStatus) {
+			case SKIPPED -> AdminRoutingApplyStatus.SKIPPED;
+			case APPLIED -> AdminRoutingApplyStatus.APPLIED;
+			case APPLIED_WITH_WARNING -> AdminRoutingApplyStatus.APPLIED_WITH_WARNING;
+			case FAILED -> AdminRoutingApplyStatus.FAILED;
 		};
 	}
 
@@ -916,6 +922,7 @@ public class AdminMapService {
 	private record RoadSegmentUpdateContext(
 		AdminRoadSegmentPropertiesResponse before,
 		AdminRoadSegmentPropertiesResponse after,
-		AccessibilityState requestedWalkAccess) {
+		AccessibilityState requestedWalkAccess,
+		boolean applyRoutingImmediately) {
 	}
 }

@@ -14,8 +14,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
-import com.ssafy.e102.domain.route.type.AccessibilityState;
-import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperPatchStatus;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadStatus;
 
 class GraphHopperAdminClientTest {
 
@@ -37,81 +37,81 @@ class GraphHopperAdminClientTest {
 	}
 
 	@Test
-	@DisplayName("GraphHopper hot patch는 active와 previous slot에 모두 적용한다")
-	void patchWalkAccessAppliesToActiveAndPreviousSlots() {
-		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+	@DisplayName("GraphHopper override reload는 active와 previous slot에 모두 적용한다")
+	void reloadRoutingOverridesAppliesToActiveAndPreviousSlots() {
+		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
-		GraphHopperAdminClient.GraphHopperPatchResult result = client.patchWalkAccess(123L, AccessibilityState.NO);
+		GraphHopperReloadResult result = client.reloadRoutingOverrides();
 
-		assertThat(result.status()).isEqualTo(GraphHopperPatchStatus.APPLIED);
+		assertThat(result.status()).isEqualTo(GraphHopperReloadStatus.APPLIED);
 		assertThat(result.message()).contains("green", "blue");
 		server.verify();
 	}
 
 	@Test
-	@DisplayName("GraphHopper hot patch는 일부 slot만 성공하면 경고 상태를 반환한다")
-	void patchWalkAccessReturnsAppliedWithWarningWhenPartialSuccess() {
-		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+	@DisplayName("GraphHopper override reload에서 일부 slot만 성공하면 경고 상태를 반환한다")
+	void reloadRoutingOverridesReturnsAppliedWithWarningWhenPartialSuccess() {
+		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withServerError());
-		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withServerError());
 
-		GraphHopperAdminClient.GraphHopperPatchResult result = client.patchWalkAccess(123L, AccessibilityState.NO);
+		GraphHopperReloadResult result = client.reloadRoutingOverrides();
 
-		assertThat(result.status()).isEqualTo(GraphHopperPatchStatus.APPLIED_WITH_WARNING);
-		assertThat(result.message()).contains("Patched GraphHopper slot(s): green", "slot=blue");
+		assertThat(result.status()).isEqualTo(GraphHopperReloadStatus.APPLIED_WITH_WARNING);
+		assertThat(result.message()).contains("green", "slot=blue");
 		server.verify();
 	}
 
 	@Test
-	@DisplayName("GraphHopper hot patch는 active 실패 후 previous만 성공해도 FAILED를 반환한다")
-	void patchWalkAccessReturnsFailedWhenOnlyPreviousSucceeds() {
-		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+	@DisplayName("GraphHopper override reload는 active 실패 후 previous만 성공해도 FAILED를 반환한다")
+	void reloadRoutingOverridesReturnsFailedWhenOnlyPreviousSucceeds() {
+		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withServerError());
-		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withServerError());
-		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
-		GraphHopperAdminClient.GraphHopperPatchResult result = client.patchWalkAccess(123L, AccessibilityState.NO);
+		GraphHopperReloadResult result = client.reloadRoutingOverrides();
 
-		assertThat(result.status()).isEqualTo(GraphHopperPatchStatus.FAILED);
+		assertThat(result.status()).isEqualTo(GraphHopperReloadStatus.FAILED);
 		assertThat(result.message()).contains("slot=green");
 		server.verify();
 	}
 
 	@Test
-	@DisplayName("GraphHopper hot patch 실패 시 동일 endpoint에 즉시 재시도 후 FAILED를 반환한다")
-	void patchWalkAccessRetriesAndReturnsFailed() {
-		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+	@DisplayName("GraphHopper override reload 실패 시 동일 endpoint로 즉시 재시도하고 FAILED를 반환한다")
+	void reloadRoutingOverridesRetriesAndReturnsFailed() {
+		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withServerError());
-		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withServerError());
-		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withServerError());
-		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/edges/123/walk-access"))
-			.andExpect(method(HttpMethod.PATCH))
+		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/overrides/reload"))
+			.andExpect(method(HttpMethod.POST))
 			.andRespond(withServerError());
 
-		GraphHopperAdminClient.GraphHopperPatchResult result = client.patchWalkAccess(123L, AccessibilityState.NO);
+		GraphHopperReloadResult result = client.reloadRoutingOverrides();
 
-		assertThat(result.status()).isEqualTo(GraphHopperPatchStatus.FAILED);
+		assertThat(result.status()).isEqualTo(GraphHopperReloadStatus.FAILED);
 		assertThat(result.message()).contains("slot=green", "slot=blue");
 		server.verify();
 	}

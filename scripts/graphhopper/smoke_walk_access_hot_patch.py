@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Verify that GraphHopper walk_access hot patch changes routing immediately.
+"""Verify GraphHopper walk_access overlay reload changes routing immediately.
 
 This smoke test runs the same origin/destination route twice:
-1. Before patch: the route must include the target `db_edge_id`.
-2. After patch: the route must either avoid that `db_edge_id` or become unroutable.
+1. Before override: the route must include the target `db_edge_id`.
+2. After override + reload: the route must either avoid that `db_edge_id` or become unroutable.
 
-The script restores the original walk_access value for the target edge unless
+The script restores the previous `routing_segment_overrides` row state unless
 `--skip-restore` is used.
 """
 
@@ -17,9 +17,11 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+import psycopg2
 
 
 NO_ROUTE_MARKERS = (
@@ -83,49 +85,18 @@ def route_url(base_url: str, profile: str, from_lat: float, from_lng: float, to_
     return f"{base_url.rstrip('/')}/route?{query}"
 
 
-def patch_url(base_url: str, edge_id: int) -> str:
-    return f"{base_url.rstrip('/')}/ieum/admin/edges/{edge_id}/walk-access"
+def reload_url(base_url: str) -> str:
+    return f"{base_url.rstrip('/')}/ieum/admin/overrides/reload"
 
 
 def extract_paths(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return payload.get("paths") or []
 
 
-def detail_rows(path: dict[str, Any], detail_name: str) -> list[list[Any]]:
+def detail_values(path: dict[str, Any], detail_name: str) -> list[str]:
     details = path.get("details") or {}
     rows = details.get(detail_name) or []
-    return [row for row in rows if isinstance(row, list) and len(row) >= 3]
-
-
-def detail_values(path: dict[str, Any], detail_name: str) -> list[str]:
-    return [str(row[2]) for row in detail_rows(path, detail_name)]
-
-
-def ranges_overlap(start_a: int, end_a: int, start_b: int, end_b: int) -> bool:
-    return max(start_a, start_b) < min(end_a, end_b)
-
-
-def resolve_original_walk_access(path: dict[str, Any], edge_id: int) -> str:
-    target_ranges = [
-        (int(row[0]), int(row[1]))
-        for row in detail_rows(path, "db_edge_id")
-        if str(row[2]) == str(edge_id)
-    ]
-    if not target_ranges:
-        raise ValueError("before route does not include the target db_edge_id")
-
-    overlapping_walk_access = {
-        str(row[2])
-        for row in detail_rows(path, "walk_access")
-        for target_start, target_end in target_ranges
-        if ranges_overlap(target_start, target_end, int(row[0]), int(row[1]))
-    }
-    if len(overlapping_walk_access) != 1:
-        raise ValueError(
-            "failed to resolve a single original walk_access value for the target db_edge_id: "
-            + ", ".join(sorted(overlapping_walk_access))
-        )
-    return overlapping_walk_access.pop()
+    return [str(row[2]) for row in rows if isinstance(row, list) and len(row) >= 3]
 
 
 def is_no_route_error(error: HttpRequestError) -> bool:
@@ -139,8 +110,9 @@ def is_no_route_error(error: HttpRequestError) -> bool:
 def write_report(report_json: str | None, report: dict[str, Any]) -> None:
     if not report_json:
         return
-    os.makedirs(os.path.dirname(os.path.abspath(report_json)), exist_ok=True)
-    with open(report_json, "w", encoding="utf-8") as file:
+    report_path = os.path.abspath(report_json)
+    os.makedirs(os.path.dirname(report_path), exist_ok=True)
+    with open(report_path, "w", encoding="utf-8") as file:
         json.dump(report, file, ensure_ascii=False, indent=2)
         file.write("\n")
 
@@ -153,18 +125,93 @@ def fail(message: str, report_json: str | None, report: dict[str, Any]) -> int:
     return 1
 
 
+def open_connection():
+    jdbc_url = first_non_blank(
+        os.getenv("DB_URL"),
+        os.getenv("SPRING_DATASOURCE_URL"),
+    )
+    if jdbc_url:
+        normalized = jdbc_url.replace("jdbc:postgresql://", "")
+        host_port, db_name = normalized.split("/", 1)
+        host, port = host_port.split(":", 1)
+        return psycopg2.connect(
+            host=host,
+            port=port,
+            dbname=db_name,
+            user=first_non_blank(os.getenv("DB_USERNAME"), os.getenv("POSTGRES_USER")),
+            password=first_non_blank(os.getenv("DB_PASSWORD"), os.getenv("POSTGRES_PASSWORD")),
+            sslmode=os.getenv("DB_SSLMODE", os.getenv("PGSSLMODE", "prefer")),
+        )
+
+    return psycopg2.connect(
+        host=first_non_blank(os.getenv("PGHOST"), "postgres"),
+        port=first_non_blank(os.getenv("PGPORT"), "5432"),
+        dbname=first_non_blank(os.getenv("PGDATABASE"), os.getenv("POSTGRES_DB"), "e102"),
+        user=first_non_blank(os.getenv("DB_USERNAME"), os.getenv("POSTGRES_USER")),
+        password=first_non_blank(os.getenv("DB_PASSWORD"), os.getenv("POSTGRES_PASSWORD")),
+        sslmode=os.getenv("DB_SSLMODE", os.getenv("PGSSLMODE", "prefer")),
+    )
+
+
+def first_non_blank(*candidates: str | None) -> str | None:
+    for candidate in candidates:
+        if candidate and candidate.strip():
+            return candidate
+    return None
+
+
+def fetch_previous_override(edge_id: int) -> str | None:
+    with open_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "select walk_access from routing_segment_overrides where edge_id = %s",
+                (edge_id,),
+            )
+            row = cursor.fetchone()
+            return None if row is None else str(row[0])
+
+
+def apply_override(edge_id: int, walk_access: str) -> None:
+    with open_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into routing_segment_overrides(edge_id, walk_access)
+                values (%s, %s)
+                on conflict (edge_id)
+                do update set walk_access = excluded.walk_access
+                """,
+                (edge_id, walk_access),
+            )
+        connection.commit()
+
+
+def clear_override(edge_id: int) -> None:
+    with open_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("delete from routing_segment_overrides where edge_id = %s", (edge_id,))
+        connection.commit()
+
+
+def restore_override(edge_id: int, previous_override: str | None) -> None:
+    if previous_override is None:
+        clear_override(edge_id)
+    else:
+        apply_override(edge_id, previous_override)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default=os.getenv("GRAPHHOPPER_HOT_PATCH_SMOKE_BASE_URL", "http://graphhopper:8989"))
-    parser.add_argument("--profile", default=os.getenv("GRAPHHOPPER_HOT_PATCH_SMOKE_PROFILE", "wheelchair_manual_safe"))
+    parser.add_argument("--base-url", default=os.getenv("GRAPHHOPPER_OVERLAY_SMOKE_BASE_URL", "http://graphhopper:8989"))
+    parser.add_argument("--profile", default=os.getenv("GRAPHHOPPER_OVERLAY_SMOKE_PROFILE", "wheelchair_manual_safe"))
     parser.add_argument("--edge-id", type=int, required=True)
     parser.add_argument("--from-lat", type=float, required=True)
     parser.add_argument("--from-lng", type=float, required=True)
     parser.add_argument("--to-lat", type=float, required=True)
     parser.add_argument("--to-lng", type=float, required=True)
-    parser.add_argument("--blocked-walk-access", default=os.getenv("GRAPHHOPPER_HOT_PATCH_SMOKE_BLOCKED_ACCESS", "NO"))
-    parser.add_argument("--timeout-seconds", type=int, default=int(os.getenv("GRAPHHOPPER_HOT_PATCH_SMOKE_TIMEOUT_SECONDS", "10")))
-    parser.add_argument("--report-json", default=os.getenv("GRAPHHOPPER_HOT_PATCH_SMOKE_REPORT_FILE"))
+    parser.add_argument("--override-walk-access", default=os.getenv("GRAPHHOPPER_OVERLAY_SMOKE_WALK_ACCESS", "NO"))
+    parser.add_argument("--timeout-seconds", type=int, default=int(os.getenv("GRAPHHOPPER_OVERLAY_SMOKE_TIMEOUT_SECONDS", "10")))
+    parser.add_argument("--report-json", default=os.getenv("GRAPHHOPPER_OVERLAY_SMOKE_REPORT_FILE"))
     parser.add_argument("--skip-restore", action="store_true")
     args = parser.parse_args()
 
@@ -182,116 +229,114 @@ def main() -> int:
     before_url = route_url(args.base_url, args.profile, args.from_lat, args.from_lng, args.to_lat, args.to_lng)
     try:
         before_status, before_payload = request_json("GET", before_url, None, args.timeout_seconds)
-    except (HttpRequestError, URLError, TimeoutError) as error:
-        return fail(f"hot patch smoke failed before route request: {error}", args.report_json, report)
+    except Exception as error:
+        return fail(f"overlay smoke failed before route request: {error}", args.report_json, report)
 
     before_paths = extract_paths(before_payload)
     report["before"] = {"httpStatus": before_status, "pathCount": len(before_paths)}
     if before_status != 200 or not before_paths:
-        return fail("hot patch smoke failed: before route has no paths", args.report_json, report)
+        return fail("overlay smoke failed: before route has no paths", args.report_json, report)
 
     before_edge_values = detail_values(before_paths[0], "db_edge_id")
-    before_walk_access_values = detail_values(before_paths[0], "walk_access")
     report["before"]["dbEdgeIds"] = before_edge_values
-    report["before"]["walkAccessValues"] = before_walk_access_values
     if str(args.edge_id) not in before_edge_values:
         return fail(
-            "hot patch smoke failed: before route does not include the target db_edge_id; choose an OD that traverses the edge",
+            "overlay smoke failed: before route does not include the target db_edge_id; choose an OD that traverses the edge",
             args.report_json,
             report,
         )
 
-    try:
-        original_walk_access = resolve_original_walk_access(before_paths[0], args.edge_id)
-    except ValueError as error:
-        return fail(f"hot patch smoke failed: {error}", args.report_json, report)
-    report["before"]["originalWalkAccess"] = original_walk_access
-
-    patch_request = {"walkAccess": args.blocked_walk_access}
-    try:
-        patch_status, patch_payload = request_json(
-            "PATCH",
-            patch_url(args.base_url, args.edge_id),
-            patch_request,
-            args.timeout_seconds,
-        )
-    except (HttpRequestError, URLError, TimeoutError) as error:
-        return fail(f"hot patch smoke failed during patch request: {error}", args.report_json, report)
-
-    report["patch"] = {
-        "httpStatus": patch_status,
-        "request": patch_request,
-        "response": patch_payload,
-    }
-    if patch_status != 200:
-        return fail("hot patch smoke failed: patch endpoint did not return 200", args.report_json, report)
+    previous_override = fetch_previous_override(args.edge_id)
+    report["before"]["previousOverride"] = previous_override
 
     return_code = 1
+    failure_message: str | None = None
     restore_error: str | None = None
-    after_url = route_url(args.base_url, args.profile, args.from_lat, args.from_lng, args.to_lat, args.to_lng)
     try:
-        after_status, after_payload = request_json("GET", after_url, None, args.timeout_seconds)
-        after_paths = extract_paths(after_payload)
-        report["after"] = {"httpStatus": after_status, "pathCount": len(after_paths)}
+        apply_override(args.edge_id, args.override_walk_access)
 
-        if after_status != 200:
-            return fail("hot patch smoke failed: after route endpoint did not return 200", args.report_json, report)
+        try:
+            reload_status, reload_payload = request_json("POST", reload_url(args.base_url), {}, args.timeout_seconds)
+            report["reload"] = {
+                "httpStatus": reload_status,
+                "response": reload_payload,
+            }
+            if reload_status != 200:
+                failure_message = "overlay smoke failed: reload endpoint did not return 200"
+            else:
+                after_url = route_url(args.base_url, args.profile, args.from_lat, args.from_lng, args.to_lat, args.to_lng)
+                after_status, after_payload = request_json("GET", after_url, None, args.timeout_seconds)
+                after_paths = extract_paths(after_payload)
+                report["after"] = {"httpStatus": after_status, "pathCount": len(after_paths)}
 
-        if not after_paths:
-            report["status"] = "PASS"
-            report["message"] = "hot patch smoke ok: route became unroutable after blocking target edge"
-            return_code = 0
-        else:
-            after_edge_values = detail_values(after_paths[0], "db_edge_id")
-            after_walk_access_values = detail_values(after_paths[0], "walk_access")
-            report["after"]["dbEdgeIds"] = after_edge_values
-            report["after"]["walkAccessValues"] = after_walk_access_values
-
-            if str(args.edge_id) in after_edge_values:
-                return fail("hot patch smoke failed: target db_edge_id is still present after patch", args.report_json, report)
-
-            report["status"] = "PASS"
-            report["message"] = "hot patch smoke ok: target db_edge_id disappeared from the route after patch"
-            return_code = 0
-    except HttpRequestError as error:
-        report["after"] = {
-            "httpStatus": error.status_code,
-            "pathCount": 0,
-            "errorBody": error.body,
-            "errorPayload": error.payload,
-        }
-        if is_no_route_error(error):
-            report["status"] = "PASS"
-            report["message"] = "hot patch smoke ok: route became unroutable after blocking target edge"
-            return_code = 0
-        else:
-            return fail(f"hot patch smoke failed after route request: {error}", args.report_json, report)
-    except (URLError, TimeoutError) as error:
-        return fail(f"hot patch smoke failed after route request: {error}", args.report_json, report)
+                if after_status != 200:
+                    failure_message = "overlay smoke failed: after route endpoint did not return 200"
+                elif not after_paths:
+                    report["status"] = "PASS"
+                    report["message"] = "overlay smoke ok: route became unroutable after blocking target edge"
+                    return_code = 0
+                else:
+                    after_edge_values = detail_values(after_paths[0], "db_edge_id")
+                    report["after"]["dbEdgeIds"] = after_edge_values
+                    if str(args.edge_id) in after_edge_values:
+                        failure_message = "overlay smoke failed: target db_edge_id is still present after reload"
+                    else:
+                        report["status"] = "PASS"
+                        report["message"] = "overlay smoke ok: target db_edge_id disappeared from the route after reload"
+                        return_code = 0
+        except HttpRequestError as error:
+            if "reload" not in report:
+                report["reload"] = {
+                    "httpStatus": error.status_code,
+                    "errorBody": error.body,
+                    "errorPayload": error.payload,
+                }
+                failure_message = f"overlay smoke failed during reload request: {error}"
+            else:
+                report["after"] = {
+                    "httpStatus": error.status_code,
+                    "pathCount": 0,
+                    "errorBody": error.body,
+                    "errorPayload": error.payload,
+                }
+                if is_no_route_error(error):
+                    report["status"] = "PASS"
+                    report["message"] = "overlay smoke ok: route became unroutable after blocking target edge"
+                    return_code = 0
+                else:
+                    failure_message = f"overlay smoke failed after route request: {error}"
+        except Exception as error:
+            if "reload" not in report:
+                failure_message = f"overlay smoke failed during reload request: {error}"
+            else:
+                failure_message = f"overlay smoke failed after route request: {error}"
     finally:
         if not args.skip_restore:
             try:
-                request_json(
-                    "PATCH",
-                    patch_url(args.base_url, args.edge_id),
-                    {"walkAccess": original_walk_access},
-                    args.timeout_seconds,
-                )
-                report["restore"] = {"walkAccess": original_walk_access}
-            except (HttpRequestError, URLError, TimeoutError) as error:
+                restore_override(args.edge_id, previous_override)
+                restore_status, restore_payload = request_json("POST", reload_url(args.base_url), {}, args.timeout_seconds)
+                report["restore"] = {
+                    "previousOverride": previous_override,
+                    "httpStatus": restore_status,
+                    "response": restore_payload,
+                }
+                if restore_status != 200:
+                    restore_error = "reload endpoint did not return 200 while restoring"
+            except Exception as error:
                 restore_error = str(error)
                 report["restoreError"] = restore_error
 
     if restore_error is not None:
-        return fail(
-            f"hot patch smoke failed while restoring original walk_access={original_walk_access}: {restore_error}",
-            args.report_json,
-            report,
-        )
+        report["status"] = "FAIL"
+        report["message"] = f"overlay smoke failed while restoring previous override={previous_override}: {restore_error}"
+    elif failure_message is not None:
+        report["status"] = "FAIL"
+        report["message"] = failure_message
 
     write_report(args.report_json, report)
-    print(report["message"])
-    return return_code
+    if report.get("message"):
+        print(report["message"])
+    return 0 if report.get("status") == "PASS" else 1
 
 
 if __name__ == "__main__":

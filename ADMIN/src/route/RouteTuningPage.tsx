@@ -121,7 +121,7 @@ export function RouteTuningPage({
     }
   }
 
-  async function saveSegmentAttributes() {
+  async function saveSegmentAttributes(applyRoutingImmediately: boolean) {
     if (!selectedSegment) return;
     setSavingAttributes(true);
     try {
@@ -129,17 +129,28 @@ export function RouteTuningPage({
         selectedSegment.properties.edgeId,
         gu,
         dong,
-        attributeDraft,
+        {
+          ...attributeDraft,
+          applyRoutingImmediately,
+        },
         accessToken,
       );
-      if (response.routingPatchStatus === "FAILED") {
-        setMessage("저장 완료. 경로 탐색 반영에 실패했습니다. 운영 상태를 확인해 주세요.");
-      } else if (response.routingPatchStatus === "APPLIED_WITH_WARNING") {
-        setMessage("저장 완료. active 경로 반영은 성공했지만 fallback slot 일부 반영에 실패했습니다. 운영 상태를 확인해 주세요.");
-      } else if (response.routingPatchStatus === "SKIPPED") {
-        setMessage("저장 완료. walk_access 변경이 없어 경로 반영은 생략되었습니다.");
+      if (response.routingApplyStatus === "FAILED") {
+        setMessage("저장은 완료되었지만 경로 탐색 반영에는 실패했습니다. 운영 상태를 확인해 주세요.");
+      } else if (response.routingApplyStatus === "APPLIED_WITH_WARNING") {
+        setMessage("저장은 완료되었습니다. active 경로 반영은 성공했지만 fallback slot 반영에는 실패했습니다. 운영 상태를 확인해 주세요.");
+      } else if (response.routingApplyStatus === "SKIPPED") {
+        setMessage(
+          applyRoutingImmediately
+            ? "저장은 완료되었습니다. walk_access 변경이 없어 즉시 경로 반영은 생략했습니다."
+            : "저장은 완료되었습니다. DB에만 반영되었습니다.",
+        );
       } else {
-        setMessage("저장 완료. 경로 탐색에 반영되었습니다.");
+        setMessage(
+          applyRoutingImmediately
+            ? "저장은 완료되었습니다. 현재 라우팅 overlay를 갱신했습니다. 사용자 재탐색부터 변경 경로가 반영됩니다."
+            : "저장은 완료되었습니다. DB에만 반영되었습니다.",
+        );
       }
       onSegmentUpdated();
     } catch (error) {
@@ -270,10 +281,13 @@ export function RouteTuningPage({
                 <StateSelect label="보도 폭" value={attributeDraft.widthState ?? "UNKNOWN"} options={widthOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, widthState: value as WidthState }))} />
                 <StateSelect label="노면" value={attributeDraft.surfaceState ?? "UNKNOWN"} options={surfaceOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, surfaceState: value as SurfaceState }))} />
               </div>
-              <p className="muted">저장된 값은 DB에 반영되고, walk_access 변경은 실행 중 GraphHopper에도 즉시 patch 됩니다. 이후 정기 graph-cache 재빌드 시 DB 기준으로 영구 반영됩니다.</p>
+              <p className="muted">저장된 값은 DB에 반영됩니다. 저장 + 즉시 경로 반영을 선택하면 현재 라우팅 overlay를 다시 불러오고, 사용자 재탐색부터 변경 경로가 반영됩니다.</p>
               <div className="button-row">
-                <button className="primary" type="button" onClick={saveSegmentAttributes} disabled={!canEdit || savingAttributes}>
+                <button className="primary" type="button" onClick={() => saveSegmentAttributes(false)} disabled={!canEdit || savingAttributes}>
                   {savingAttributes ? "저장 중" : "segment 속성 저장"}
+                </button>
+                <button className="primary" type="button" onClick={() => saveSegmentAttributes(true)} disabled={!canEdit || savingAttributes}>
+                  {savingAttributes ? "저장 중" : "저장 + 즉시 경로 반영"}
                 </button>
               </div>
             </>

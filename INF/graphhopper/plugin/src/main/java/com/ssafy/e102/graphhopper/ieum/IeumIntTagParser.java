@@ -9,7 +9,7 @@ import com.graphhopper.storage.IntsRef;
 /**
  * OSM way??정수형 `ieum:*` tag 하나를 int encoded value로 옮기는 parser다.
  *
- * <p>현재는 DB edge id를 graph-cache 안에 심어 런타임 hot patch에서 내부 edge를 찾는 용도로 사용한다.
+ * <p>현재는 DB edge id를 graph-cache 안에 심어 런타임 overlay weighting에서 내부 edge를 찾는 용도로 사용한다.
  */
 public class IeumIntTagParser implements TagParser {
     private final IntEncodedValue encodedValue;

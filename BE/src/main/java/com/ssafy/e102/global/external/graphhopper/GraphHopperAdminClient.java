@@ -21,8 +21,6 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import com.ssafy.e102.domain.route.type.AccessibilityState;
-
 @Component
 public class GraphHopperAdminClient {
 
@@ -51,94 +49,87 @@ public class GraphHopperAdminClient {
 		this.endpointProvider = endpointProvider;
 	}
 
-	public GraphHopperPatchResult patchWalkAccess(long edgeId, AccessibilityState walkAccess) {
+	public GraphHopperReloadResult reloadRoutingOverrides() {
 		GraphHopperEndpointSelection endpointSelection = endpointProvider.selectEndpoint();
 		List<EndpointTarget> endpointTargets = resolveTargets(endpointSelection);
-		EndpointPatchResult activePatchResult = null;
-		List<String> patchedSlots = new ArrayList<>();
+		EndpointReloadResult activeReloadResult = null;
+		List<String> reloadedSlots = new ArrayList<>();
 		List<String> failureMessages = new ArrayList<>();
 
 		for (int index = 0; index < endpointTargets.size(); index++) {
 			EndpointTarget endpointTarget = endpointTargets.get(index);
-			EndpointPatchResult patchResult = patchEndpointWithRetry(endpointTarget, edgeId, walkAccess);
+			EndpointReloadResult reloadResult = reloadEndpointWithRetry(endpointTarget);
 			if (index == 0) {
-				activePatchResult = patchResult;
+				activeReloadResult = reloadResult;
 			}
-			if (patchResult.success()) {
-				patchedSlots.add(endpointTarget.slot());
+			if (reloadResult.success()) {
+				reloadedSlots.add(endpointTarget.slot());
 				continue;
 			}
-			failureMessages.add(patchResult.message());
+			failureMessages.add(reloadResult.message());
 		}
 
 		if (failureMessages.isEmpty()) {
-			return new GraphHopperPatchResult(
-				GraphHopperPatchStatus.APPLIED,
-				"Patched GraphHopper slot(s): " + String.join(", ", patchedSlots));
+			return new GraphHopperReloadResult(
+				GraphHopperReloadStatus.APPLIED,
+				"Reloaded GraphHopper override slot(s): " + String.join(", ", reloadedSlots));
 		}
-		if (activePatchResult != null && activePatchResult.success()) {
-			return new GraphHopperPatchResult(
-				GraphHopperPatchStatus.APPLIED_WITH_WARNING,
-				"Patched GraphHopper slot(s): "
-					+ String.join(", ", patchedSlots)
+		if (activeReloadResult != null && activeReloadResult.success()) {
+			return new GraphHopperReloadResult(
+				GraphHopperReloadStatus.APPLIED_WITH_WARNING,
+				"Reloaded GraphHopper override slot(s): "
+					+ String.join(", ", reloadedSlots)
 					+ " | failed slot(s): "
 					+ String.join(" | ", failureMessages));
 		}
-		return new GraphHopperPatchResult(
-			GraphHopperPatchStatus.FAILED,
-			"GraphHopper patch failed: " + String.join(" | ", failureMessages));
+		return new GraphHopperReloadResult(
+			GraphHopperReloadStatus.FAILED,
+			"GraphHopper override reload failed: " + String.join(" | ", failureMessages));
 	}
 
-	private EndpointPatchResult patchEndpointWithRetry(
-		EndpointTarget endpointTarget,
-		long edgeId,
-		AccessibilityState walkAccess) {
+	private EndpointReloadResult reloadEndpointWithRetry(EndpointTarget endpointTarget) {
 		RuntimeException lastException = null;
 		for (int attempt = 1; attempt <= MAX_SINGLE_ENDPOINT_ATTEMPTS; attempt++) {
 			try {
-				patchWalkAccessOnce(endpointTarget.baseUrl(), edgeId, walkAccess);
-				return EndpointPatchResult.succeeded();
+				reloadRoutingOverridesOnce(endpointTarget.baseUrl());
+				return EndpointReloadResult.succeeded();
 			} catch (HttpStatusCodeException | ResourceAccessException exception) {
 				lastException = exception;
 				log.warn(
-					"graphhopper hot patch failed slot={} edgeId={} walkAccess={} attempt={} message={}",
+					"graphhopper override reload failed slot={} attempt={} message={}",
 					endpointTarget.slot(),
-					edgeId,
-					walkAccess,
 					attempt,
 					exception.getMessage(),
 					exception);
 			} catch (RestClientException exception) {
 				lastException = exception;
 				log.warn(
-					"graphhopper hot patch failed slot={} edgeId={} walkAccess={} attempt={} message={}",
+					"graphhopper override reload failed slot={} attempt={} message={}",
 					endpointTarget.slot(),
-					edgeId,
-					walkAccess,
 					attempt,
 					exception.getMessage(),
 					exception);
 			}
 		}
-		return EndpointPatchResult.failed(
-			"slot=" + endpointTarget.slot() + " edgeId=" + edgeId + " message=" + describeFailure(lastException));
+		return EndpointReloadResult.failed(
+			"slot=" + endpointTarget.slot() + " message=" + describeFailure(lastException));
 	}
 
-	private void patchWalkAccessOnce(String baseUrl, long edgeId, AccessibilityState walkAccess) {
+	private void reloadRoutingOverridesOnce(String baseUrl) {
 		restTemplate.exchange(
 			RequestEntity
-				.method(HttpMethod.PATCH, patchWalkAccessUri(baseUrl, edgeId))
+				.method(HttpMethod.POST, reloadRoutingOverridesUri(baseUrl))
 				.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
 				.contentType(MediaType.APPLICATION_JSON)
-				.body(Map.of("walkAccess", walkAccess.name())),
+				.body(Map.of()),
 			Void.class);
 	}
 
-	private java.net.URI patchWalkAccessUri(String baseUrl, long edgeId) {
+	private java.net.URI reloadRoutingOverridesUri(String baseUrl) {
 		return UriComponentsBuilder
 			.fromUriString(baseUrl)
-			.path("/ieum/admin/edges/{edgeId}/walk-access")
-			.buildAndExpand(Map.of("edgeId", edgeId))
+			.path("/ieum/admin/overrides/reload")
+			.build()
 			.toUri();
 	}
 
@@ -179,10 +170,10 @@ public class GraphHopperAdminClient {
 		return false;
 	}
 
-	public record GraphHopperPatchResult(GraphHopperPatchStatus status, String message) {
+	public record GraphHopperReloadResult(GraphHopperReloadStatus status, String message) {
 	}
 
-	public enum GraphHopperPatchStatus {
+	public enum GraphHopperReloadStatus {
 		SKIPPED,
 		APPLIED,
 		APPLIED_WITH_WARNING,
@@ -192,13 +183,13 @@ public class GraphHopperAdminClient {
 	private record EndpointTarget(String baseUrl, String slot) {
 	}
 
-	private record EndpointPatchResult(boolean success, String message) {
-		private static EndpointPatchResult succeeded() {
-			return new EndpointPatchResult(true, null);
+	private record EndpointReloadResult(boolean success, String message) {
+		private static EndpointReloadResult succeeded() {
+			return new EndpointReloadResult(true, null);
 		}
 
-		private static EndpointPatchResult failed(String message) {
-			return new EndpointPatchResult(false, message);
+		private static EndpointReloadResult failed(String message) {
+			return new EndpointReloadResult(false, message);
 		}
 	}
 }

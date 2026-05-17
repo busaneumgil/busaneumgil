@@ -248,6 +248,9 @@ fun RouteSettingScreen(
                         onOptionDetailClick = { routeOption ->
                             onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
                         },
+                        onCurrentLocationClick = {
+                            onAction(RouteSettingUiAction.CurrentLocationClicked)
+                        },
                     )
                 }
                 if (!showsRouteLoadingScreen && !showsRouteUnsupportedAreaScreen && !showsRouteFailureScreen) {
@@ -293,6 +296,7 @@ fun RouteDetailScreen(
     onBackClick: () -> Unit,
     onCloseClick: () -> Unit = onBackClick,
     onStartClick: () -> Unit,
+    onCurrentLocationClick: () -> Unit = {},
     pendingLowFloorReservation: LowFloorBusReservation? = null,
     isLowFloorReservationRequesting: Boolean = false,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit = {},
@@ -362,7 +366,10 @@ fun RouteDetailScreen(
             )
 
             RouteMapControls(
-                onActionClick = { mapControlState.recenter() },
+                onActionClick = {
+                    onCurrentLocationClick()
+                    mapControlState.recenterToCurrentLocationOrRoute(uiState.currentLocationRecenterCoordinate)
+                },
                 onZoomInClick = { mapControlState.zoomIn() },
                 onZoomOutClick = { mapControlState.zoomOut() },
                 modifier =
@@ -2900,12 +2907,32 @@ private fun routeTravelModeTabContentColor(isSelected: Boolean): Color =
         RouteTravelModeInactiveContentColor
     }
 
+private val RouteSettingUiState.currentLocationRecenterCoordinate: GeoCoordinate?
+    get() =
+        currentLocationCoordinate ?: origin.coordinate.takeIf {
+            originState == RouteOriginState.CURRENT_LOCATION_RESOLVED
+        }
+
+private fun MapOverlayViewportControlState.recenterToCurrentLocationOrRoute(currentLocation: GeoCoordinate?) {
+    if (currentLocation == null) {
+        recenter()
+        return
+    }
+    recenterToCurrentLocation(
+        MapCoordinate(
+            latitude = currentLocation.latitude,
+            longitude = currentLocation.longitude,
+        ),
+    )
+}
+
 @Composable
 private fun RouteMapStage(
     uiState: RouteSettingUiState,
     modifier: Modifier = Modifier,
     onOptionClick: (RouteOption) -> Unit = {},
     onOptionDetailClick: (RouteOption) -> Unit = {},
+    onCurrentLocationClick: () -> Unit = {},
 ) {
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
@@ -2968,7 +2995,10 @@ private fun RouteMapStage(
                         .padding(end = EumSpacing.small)
                 }
             RouteMapControls(
-                onActionClick = { mapControlState.recenter() },
+                onActionClick = {
+                    onCurrentLocationClick()
+                    mapControlState.recenterToCurrentLocationOrRoute(uiState.currentLocationRecenterCoordinate)
+                },
                 onZoomInClick = { mapControlState.zoomIn() },
                 onZoomOutClick = { mapControlState.zoomOut() },
                 modifier = mapControlsModifier,

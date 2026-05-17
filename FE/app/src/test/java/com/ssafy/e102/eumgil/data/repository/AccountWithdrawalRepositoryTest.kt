@@ -106,6 +106,50 @@ class AccountWithdrawalRepositoryTest {
         }
 
     @Test
+    fun `withdraw treats already missing user as completed and clears local session`() =
+        runTest {
+            val authSessionRepository =
+                RecordingWithdrawalAuthSessionRepository(
+                    authGateState =
+                        AuthGateState(
+                            authSession =
+                                AuthSession(
+                                    accessToken = "access-token",
+                                    refreshToken = "refresh-token",
+                                    userId = "deleted-user-id",
+                                ),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val localDataCleaner = RecordingAccountWithdrawalLocalDataCleaner()
+            val remoteDataSource =
+                FakeWithdrawUserRemoteDataSource(
+                    exception =
+                        UserApiException(
+                            httpStatusCode = 404,
+                            status = "U4040",
+                            message = "사용자를 찾을 수 없습니다.",
+                        ),
+                )
+            val repository =
+                ServerAccountWithdrawalRepository(
+                    userRemoteDataSource = remoteDataSource,
+                    authRemoteDataSource = FakeWithdrawalAuthRemoteDataSource(),
+                    authSessionRepository = authSessionRepository,
+                    localDataCleaner = localDataCleaner,
+                )
+
+            val result = repository.withdraw()
+
+            assertTrue(localDataCleaner.clearCalled)
+            assertTrue(authSessionRepository.clearAuthSessionCalled)
+            assertEquals(
+                AccountWithdrawalResult.Success(message = "회원탈퇴가 완료되었습니다."),
+                result,
+            )
+        }
+
+    @Test
     fun `withdraw authentication failure clears session and returns authentication failed`() =
         runTest {
             val authSessionRepository =

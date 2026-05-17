@@ -15,6 +15,7 @@ export interface SegmentEndpointNodeCandidate {
   nodeId: string;
   sourceNodeKey?: string | null;
   coord: Coord;
+  nodeRef?: EditNodeRef;
 }
 
 export interface SnappedSegmentEndpoint {
@@ -47,6 +48,8 @@ export function draftSegmentFeatures(edits: EditAction[]): SegmentFeature[] {
         geometry: edit.geom,
         properties: {
           edgeId: `draft:${index}`,
+          fromNodeId: edit.fromNode ? nodeRefId(edit.fromNode) : undefined,
+          toNodeId: edit.toNode ? nodeRefId(edit.toNode) : undefined,
           segmentType: edit.segmentType,
         },
       } satisfies SegmentFeature,
@@ -87,7 +90,25 @@ export function roadNodeCandidates(nodes: RoadNodeFeature[]): SegmentEndpointNod
     nodeId: String(node.properties.vertexId),
     sourceNodeKey: node.properties.sourceNodeKey ?? null,
     coord: node.geometry.coordinates,
+    nodeRef: {
+      mode: "existing",
+      vertexId: node.properties.vertexId,
+      sourceNodeKey: node.properties.sourceNodeKey ?? null,
+      geom: { type: "Point", coordinates: node.geometry.coordinates },
+      snapDistanceMeter: 0,
+    },
   }));
+}
+
+export function draftEndpointNodeCandidates(edits: EditAction[]): SegmentEndpointNodeCandidate[] {
+  return edits.flatMap((edit, index) => {
+    if (edit.action !== "add_segment") return [];
+    const [first, last] = edit.geom.coordinates;
+    return [
+      nodeRefCandidate(edit.fromNode, `draft:${index}:from`, first),
+      nodeRefCandidate(edit.toNode, `draft:${index}:to`, last),
+    ].filter((candidate): candidate is SegmentEndpointNodeCandidate => Boolean(candidate));
+  });
 }
 
 export function segmentEndpointNodeCandidates(segments: SegmentFeature[]): SegmentEndpointNodeCandidate[] {
@@ -106,6 +127,27 @@ export function segmentEndpointNodeCandidates(segments: SegmentFeature[]): Segme
     }
   });
   return Array.from(candidatesByNodeId, ([nodeId, coord]) => ({ nodeId, coord }));
+}
+
+function nodeRefCandidate(nodeRef: EditNodeRef | undefined, fallbackNodeId: string, fallbackCoord: Coord | undefined): SegmentEndpointNodeCandidate | null {
+  if (nodeRef) {
+    return {
+      nodeId: nodeRefId(nodeRef),
+      sourceNodeKey: nodeRef.sourceNodeKey ?? null,
+      coord: nodeRef.geom.coordinates,
+      nodeRef,
+    };
+  }
+  if (!fallbackCoord) return null;
+  return {
+    nodeId: fallbackNodeId,
+    sourceNodeKey: fallbackNodeId,
+    coord: fallbackCoord,
+  };
+}
+
+function nodeRefId(nodeRef: EditNodeRef): string {
+  return nodeRef.mode === "existing" ? String(nodeRef.vertexId) : nodeRef.tempNodeId;
 }
 
 export function snapToSegmentEndpointNode(
@@ -132,7 +174,7 @@ export function snapToSegmentEndpointNode(
     snapped: true,
     nodeId: nearest.candidate.nodeId,
     distanceMeter: nearest.distanceMeter,
-    nodeRef: {
+    nodeRef: nearest.candidate.nodeRef ?? {
       mode: "existing",
       vertexId: nearest.candidate.nodeId,
       sourceNodeKey: nearest.candidate.sourceNodeKey ?? null,

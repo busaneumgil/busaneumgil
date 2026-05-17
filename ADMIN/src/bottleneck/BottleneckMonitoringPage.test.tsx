@@ -51,4 +51,39 @@ describe("BottleneckMonitoringPage", () => {
     expect(html).toContain("해운대 해변로 입구");
     expect(html).toContain("전체 보기");
   });
+
+  it("shows only loading state when real bottleneck monitoring data has not arrived yet", async () => {
+    const pageModule = await import("./BottleneckMonitoringPage").catch(() => null);
+    expect(pageModule).not.toBeNull();
+    if (!pageModule) return;
+
+    const html = renderToStaticMarkup(
+      <pageModule.BottleneckMonitoringPage
+        loading
+      />,
+    );
+
+    expect(html).toContain("병목구간 통계를 불러오는 중입니다.");
+    expect(html).not.toContain("병목구간 총수");
+    expect(html).not.toContain("영향도 TOP 5");
+  });
+
+  it("does not render duplicate loading state when stale bottleneck data already exists", async () => {
+    const pageModule = await import("./BottleneckMonitoringPage").catch(() => null);
+    expect(pageModule).not.toBeNull();
+    if (!pageModule) return;
+
+    const contractModule = await import("./bottleneckMonitoringContract").catch(() => null);
+    expect(contractModule).not.toBeNull();
+    if (!contractModule) return;
+
+    const html = renderToStaticMarkup(
+      <pageModule.BottleneckMonitoringPage
+        data={contractModule.bottleneckMonitoringMockResponse}
+        loading
+      />,
+    );
+
+    expect(html).not.toContain("병목구간 통계를 불러오는 중입니다.");
+  });
 });

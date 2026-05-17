@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -24,12 +25,18 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminRoadSegmentAttributesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminAreaBoundaryPropertiesResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse.AdminFacilitySummaryResponse;
@@ -46,6 +53,8 @@ import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkSummaryResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNodePropertiesResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentPropertiesResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentUpdateResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.admin.type.AdminAreaAssignmentType;
 import com.ssafy.e102.domain.place.entity.Place;
@@ -57,12 +66,18 @@ import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
+import com.ssafy.e102.domain.route.entity.RoutingSegmentOverride;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
 import com.ssafy.e102.domain.route.repository.RoadNodeRepository;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
+import com.ssafy.e102.domain.route.repository.RoutingSegmentOverrideRepository;
 import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
+import com.ssafy.e102.domain.route.type.AccessibilityState;
 import com.ssafy.e102.domain.route.type.SegmentFeatureType;
 import com.ssafy.e102.domain.route.type.SegmentType;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadStatus;
 import com.ssafy.e102.global.exception.BusinessException;
 import com.ssafy.e102.global.exception.CommonErrorCode;
 import com.ssafy.e102.global.geo.GeoPointConverter;
@@ -75,36 +90,49 @@ public class AdminMapService {
 	private static final Sort PLACE_SORT = Sort.by(Sort.Direction.ASC, "placeId");
 	private static final double BRIDGE_MAX_DISTANCE_METER = 50.0;
 	private static final double BRIDGE_AUTO_DISTANCE_METER = 12.0;
+	private static final String ALL_DONG = AdminService.ALL_DONG;
 
 	private final AdminAreaRepository adminAreaRepository;
+	private final ObjectMapper objectMapper;
 	private final RoadNodeRepository roadNodeRepository;
 	private final RoadSegmentRepository roadSegmentRepository;
 	private final SegmentFeatureRepository segmentFeatureRepository;
+	private final RoutingSegmentOverrideRepository routingSegmentOverrideRepository;
 	private final PlaceRepository placeRepository;
 	private final PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository;
 	private final GeoPointConverter geoPointConverter;
 	private final AdminService adminService;
 	private final AdminAuditLogService adminAuditLogService;
+	private final GraphHopperAdminClient graphHopperAdminClient;
+	private final TransactionTemplate transactionTemplate;
 
 	public AdminMapService(
 		AdminAreaRepository adminAreaRepository,
+		ObjectMapper objectMapper,
 		RoadNodeRepository roadNodeRepository,
 		RoadSegmentRepository roadSegmentRepository,
 		SegmentFeatureRepository segmentFeatureRepository,
+		RoutingSegmentOverrideRepository routingSegmentOverrideRepository,
 		PlaceRepository placeRepository,
 		PlaceAccessibilityFeatureRepository placeAccessibilityFeatureRepository,
 		GeoPointConverter geoPointConverter,
 		AdminService adminService,
-		AdminAuditLogService adminAuditLogService) {
+		AdminAuditLogService adminAuditLogService,
+		GraphHopperAdminClient graphHopperAdminClient,
+		PlatformTransactionManager transactionManager) {
 		this.adminAreaRepository = adminAreaRepository;
+		this.objectMapper = objectMapper;
 		this.roadNodeRepository = roadNodeRepository;
 		this.roadSegmentRepository = roadSegmentRepository;
 		this.segmentFeatureRepository = segmentFeatureRepository;
+		this.routingSegmentOverrideRepository = routingSegmentOverrideRepository;
 		this.placeRepository = placeRepository;
 		this.placeAccessibilityFeatureRepository = placeAccessibilityFeatureRepository;
 		this.geoPointConverter = geoPointConverter;
 		this.adminService = adminService;
 		this.adminAuditLogService = adminAuditLogService;
+		this.graphHopperAdminClient = graphHopperAdminClient;
+		this.transactionTemplate = new TransactionTemplate(transactionManager);
 	}
 
 	public AdminAreaListResponse getAreas() {
@@ -135,9 +163,12 @@ public class AdminMapService {
 	public AdminRoadNetworkResponse getRoadNetwork(String gu, String dong, int limit) {
 		List<RoadSegment> roadSegments;
 		long segmentCount;
-		if (hasArea(gu, dong)) {
+		if (hasAreaScope(gu, dong)) {
 			roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
 			segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
+		} else if (hasGu(gu)) {
+			roadSegments = roadSegmentRepository.findAllIntersectingGu(gu);
+			segmentCount = roadSegmentRepository.countIntersectingGu(gu);
 		} else {
 			Page<RoadSegment> page = roadSegmentRepository.findAll(PageRequest.of(0, limit, ROAD_SEGMENT_SORT));
 			roadSegments = page.getContent();
@@ -175,14 +206,17 @@ public class AdminMapService {
 				.map(LineString::getEnvelopeInternal)
 				.toList()),
 			AdminGeoJsonFeatureCollectionResponse.of(features),
-			AdminGeoJsonFeatureCollectionResponse.of(nodeFeatures));
+			AdminGeoJsonFeatureCollectionResponse.of(nodeFeatures),
+			toAreaBoundaryFeature(gu, dong));
 	}
 
 	public AdminRoadNetworkBridgePayloadResponse getRoadNetworkBridges(String gu, String dong) {
-		if (!hasArea(gu, dong)) {
-			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "구/동은 필수입니다.");
+		if (!hasGu(gu)) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "구는 필수입니다.");
 		}
-		List<RoadSegment> roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
+		List<RoadSegment> roadSegments = hasAreaScope(gu, dong)
+			? roadSegmentRepository.findAllIntersectingArea(gu, dong)
+			: roadSegmentRepository.findAllIntersectingGu(gu);
 		BridgeGraph bridgeGraph = buildBridgeGraph(roadSegments);
 		List<BridgeCandidate> candidates = findBridgeCandidates(bridgeGraph);
 		List<AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadNetworkBridgePropertiesResponse>> features = candidates
@@ -206,8 +240,10 @@ public class AdminMapService {
 
 	public AdminFacilityPayloadResponse getFacilities(String gu, String dong, int limit) {
 		List<Place> places;
-		if (hasArea(gu, dong)) {
+		if (hasAreaScope(gu, dong)) {
 			places = placeRepository.findAllIntersectingArea(gu, dong, limit);
+		} else if (hasGu(gu)) {
+			places = placeRepository.findAllIntersectingGu(gu, limit);
 		} else {
 			places = placeRepository.findAll(PageRequest.of(0, limit, PLACE_SORT)).getContent();
 		}
@@ -234,7 +270,8 @@ public class AdminMapService {
 				.map(Place::getPoint)
 				.map(Point::getEnvelopeInternal)
 				.toList()),
-			AdminGeoJsonFeatureCollectionResponse.of(features));
+			AdminGeoJsonFeatureCollectionResponse.of(features),
+			toAreaBoundaryFeature(gu, dong));
 	}
 
 	public AdminPlaceDetailResponse getPlace(Long placeId) {
@@ -242,42 +279,25 @@ public class AdminMapService {
 		return AdminPlaceDetailResponse.of(place, geoPointConverter);
 	}
 
-	@Transactional
-	public AdminRoadSegmentPropertiesResponse updateRoadSegmentAttributes(
+	public AdminRoadSegmentUpdateResponse updateRoadSegmentAttributes(
 		UUID userId,
 		Long edgeId,
 		String gu,
 		String dong,
 		AdminRoadSegmentAttributesUpdateRequest request) {
-		adminService.requireCanEditArea(userId, gu, dong, AdminAreaAssignmentType.ROAD_NETWORK);
-		if (!roadSegmentRepository.existsIntersectingAreaByEdgeId(edgeId, gu, dong)) {
-			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "담당 구/동의 segment만 수정할 수 있습니다.");
-		}
-		RoadSegment roadSegment = roadSegmentRepository.findById(edgeId)
-			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "segment를 찾을 수 없습니다."));
-		AdminRoadSegmentPropertiesResponse before = toRoadSegmentProperties(roadSegment);
-		roadSegment.updateAttributes(
-			request.walkAccess(),
-			request.brailleBlockState(),
-			request.audioSignalState(),
-			request.widthState(),
-			request.surfaceState(),
-			request.stairsState(),
-			request.signalState());
-		AdminRoadSegmentPropertiesResponse after = toRoadSegmentProperties(roadSegment);
-		adminAuditLogService.record(
-			userId,
-			"ROAD_SEGMENT_ATTRIBUTES_UPDATE",
-			"ROAD_SEGMENT",
-			String.valueOf(edgeId),
-			gu,
-			dong,
-			"보행 segment 속성 변경 edgeId=" + edgeId,
-			before,
-			after);
-		return after;
+		RoadSegmentUpdateContext updateContext = Objects.requireNonNull(
+			transactionTemplate.execute(transactionStatus -> updateRoadSegmentAttributesInTransaction(
+				userId,
+				edgeId,
+				gu,
+				dong,
+				request)));
+		GraphHopperReloadResult routingApplyResult = resolveRoutingApplyResult(updateContext);
+		return new AdminRoadSegmentUpdateResponse(
+			updateContext.after(),
+			toAdminRoutingApplyStatus(routingApplyResult.status()),
+			routingApplyResult.message());
 	}
-
 	@Transactional
 	public AdminPlaceDetailResponse updatePlace(
 		UUID userId,
@@ -556,8 +576,12 @@ public class AdminMapService {
 		return envelope;
 	}
 
-	private boolean hasArea(String gu, String dong) {
-		return gu != null && !gu.isBlank() && dong != null && !dong.isBlank();
+	private boolean hasGu(String gu) {
+		return gu != null && !gu.isBlank();
+	}
+
+	private boolean hasAreaScope(String gu, String dong) {
+		return hasGu(gu) && dong != null && !dong.isBlank() && !ALL_DONG.equals(dong);
 	}
 
 	private Place requirePlace(Long placeId) {
@@ -583,8 +607,28 @@ public class AdminMapService {
 
 	private void validateEditablePlace(UUID userId, Long placeId, String gu, String dong) {
 		adminService.requireCanEditArea(userId, gu, dong, AdminAreaAssignmentType.FACILITY);
-		if (!placeRepository.existsIntersectingAreaByPlaceId(placeId, gu, dong)) {
-			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, "담당 구/동의 장소만 수정할 수 있습니다.");
+		if (!placeRepository.existsIntersectingGuByPlaceId(placeId, gu)) {
+			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, "담당 구의 장소만 수정할 수 있습니다.");
+		}
+	}
+
+	private AdminGeoJsonFeatureResponse<JsonNode, AdminAreaBoundaryPropertiesResponse> toAreaBoundaryFeature(String gu,
+		String dong) {
+		if (!hasGu(gu)) {
+			return null;
+		}
+		String geoJson = hasAreaScope(gu, dong)
+			? adminAreaRepository.findAreaBoundaryGeoJson(gu, dong)
+			: adminAreaRepository.findGuBoundaryGeoJson(gu);
+		if (geoJson == null || geoJson.isBlank()) {
+			return null;
+		}
+		try {
+			return AdminGeoJsonFeatureResponse.of(
+				objectMapper.readTree(geoJson),
+				new AdminAreaBoundaryPropertiesResponse(gu, hasAreaScope(gu, dong) ? dong : ALL_DONG));
+		} catch (JsonProcessingException ignored) {
+			return null;
 		}
 	}
 
@@ -618,10 +662,90 @@ public class AdminMapService {
 	}
 
 	private String toSyntheticDong(String dong) {
-		return dong.replace("1동", "동")
-			.replace("2동", "동")
-			.replace("3동", "동")
-			.replace("4동", "동");
+		return dong.replace("1\uB3D9", "\uB3D9")
+			.replace("2\uB3D9", "\uB3D9")
+			.replace("3\uB3D9", "\uB3D9")
+			.replace("4\uB3D9", "\uB3D9");
+	}
+
+	private RoadSegmentUpdateContext updateRoadSegmentAttributesInTransaction(
+		UUID userId,
+		Long edgeId,
+		String gu,
+		String dong,
+		AdminRoadSegmentAttributesUpdateRequest request) {
+		adminService.requireCanEditArea(userId, gu, dong, AdminAreaAssignmentType.ROAD_NETWORK);
+		if (!roadSegmentRepository.existsIntersectingGuByEdgeId(edgeId, gu)) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "담당 구/동의 segment만 수정할 수 있습니다.");
+		}
+		RoadSegment roadSegment = roadSegmentRepository.findById(edgeId)
+			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "segment를 찾을 수 없습니다."));
+		AdminRoadSegmentPropertiesResponse before = toRoadSegmentProperties(roadSegment);
+		roadSegment.updateAttributes(
+			request.walkAccess(),
+			request.brailleBlockState(),
+			request.audioSignalState(),
+			request.widthState(),
+			request.surfaceState(),
+			request.stairsState(),
+			request.signalState());
+		AdminRoadSegmentPropertiesResponse after = toRoadSegmentProperties(roadSegment);
+		adminAuditLogService.record(
+			userId,
+			"ROAD_SEGMENT_ATTRIBUTES_UPDATE",
+			"ROAD_SEGMENT",
+			String.valueOf(edgeId),
+			gu,
+			dong,
+			"보행 segment 속성 변경 edgeId=" + edgeId,
+			before,
+			after);
+		applyRoutingOverride(edgeId, request);
+		return new RoadSegmentUpdateContext(before, after, request.walkAccess(), Boolean.TRUE.equals(request.applyRoutingImmediately()));
+	}
+
+	private void applyRoutingOverride(Long edgeId, AdminRoadSegmentAttributesUpdateRequest request) {
+		if (!Boolean.TRUE.equals(request.applyRoutingImmediately())) {
+			return;
+		}
+		if (request.walkAccess() == null) {
+			return;
+		}
+		if (request.walkAccess() == AccessibilityState.NO) {
+			routingSegmentOverrideRepository.save(RoutingSegmentOverride.of(edgeId, AccessibilityState.NO));
+			return;
+		}
+		if (request.walkAccess() == AccessibilityState.YES || request.walkAccess() == AccessibilityState.UNKNOWN) {
+			routingSegmentOverrideRepository.deleteById(edgeId);
+		}
+	}
+
+	private GraphHopperReloadResult resolveRoutingApplyResult(RoadSegmentUpdateContext updateContext) {
+		if (!updateContext.applyRoutingImmediately()) {
+			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "immediate routing apply disabled");
+		}
+		if (updateContext.requestedWalkAccess() == null) {
+			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "walk_access update not requested; runtime override unchanged");
+		}
+		GraphHopperReloadResult reloadResult = graphHopperAdminClient.reloadRoutingOverrides();
+		if (updateContext.requestedWalkAccess() == AccessibilityState.NO) {
+			return reloadResult;
+		}
+		if (reloadResult.status() == GraphHopperReloadStatus.FAILED) {
+			return reloadResult;
+		}
+		return new GraphHopperReloadResult(
+			GraphHopperReloadStatus.APPLIED_WITH_WARNING,
+			"runtime override cleared, but reopening walk_access may still require a full GraphHopper rebuild if the current graph-cache is already blocked");
+	}
+
+	private AdminRoutingApplyStatus toAdminRoutingApplyStatus(GraphHopperReloadStatus applyStatus) {
+		return switch (applyStatus) {
+			case SKIPPED -> AdminRoutingApplyStatus.SKIPPED;
+			case APPLIED -> AdminRoutingApplyStatus.APPLIED;
+			case APPLIED_WITH_WARNING -> AdminRoutingApplyStatus.APPLIED_WITH_WARNING;
+			case FAILED -> AdminRoutingApplyStatus.FAILED;
+		};
 	}
 
 	private AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadSegmentPropertiesResponse> toRoadSegmentFeature(
@@ -803,5 +927,11 @@ public class AdminMapService {
 				parentByNodeId.put(rightRoot, leftRoot);
 			}
 		}
+	}
+	private record RoadSegmentUpdateContext(
+		AdminRoadSegmentPropertiesResponse before,
+		AdminRoadSegmentPropertiesResponse after,
+		AccessibilityState requestedWalkAccess,
+		boolean applyRoutingImmediately) {
 	}
 }

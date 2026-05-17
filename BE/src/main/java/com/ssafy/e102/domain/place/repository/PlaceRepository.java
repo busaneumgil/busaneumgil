@@ -30,6 +30,37 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 		join admin_areas aa
 			on ST_Intersects(p.point, ST_Buffer(aa.geom::geography, 100)::geometry)
 		where aa.gu = :gu
+		order by p.place_id asc
+		limit :limit
+		""", nativeQuery = true)
+	List<Place> findAllIntersectingGu(
+		@Param("gu")
+		String gu,
+		@Param("limit")
+		int limit);
+
+	@Query(value = """
+		select exists (
+			select 1
+			from places p
+			join admin_areas aa
+				on ST_Intersects(p.point, ST_Buffer(aa.geom::geography, 100)::geometry)
+			where p.place_id = :placeId
+				and aa.gu = :gu
+		)
+		""", nativeQuery = true)
+	boolean existsIntersectingGuByPlaceId(
+		@Param("placeId")
+		Long placeId,
+		@Param("gu")
+		String gu);
+
+	@Query(value = """
+		select distinct p.*
+		from places p
+		join admin_areas aa
+			on ST_Intersects(p.point, ST_Buffer(aa.geom::geography, 100)::geometry)
+		where aa.gu = :gu
 			and (
 				aa.dong = :dong
 				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
@@ -103,4 +134,23 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 		boolean featureTypesEmpty,
 		@Param("limit")
 		int limit);
+
+	@Query(value = """
+		select p.name
+		from places p
+		where ST_DWithin(
+			CAST(p.point AS geography),
+			CAST(ST_SetSRID(ST_MakePoint(:lng, :lat), 4326) AS geography),
+			:radius
+		)
+		order by ST_DistanceSphere(p.point, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326))
+		limit 1
+		""", nativeQuery = true)
+	Optional<String> findNearestPlaceName(
+		@Param("lat")
+		double lat,
+		@Param("lng")
+		double lng,
+		@Param("radius")
+		int radius);
 }

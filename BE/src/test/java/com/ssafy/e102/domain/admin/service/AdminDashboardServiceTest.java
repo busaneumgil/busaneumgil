@@ -1,11 +1,14 @@
 package com.ssafy.e102.domain.admin.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.DisplayName;
@@ -159,6 +162,40 @@ class AdminDashboardServiceTest {
 		assertThat(response.routeSegments().get(0).points()).hasSize(3);
 		assertThat(response.routeSegments().get(0).points().get(0).lat()).isEqualTo(35.116888);
 		assertThat(response.routeSegments().get(0).points().get(0).lng()).isEqualTo(129.039221);
+	}
+
+	@Test
+	@DisplayName("관리자 병목 후보는 generic route title 대신 주변 장소명을 우선 사용한다")
+	void getBottlenecksUsesNearbyPlaceNameForGenericRouteTitle() {
+		LocalDate from = LocalDate.of(2026, 5, 8);
+		LocalDate to = LocalDate.of(2026, 5, 14);
+		LocalDateTime start = from.atStartOfDay();
+		LocalDateTime endExclusive = to.plusDays(1).atStartOfDay();
+		when(routeSessionRepository.findBottleneckRouteCandidates(start, endExclusive, 5))
+			.thenReturn(List.of(new BottleneckRouteCandidate(
+				"안전 경로",
+				"LINESTRING(129.039221 35.116888,129.038934 35.115918,129.034979 35.097914)",
+				1200.0,
+				1500.0,
+				16L,
+				0.8,
+				3L)));
+		when(placeRepository.findNearestPlaceName(anyDouble(), anyDouble(), eq(120)))
+			.thenReturn(Optional.of("초량 이바구길 입구"));
+
+		AdminDashboardService service = new AdminDashboardService(
+			userRepository,
+			routeSessionRepository,
+			hazardReportRepository,
+			adminAreaAssignmentRepository,
+			roadSegmentRepository,
+			placeRepository,
+			adminAuditLogService);
+
+		var response = service.getBottlenecks(from, to, 5);
+
+		assertThat(response.topBottlenecks()).hasSize(1);
+		assertThat(response.topBottlenecks().get(0).name()).isEqualTo("초량 이바구길 입구 인근");
 	}
 
 	private record UserTypeCount(PrimaryUserType userType, long count) implements UserRepository.UserTypeCount {

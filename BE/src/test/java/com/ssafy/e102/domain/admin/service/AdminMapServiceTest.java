@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.admin.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,13 +27,21 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
+import com.ssafy.e102.domain.admin.dto.request.AdminRoadSegmentAttributesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentUpdateResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
@@ -43,9 +52,15 @@ import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
+import com.ssafy.e102.domain.route.entity.RoutingSegmentOverride;
 import com.ssafy.e102.domain.route.repository.RoadNodeRepository;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
+import com.ssafy.e102.domain.route.repository.RoutingSegmentOverrideRepository;
 import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
+import com.ssafy.e102.domain.route.type.AccessibilityState;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadStatus;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
@@ -67,6 +82,9 @@ class AdminMapServiceTest {
 	private SegmentFeatureRepository segmentFeatureRepository;
 
 	@Mock
+	private RoutingSegmentOverrideRepository routingSegmentOverrideRepository;
+
+	@Mock
 	private PlaceRepository placeRepository;
 
 	@Mock
@@ -78,6 +96,9 @@ class AdminMapServiceTest {
 	@Mock
 	private AdminAuditLogService adminAuditLogService;
 
+	@Mock
+	private GraphHopperAdminClient graphHopperAdminClient;
+
 	private AdminMapService adminMapService;
 	private GeometryFactory geometryFactory;
 	private GeoPointConverter geoPointConverter;
@@ -88,14 +109,18 @@ class AdminMapServiceTest {
 		geoPointConverter = new GeoPointConverter();
 		adminMapService = new AdminMapService(
 			adminAreaRepository,
+			new ObjectMapper(),
 			roadNodeRepository,
 			roadSegmentRepository,
 			segmentFeatureRepository,
+			routingSegmentOverrideRepository,
 			placeRepository,
 			placeAccessibilityFeatureRepository,
 			geoPointConverter,
 			adminService,
-			adminAuditLogService);
+			adminAuditLogService,
+			graphHopperAdminClient,
+			new NoOpPlatformTransactionManager());
 		geometryFactory = new GeometryFactory();
 		adminUserId = UUID.randomUUID();
 	}
@@ -114,7 +139,7 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("관리자 보행 네트워크는 행정동 경계와 교차하는 DB segment를 GeoJSON으로 변환한다")
+	@DisplayName("관리자 보행 네트워크는 선택 동 경계와 교차하는 DB segment를 GeoJSON으로 변환한다")
 	void getRoadNetwork() {
 		RoadSegment roadSegment = roadSegment(1L);
 		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동"))
@@ -150,7 +175,7 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("관리자 편의시설은 구/동이 있으면 행정동 주변 places를 조회한다")
+	@DisplayName("관리자 편의시설은 구/동이 있으면 선택 동 주변 places를 조회한다")
 	void getFacilitiesByArea() throws Exception {
 		Place place = place();
 		when(placeRepository.findAllIntersectingArea("강서구", "명지동", 10)).thenReturn(List.of(place));
@@ -178,10 +203,126 @@ class AdminMapServiceTest {
 	}
 
 	@Test
+	@DisplayName("관리자 segment walk_access 변경에서 즉시 경로 반영이 꺼져 있으면 road_segments만 저장하고 overlay는 건드리지 않는다")
+	void updateRoadSegmentAttributesSkipsOverlayWhenImmediateApplyDisabled() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+
+		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
+			adminUserId,
+			1L,
+			"강서구",
+			"명지동",
+			new AdminRoadSegmentAttributesUpdateRequest(AccessibilityState.NO, null, null, null, null, null, null, false));
+
+		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.NO);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.SKIPPED);
+		assertThat(response.routingApplyMessage()).contains("immediate");
+		verify(routingSegmentOverrideRepository, never()).save(any(RoutingSegmentOverride.class));
+		verify(routingSegmentOverrideRepository, never()).deleteById(1L);
+		verify(graphHopperAdminClient, never()).reloadRoutingOverrides();
+	}
+
+	@Test
+	@DisplayName("관리자 segment walk_access=NO 변경에서 즉시 경로 반영을 선택하면 overlay upsert 후 runtime reload를 호출한다")
+	void updateRoadSegmentAttributesAppliesOverlayWhenImmediateApplyEnabled() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+		when(graphHopperAdminClient.reloadRoutingOverrides())
+			.thenReturn(
+				new GraphHopperReloadResult(
+					GraphHopperReloadStatus.APPLIED,
+					"reloaded"));
+
+		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
+			adminUserId,
+			1L,
+			"강서구",
+			"명지동",
+			new AdminRoadSegmentAttributesUpdateRequest(AccessibilityState.NO, null, null, null, null, null, null, true));
+
+		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.NO);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
+		assertThat(response.routingApplyMessage()).isEqualTo("reloaded");
+		verify(routingSegmentOverrideRepository).save(any(RoutingSegmentOverride.class));
+		verify(graphHopperAdminClient).reloadRoutingOverrides();
+	}
+
+	@Test
+	@DisplayName("관리자 segment walk_access=YES 변경에서 즉시 경로 반영을 선택하면 overlay를 삭제하고 runtime reload를 호출한다")
+	void updateRoadSegmentAttributesClearsOverlayWhenImmediateApplyEnabledForYes() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+		when(graphHopperAdminClient.reloadRoutingOverrides())
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
+
+		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
+			adminUserId,
+			1L,
+			"강서구",
+			"명지동",
+			new AdminRoadSegmentAttributesUpdateRequest(AccessibilityState.YES, AccessibilityState.YES, null, null, null, null, null, true));
+
+		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.YES);
+		assertThat(response.segment().brailleBlockState()).isEqualTo(AccessibilityState.YES);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED_WITH_WARNING);
+		assertThat(response.routingApplyMessage()).contains("full GraphHopper rebuild");
+		verify(routingSegmentOverrideRepository).deleteById(1L);
+		verify(graphHopperAdminClient).reloadRoutingOverrides();
+	}
+
+	@Test
+	@DisplayName("관리자 segment walk_access=UNKNOWN 변경에서 즉시 경로 반영을 선택하면 stale overlay를 제거하고 runtime reload를 호출한다")
+	void updateRoadSegmentAttributesClearsOverlayWhenImmediateApplyEnabledForUnknown() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+		when(graphHopperAdminClient.reloadRoutingOverrides())
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
+
+		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
+			adminUserId,
+			1L,
+			"강서구",
+			"명지동",
+			new AdminRoadSegmentAttributesUpdateRequest(AccessibilityState.UNKNOWN, null, null, null, null, null, null, true));
+
+		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.UNKNOWN);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED_WITH_WARNING);
+		assertThat(response.routingApplyMessage()).contains("full GraphHopper rebuild");
+		verify(routingSegmentOverrideRepository).deleteById(1L);
+		verify(graphHopperAdminClient).reloadRoutingOverrides();
+	}
+
+	@Test
+	@DisplayName("관리자 segment 수정에서 walk_access 요청이 없으면 overlay와 runtime reload는 생략된다")
+	void updateRoadSegmentAttributesSkipsOverlayWhenWalkAccessNotRequested() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+
+		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
+			adminUserId,
+			1L,
+			"강서구",
+			"명지동",
+			new AdminRoadSegmentAttributesUpdateRequest(null, AccessibilityState.YES, null, null, null, null, null, true));
+
+		assertThat(response.segment().brailleBlockState()).isEqualTo(AccessibilityState.YES);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.SKIPPED);
+		verify(routingSegmentOverrideRepository, never()).save(any(RoutingSegmentOverride.class));
+		verify(routingSegmentOverrideRepository, never()).deleteById(1L);
+		verify(graphHopperAdminClient, never()).reloadRoutingOverrides();
+	}
+
+	@Test
 	@DisplayName("관리자 장소 기본 정보를 부분 수정한다")
 	void updatePlace() throws Exception {
 		Place place = place();
-		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
+		when(placeRepository.existsIntersectingGuByPlaceId(1L, "강서구")).thenReturn(true);
 		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
 		when(placeRepository.findByProviderPlaceId("67890")).thenReturn(Optional.empty());
 
@@ -189,7 +330,7 @@ class AdminMapServiceTest {
 			adminUserId,
 			1L,
 			"강서구",
-			"명지동",
+			"전체",
 			new AdminPlaceUpdateRequest(
 				" 부산광역시청 ",
 				PlaceCategory.PUBLIC_OFFICE,
@@ -210,7 +351,7 @@ class AdminMapServiceTest {
 		Place place = place();
 		Place otherPlace = place();
 		ReflectionTestUtils.setField(otherPlace, "placeId", 2L);
-		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
+		when(placeRepository.existsIntersectingGuByPlaceId(1L, "강서구")).thenReturn(true);
 		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
 		when(placeRepository.findByProviderPlaceId("67890")).thenReturn(Optional.of(otherPlace));
 
@@ -218,7 +359,7 @@ class AdminMapServiceTest {
 			adminUserId,
 			1L,
 			"강서구",
-			"명지동",
+			"전체",
 			new AdminPlaceUpdateRequest(null, null, null, null, "67890")))
 			.isInstanceOf(PlaceException.class);
 	}
@@ -227,7 +368,7 @@ class AdminMapServiceTest {
 	@DisplayName("관리자 장소 접근성 속성은 요청 목록으로 전체 교체한다")
 	void updatePlaceAccessibilityFeatures() throws Exception {
 		Place place = place();
-		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
+		when(placeRepository.existsIntersectingGuByPlaceId(1L, "강서구")).thenReturn(true);
 		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
 		when(placeRepository.findById(1L)).thenReturn(Optional.of(place));
 		when(placeAccessibilityFeatureRepository.saveAll(any()))
@@ -237,7 +378,7 @@ class AdminMapServiceTest {
 			adminUserId,
 			1L,
 			"강서구",
-			"명지동",
+			"전체",
 			new AdminPlaceAccessibilityFeaturesUpdateRequest(List.of(
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, true),
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.accessibleToilet,
@@ -253,13 +394,13 @@ class AdminMapServiceTest {
 	@Test
 	@DisplayName("관리자 장소 접근성 속성은 같은 유형을 중복 요청할 수 없다")
 	void updatePlaceAccessibilityFeaturesDuplicateType() throws Exception {
-		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
+		when(placeRepository.existsIntersectingGuByPlaceId(1L, "강서구")).thenReturn(true);
 
 		assertThatThrownBy(() -> adminMapService.updatePlaceAccessibilityFeatures(
 			adminUserId,
 			1L,
 			"강서구",
-			"명지동",
+			"전체",
 			new AdminPlaceAccessibilityFeaturesUpdateRequest(List.of(
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, true),
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, false)))))
@@ -308,5 +449,21 @@ class AdminMapServiceTest {
 		ReflectionTestUtils.setField(feature, "featureType", featureType);
 		ReflectionTestUtils.setField(feature, "isAvailable", isAvailable);
 		return feature;
+	}
+
+	private static final class NoOpPlatformTransactionManager implements PlatformTransactionManager {
+
+		@Override
+		public TransactionStatus getTransaction(TransactionDefinition definition) {
+			return new SimpleTransactionStatus();
+		}
+
+		@Override
+		public void commit(TransactionStatus status) {
+		}
+
+		@Override
+		public void rollback(TransactionStatus status) {
+		}
 	}
 }

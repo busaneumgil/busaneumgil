@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
-import type { BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentFeatureType, SegmentPayload } from "../types";
+import type { AreaBoundaryFeature, BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentFeatureType, SegmentPayload } from "../types";
 import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
-import { deletedEdgeIds, describeCrossWalkProjection, describeSideLineNodeSnap, draftSegmentFeatures, isSameSnappedNode, newNodeRef, resetPolygonDeleteSelection, roadNodeCandidates, segmentEndpointNodeCandidates, segmentsTouchingPolygon, snapToSegmentEndpointNode, type SnappedSegmentEndpoint, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
+import { deletedEdgeIds, describeCrossWalkProjection, describeSideLineNodeSnap, draftEndpointNodeCandidates, draftSegmentFeatures, newNodeRef, resetPolygonDeleteSelection, roadNodeCandidates, segmentEndpointNodeCandidates, segmentsTouchingPolygon, snapToSegmentEndpointNode, type SnappedSegmentEndpoint, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
 import { shouldShowRoadAttributeReference } from "./networkReferenceLayer";
 import { roadAttributeStrokeColor, roadAttributeStrokeStyle, roadAttributeStrokeWeight } from "./roadAttributeStyle";
 import { roadviewUnavailableMessage, shouldOpenRoadviewForMode } from "./roadviewMode";
@@ -253,6 +253,7 @@ export function SegmentMap({
     const useHitArea = toolbarMode === "editor";
     const canRenderDetails = detailedSegmentsVisible;
     const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+    overlaysRef.current.push(...createAreaBoundaryOverlay(payload?.areaBoundary, mapRef.current));
     const segmentFeatures = canRenderDetails
       ? allSegmentFeatures.filter(shouldShowRoadSegmentLayer)
       : [];
@@ -268,7 +269,8 @@ export function SegmentMap({
           drawSelectedSegment(feature);
           return;
         }
-        if (modeRef.current === "delete" && polygonDeleteActiveRef.current) {
+        if (isCoordinatePickMode()) {
+          preventMapClickPropagation();
           handleMapCoordinate(coord, latLng);
           return;
         }
@@ -304,7 +306,7 @@ export function SegmentMap({
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
+  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, mode, polygonDeleteActive, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
 
   useEffect(() => {
     if (detailedSegmentsVisible) {
@@ -398,15 +400,6 @@ export function SegmentMap({
       addPointsRef.current = addEndpointSnapsRef.current.map((item) => item.coord);
       redrawAddPreview();
       setPendingAddCount(addPointsRef.current.length);
-      if (isSameSnappedNode(addEndpointSnapsRef.current[0], addEndpointSnapsRef.current[1])) {
-        const first = addEndpointSnapsRef.current[0];
-        addEndpointSnapsRef.current = first ? [first] : [];
-        addPointsRef.current = addEndpointSnapsRef.current.map((item) => item.coord);
-        redrawAddPreview();
-        setPendingAddCount(addPointsRef.current.length);
-        setSnapMessage("시작점과 끝점이 같은 node에 붙습니다. 다른 끝점을 선택하세요.");
-        return;
-      }
       const result = twoPointAddDraft(addTypeRef.current, addPointsRef.current, addEndpointSnapsRef.current);
       if (result.rejectedReason) {
         addPointsRef.current = result.remainingPoints;
@@ -432,6 +425,15 @@ export function SegmentMap({
     }
   }
 
+  function isCoordinatePickMode() {
+    return modeRef.current === "add" || (modeRef.current === "delete" && polygonDeleteActiveRef.current);
+  }
+
+  function preventMapClickPropagation() {
+    const kakaoEvent = window.kakao?.maps?.event as { preventMap?: () => void } | undefined;
+    kakaoEvent?.preventMap?.();
+  }
+
   function clearTempOverlays() {
     tempOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     tempOverlaysRef.current = [];
@@ -439,7 +441,7 @@ export function SegmentMap({
     polygonShapeRef.current = null;
   }
 
-  function drawPoint(coord: Coord, color: string, radius: number): KakaoOverlay | null {
+  function drawPoint(coord: Coord, color: string, radius: number, onClick?: (coord: Coord, latLng: unknown) => void): KakaoOverlay | null {
     if (!window.kakao?.maps || !mapRef.current) return null;
     const circle = new window.kakao.maps.Circle({
       map: mapRef.current,
@@ -450,7 +452,15 @@ export function SegmentMap({
       strokeOpacity: 1,
       fillColor: color,
       fillOpacity: 0.95,
+      clickable: Boolean(onClick),
     });
+    if (onClick) {
+      window.kakao.maps.event.addListener(circle, "click", (event: unknown) => {
+        preventMapClickPropagation();
+        const latLng = (event as { latLng?: unknown }).latLng ?? kakaoLatLngAtCoord(coord);
+        onClick(coord, latLng);
+      });
+    }
     return circle;
   }
 
@@ -459,10 +469,17 @@ export function SegmentMap({
     clearPendingEditOverlays();
 
     draftSegmentFeatures(draftEditsRef.current).forEach((feature) => {
-      const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, () => undefined, { draft: true, hitArea: false });
+      const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, (coord, latLng) => {
+        if (!isCoordinatePickMode()) return;
+        preventMapClickPropagation();
+        handleMapCoordinate(coord, latLng);
+      }, { draft: true, hitArea: false });
       if (segmentOverlays) pendingEditOverlaysRef.current.push(...segmentOverlays);
       feature.geometry.coordinates.forEach((coord) => {
-        const point = drawPoint(coord, "#ef4444", 2);
+        const point = drawPoint(coord, "#ef4444", 2, (pointCoord, latLng) => {
+          if (!isCoordinatePickMode()) return;
+          handleMapCoordinate(pointCoord, latLng);
+        });
         if (point) pendingEditOverlaysRef.current.push(point);
       });
     });
@@ -830,9 +847,13 @@ export function SegmentMap({
       return { coord: snappedCoord, snapped: false, nodeRef: newNodeRef(snappedCoord) };
     }
     const explicitNodeCandidates = roadNodeCandidates(payload?.roadNodes?.features ?? []);
+    const draftNodeCandidates = draftEndpointNodeCandidates(draftEditsRef.current);
     const candidates = explicitNodeCandidates.length
-      ? explicitNodeCandidates
-      : segmentEndpointNodeCandidates(visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current));
+      ? [...explicitNodeCandidates, ...draftNodeCandidates]
+      : [
+          ...segmentEndpointNodeCandidates(visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current)),
+          ...draftNodeCandidates,
+        ];
     const endpoint = snapToSegmentEndpointNode(coord, candidates);
     if (!endpoint.snapped) {
       setSnapMessage(null);
@@ -1026,6 +1047,51 @@ function createRoutePointOverlay(point: GeoPoint, label: string, type: "start" |
     yAnchor: 1,
     zIndex: 36,
   });
+}
+
+function createAreaBoundaryOverlay(feature: AreaBoundaryFeature | null | undefined, map: KakaoMap): KakaoOverlay[] {
+  if (!window.kakao?.maps || !feature) return [];
+  return areaBoundaryLineCoordinates(feature).map((coordinates) => new window.kakao!.maps.Polyline({
+    map,
+    path: coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng)),
+    strokeWeight: 3,
+    strokeColor: "#0f766e",
+    strokeOpacity: 0.86,
+    strokeStyle: "shortdash",
+    clickable: false,
+    zIndex: 6,
+  }));
+}
+
+function areaBoundaryLineCoordinates(feature: AreaBoundaryFeature): Coord[][] {
+  const coordinates = feature.geometry.coordinates;
+  switch (feature.geometry.type) {
+    case "LineString":
+      return isLineStringCoordinates(coordinates) ? [coordinates] : [];
+    case "MultiLineString":
+      return isMultiLineStringCoordinates(coordinates) ? coordinates : [];
+    case "Polygon":
+      return isMultiLineStringCoordinates(coordinates) ? coordinates : [];
+    case "MultiPolygon":
+      return Array.isArray(coordinates)
+        ? coordinates.flatMap((polygon) => isMultiLineStringCoordinates(polygon) ? polygon : [])
+        : [];
+    default:
+      return [];
+  }
+}
+
+function isLineStringCoordinates(value: unknown): value is Coord[] {
+  return Array.isArray(value)
+    && value.every((coord) =>
+      Array.isArray(coord)
+      && coord.length >= 2
+      && typeof coord[0] === "number"
+      && typeof coord[1] === "number");
+}
+
+function isMultiLineStringCoordinates(value: unknown): value is Coord[][] {
+  return Array.isArray(value) && value.every(isLineStringCoordinates);
 }
 
 function createSegmentFeatureOverlays(feature: SegmentFeature, activeTypes: Set<SegmentFeatureType>): KakaoOverlay[] {
@@ -1232,7 +1298,7 @@ function createBridgeOverlay(feature: BridgeFeature, map: KakaoMap): KakaoOverla
   const marker = new window.kakao.maps.Circle({
     map,
     center: new window.kakao.maps.LatLng(markerPoint[1], markerPoint[0]),
-    radius: 4,
+    radius: 4 / 3,
     strokeWeight: 2,
     strokeColor: "#ffffff",
     strokeOpacity: 1,

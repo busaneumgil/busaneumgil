@@ -193,6 +193,8 @@ UNKNOWN_WARNING_THRESHOLD = 0.90
 ENDPOINT_TOLERANCE = 0.000001
 SPLIT_FRACTION_TOLERANCE = 0.000000001
 GEOMETRY_DECIMAL_PLACES = 12
+SIGNED_INT_MIN = 0
+SIGNED_INT_MAX = 2**31 - 1
 
 
 def jdbc_to_dsn(jdbc_url: str) -> dict:
@@ -239,6 +241,16 @@ def tag(parent, key, value):
 def safe_osm_way_id(edge_id):
     numeric = int(edge_id)
     return numeric if numeric > 0 else abs(numeric) + 1_000_000_000
+
+
+def require_signed_int32(value, *, field_name, segment_id):
+    numeric = int(value)
+    if numeric < SIGNED_INT_MIN or numeric > SIGNED_INT_MAX:
+        raise ValueError(
+            f"road_segment edge_id={segment_id} has {field_name}={numeric} outside GraphHopper 31-bit non-negative encoded value range "
+            f"[{SIGNED_INT_MIN}, {SIGNED_INT_MAX}]"
+        )
+    return numeric
 
 
 def parse_linestring_wkt(value):
@@ -719,6 +731,7 @@ def validate_graph(nodes, segments, output=None):
     endpoint_mismatch_edges = []
     self_loop_edges = []
     enum_violations = defaultdict(list)
+    invalid_db_edge_id_ranges = []
     routeable_edges = 0
     unknown_counts = Counter()
     enum_counts = {field: Counter() for field in ENUM_VALUES}
@@ -737,6 +750,10 @@ def validate_graph(nodes, segments, output=None):
             self_loop_edges.append(edge_id)
         if from_node_id not in node_lookup or to_node_id not in node_lookup:
             dangling_edges.append(edge_id)
+        try:
+            require_signed_int32(segment.get("source_edge_id", edge_id), field_name="db_edge_id", segment_id=edge_id)
+        except (TypeError, ValueError):
+            invalid_db_edge_id_ranges.append(edge_id)
 
         coords = parse_linestring_wkt(segment.get("geom_wkt"))
         if len(coords) < 2 or coords[0] == coords[-1] or not all(is_valid_lon_lat(lon, lat) for lon, lat in coords):
@@ -768,6 +785,14 @@ def validate_graph(nodes, segments, output=None):
         add_issue(blockers, "endpoint_mismatch", "blocker", "segment endpoints do not match from/to node coordinates", endpoint_mismatch_edges)
     if self_loop_edges:
         add_issue(blockers, "self_loop", "blocker", "segment from_node_id and to_node_id must differ", self_loop_edges)
+    if invalid_db_edge_id_ranges:
+        add_issue(
+            blockers,
+            "db_edge_id_out_of_range",
+            "blocker",
+            "db_edge_id/source_edge_id must fit the GraphHopper 31-bit non-negative encoded value range",
+            invalid_db_edge_id_ranges,
+        )
     for field, edge_ids in enum_violations.items():
         add_issue(blockers, "enum_violation", "blocker", f"{field} contains values outside the GraphHopper contract", edge_ids)
     if routeable_edges == 0:
@@ -872,6 +897,15 @@ def write_osm(nodes, segments, output):
         tag(way, "foot", "yes")
         tag(way, "oneway", "no")
         tag(way, "ieum:edge_id", segment["edge_id"])
+        tag(
+            way,
+            "ieum:db_edge_id",
+            require_signed_int32(
+                segment.get("source_edge_id", segment["edge_id"]),
+                field_name="db_edge_id",
+                segment_id=segment["edge_id"],
+            ),
+        )
         tag(way, "ieum:walk_access", normalize_export_value(segment.get("walk_access"), "UNKNOWN"))
         tag(way, "ieum:avg_slope_percent", normalize_export_value(segment.get("avg_slope_percent"), "0.0"))
         tag(way, "ieum:width_meter", normalize_export_value(segment.get("width_meter"), "0.0"))

@@ -3,6 +3,7 @@ import type {
   AdminPlaceDetailResponse,
   AdminPlaceUpdateRequest,
   AdminRoadSegmentAttributesUpdateRequest,
+  AdminRoadSegmentUpdateResponse,
   AdminRoutePreviewRequest,
   AdminRoutePreviewResponse,
   AdminDashboardSummaryResponse,
@@ -13,6 +14,7 @@ import type {
   AdminAreaAssignmentListResponse,
   AdminAuditLogListResponse,
   AdminDashboardBottleneckResponse,
+  AdminBottleneckMonitoringResponse,
   AdminUserListResponse,
   AdminUserResponse,
   FacilityPayload,
@@ -20,6 +22,7 @@ import type {
   PlaceAccessibilityFeature,
   RoadNetworkEditApplyResponse,
   RoadNetworkEditJobResponse,
+  AdminRouteStatsResponse,
   HazardReportStatus,
   SegmentPayload,
   TokenResponse,
@@ -236,6 +239,14 @@ export async function fetchAdminDashboardBottlenecks({
   return requestAdminJson<AdminDashboardBottleneckResponse>(`/admin/dashboard/bottlenecks?${params.toString()}`, accessToken);
 }
 
+export async function fetchAdminRouteStats(accessToken: string): Promise<AdminRouteStatsResponse> {
+  return requestAdminJson<AdminRouteStatsResponse>("/admin/dashboard/route-stats", accessToken);
+}
+
+export async function fetchAdminBottleneckMonitoring(accessToken: string): Promise<AdminBottleneckMonitoringResponse> {
+  return requestAdminJson<AdminBottleneckMonitoringResponse>("/admin/dashboard/bottleneck-monitoring", accessToken);
+}
+
 export async function updateAdminUserRole(
   userId: string,
   role: UserRole,
@@ -401,7 +412,7 @@ export async function updateAdminRoadSegmentAttributes(
   accessToken: string,
 ) {
   const params = new URLSearchParams({ gu, dong });
-  return requestAdminJson<SegmentPayload["segments"]["features"][number]["properties"]>(
+  return requestAdminJson<AdminRoadSegmentUpdateResponse>(
     `/admin/road-network/segments/${edgeId}/attributes?${params.toString()}`,
     accessToken,
     {

@@ -4,6 +4,7 @@ import {
   coordBounds,
   describeCrossWalkProjection,
   describeSideLineNodeSnap,
+  draftEndpointNodeCandidates,
   draftSegmentFeatures,
   isSameSnappedNode,
   roadNodeCandidates,
@@ -138,8 +139,28 @@ describe("draft segment helpers", () => {
     const result = twoPointAddDraft("SIDE_LINE", [first.coord, second.coord], [first, second]);
 
     expect(result.edit).toMatchObject({
-      fromNode: { mode: "existing", vertexId: "10" },
-      toNode: { mode: "existing", vertexId: "11" },
+      fromNode: { mode: "existing", vertexId: 10 },
+      toNode: { mode: "existing", vertexId: 11 },
+    });
+  });
+
+  it("uses newly added draft endpoints as SIDE_LINE snap candidates", () => {
+    const first = snapToSegmentEndpointNode([129, 35], []);
+    const second = snapToSegmentEndpointNode([129.001, 35], []);
+    const result = twoPointAddDraft("SIDE_LINE", [first.coord, second.coord], [first, second]);
+
+    const candidates = draftEndpointNodeCandidates(result.edit ? [result.edit] : []);
+    const snappedToDraftEnd = snapToSegmentEndpointNode([129.0010005, 35], candidates);
+
+    expect(candidates.map((candidate) => candidate.nodeId)).toEqual([
+      "manual_node:129.00000000:35.00000000",
+      "manual_node:129.00100000:35.00000000",
+    ]);
+    expect(snappedToDraftEnd).toMatchObject({
+      snapped: true,
+      nodeId: "manual_node:129.00100000:35.00000000",
+      coord: [129.001, 35],
+      nodeRef: { mode: "new", tempNodeId: "manual_node:129.00100000:35.00000000" },
     });
   });
 

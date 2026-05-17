@@ -11,6 +11,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL -o graphhopper-web.jar "https://repo1.maven.org/maven2/com/graphhopper/graphhopper-web/${GRAPHHOPPER_VERSION}/graphhopper-web-${GRAPHHOPPER_VERSION}.jar"
+RUN curl -fsSL -o postgresql.jar "https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.5/postgresql-42.7.5.jar"
 
 COPY INF/graphhopper/config-local.yml /opt/graphhopper/config-local.yml
 COPY INF/graphhopper/config-runtime.yml /opt/graphhopper/config-runtime.yml
@@ -21,11 +22,12 @@ COPY scripts/docker/entrypoints/graphhopper-build.sh /usr/local/bin/graphhopper-
 COPY scripts/graphhopper/export_postgis_to_osm.py /usr/local/bin/export-postgis-to-osm.py
 COPY scripts/graphhopper/smoke_postgis_export.py /usr/local/bin/smoke-postgis-export.py
 COPY scripts/graphhopper/smoke_graphhopper_profiles.py /usr/local/bin/smoke-graphhopper-profiles.py
+COPY scripts/graphhopper/smoke_walk_access_hot_patch.py /usr/local/bin/smoke-walk-access-hot-patch.py
 COPY scripts/db/load_accessibility_features.py /usr/local/bin/load-accessibility-features.py
 COPY INF/graphhopper/plugin/src /opt/graphhopper/plugin/src
 
 RUN mkdir -p /opt/graphhopper/plugin/classes \
-    && javac -cp /opt/graphhopper/graphhopper-web.jar \
+    && javac -cp /opt/graphhopper/graphhopper-web.jar:/opt/graphhopper/postgresql.jar \
       -d /opt/graphhopper/plugin/classes \
       $(find /opt/graphhopper/plugin/src -name '*.java' | sort) \
     && jar --create --file /opt/graphhopper/plugin/ieum-graphhopper-plugin.jar \
@@ -36,6 +38,7 @@ RUN chmod +x /usr/local/bin/graphhopper-entrypoint.sh \
     && chmod +x /usr/local/bin/export-postgis-to-osm.py \
     && chmod +x /usr/local/bin/smoke-postgis-export.py \
     && chmod +x /usr/local/bin/smoke-graphhopper-profiles.py \
+    && chmod +x /usr/local/bin/smoke-walk-access-hot-patch.py \
     && chmod +x /usr/local/bin/load-accessibility-features.py
 
 EXPOSE 8989 8990

@@ -199,6 +199,23 @@ class SecurityConfigTest {
 	}
 
 	@Test
+	@DisplayName("음성 분석 API는 인증이 필요하다")
+	void voiceAnalyzeRequiresAuthentication() throws Exception {
+		mockMvc.perform(post("/voice/analyze")
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "text": "부산역 어디야",
+				  "mode": "LOW_VISION"
+				}
+				"""))
+			.andExpect(status().isUnauthorized())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.status").value("A4010"))
+			.andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+	}
+
+	@Test
 	@DisplayName("도보 경로 검색 API는 인증이 필요하다")
 	void walkRouteSearchRequiresAuthentication() throws Exception {
 		mockMvc.perform(post("/routes/search/walk")

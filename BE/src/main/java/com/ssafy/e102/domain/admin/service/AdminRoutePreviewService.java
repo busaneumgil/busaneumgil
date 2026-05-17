@@ -39,6 +39,7 @@ public class AdminRoutePreviewService {
 
 	private static final int ROUTE_GRAPH_LIMIT = 20_000;
 	private static final double WALK_SPEED_METER_PER_SECOND = 1.2;
+	private static final String ALL_DONG = AdminService.ALL_DONG;
 
 	private final RoadSegmentRepository roadSegmentRepository;
 	private final SegmentFeatureRepository segmentFeatureRepository;
@@ -51,12 +52,11 @@ public class AdminRoutePreviewService {
 	}
 
 	public AdminRoutePreviewResponse preview(AdminRoutePreviewRequest request) {
-		List<RoadSegment> segments = roadSegmentRepository.findAllIntersectingArea(
-			request.gu(),
-			request.dong(),
-			ROUTE_GRAPH_LIMIT);
+		List<RoadSegment> segments = hasAreaScope(request.dong())
+			? roadSegmentRepository.findAllIntersectingArea(request.gu(), request.dong(), ROUTE_GRAPH_LIMIT)
+			: roadSegmentRepository.findAllIntersectingGu(request.gu(), ROUTE_GRAPH_LIMIT);
 		if (segments.isEmpty()) {
-			throw new BusinessException(CommonErrorCode.NOT_FOUND, "선택한 구/동에 경로 계산 가능한 보행 네트워크가 없습니다.");
+			throw new BusinessException(CommonErrorCode.NOT_FOUND, "선택한 범위에 경로 계산 가능한 보행 네트워크가 없습니다.");
 		}
 
 		Map<Long, Set<SegmentFeatureType>> featureTypesByEdgeId = loadFeatureTypes(segments);
@@ -272,6 +272,10 @@ public class AdminRoutePreviewService {
 	private boolean isWheelchair(AdminRouteProfileGroup profileGroup) {
 		return profileGroup == AdminRouteProfileGroup.WHEELCHAIR_MANUAL
 			|| profileGroup == AdminRouteProfileGroup.WHEELCHAIR_AUTO;
+	}
+
+	private boolean hasAreaScope(String dong) {
+		return dong != null && !dong.isBlank() && !ALL_DONG.equals(dong);
 	}
 
 	private double unknownFactor(AccessibilityState state, double unknownFactor) {

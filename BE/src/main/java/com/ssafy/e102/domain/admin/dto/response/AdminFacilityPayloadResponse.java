@@ -3,6 +3,8 @@ package com.ssafy.e102.domain.admin.dto.response;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "관리자 편의시설 지도 조회 응답")
@@ -12,7 +14,9 @@ public record AdminFacilityPayloadResponse(
 	@Schema(description = "조회 결과 bbox. [minLng, minLat, maxLng, maxLat]")
 	List<Double> bbox,
 	@Schema(description = "편의시설 GeoJSON")
-	AdminGeoJsonFeatureCollectionResponse<AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminFacilityPropertiesResponse>> facilities) {
+	AdminGeoJsonFeatureCollectionResponse<AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminFacilityPropertiesResponse>> facilities,
+	@Schema(description = "선택 구 경계 GeoJSON Feature. 편집 금지 영역이 아니라 참고선입니다.")
+	AdminGeoJsonFeatureResponse<JsonNode, AdminAreaBoundaryPropertiesResponse> areaBoundary) {
 
 	@Schema(description = "관리자 편의시설 요약 응답")
 	public record AdminFacilitySummaryResponse(

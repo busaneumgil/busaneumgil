@@ -1201,6 +1201,33 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `manual walk refresh reloads selected walk options with a fresh search`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = TransitModeRecordingRouteRepository(walkSafeDistanceMeters = 720)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(1, routeRepository.walkSearchCount)
+
+            viewModel.onAction(RouteSettingUiAction.RouteRefreshClicked)
+            advanceUntilIdle()
+
+            assertEquals(RouteTravelMode.WALK, viewModel.uiState.value.selectedTravelMode)
+            assertEquals(1, routeRepository.freshWalkSearchCount)
+            assertFalse(viewModel.uiState.value.isRouteRefreshing)
+            assertTrue(viewModel.uiState.value.isStartEnabled)
+        }
+
+    @Test
     fun `manual transit refresh reloads selected transit options with a fresh search`() =
         runTest {
             val destinationSelectionRepository =
@@ -1221,14 +1248,14 @@ class RouteSettingViewModelTest {
             assertEquals(1, routeRepository.transitSearchCount)
             assertEquals("transit-search-1", routeRepository.lastTransitSearchId)
 
-            viewModel.onAction(RouteSettingUiAction.TransitRefreshClicked)
+            viewModel.onAction(RouteSettingUiAction.RouteRefreshClicked)
             advanceUntilIdle()
 
             assertEquals(RouteTravelMode.TRANSIT, viewModel.uiState.value.selectedTravelMode)
             assertEquals(1, routeRepository.transitSearchCount)
             assertEquals(1, routeRepository.freshTransitSearchCount)
             assertEquals("transit-fresh-search-1", routeRepository.lastTransitSearchId)
-            assertFalse(viewModel.uiState.value.isTransitRefreshing)
+            assertFalse(viewModel.uiState.value.isRouteRefreshing)
             assertTrue(viewModel.uiState.value.isStartEnabled)
         }
 
@@ -1868,6 +1895,8 @@ private class TransitModeRecordingRouteRepository(
 ) : BaseTestRouteRepository() {
     var walkSearchCount: Int = 0
         private set
+    var freshWalkSearchCount: Int = 0
+        private set
     var transitSearchCount: Int = 0
         private set
     var freshTransitSearchCount: Int = 0
@@ -1884,6 +1913,15 @@ private class TransitModeRecordingRouteRepository(
         return buildWalkSearchData(
             query = query,
             searchId = "walk-search-$walkSearchCount",
+            safeDistanceMeters = walkSafeDistanceMeters,
+        )
+    }
+
+    override suspend fun getFreshRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        freshWalkSearchCount += 1
+        return buildWalkSearchData(
+            query = query,
+            searchId = "walk-fresh-search-$freshWalkSearchCount",
             safeDistanceMeters = walkSafeDistanceMeters,
         )
     }

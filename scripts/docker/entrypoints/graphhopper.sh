@@ -12,6 +12,6 @@ fi
 
 exec java ${JAVA_OPTS:-} \
   -Ddw.graphhopper.graph.location="$GRAPH_LOCATION" \
-  -cp /opt/graphhopper/plugin/ieum-graphhopper-plugin.jar:/opt/graphhopper/graphhopper-web.jar \
+  -cp /opt/graphhopper/plugin/ieum-graphhopper-plugin.jar:/opt/graphhopper/graphhopper-web.jar:/opt/graphhopper/postgresql.jar \
   com.ssafy.e102.graphhopper.IeumGraphHopperApplication \
   server "$CONFIG_FILE"

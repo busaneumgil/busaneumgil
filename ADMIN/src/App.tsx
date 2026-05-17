@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import adminLogoUrl from "./assets/app_logo.png";
 import { BottleneckMonitoringPage } from "./bottleneck/BottleneckMonitoringPage";
-import { bottleneckMonitoringMockResponse, composeBottleneckMonitoringData } from "./bottleneck/bottleneckMonitoringContract";
+import { bottleneckMonitoringMockResponse } from "./bottleneck/bottleneckMonitoringContract";
 import {
   createAdminRoadNetworkEditJob,
   fetchAdminAreaAssignments,
   fetchAdminAuditLogs,
   fetchAdminAreas,
+  fetchAdminBottleneckMonitoring,
   fetchAdminDashboardBottlenecks,
   fetchAdminDashboardSummary,
   fetchAdminFacilityPayload,
@@ -16,6 +17,7 @@ import {
   fetchAdminRoadNetworkPayload,
   fetchAdminRoadNetworkEditJob,
   fetchAdminHazardReports,
+  fetchAdminRouteStats,
   fetchAdminUsers,
   adminAccessTokenRefreshedEvent,
   getStoredAdminAccessToken,
@@ -66,6 +68,7 @@ import type {
 } from "./types";
 
 const placeCategories: PlaceCategory[] = [...facilityCategoryOrder];
+const allDongScope = "전체";
 
 const accessibilityFeatureTypes: AccessibilityFeatureType[] = [
   "accessibleEntrance",
@@ -426,7 +429,7 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   },
   users: {
     label: "사용자 관리",
-    description: "관리자 권한과 구·동 담당자, 작업 상태를 관리합니다.",
+    description: "관리자 권한과 구 단위 담당자, 작업 상태를 관리합니다.",
   },
   logs: {
     label: "로그",
@@ -459,6 +462,7 @@ function AdminApp() {
   const [selectedFacility, setSelectedFacility] = useState<FacilityFeature | null>(null);
   const [selectedFacilityCategories, setSelectedFacilityCategories] = useState<PlaceCategory[]>(() => [...placeCategories]);
   const [selectedSegment, setSelectedSegment] = useState<SegmentFeature | null>(null);
+  const [networkDetailPanelCollapsed, setNetworkDetailPanelCollapsed] = useState(false);
   const [facilityLocationPickEnabled, setFacilityLocationPickEnabled] = useState(false);
   const [facilityPickedLocation, setFacilityPickedLocation] = useState<{ point: GeoPoint; address?: string; nonce: number } | null>(null);
   const [accessToken, setAccessToken] = useState(getStoredAdminAccessToken);
@@ -505,6 +509,8 @@ function AdminApp() {
   const usesRealAdminApi = hasToken && adminPrincipal?.role === "ADMIN";
   const showsAreaSelector = page === "network" || page === "facilities" || page === "routeTuning";
   const selectedAssignmentType: AssignmentType = page === "facilities" ? "FACILITY" : "ROAD_NETWORK";
+  const selectedScopeDong = allDongScope;
+  const selectedAssignmentScopeLabel = `${selectedGu} ${selectedScopeDong}`;
 
   useEffect(() => {
     function handleAccessTokenRefreshed(event: Event) {
@@ -572,9 +578,17 @@ function AdminApp() {
     refetchInterval: 60_000,
   });
 
+  const routeStatsQuery = useQuery({
+    queryKey: ["admin-route-stats", accessToken],
+    queryFn: () => fetchAdminRouteStats(accessToken),
+    enabled: page === "routeStats" && usesRealAdminApi,
+    retry: false,
+    refetchInterval: 60_000,
+  });
+
   const bottleneckMonitoringQuery = useQuery({
     queryKey: ["admin-bottleneck-monitoring", accessToken],
-    queryFn: () => fetchAdminDashboardBottlenecks({ accessToken, limit: 20 }),
+    queryFn: () => fetchAdminBottleneckMonitoring(accessToken),
     enabled: page === "bottleneckMonitoring" && usesRealAdminApi,
     retry: false,
     refetchInterval: 60_000,
@@ -666,9 +680,9 @@ function AdminApp() {
       submittedRoadEditAssignmentIdRef.current = selectedAssignmentId;
       return createAdminRoadNetworkEditJob({
         version: "ADMIN-draft-v1",
-        assignmentId: `${selectedGu}:${selectedDong}`,
+        assignmentId: `${selectedGu}:${selectedScopeDong}`,
         gu: selectedGu,
-        dong: selectedDong,
+        dong: selectedScopeDong,
         role: currentAdmin?.role ?? "ADMIN",
         createdAt: new Date().toISOString(),
         edits: draftEdits,
@@ -707,7 +721,7 @@ function AdminApp() {
 
   const updatePlaceMutation = useMutation({
     mutationFn: ({ placeId, request }: { placeId: number; request: AdminPlaceUpdateRequest }) =>
-      updateAdminPlace(placeId, selectedGu, selectedDong, request, accessToken),
+      updateAdminPlace(placeId, selectedGu, selectedScopeDong, request, accessToken),
     onSuccess: (place) => {
       queryClient.setQueryData(["admin-place", place.placeId, accessToken], place);
       queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
@@ -716,7 +730,7 @@ function AdminApp() {
 
   const updatePlaceFeaturesMutation = useMutation({
     mutationFn: ({ placeId, features }: { placeId: number; features: PlaceAccessibilityFeature[] }) =>
-      updateAdminPlaceAccessibilityFeatures(placeId, selectedGu, selectedDong, features, accessToken),
+      updateAdminPlaceAccessibilityFeatures(placeId, selectedGu, selectedScopeDong, features, accessToken),
     onSuccess: (place) => {
       queryClient.setQueryData(["admin-place", place.placeId, accessToken], place);
       queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
@@ -777,9 +791,9 @@ function AdminApp() {
   const selectedAssignment = useMemo(() => {
     return (areaAssignmentsQuery.data ?? []).find((assignment) =>
       assignment.gu === selectedGu
-      && assignment.dong === selectedDong
+      && assignment.dong === selectedScopeDong
       && assignment.assignmentType === selectedAssignmentType) ?? null;
-  }, [areaAssignmentsQuery.data, selectedAssignmentType, selectedDong, selectedGu]);
+  }, [areaAssignmentsQuery.data, selectedAssignmentType, selectedScopeDong, selectedGu]);
 
   const canEditSelectedArea = selectedAssignment?.assigneeUserId === currentAdmin?.userId;
   const selectedAssignmentLabel = selectedAssignment?.assigneeLabel || selectedAssignment?.assigneeUserId || "미지정";
@@ -1033,6 +1047,9 @@ function AdminApp() {
             bottlenecks={dashboardBottlenecksQuery.data}
             bottlenecksLoading={dashboardBottlenecksQuery.isLoading}
             bottlenecksError={dashboardBottlenecksQuery.error}
+            onOpenRouteStats={() => setPage("routeStats")}
+            onOpenBottleneckMonitoring={() => setPage("bottleneckMonitoring")}
+            onOpenHazards={() => setPage("hazards")}
           />
         )}
 
@@ -1051,8 +1068,8 @@ function AdminApp() {
             canEdit={canEditSelectedArea}
             assignmentMessage={
               canEditSelectedArea
-                ? `${selectedGu} ${selectedDong} 보행 네트워크 담당자로 수정할 수 있습니다.`
-                : `${selectedGu} ${selectedDong} 보행 네트워크 담당자만 수정할 수 있습니다. 현재 담당자: ${selectedAssignmentLabel}`
+                ? `${selectedAssignmentScopeLabel} 보행 네트워크 담당자로 수정할 수 있습니다.`
+                : `${selectedAssignmentScopeLabel} 보행 네트워크 담당자만 수정할 수 있습니다. 현재 담당자: ${selectedAssignmentLabel}`
             }
             roadviewContainerRef={roadviewContainerRef}
             onRoadviewChange={setRoadviewDock}
@@ -1062,7 +1079,13 @@ function AdminApp() {
           />
         )}
 
-        {page === "routeStats" && <RouteStatsPage data={routeStatsMockResponse} />}
+        {page === "routeStats" && (
+          <RouteStatsPage
+            data={usesRealAdminApi ? routeStatsQuery.data : routeStatsMockResponse}
+            loading={usesRealAdminApi && routeStatsQuery.isLoading}
+            error={routeStatsQuery.error}
+          />
+        )}
 
         {page === "users" && (
           <UserManagementPage
@@ -1108,7 +1131,7 @@ function AdminApp() {
         )}
 
         {page === "network" && (
-          <div className="editor-layout">
+          <div className={`editor-layout ${networkDetailPanelCollapsed ? "detail-panel-collapsed" : ""}`}>
             <SegmentMap
               payload={payloadQuery.data}
               bridgePayload={bridgeQuery.data}
@@ -1125,6 +1148,15 @@ function AdminApp() {
               onRoadviewChange={setRoadviewDock}
               editable={canEditSelectedArea}
             />
+            <button
+              type="button"
+              className="detail-panel-toggle"
+              aria-expanded={!networkDetailPanelCollapsed}
+              aria-label={networkDetailPanelCollapsed ? "우측 패널 펼치기" : "우측 패널 접기"}
+              onClick={() => setNetworkDetailPanelCollapsed((collapsed) => !collapsed)}
+            >
+              {networkDetailPanelCollapsed ? "<" : ">"}
+            </button>
             <aside className="detail-panel">
               <section className="panel-section roadview-dock-section">
                 <div className="roadview-panel docked">
@@ -1171,7 +1203,7 @@ function AdminApp() {
                   <AttributeRow label="상태" value={workStatusLabel(selectedAssignment?.status ?? "NOT_STARTED")} />
                 </dl>
                 {!canEditSelectedArea && (
-                  <p className="error-box">현재 계정은 {selectedGu} {selectedDong} 담당자가 아니므로 수정할 수 없습니다.</p>
+                  <p className="error-box">현재 계정은 {selectedAssignmentScopeLabel} 담당자가 아니므로 수정할 수 없습니다.</p>
                 )}
                 <button
                   className="primary"
@@ -1185,7 +1217,7 @@ function AdminApp() {
                     작업 #{activeRoadEditJob.jobId} {activeRoadEditJob.message}
                     {roadEditResult && (
                       <>
-                        {" "}추가 {roadEditResult.addedSegments}, 삭제 {roadEditResult.deletedSegments},
+                        {" "}추가 {roadEditResult.addedSegments}, 제외 {roadEditResult.skippedSegments ?? 0}, 삭제 {roadEditResult.deletedSegments},
                         생성 node {roadEditResult.createdNodes}, snap {roadEditResult.snappedNodes}
                       </>
                     )}
@@ -1206,9 +1238,7 @@ function AdminApp() {
 
         {page === "bottleneckMonitoring" && (
           <BottleneckMonitoringPage
-            data={usesRealAdminApi
-              ? composeBottleneckMonitoringData(bottleneckMonitoringQuery.data)
-              : bottleneckMonitoringMockResponse}
+            data={usesRealAdminApi ? bottleneckMonitoringQuery.data : bottleneckMonitoringMockResponse}
             loading={usesRealAdminApi && bottleneckMonitoringQuery.isLoading}
             error={bottleneckMonitoringQuery.error}
           />
@@ -1286,8 +1316,8 @@ function AdminApp() {
                       className={`facility-assignment-badge ${canEditSelectedArea ? "is-editable" : "is-readonly"}`}
                       title={
                         canEditSelectedArea
-                          ? `${selectedGu} ${selectedDong} 편의시설 담당자로 수정할 수 있습니다.`
-                          : `${selectedGu} ${selectedDong} 편의시설 담당자만 수정할 수 있습니다. 현재 담당자: ${selectedAssignmentLabel}`
+                          ? `${selectedAssignmentScopeLabel} 편의시설 담당자로 수정할 수 있습니다.`
+                          : `${selectedAssignmentScopeLabel} 편의시설 담당자만 수정할 수 있습니다. 현재 담당자: ${selectedAssignmentLabel}`
                       }
                     >
                       {canEditSelectedArea ? "수정 가능" : "담당자 아님"}
@@ -1356,6 +1386,9 @@ function HomeDashboardPage({
   bottlenecks,
   bottlenecksLoading,
   bottlenecksError,
+  onOpenRouteStats,
+  onOpenBottleneckMonitoring,
+  onOpenHazards,
 }: {
   summary?: AdminDashboardSummaryResponse;
   loading: boolean;
@@ -1364,6 +1397,9 @@ function HomeDashboardPage({
   bottlenecks?: AdminDashboardBottleneckResponse;
   bottlenecksLoading: boolean;
   bottlenecksError?: Error | null;
+  onOpenRouteStats?: () => void;
+  onOpenBottleneckMonitoring?: () => void;
+  onOpenHazards?: () => void;
 }) {
   const periodLabel = summary
     ? summary.period.from === summary.period.to
@@ -1446,9 +1482,14 @@ function HomeDashboardPage({
 
           <div className="admin-home-main">
             <div className="admin-home-left">
-              <MovementChartCard metrics={summary.routes.dailyMovement ?? []} />
-              <BottleneckTableCard bottlenecks={bottlenecks} loading={bottlenecksLoading} error={bottlenecksError} />
-              <RecentReportsCard summary={summary} />
+              <MovementChartCard metrics={summary.routes.dailyMovement ?? []} onMore={onOpenRouteStats} />
+              <BottleneckTableCard
+                bottlenecks={bottlenecks}
+                loading={bottlenecksLoading}
+                error={bottlenecksError}
+                onMore={onOpenBottleneckMonitoring}
+              />
+              <RecentReportsCard summary={summary} onMore={onOpenHazards} />
             </div>
 
             <div className="admin-home-right">
@@ -1516,15 +1557,24 @@ function OverviewMetricCard({
 function DashboardCardHeader({
   title,
   action,
+  onActionClick,
+  actionTarget,
 }: {
   title: string;
   action?: string;
+  onActionClick?: () => void;
+  actionTarget?: string;
 }) {
   return (
     <header className="admin-card-header">
       <h3>{title}</h3>
       {action && (
-        <button type="button" className="admin-card-more">
+        <button
+          type="button"
+          className="admin-card-more"
+          onClick={onActionClick}
+          data-action-target={actionTarget}
+        >
           {action}
           <DashboardIcon name="chevron" />
         </button>
@@ -1533,7 +1583,13 @@ function DashboardCardHeader({
   );
 }
 
-function MovementChartCard({ metrics }: { metrics: AdminDashboardDailyMovementMetric[] }) {
+function MovementChartCard({
+  metrics,
+  onMore,
+}: {
+  metrics: AdminDashboardDailyMovementMetric[];
+  onMore?: () => void;
+}) {
   const chartMetrics = metrics.slice(-7);
   const plot = {
     left: 42,
@@ -1554,7 +1610,12 @@ function MovementChartCard({ metrics }: { metrics: AdminDashboardDailyMovementMe
 
   return (
     <article className="admin-dashboard-card movement-chart-card">
-      <DashboardCardHeader title="사용자 이동 통계" action="더보기" />
+      <DashboardCardHeader
+        title="사용자 이동 통계"
+        action="더보기"
+        onActionClick={onMore}
+        actionTarget="routeStats"
+      />
       <div className="movement-legend">
         <span className="legend-route">이동 경로 수 (건)</span>
         <span className="legend-users">이용자 수 (명)</span>
@@ -1626,10 +1687,12 @@ function BottleneckTableCard({
   bottlenecks,
   loading,
   error,
+  onMore,
 }: {
   bottlenecks?: AdminDashboardBottleneckResponse;
   loading: boolean;
   error?: Error | null;
+  onMore?: () => void;
 }) {
   const rows = (bottlenecks?.topBottlenecks ?? [])
     .slice(0, 5)
@@ -1647,7 +1710,12 @@ function BottleneckTableCard({
 
   return (
     <article className="admin-dashboard-card bottleneck-rank-card">
-      <DashboardCardHeader title="병목 구간 TOP 5" action="더보기" />
+      <DashboardCardHeader
+        title="병목 구간 TOP 5"
+        action="더보기"
+        onActionClick={onMore}
+        actionTarget="bottleneckMonitoring"
+      />
       {loading && <p className="admin-card-inline-state">병목 후보를 불러오는 중입니다.</p>}
       {error && <p className="admin-card-inline-state error">{error.message}</p>}
       <div className="admin-table-scroll">
@@ -1705,8 +1773,10 @@ function formatSpeed(speed: number) {
 
 function RecentReportsCard({
   summary,
+  onMore,
 }: {
   summary: AdminDashboardSummaryResponse;
+  onMore?: () => void;
 }) {
   const rows = (summary.operations.recentReports ?? [])
     .slice(0, 3)
@@ -1719,7 +1789,12 @@ function RecentReportsCard({
 
   return (
     <article className="admin-dashboard-card recent-report-card">
-      <DashboardCardHeader title="최근 불편 신고" action="더보기" />
+      <DashboardCardHeader
+        title="최근 불편 신고"
+        action="더보기"
+        onActionClick={onMore}
+        actionTarget="hazards"
+      />
       <div className="admin-table-scroll">
         <table className="admin-home-table recent-report-table">
           <thead>
@@ -2164,7 +2239,7 @@ function FacilityCategorySummary({
   }
 
   if (visibleCategories.length === 0) {
-    return <p className="muted facility-summary-note">현재 선택한 구·동에는 선택 카테고리 시설이 없습니다.</p>;
+    return <p className="muted facility-summary-note">현재 선택한 구에는 선택 카테고리 시설이 없습니다.</p>;
   }
 
   return (
@@ -2213,25 +2288,12 @@ function UserManagementPage({
     return left.userId.localeCompare(right.userId);
   });
   const assignmentByArea = new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}:${assignment.assignmentType}`, assignment]));
-  const normalizedAreas = areas.length
+  const sourceAreas = areas.length
     ? areas
     : [...new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}`, { gu: assignment.gu, dong: assignment.dong }])).values()];
-  const guOptions = [...new Set(normalizedAreas.map((area) => area.gu))].filter(Boolean).sort((left, right) => left.localeCompare(right, "ko"));
+  const guOptions = [...new Set(sourceAreas.map((area) => area.gu))].filter(Boolean).sort((left, right) => left.localeCompare(right, "ko"));
+  const guAreas = guOptions.map((gu) => ({ gu, dong: allDongScope }));
   const [promoteUserId, setPromoteUserId] = useState("");
-  const [selectedGuFilter, setSelectedGuFilter] = useState("");
-  const guOptionsKey = guOptions.join("|");
-  useEffect(() => {
-    if (!guOptions.length) {
-      if (selectedGuFilter) setSelectedGuFilter("");
-      return;
-    }
-    if (!selectedGuFilter || !guOptions.includes(selectedGuFilter)) {
-      setSelectedGuFilter(guOptions[0]);
-    }
-  }, [guOptionsKey, selectedGuFilter]);
-  const filteredAreas = selectedGuFilter
-    ? normalizedAreas.filter((area) => area.gu === selectedGuFilter)
-    : normalizedAreas;
 
   return (
     <div className="user-management-layout">
@@ -2302,22 +2364,12 @@ function UserManagementPage({
       </section>
 
       <section className="panel-section">
-        <h3>구·동 담당자 및 작업 상태</h3>
-        <p className="muted">보행 네트워크와 편의시설 담당자를 분리합니다. 담당자로 지정된 관리자만 해당 영역을 수정할 수 있습니다.</p>
-        <div className="assignment-filter-row">
-          <label>
-            구
-            <select value={selectedGuFilter} onChange={(event) => setSelectedGuFilter(event.target.value)}>
-              {guOptions.map((gu) => (
-                <option key={gu} value={gu}>{gu}</option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <h3>구 담당자 및 작업 상태</h3>
+        <p className="muted">보행 네트워크와 편의시설 담당자를 구 단위로 분리합니다. 담당자로 지정된 관리자만 해당 구를 수정할 수 있습니다.</p>
         <AssignmentTable
           title="보행 네트워크 담당 현황"
           assignmentType="ROAD_NETWORK"
-          normalizedAreas={filteredAreas}
+          normalizedAreas={guAreas}
           assignmentByArea={assignmentByArea}
           adminUsers={adminUsers}
           assignmentPending={assignmentPending}
@@ -2327,7 +2379,7 @@ function UserManagementPage({
         <AssignmentTable
           title="편의시설 담당 현황"
           assignmentType="FACILITY"
-          normalizedAreas={filteredAreas}
+          normalizedAreas={guAreas}
           assignmentByArea={assignmentByArea}
           adminUsers={adminUsers}
           assignmentPending={assignmentPending}
@@ -2366,7 +2418,7 @@ function AssignmentTable({
           <thead>
             <tr>
               <th>구</th>
-              <th>동</th>
+              <th>범위</th>
               <th>담당자</th>
               <th>상태</th>
               <th>수정일</th>
@@ -2434,7 +2486,7 @@ function AssignmentTable({
             })}
             {!normalizedAreas.length && (
               <tr>
-                <td colSpan={5}>구·동 목록이 없습니다.</td>
+                <td colSpan={5}>구 목록이 없습니다.</td>
               </tr>
             )}
           </tbody>
@@ -2556,7 +2608,7 @@ function AuditLogsPage({
                 <dd>{log.targetType}{log.targetId ? ` #${log.targetId}` : ""}</dd>
               </div>
               <div>
-                <dt>구/동</dt>
+                <dt>구/범위</dt>
                 <dd>{log.gu && log.dong ? `${log.gu} ${log.dong}` : "-"}</dd>
               </div>
             </dl>

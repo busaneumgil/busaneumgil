@@ -250,7 +250,9 @@ export function SegmentMap({
     overlaysRef.current = [];
     segmentOverlayByEdgeRef.current.clear();
 
-    const useHitArea = toolbarMode === "editor";
+    const segmentClickEnabled = toolbarMode !== "editor"
+      || (mode !== "add" && !(mode === "delete" && polygonDeleteActive));
+    const useHitArea = toolbarMode === "editor" && segmentClickEnabled;
     const canRenderDetails = detailedSegmentsVisible;
     const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
     overlaysRef.current.push(...createAreaBoundaryOverlay(payload?.areaBoundary, mapRef.current));
@@ -283,7 +285,7 @@ export function SegmentMap({
           segmentType: feature.properties.segmentType,
           reason: "ADMIN_click_delete",
         } as EditAction);
-      }, { hitArea: useHitArea, style: routeAttributeStyleOverride });
+      }, { clickable: segmentClickEnabled, hitArea: useHitArea, style: routeAttributeStyleOverride });
       if (segmentOverlays) {
         overlaysRef.current.push(...segmentOverlays);
         segmentOverlayByEdgeRef.current.set(String(feature.properties.edgeId), segmentOverlays);
@@ -305,7 +307,7 @@ export function SegmentMap({
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
+  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, mode, polygonDeleteActive, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
 
   useEffect(() => {
     if (detailedSegmentsVisible) {
@@ -1353,22 +1355,26 @@ function createSegmentOverlay(
   feature: SegmentFeature,
   map: KakaoMap,
   onClick: (coord: Coord, latLng: unknown) => void,
-  options: { draft?: boolean; hitArea?: boolean; style?: SegmentStyleOverride } = {},
+  options: { clickable?: boolean; draft?: boolean; hitArea?: boolean; style?: SegmentStyleOverride } = {},
 ): KakaoOverlay[] | null {
   const line = createPolyline(feature.geometry.coordinates, feature.properties.segmentType ?? "SIDE_LINE", {
+    clickable: options.clickable,
     draft: options.draft,
     opacity: options.draft ? 0.98 : undefined,
     ...options.style,
   });
   if (!line || !window.kakao?.maps) return null;
   const overlays = [line];
+  const clickable = options.clickable ?? true;
   const handleClick = (event: unknown) => {
     const latLng = (event as { latLng?: { getLng: () => number; getLat: () => number } }).latLng ?? kakaoLatLngAtCoord(feature.geometry.coordinates[Math.floor(feature.geometry.coordinates.length / 2)] ?? feature.geometry.coordinates[0]);
     onClick([latLng.getLng(), latLng.getLat()], latLng);
   };
-  window.kakao.maps.event.addListener(line, "click", handleClick);
+  if (clickable) {
+    window.kakao.maps.event.addListener(line, "click", handleClick);
+  }
 
-  if (options.hitArea !== false) {
+  if (clickable && options.hitArea !== false) {
     const path = feature.geometry.coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng));
     const hitLine = new window.kakao.maps.Polyline({
       path,
@@ -1396,7 +1402,7 @@ function kakaoLatLngAtCoord(coord: Coord): { getLng: () => number; getLat: () =>
 function createPolyline(
   coordinates: Coord[],
   segmentType: string,
-  options: { draft?: boolean; opacity?: number } & SegmentStyleOverride = {},
+  options: { clickable?: boolean; draft?: boolean; opacity?: number } & SegmentStyleOverride = {},
 ): KakaoOverlay | null {
   if (!window.kakao?.maps) return null;
 
@@ -1413,7 +1419,7 @@ function createPolyline(
     strokeColor,
     strokeOpacity: opacity,
     strokeStyle: options.strokeStyle ?? (options.draft ? "shortdash" : "solid"),
-    clickable: true,
+    clickable: options.clickable ?? true,
     zIndex,
   });
 }

@@ -170,7 +170,7 @@ export function snapToSegmentEndpointNode(
     };
   }
   return {
-    coord,
+    coord: nearest.candidate.coord,
     snapped: true,
     nodeId: nearest.candidate.nodeId,
     distanceMeter: nearest.distanceMeter,

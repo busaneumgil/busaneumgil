@@ -40,8 +40,8 @@ class PlaceVoiceAnalysisServiceTest {
 	}
 
 	@Test
-	@DisplayName("보행약자 음성 분석은 추출 장소명을 반환하고 확인 필드는 비운다")
-	void analyzeMobilityImpairedVoiceText() {
+	@DisplayName("보행약자 음성 분석은 AI가 반환한 확인 정보를 그대로 전달한다")
+	void analyzeMobilityImpairedVoiceTextWithAiConfirmation() {
 		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
 			.thenReturn(new AiVoiceAnalyzeResult(
 				VoiceIntent.PLACE_SEARCH,
@@ -63,8 +63,8 @@ class PlaceVoiceAnalysisServiceTest {
 
 		assertThat(response.intent()).isEqualTo(VoiceIntent.PLACE_SEARCH);
 		assertThat(response.placeName()).isEqualTo("이재모피자");
-		assertThat(response.confirmed()).isNull();
-		assertThat(response.confirmationMessage()).isNull();
+		assertThat(response.confirmed()).isTrue();
+		assertThat(response.confirmationMessage()).isEqualTo("무시되는 문구");
 		ArgumentCaptor<AiVoiceAnalyzeCommand> captor = ArgumentCaptor.forClass(AiVoiceAnalyzeCommand.class);
 		verify(aiVoiceAnalysisClient).analyze(captor.capture());
 		assertThat(captor.getValue().history()).hasSize(1);
@@ -102,6 +102,33 @@ class PlaceVoiceAnalysisServiceTest {
 		ArgumentCaptor<AiVoiceAnalyzeCommand> captor = ArgumentCaptor.forClass(AiVoiceAnalyzeCommand.class);
 		verify(aiVoiceAnalysisClient).analyze(captor.capture());
 		assertThat(captor.getValue().history()).hasSize(2);
+	}
+
+	@Test
+	@DisplayName("보행약자 ASK 응답은 AI가 생성한 follow-up 문구를 그대로 전달한다")
+	void passThroughMobilityAskConfirmationMessage() {
+		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
+			.thenReturn(new AiVoiceAnalyzeResult(
+				VoiceIntent.ASK,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				"어떤 제보인가요?"));
+
+		VoiceAnalyzeResponse response = placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
+			"제보할게요",
+			VoiceAnalysisMode.MOBILITY_IMPAIRED,
+			List.of(new VoiceAnalyzeHistoryRequest("user", "길 안내 끝낼게")),
+			"navigation/guidance"));
+
+		assertThat(response.intent()).isEqualTo(VoiceIntent.ASK);
+		assertThat(response.confirmed()).isNull();
+		assertThat(response.confirmationMessage()).isEqualTo("어떤 제보인가요?");
 	}
 
 	@Test

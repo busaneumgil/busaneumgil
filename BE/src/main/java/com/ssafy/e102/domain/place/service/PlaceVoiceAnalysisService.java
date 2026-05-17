@@ -23,9 +23,6 @@ public class PlaceVoiceAnalysisService {
 	public VoiceAnalyzeResponse analyze(VoiceAnalyzeRequest request) {
 		AiVoiceAnalyzeResult result = aiVoiceAnalysisClient.analyze(AiVoiceAnalyzeCommand.from(request));
 		validateResult(request.mode(), result);
-		if (request.mode() == VoiceAnalysisMode.MOBILITY_IMPAIRED) {
-			return VoiceAnalyzeResponse.of(result, null, null);
-		}
 		return VoiceAnalyzeResponse.of(result, result.confirmed(), result.confirmationMessage());
 	}
 

@@ -55,4 +55,10 @@ describe("RouteStatsPage", () => {
     expect(html).not.toContain("35,284건");
     expect(html).not.toContain("주요 이동 구간 TOP 7");
   });
+
+  it("does not render duplicate loading state when stale data already exists", () => {
+    const html = renderToStaticMarkup(<RouteStatsPage data={routeStatsMockResponse} loading />);
+
+    expect(html).not.toContain("경로/이동 통계를 불러오는 중입니다.");
+  });
 });

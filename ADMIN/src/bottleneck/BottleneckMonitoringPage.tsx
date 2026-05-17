@@ -34,9 +34,6 @@ export function BottleneckMonitoringPage({
         ))}
       </div>
 
-      {loading && <p className="admin-card-inline-state">병목구간 통계를 불러오는 중입니다.</p>}
-      {error && <p className="admin-card-inline-state error">{error.message}</p>}
-
       <div className="bottleneck-monitoring-overview-grid map-leading map-emphasis">
         <article className="admin-dashboard-card bottleneck-monitoring-map-card">
           <header className="admin-card-header">

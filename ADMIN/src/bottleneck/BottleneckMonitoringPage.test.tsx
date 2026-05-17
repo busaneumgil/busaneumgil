@@ -67,4 +67,23 @@ describe("BottleneckMonitoringPage", () => {
     expect(html).not.toContain("병목구간 총수");
     expect(html).not.toContain("영향도 TOP 5");
   });
+
+  it("does not render duplicate loading state when stale bottleneck data already exists", async () => {
+    const pageModule = await import("./BottleneckMonitoringPage").catch(() => null);
+    expect(pageModule).not.toBeNull();
+    if (!pageModule) return;
+
+    const contractModule = await import("./bottleneckMonitoringContract").catch(() => null);
+    expect(contractModule).not.toBeNull();
+    if (!contractModule) return;
+
+    const html = renderToStaticMarkup(
+      <pageModule.BottleneckMonitoringPage
+        data={contractModule.bottleneckMonitoringMockResponse}
+        loading
+      />,
+    );
+
+    expect(html).not.toContain("병목구간 통계를 불러오는 중입니다.");
+  });
 });

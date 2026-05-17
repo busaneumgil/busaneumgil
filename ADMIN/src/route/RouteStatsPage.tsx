@@ -42,9 +42,6 @@ export function RouteStatsPage({
 
   return (
     <section className="route-stats-page">
-      {loading && <p className="admin-card-inline-state">경로/이동 통계를 불러오는 중입니다.</p>}
-      {error && <p className="admin-card-inline-state error">{error.message}</p>}
-
       <div className="route-stats-filter-bar">
         <div className="route-stats-chip-row" role="tablist" aria-label="이동 유형 필터">
           {data.filters.mobilityOptions.map((option) => (

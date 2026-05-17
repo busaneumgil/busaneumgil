@@ -67,12 +67,20 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToSearch = { editingTarget ->
                 navController.navigate(SearchRoute.Entry.createRoute(editingTarget))
             },
+            onNavigateToSearchResults = { query, editingTarget ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+                    launchSingleTop = true
+                }
+            },
             shouldResetForHomeEntry = shouldResetForHomeEntry,
             onHomeReentryResetConsumed = {
                 backStackEntry.savedStateHandle.consumeMapHomeReentryReset()
             },
             onFacilityDetailVisibilityChanged = { isVisible ->
                 backStackEntry.savedStateHandle[MAP_FACILITY_DETAIL_VISIBLE_KEY] = isVisible
+            },
+            onVoiceSearchVisibilityChanged = { isVisible ->
+                backStackEntry.savedStateHandle[MAP_VOICE_SEARCH_VISIBLE_KEY] = isVisible
             },
         )
     }
@@ -638,6 +646,7 @@ internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): B
 
 private const val SEARCH_PRESERVE_ENTRY_STATE_KEY: String = "searchPreserveEntryState"
 private const val MAP_HOME_REENTRY_RESET_KEY: String = "mapHomeReentryReset"
+internal const val MAP_VOICE_SEARCH_VISIBLE_KEY: String = "mapVoiceSearchVisible"
 
 internal data class TopLevelNavigationPolicy(
     val launchSingleTop: Boolean,

@@ -27,6 +27,9 @@ data class RouteBookmarkDraft(
     val durationMinutes: Int? = null,
     val routeSnapshot: RouteCandidate? = null,
 ) {
+    val canSaveToServer: Boolean
+        get() = !routeId.isNullOrBlank()
+
     val defaultRouteName: String
         get() = "${startLabel.orDefaultStartLabel()}-${endLabel.orDefaultEndLabel()}"
 

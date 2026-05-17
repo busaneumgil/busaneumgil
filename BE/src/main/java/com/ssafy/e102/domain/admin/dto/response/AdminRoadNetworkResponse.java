@@ -11,5 +11,7 @@ public record AdminRoadNetworkResponse(
 	@Schema(description = "조회 결과 bbox. [minLng, minLat, maxLng, maxLat]")
 	List<Double> bbox,
 	@Schema(description = "보행 네트워크 segment GeoJSON")
-	AdminGeoJsonFeatureCollectionResponse<AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadSegmentPropertiesResponse>> segments) {
+	AdminGeoJsonFeatureCollectionResponse<AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadSegmentPropertiesResponse>> segments,
+	@Schema(description = "보행 네트워크 node GeoJSON")
+	AdminGeoJsonFeatureCollectionResponse<AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminRoadNodePropertiesResponse>> roadNodes) {
 }

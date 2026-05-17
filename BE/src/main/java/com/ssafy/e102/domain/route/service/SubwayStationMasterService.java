@@ -28,6 +28,7 @@ public class SubwayStationMasterService {
 	private final SubwayStationRepository subwayStationRepository;
 	private final SubwayStationAccessibilityFeatureRepository accessibilityFeatureRepository;
 	private final SubwayStationElevatorRepository subwayStationElevatorRepository;
+	private volatile List<SubwayStation> cachedStations;
 
 	public SubwayStationMasterService(
 		SubwayStationRepository subwayStationRepository,
@@ -75,8 +76,14 @@ public class SubwayStationMasterService {
 	}
 
 	private List<SubwayStation> loadStations() {
+		List<SubwayStation> stations = cachedStations;
+		if (stations != null) {
+			return stations;
+		}
 		try {
-			return subwayStationRepository.findAll();
+			stations = List.copyOf(subwayStationRepository.findAll());
+			cachedStations = stations;
+			return stations;
 		} catch (DataAccessException exception) {
 			log.warn("지하철역 마스터를 조회할 수 없어 지하철역 POI 매칭을 생략합니다.", exception);
 			return List.of();

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -611,31 +612,49 @@ private fun SearchVoiceInputScreen(
             destination = backgroundDestination,
             modifier = Modifier.fillMaxSize(),
         )
-        ModalBottomSheet(
-            onDismissRequest = { onAction(SearchUiAction.VoiceInputDismissed) },
-            sheetState = bottomSheetState,
-            dragHandle = null,
-            shape =
-                RoundedCornerShape(
-                    topStart = searchVoiceInputSheetTopCornerRadius(),
-                    topEnd = searchVoiceInputSheetTopCornerRadius(),
-                    bottomEnd = 0.dp,
-                    bottomStart = 0.dp,
-                ),
-            containerColor = searchVoiceInputSheetContainerColor(),
-            scrimColor = Color.Black.copy(alpha = 0.38f),
-        ) {
-            SearchVoiceInputContent(
-                uiState = uiState,
-                copy = copy,
-                onAction = onAction,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .background(searchVoiceInputSheetContainerColor())
-                        .padding(horizontal = 24.dp, vertical = 12.dp),
-            )
-        }
+        SearchVoiceInputBottomSheet(
+            uiState = uiState,
+            onAction = onAction,
+            bottomSheetState = bottomSheetState,
+            copy = copy,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SearchVoiceInputBottomSheet(
+    uiState: SearchUiState,
+    onAction: (SearchUiAction) -> Unit,
+    bottomSheetState: androidx.compose.material3.SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    copy: SearchCopyUiState = resolveSearchCopyUiState(uiState.editingTarget),
+) {
+    ModalBottomSheet(
+        onDismissRequest = { onAction(SearchUiAction.VoiceInputDismissed) },
+        sheetState = bottomSheetState,
+        dragHandle = null,
+        shape =
+            RoundedCornerShape(
+                topStart = searchVoiceInputSheetTopCornerRadius(),
+                topEnd = searchVoiceInputSheetTopCornerRadius(),
+                bottomEnd = 0.dp,
+                bottomStart = 0.dp,
+            ),
+        containerColor = searchVoiceInputSheetContainerColor(),
+        scrimColor = Color.Black.copy(alpha = 0.38f),
+        windowInsets = SearchVoiceInputBottomSheetWindowInsets,
+    ) {
+        SearchVoiceInputContent(
+            uiState = uiState,
+            copy = copy,
+            onAction = onAction,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(searchVoiceInputSheetContainerColor())
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+        )
     }
 }
 
@@ -1300,6 +1319,8 @@ private val SearchResultPlaceIconSize: Dp = 32.dp
 private val SearchStateIllustrationMinHeight: Dp = 360.dp
 private val SearchStateIllustrationSize: Dp = 128.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
+
+private val SearchVoiceInputBottomSheetWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 private val SearchStateTitleLineHeight = 34.sp
 private val SearchEmptyResultTitleLineHeight = 40.sp
 

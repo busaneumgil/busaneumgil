@@ -48,6 +48,9 @@ enum class NavigationScreenState {
 enum class NavigationGuidanceAction(
     val label: String,
 ) {
+    ARRIVAL("\uB3C4\uCC29"),
+    ALIGHT("\uD558\uCC28"),
+    START("출발"),
     BUS("버스 탑승"),
     SUBWAY("지하철 탑승"),
     STRAIGHT("직진"),
@@ -90,6 +93,7 @@ data class NavigationMapSegmentUiState(
     val sequence: Int,
     val polyline: List<GeoCoordinate>,
     val segmentStartCoordinate: GeoCoordinate? = null,
+    val segmentEndCoordinate: GeoCoordinate? = null,
     val distanceMeters: Int,
     val riskLevel: RouteRiskLevel,
     val guidanceMessage: String,
@@ -131,6 +135,8 @@ data class NavigationSegmentRailItemUiState(
     val isCompleted: Boolean = false,
     val isRiskUpcoming: Boolean = false,
     val transitInfo: NavigationTransitInfoUiState? = null,
+    val sidePanelTitle: String = "",
+    val sidePanelDescription: String? = null,
 )
 
 data class NavigationFocusedSegmentCardUiState(
@@ -242,6 +248,10 @@ sealed interface NavigationUiEvent {
 
     data object NavigateToArrival : NavigationUiEvent
 
+    data class ShowToast(
+        val message: String,
+    ) : NavigationUiEvent
+
     data class SpeakBriefing(
         val text: String,
     ) : NavigationUiEvent
@@ -299,6 +309,9 @@ internal fun RouteCandidate.toNavigationGuidanceAction(segment: RouteSegment): N
 
 internal fun RouteDetailStepKind.toNavigationGuidanceAction(): NavigationGuidanceAction =
     when {
+        this == RouteDetailStepKind.ARRIVAL -> NavigationGuidanceAction.ARRIVAL
+        this == RouteDetailStepKind.START -> NavigationGuidanceAction.START
+        this == RouteDetailStepKind.ALIGHT -> NavigationGuidanceAction.ALIGHT
         this == RouteDetailStepKind.BUS -> NavigationGuidanceAction.BUS
         this == RouteDetailStepKind.SUBWAY -> NavigationGuidanceAction.SUBWAY
         this == RouteDetailStepKind.CROSSWALK -> NavigationGuidanceAction.CROSSWALK

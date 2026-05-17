@@ -194,6 +194,8 @@ class LowVisionNavigationScreenTest {
         assertTrue(source.contains("AndroidTextToSpeechController"))
         assertTrue(source.contains("NavigationRouteChangeAlertPlayer"))
         assertTrue(source.contains("viewModel.updateTextToSpeechState"))
+        assertTrue(source.contains("LaunchedEffect(textToSpeechController, uiState.tts.isEnabled)"))
+        assertTrue(source.contains("textToSpeechController.setEnabled(uiState.tts.isEnabled)"))
         assertTrue(source.contains("is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)"))
         assertTrue(source.contains("NavigationUiEvent.PlayRouteChangeAlert -> routeChangeAlertPlayer.play()"))
         assertTrue(source.contains("NavigationUiEvent.StopBriefing -> textToSpeechController.stop()"))

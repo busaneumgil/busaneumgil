@@ -106,7 +106,12 @@ describe("draft segment helpers", () => {
     const snapped = snapToSegmentEndpointNode([129.0000005, 35], candidates);
     const unsnapped = snapToSegmentEndpointNode([129.002, 35], candidates);
 
-    expect(snapped).toMatchObject({ snapped: true, nodeId: "10", coord: [129, 35] });
+    expect(snapped).toMatchObject({
+      snapped: true,
+      nodeId: "10",
+      coord: [129.0000005, 35],
+      nodeRef: { geom: { coordinates: [129, 35] } },
+    });
     expect(unsnapped).toMatchObject({ snapped: false, coord: [129.002, 35] });
   });
 
@@ -139,6 +144,7 @@ describe("draft segment helpers", () => {
     const result = twoPointAddDraft("SIDE_LINE", [first.coord, second.coord], [first, second]);
 
     expect(result.edit).toMatchObject({
+      geom: { coordinates: [[129.0000005, 35], [129.0010005, 35]] },
       fromNode: { mode: "existing", vertexId: 10 },
       toNode: { mode: "existing", vertexId: 11 },
     });
@@ -159,7 +165,7 @@ describe("draft segment helpers", () => {
     expect(snappedToDraftEnd).toMatchObject({
       snapped: true,
       nodeId: "manual_node:129.00100000:35.00000000",
-      coord: [129.001, 35],
+      coord: [129.0010005, 35],
       nodeRef: { mode: "new", tempNodeId: "manual_node:129.00100000:35.00000000" },
     });
   });

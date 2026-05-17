@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 import os
+import re
 import time
 import uuid
 from dataclasses import asdict
@@ -17,13 +18,6 @@ from config import Config
 from utils.logger import get_logger
 from utils.result_logger import save_result
 from providers.gemini_provider import GeminiProvider
-from providers.claude_provider import ClaudeProvider
-from providers.gpt_mini_provider import GPTMiniProvider
-from providers.utils import (
-    get_system_prompt,
-    parse_json_response,
-    is_success,
-)
 
 logger = get_logger(__name__)
 
@@ -32,9 +26,7 @@ app.config.from_object(Config)
 CORS(app)
 
 PROVIDERS = {
-    "gemini":   GeminiProvider(),
-    "claude":   ClaudeProvider(),
-    "gpt_mini": GPTMiniProvider(),
+    "gemini": GeminiProvider(),
 }
 
 logger.info("Providers ready: " + ", ".join(PROVIDERS.keys()))
@@ -126,137 +118,88 @@ def chat_llm():
 
 @app.route('/voice/analyze', methods=['POST'])
 def voice_analyze():
-    """백엔드 연동용 단일 엔드포인트 - STT 텍스트 의미 추론"""
     body = request.get_json()
 
+    # ── 입력 검증 ──────────────────────────────────────────
     text = body.get("text", "").strip()
+    text = re.sub(r'[.。、·]+$', '', text)
+
     if not text:
-        logger.warning(
-            "event=voice_analyze_invalid_input request_id=%s reason=empty_text model=%s",
-            get_request_id(),
-            body.get("model", Config.DEFAULT_MODEL),
-        )
         return jsonify({
-            "success": False,
-            "intent": "unknown",
-            "confirmationMessage": "다시 말씀해 주세요",
-            "error": "text 필드가 비어 있습니다",
-            "model": body.get("model", Config.DEFAULT_MODEL),
-            "latency_ms": 0
+            "status": "C4000",
+            "data": None,
+            "message": "잘못된 입력입니다."
         }), 400
 
-    model_key = body.get("model", Config.DEFAULT_MODEL)
-    provider = PROVIDERS.get(model_key)
-    if not provider:
-        logger.warning(
-            "event=voice_analyze_invalid_model request_id=%s model=%s",
-            get_request_id(),
-            model_key,
-        )
-        return jsonify({
-            "success": False,
-            "intent": "unknown",
-            "confirmationMessage": "다시 말씀해 주세요",
-            "error": f"지원하지 않는 모델입니다: {model_key}",
-            "model": model_key,
-            "latency_ms": 0
-        }), 400
-
-    mode = body.get("mode", "MOBILITY_IMPAIRED")
+    mode = body.get("mode", "")
     if mode not in ("MOBILITY_IMPAIRED", "LOW_VISION"):
-        logger.warning(
-            "event=voice_analyze_invalid_mode request_id=%s mode=%s model=%s",
-            get_request_id(),
-            mode,
-            model_key,
-        )
         return jsonify({
-            "success": False,
-            "error": "mode는 'MOBILITY_IMPAIRED' 또는 'LOW_VISION'만 허용됩니다.",
-            "model": model_key,
-            "mode": mode,
+            "status": "C4000",
+            "data": None,
+            "message": "잘못된 입력입니다."
         }), 400
 
-    internal_mode = "visually" if mode == "LOW_VISION" else "mobility"
     history = body.get("history", [])
-    system_prompt = get_system_prompt(internal_mode)
+    current_route = body.get("currentRoute")
 
-    # LOW_VISION 히스토리 길이 제한: history >= 3이고 마지막 항목이 assistant면 조기 반환
-    if (
-        mode == "LOW_VISION"
-        and len(history) >= 3
-        and isinstance(history[-1], dict)
-        and history[-1].get("role") == "assistant"
-    ):
-        logger.info(
-            "event=voice_analyze_history_limit request_id=%s history_len=%s model=%s mode=LOW_VISION",
-            get_request_id(),
-            len(history),
-            model_key,
-        )
-        return jsonify({
-            "success": True,
-            "intent": "UNKNOWN",
-            "placeName": None,
-            "confirmed": False,
-            "confirmationMessage": "다시 말씀해 주세요",
-            "model": model_key,
-            "mode": "LOW_VISION",
-            "latency_ms": 0,
-        })
+    # ── 모드 변환 ──────────────────────────────────────────
+    internal_mode = "visually" if mode == "LOW_VISION" else "mobility"
 
-    if mode == "LOW_VISION" and history:
+    # ── messages 구성 ──────────────────────────────────────
+    if history:
         messages = history + [{"role": "user", "content": text}]
     else:
         messages = [{"role": "user", "content": text}]
 
+    # ── AI 호출 ────────────────────────────────────────────
+    provider = PROVIDERS["gemini"]
     start_ms = int(time.time() * 1000)
     try:
-        result = provider.call(text, system_prompt=system_prompt, messages=messages)
-        latency_ms = int(time.time() * 1000) - start_ms
-        data = asdict(result)
-        intent_raw = data.get("intent") or "unknown"
-        intent_upper = intent_raw.upper()
-        logger.info(
-            "event=voice_analyze_completed request_id=%s model=%s mode=%s intent=%s confirmed=%s latency_ms=%s success=%s",
-            get_request_id(),
-            model_key,
-            mode,
-            intent_upper,
-            data.get("confirmed"),
-            latency_ms,
-            result.success,
+        result = provider.call(
+            user_input=text,
+            messages=messages,
+            mode=internal_mode,
+            current_route=current_route,
         )
+        latency_ms = int(time.time() * 1000) - start_ms
+
+        # ── 응답 필드 처리 ─────────────────────────────────
+        confirmed_val = result.confirmed if mode == "LOW_VISION" else None
+        confirmation_msg = result.confirmation_message if mode == "LOW_VISION" else None
+
+        logger.info(
+            "event=voice_analyze_completed request_id=%s mode=%s intent=%s confirmed=%s latency_ms=%s",
+            get_request_id(), mode, result.intent, confirmed_val, latency_ms,
+        )
+
         return jsonify({
-            "success": result.success,
-            "intent": intent_upper,
-            "placeName": data.get("place_name"),
-            "confirmed": data.get("confirmed") if mode == "LOW_VISION" else None,
-            "confirmationMessage": data.get("confirmation_message") if mode == "LOW_VISION" else None,
-            "model": model_key,
-            "mode": mode,
-            "latency_ms": latency_ms
+            "status": "S2000",
+            "data": {
+                "intent": (result.intent or "UNKNOWN").upper(),
+                "placeName": result.place_name,
+                "category": result.category,
+                "bookmarkAction": result.bookmark_action,
+                "departure": result.departure,
+                "destination": result.destination,
+                "reportType": result.report_type,
+                "description": result.description,
+                "confirmed": confirmed_val,
+                "confirmationMessage": confirmation_msg,
+            },
+            "message": "정상 처리되었습니다."
         })
+
     except Exception as e:
         latency_ms = int(time.time() * 1000) - start_ms
         logger.exception(
-            "event=voice_analyze_failed request_id=%s model=%s mode=%s latency_ms=%s",
-            get_request_id(),
-            model_key,
-            mode,
-            latency_ms,
+            "event=voice_analyze_failed request_id=%s mode=%s latency_ms=%s",
+            get_request_id(), mode, latency_ms,
         )
         return jsonify({
-            "success": False,
-            "intent": "UNKNOWN",
-            "placeName": None,
-            "confirmed": None,
-            "confirmationMessage": None,
-            "error": str(e),
-            "model": model_key,
-            "mode": mode,
-            "latency_ms": latency_ms
-        }), 500
+            "status": "V5020",
+            "data": None,
+            "message": "음성 분석 AI 호출에 실패했습니다."
+        }), 502
 
 
 # /api/voice/confirm 엔드포인트 폐기
@@ -322,9 +265,7 @@ def health_check():
         "status": "healthy",
         "providers": list(PROVIDERS.keys()),
         "modes": ["MOBILITY_IMPAIRED", "LOW_VISION"],
-        "endpoints": [
-            "POST /voice/analyze",
-        ],
+        "endpoints": ["POST /voice/analyze"],
     })
 
 

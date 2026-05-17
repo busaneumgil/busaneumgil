@@ -244,12 +244,10 @@ fun RouteSettingScreen(
                         enabled = uiState.isStartEnabled,
                         supportingText = ctaSupportingText,
                         selectedRoute = uiState.selectedRoute,
-                        showRefreshAction =
-                            uiState.selectedTravelMode == RouteTravelMode.TRANSIT &&
-                                uiState.selectedRoute != null,
-                        isRefreshInProgress = uiState.isTransitRefreshing,
+                        showRefreshAction = uiState.selectedRoute != null,
+                        isRefreshInProgress = uiState.isRouteRefreshing,
                         onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
-                        onRefreshClick = { onAction(RouteSettingUiAction.TransitRefreshClicked) },
+                        onRefreshClick = { onAction(RouteSettingUiAction.RouteRefreshClicked) },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
@@ -4154,7 +4152,7 @@ private fun RouteSettingBottomBar(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (showRefreshAction) {
-                RouteTransitRefreshFloatingButton(
+                RouteRefreshFloatingButton(
                     isRefreshing = isRefreshInProgress,
                     enabled = !isRefreshInProgress,
                     onClick = onRefreshClick,
@@ -4169,7 +4167,7 @@ private fun RouteSettingBottomBar(
 }
 
 @Composable
-private fun RouteTransitRefreshFloatingButton(
+private fun RouteRefreshFloatingButton(
     isRefreshing: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -4185,7 +4183,7 @@ private fun RouteTransitRefreshFloatingButton(
                     role = Role.Button,
                     onClick = onClick,
                 ).semantics {
-                    contentDescription = "대중교통 도착정보 새로고침"
+                    contentDescription = "경로 새로고침"
                     stateDescription = if (isRefreshing) "새로고침 중" else "새로고침 가능"
                 },
         shape = CircleShape,

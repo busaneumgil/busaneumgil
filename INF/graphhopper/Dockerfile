@@ -21,6 +21,7 @@ COPY scripts/docker/entrypoints/graphhopper-build.sh /usr/local/bin/graphhopper-
 COPY scripts/graphhopper/export_postgis_to_osm.py /usr/local/bin/export-postgis-to-osm.py
 COPY scripts/graphhopper/smoke_postgis_export.py /usr/local/bin/smoke-postgis-export.py
 COPY scripts/graphhopper/smoke_graphhopper_profiles.py /usr/local/bin/smoke-graphhopper-profiles.py
+COPY scripts/graphhopper/smoke_walk_access_hot_patch.py /usr/local/bin/smoke-walk-access-hot-patch.py
 COPY scripts/db/load_accessibility_features.py /usr/local/bin/load-accessibility-features.py
 COPY INF/graphhopper/plugin/src /opt/graphhopper/plugin/src
 
@@ -36,6 +37,7 @@ RUN chmod +x /usr/local/bin/graphhopper-entrypoint.sh \
     && chmod +x /usr/local/bin/export-postgis-to-osm.py \
     && chmod +x /usr/local/bin/smoke-postgis-export.py \
     && chmod +x /usr/local/bin/smoke-graphhopper-profiles.py \
+    && chmod +x /usr/local/bin/smoke-walk-access-hot-patch.py \
     && chmod +x /usr/local/bin/load-accessibility-features.py
 
 EXPOSE 8989 8990

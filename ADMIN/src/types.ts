@@ -404,6 +404,14 @@ export interface AdminRoadSegmentAttributesUpdateRequest {
   signalState?: AccessibilityState | null;
 }
 
+export type AdminRoutingPatchStatus = "SKIPPED" | "APPLIED" | "FAILED";
+
+export interface AdminRoadSegmentUpdateResponse {
+  segment: SegmentFeature["properties"];
+  routingPatchStatus: AdminRoutingPatchStatus;
+  routingPatchMessage: string | null;
+}
+
 export type WalkRouteProfile =
   | "PEDESTRIAN_SAFE"
   | "PEDESTRIAN_FAST"

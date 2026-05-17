@@ -26,13 +26,20 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
+import com.ssafy.e102.domain.admin.dto.request.AdminRoadSegmentAttributesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentUpdateResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutingPatchStatus;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.place.entity.Place;
 import com.ssafy.e102.domain.place.entity.PlaceAccessibilityFeature;
@@ -46,6 +53,10 @@ import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.repository.RoadNodeRepository;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
 import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
+import com.ssafy.e102.domain.route.type.AccessibilityState;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperPatchResult;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperPatchStatus;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
@@ -78,6 +89,9 @@ class AdminMapServiceTest {
 	@Mock
 	private AdminAuditLogService adminAuditLogService;
 
+	@Mock
+	private GraphHopperAdminClient graphHopperAdminClient;
+
 	private AdminMapService adminMapService;
 	private GeometryFactory geometryFactory;
 	private GeoPointConverter geoPointConverter;
@@ -95,7 +109,9 @@ class AdminMapServiceTest {
 			placeAccessibilityFeatureRepository,
 			geoPointConverter,
 			adminService,
-			adminAuditLogService);
+			adminAuditLogService,
+			graphHopperAdminClient,
+			new NoOpPlatformTransactionManager());
 		geometryFactory = new GeometryFactory();
 		adminUserId = UUID.randomUUID();
 	}
@@ -175,6 +191,46 @@ class AdminMapServiceTest {
 		assertThat(response.accessibilityFeatures()).hasSize(1);
 		assertThat(response.accessibilityFeatures().get(0).featureType())
 			.isEqualTo(AccessibilityFeatureType.accessibleToilet);
+	}
+
+	@Test
+	@DisplayName("관리자 segment walk_access 변경은 DB 저장 후 GraphHopper hot patch 결과를 함께 반환한다")
+	void updateRoadSegmentAttributesAppliesRoutingPatch() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingAreaByEdgeId(1L, "강서구", "명지동")).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+		when(graphHopperAdminClient.patchWalkAccess(1L, AccessibilityState.NO))
+			.thenReturn(new GraphHopperPatchResult(GraphHopperPatchStatus.APPLIED, "patched"));
+
+		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
+			adminUserId,
+			1L,
+			"강서구",
+			"명지동",
+			new AdminRoadSegmentAttributesUpdateRequest(AccessibilityState.NO, null, null, null, null, null, null));
+
+		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.NO);
+		assertThat(response.routingPatchStatus()).isEqualTo(AdminRoutingPatchStatus.APPLIED);
+		assertThat(response.routingPatchMessage()).isEqualTo("patched");
+	}
+
+	@Test
+	@DisplayName("관리자 segment 수정에서 walk_access 요청이 없으면 GraphHopper patch는 생략된다")
+	void updateRoadSegmentAttributesSkipsRoutingPatchWhenWalkAccessNotRequested() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingAreaByEdgeId(1L, "강서구", "명지동")).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+
+		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
+			adminUserId,
+			1L,
+			"강서구",
+			"명지동",
+			new AdminRoadSegmentAttributesUpdateRequest(null, AccessibilityState.YES, null, null, null, null, null));
+
+		assertThat(response.segment().brailleBlockState()).isEqualTo(AccessibilityState.YES);
+		assertThat(response.routingPatchStatus()).isEqualTo(AdminRoutingPatchStatus.SKIPPED);
+		assertThat(response.routingPatchMessage()).contains("walk_access");
 	}
 
 	@Test
@@ -308,5 +364,21 @@ class AdminMapServiceTest {
 		ReflectionTestUtils.setField(feature, "featureType", featureType);
 		ReflectionTestUtils.setField(feature, "isAvailable", isAvailable);
 		return feature;
+	}
+
+	private static final class NoOpPlatformTransactionManager implements PlatformTransactionManager {
+
+		@Override
+		public TransactionStatus getTransaction(TransactionDefinition definition) {
+			return new SimpleTransactionStatus();
+		}
+
+		@Override
+		public void commit(TransactionStatus status) {
+		}
+
+		@Override
+		public void rollback(TransactionStatus status) {
+		}
 	}
 }

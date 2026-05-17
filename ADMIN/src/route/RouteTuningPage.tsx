@@ -125,8 +125,20 @@ export function RouteTuningPage({
     if (!selectedSegment) return;
     setSavingAttributes(true);
     try {
-      await updateAdminRoadSegmentAttributes(selectedSegment.properties.edgeId, gu, dong, attributeDraft, accessToken);
-      setMessage("segment 속성을 저장했습니다. DB 기준 경로 미리보기에는 바로 반영됩니다.");
+      const response = await updateAdminRoadSegmentAttributes(
+        selectedSegment.properties.edgeId,
+        gu,
+        dong,
+        attributeDraft,
+        accessToken,
+      );
+      if (response.routingPatchStatus === "FAILED") {
+        setMessage("저장 완료. 경로 탐색 반영에 실패했습니다. 운영 상태를 확인해 주세요.");
+      } else if (response.routingPatchStatus === "SKIPPED") {
+        setMessage("저장 완료. walk_access 변경이 없어 경로 반영은 생략되었습니다.");
+      } else {
+        setMessage("저장 완료. 경로 탐색에 반영되었습니다.");
+      }
       onSegmentUpdated();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "segment 속성 저장 실패");
@@ -256,7 +268,7 @@ export function RouteTuningPage({
                 <StateSelect label="보도 폭" value={attributeDraft.widthState ?? "UNKNOWN"} options={widthOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, widthState: value as WidthState }))} />
                 <StateSelect label="노면" value={attributeDraft.surfaceState ?? "UNKNOWN"} options={surfaceOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, surfaceState: value as SurfaceState }))} />
               </div>
-              <p className="muted">저장 값은 DB road_segments에 반영됩니다. 이 화면의 경로 미리보기는 DB 기준으로 계산되며, 운영 앱 경로는 graph-cache 재생성 전까지 기존 캐시 기준일 수 있습니다.</p>
+              <p className="muted">저장된 값은 DB에 반영되고, walk_access 변경은 실행 중 GraphHopper에도 즉시 patch 됩니다. 이후 정기 graph-cache 재빌드 시 DB 기준으로 영구 반영됩니다.</p>
               <div className="button-row">
                 <button className="primary" type="button" onClick={saveSegmentAttributes} disabled={!canEdit || savingAttributes}>
                   {savingAttributes ? "저장 중" : "segment 속성 저장"}

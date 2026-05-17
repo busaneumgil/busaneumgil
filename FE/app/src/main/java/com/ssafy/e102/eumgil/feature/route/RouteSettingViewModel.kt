@@ -83,6 +83,7 @@ class RouteSettingViewModel(
     private var lastObservedSelectionState = destinationSelectionRepository.selectionState.value
     private var detailNavigationRequest: RouteNavigationRequest? = null
     private var isManualTransitRefreshInFlight: Boolean = false
+    private var isManualRouteRefreshInFlight: Boolean = false
 
     init {
         currentLocationManager.refreshLatestLocation()
@@ -106,7 +107,7 @@ class RouteSettingViewModel(
             is RouteSettingUiAction.RouteOptionDetailClicked -> openRouteDetail(action.routeOption)
             RouteSettingUiAction.WaypointsSwapClicked -> swapWaypoints()
             RouteSettingUiAction.StartNavigationClicked -> startNavigation()
-            RouteSettingUiAction.TransitRefreshClicked -> refreshSelectedTransitRoutes()
+            RouteSettingUiAction.RouteRefreshClicked -> refreshSelectedRoute()
         }
     }
 
@@ -777,21 +778,21 @@ class RouteSettingViewModel(
             )
     }
 
-    private fun refreshSelectedTransitRoutes() {
+    private fun refreshSelectedRoute() {
         val currentState = mutableUiState.value
         if (
-            isManualTransitRefreshInFlight ||
-            currentState.selectedTravelMode != RouteTravelMode.TRANSIT ||
+            isManualRouteRefreshInFlight ||
             currentState.selectedRoute == null
         ) {
             return
         }
-        val currentSearchData = latestSearchDataByMode[RouteTravelMode.TRANSIT] ?: return
+        val selectedTravelMode = currentState.selectedTravelMode
+        val currentSearchData = latestSearchDataByMode[selectedTravelMode] ?: return
         cancelStagedTransitEnhancement()
-        isManualTransitRefreshInFlight = true
+        isManualRouteRefreshInFlight = true
         mutableUiState.update { state ->
             state.copy(
-                isTransitRefreshing = true,
+                isRouteRefreshing = true,
                 loadNoticeMessage = null,
                 ctaAcknowledged = false,
             )
@@ -799,40 +800,40 @@ class RouteSettingViewModel(
 
         viewModelScope.launch {
             try {
-                val selectedOption = selectedOptionForMode(RouteTravelMode.TRANSIT)
+                val selectedOption = selectedOptionForMode(selectedTravelMode)
                 runCatching {
                     loadFreshSearchDataForMode(
-                        mode = RouteTravelMode.TRANSIT,
+                        mode = selectedTravelMode,
                         query = currentSearchData.query,
                     )
                 }.onSuccess { searchData ->
-                    latestSearchDataByMode = latestSearchDataByMode + (RouteTravelMode.TRANSIT to searchData)
+                    latestSearchDataByMode = latestSearchDataByMode + (selectedTravelMode to searchData)
                     mutableUiState.value =
                         buildUiState(
                             searchData = searchData,
                             originResolution = currentOriginResolution(searchData.result.origin),
                             destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value),
-                            selectedTravelMode = RouteTravelMode.TRANSIT,
+                            selectedTravelMode = selectedTravelMode,
                             requestedOption = selectedOption,
                             ctaAcknowledged = false,
-                        ).copy(isTransitRefreshing = false)
+                        ).copy(isRouteRefreshing = false)
                 }.onFailure { throwable ->
                     if (throwable is CancellationException) throw throwable
                     mutableUiState.update { state ->
                         state.copy(
-                            isTransitRefreshing = false,
+                            isRouteRefreshing = false,
                             loadNoticeMessage = throwable.toRouteLoadErrorMessage(),
                             loadDebugMessage =
                                 combineRouteLoadDebugMessages(
                                     primary = state.loadDebugMessage,
-                                    secondary = throwable.toRouteLoadDebugMessage(RouteTravelMode.TRANSIT),
+                                    secondary = throwable.toRouteLoadDebugMessage(selectedTravelMode),
                                 ),
                             ctaAcknowledged = false,
                         )
                     }
                 }
             } finally {
-                isManualTransitRefreshInFlight = false
+                isManualRouteRefreshInFlight = false
             }
         }
     }

@@ -5,6 +5,7 @@ import com.graphhopper.routing.ev.DecimalEncodedValueImpl;
 import com.graphhopper.routing.ev.EncodedValueLookup;
 import com.graphhopper.routing.ev.EnumEncodedValue;
 import com.graphhopper.routing.ev.ImportUnit;
+import com.graphhopper.routing.ev.IntEncodedValueImpl;
 import com.graphhopper.routing.util.parsers.TagParser;
 import com.graphhopper.util.PMap;
 import com.ssafy.e102.graphhopper.ieum.IeumEnum.SegmentType;
@@ -26,6 +27,7 @@ public final class IeumEncodedValues {
     private static final String IEUM_TAG_PREFIX = "ieum:";
 
     public static final String WALK_ACCESS = "walk_access";
+    public static final String DB_EDGE_ID = "db_edge_id";
     public static final String AVG_SLOPE_PERCENT = "avg_slope_percent";
     public static final String WIDTH_METER = "width_meter";
     public static final String BRAILLE_BLOCK_STATE = "braille_block_state";
@@ -40,6 +42,7 @@ public final class IeumEncodedValues {
     // exporter가 쓰는 `ieum:*` tag 이름, 아래 parser 연결이 모두 같은 이름을 공유해야 한다.
     private static final Map<String, Function<PMap, ?>> ENCODED_VALUE_FACTORIES = Map.ofEntries(
         Map.entry(WALK_ACCESS, ignored -> new EnumEncodedValue<>(WALK_ACCESS, YesNoUnknown.class)),
+        Map.entry(DB_EDGE_ID, ignored -> new IntEncodedValueImpl(DB_EDGE_ID, 31, false)),
         Map.entry(AVG_SLOPE_PERCENT, ignored -> new DecimalEncodedValueImpl(AVG_SLOPE_PERCENT, 12, 0.1, false)),
         Map.entry(WIDTH_METER, ignored -> new DecimalEncodedValueImpl(WIDTH_METER, 10, 0.1, false)),
         Map.entry(BRAILLE_BLOCK_STATE, ignored -> new EnumEncodedValue<>(BRAILLE_BLOCK_STATE, YesNoUnknown.class)),
@@ -69,6 +72,9 @@ public final class IeumEncodedValues {
     private static BiFunction<EncodedValueLookup, PMap, TagParser> createTagParser(String name) {
         return (lookup, properties) -> {
             // 폭/경사처럼 계산에 쓰는 값은 decimal EV로, 상태값은 enum EV로 읽는다.
+            if (DB_EDGE_ID.equals(name)) {
+                return new IeumIntTagParser(lookup.getIntEncodedValue(name), tagName(name), 0);
+            }
             if (AVG_SLOPE_PERCENT.equals(name)) {
                 return new IeumDecimalTagParser(lookup.getDecimalEncodedValue(name), tagName(name), 0.0);
             }

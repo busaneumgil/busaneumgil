@@ -132,6 +132,7 @@ public class IeumGraphHopperBundle implements ConfiguredBundle<GraphHopperBundle
         environment.jersey().register(NearestResource.class);
         environment.jersey().register(I18NResource.class);
         environment.jersey().register(InfoResource.class);
+        environment.jersey().register(IeumEdgePatchResource.class);
         environment.healthChecks().register("graphhopper", new GraphHopperHealthCheck(graphHopper));
         environment.jersey().register(environment.healthChecks());
         environment.jersey().register(HealthCheckResource.class);

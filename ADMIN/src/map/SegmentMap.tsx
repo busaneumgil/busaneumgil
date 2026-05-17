@@ -156,7 +156,6 @@ export function SegmentMap({
   const addEndpointSnapsRef = useRef<SnappedSegmentEndpoint[]>([]);
   const polygonPointsRef = useRef<Coord[]>([]);
   const polygonDeleteActiveRef = useRef(false);
-  const lastEditCoordinateClickRef = useRef<{ coord: Coord; mode: EditorMode; timestamp: number } | null>(null);
   const onDraftEditRef = useRef(onDraftEdit);
   const onSelectSegmentRef = useRef(onSelectSegment);
   const routePointPickModeRef = useRef(routePointPickMode);
@@ -251,8 +250,7 @@ export function SegmentMap({
     overlaysRef.current = [];
     segmentOverlayByEdgeRef.current.clear();
 
-    const coordinatePickMode = toolbarMode === "editor" && (mode === "add" || (mode === "delete" && polygonDeleteActive));
-    const useHitArea = toolbarMode === "editor" && !coordinatePickMode;
+    const useHitArea = toolbarMode === "editor";
     const canRenderDetails = detailedSegmentsVisible;
     const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
     overlaysRef.current.push(...createAreaBoundaryOverlay(payload?.areaBoundary, mapRef.current));
@@ -271,7 +269,8 @@ export function SegmentMap({
           drawSelectedSegment(feature);
           return;
         }
-        if (modeRef.current === "delete" && polygonDeleteActiveRef.current) {
+        if (isCoordinatePickMode()) {
+          preventMapClickPropagation();
           handleMapCoordinate(coord, latLng);
           return;
         }
@@ -390,10 +389,6 @@ export function SegmentMap({
       return;
     }
 
-    if (isCoordinateEditMode(modeRef.current)) {
-      if (isDuplicateEditCoordinateClick(coord, modeRef.current)) return;
-    }
-
     if (shouldOpenRoadviewForMode(modeRef.current)) {
       showRoadviewAt(latLng);
       return;
@@ -430,16 +425,13 @@ export function SegmentMap({
     }
   }
 
-  function isCoordinateEditMode(currentMode: EditorMode) {
-    return currentMode === "add" || (currentMode === "delete" && polygonDeleteActiveRef.current);
+  function isCoordinatePickMode() {
+    return modeRef.current === "add" || (modeRef.current === "delete" && polygonDeleteActiveRef.current);
   }
 
-  function isDuplicateEditCoordinateClick(coord: Coord, currentMode: EditorMode) {
-    const now = Date.now();
-    const last = lastEditCoordinateClickRef.current;
-    lastEditCoordinateClickRef.current = { coord, mode: currentMode, timestamp: now };
-    if (!last || last.mode !== currentMode || now - last.timestamp > 120) return false;
-    return coordinateDistanceMeter(coord, last.coord) < 0.05;
+  function preventMapClickPropagation() {
+    const kakaoEvent = window.kakao?.maps?.event as { preventMap?: () => void } | undefined;
+    kakaoEvent?.preventMap?.();
   }
 
   function clearTempOverlays() {
@@ -449,7 +441,7 @@ export function SegmentMap({
     polygonShapeRef.current = null;
   }
 
-  function drawPoint(coord: Coord, color: string, radius: number): KakaoOverlay | null {
+  function drawPoint(coord: Coord, color: string, radius: number, onClick?: (coord: Coord, latLng: unknown) => void): KakaoOverlay | null {
     if (!window.kakao?.maps || !mapRef.current) return null;
     const circle = new window.kakao.maps.Circle({
       map: mapRef.current,
@@ -460,7 +452,15 @@ export function SegmentMap({
       strokeOpacity: 1,
       fillColor: color,
       fillOpacity: 0.95,
+      clickable: Boolean(onClick),
     });
+    if (onClick) {
+      window.kakao.maps.event.addListener(circle, "click", (event: unknown) => {
+        preventMapClickPropagation();
+        const latLng = (event as { latLng?: unknown }).latLng ?? kakaoLatLngAtCoord(coord);
+        onClick(coord, latLng);
+      });
+    }
     return circle;
   }
 
@@ -469,10 +469,17 @@ export function SegmentMap({
     clearPendingEditOverlays();
 
     draftSegmentFeatures(draftEditsRef.current).forEach((feature) => {
-      const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, () => undefined, { draft: true, hitArea: false });
+      const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, (coord, latLng) => {
+        if (!isCoordinatePickMode()) return;
+        preventMapClickPropagation();
+        handleMapCoordinate(coord, latLng);
+      }, { draft: true, hitArea: false });
       if (segmentOverlays) pendingEditOverlaysRef.current.push(...segmentOverlays);
       feature.geometry.coordinates.forEach((coord) => {
-        const point = drawPoint(coord, "#ef4444", 2);
+        const point = drawPoint(coord, "#ef4444", 2, (pointCoord, latLng) => {
+          if (!isCoordinatePickMode()) return;
+          handleMapCoordinate(pointCoord, latLng);
+        });
         if (point) pendingEditOverlaysRef.current.push(point);
       });
     });
@@ -1371,26 +1378,22 @@ function createSegmentOverlay(
   feature: SegmentFeature,
   map: KakaoMap,
   onClick: (coord: Coord, latLng: unknown) => void,
-  options: { clickable?: boolean; draft?: boolean; hitArea?: boolean; style?: SegmentStyleOverride } = {},
+  options: { draft?: boolean; hitArea?: boolean; style?: SegmentStyleOverride } = {},
 ): KakaoOverlay[] | null {
   const line = createPolyline(feature.geometry.coordinates, feature.properties.segmentType ?? "SIDE_LINE", {
-    clickable: options.clickable,
     draft: options.draft,
     opacity: options.draft ? 0.98 : undefined,
     ...options.style,
   });
   if (!line || !window.kakao?.maps) return null;
   const overlays = [line];
-  const clickable = options.clickable ?? true;
   const handleClick = (event: unknown) => {
     const latLng = (event as { latLng?: { getLng: () => number; getLat: () => number } }).latLng ?? kakaoLatLngAtCoord(feature.geometry.coordinates[Math.floor(feature.geometry.coordinates.length / 2)] ?? feature.geometry.coordinates[0]);
     onClick([latLng.getLng(), latLng.getLat()], latLng);
   };
-  if (clickable) {
-    window.kakao.maps.event.addListener(line, "click", handleClick);
-  }
+  window.kakao.maps.event.addListener(line, "click", handleClick);
 
-  if (clickable && options.hitArea !== false) {
+  if (options.hitArea !== false) {
     const path = feature.geometry.coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng));
     const hitLine = new window.kakao.maps.Polyline({
       path,
@@ -1418,7 +1421,7 @@ function kakaoLatLngAtCoord(coord: Coord): { getLng: () => number; getLat: () =>
 function createPolyline(
   coordinates: Coord[],
   segmentType: string,
-  options: { clickable?: boolean; draft?: boolean; opacity?: number } & SegmentStyleOverride = {},
+  options: { draft?: boolean; opacity?: number } & SegmentStyleOverride = {},
 ): KakaoOverlay | null {
   if (!window.kakao?.maps) return null;
 
@@ -1435,7 +1438,7 @@ function createPolyline(
     strokeColor,
     strokeOpacity: opacity,
     strokeStyle: options.strokeStyle ?? (options.draft ? "shortdash" : "solid"),
-    clickable: options.clickable ?? true,
+    clickable: true,
     zIndex,
   });
 }
@@ -1488,13 +1491,6 @@ function localMetersToLngLat(point: { x: number; y: number }, originLat: number)
   const metersPerDegreeLat = 111_320;
   const metersPerDegreeLng = 111_320 * Math.cos((originLat * Math.PI) / 180);
   return [point.x / metersPerDegreeLng, point.y / metersPerDegreeLat];
-}
-
-function coordinateDistanceMeter(a: Coord, b: Coord) {
-  const originLat = (a[1] + b[1]) / 2;
-  const aMeters = lngLatToLocalMeters(a, originLat);
-  const bMeters = lngLatToLocalMeters(b, originLat);
-  return Math.hypot(aMeters.x - bMeters.x, aMeters.y - bMeters.y);
 }
 
 function escapeHtml(value: string): string {

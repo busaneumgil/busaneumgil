@@ -143,7 +143,10 @@ public class AdminMapService {
 	public AdminRoadNetworkResponse getRoadNetwork(String gu, String dong, int limit) {
 		List<RoadSegment> roadSegments;
 		long segmentCount;
-		if (hasGu(gu)) {
+		if (hasAreaScope(gu, dong)) {
+			roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
+			segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
+		} else if (hasGu(gu)) {
 			roadSegments = roadSegmentRepository.findAllIntersectingGu(gu);
 			segmentCount = roadSegmentRepository.countIntersectingGu(gu);
 		} else {
@@ -184,14 +187,16 @@ public class AdminMapService {
 				.toList()),
 			AdminGeoJsonFeatureCollectionResponse.of(features),
 			AdminGeoJsonFeatureCollectionResponse.of(nodeFeatures),
-			toAreaBoundaryFeature(gu));
+			toAreaBoundaryFeature(gu, dong));
 	}
 
 	public AdminRoadNetworkBridgePayloadResponse getRoadNetworkBridges(String gu, String dong) {
 		if (!hasGu(gu)) {
 			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "구는 필수입니다.");
 		}
-		List<RoadSegment> roadSegments = roadSegmentRepository.findAllIntersectingGu(gu);
+		List<RoadSegment> roadSegments = hasAreaScope(gu, dong)
+			? roadSegmentRepository.findAllIntersectingArea(gu, dong)
+			: roadSegmentRepository.findAllIntersectingGu(gu);
 		BridgeGraph bridgeGraph = buildBridgeGraph(roadSegments);
 		List<BridgeCandidate> candidates = findBridgeCandidates(bridgeGraph);
 		List<AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadNetworkBridgePropertiesResponse>> features = candidates
@@ -215,7 +220,9 @@ public class AdminMapService {
 
 	public AdminFacilityPayloadResponse getFacilities(String gu, String dong, int limit) {
 		List<Place> places;
-		if (hasGu(gu)) {
+		if (hasAreaScope(gu, dong)) {
+			places = placeRepository.findAllIntersectingArea(gu, dong, limit);
+		} else if (hasGu(gu)) {
 			places = placeRepository.findAllIntersectingGu(gu, limit);
 		} else {
 			places = placeRepository.findAll(PageRequest.of(0, limit, PLACE_SORT)).getContent();
@@ -244,7 +251,7 @@ public class AdminMapService {
 				.map(Point::getEnvelopeInternal)
 				.toList()),
 			AdminGeoJsonFeatureCollectionResponse.of(features),
-			toAreaBoundaryFeature(gu));
+			toAreaBoundaryFeature(gu, dong));
 	}
 
 	public AdminPlaceDetailResponse getPlace(Long placeId) {
@@ -570,6 +577,10 @@ public class AdminMapService {
 		return gu != null && !gu.isBlank();
 	}
 
+	private boolean hasAreaScope(String gu, String dong) {
+		return hasGu(gu) && dong != null && !dong.isBlank() && !ALL_DONG.equals(dong);
+	}
+
 	private Place requirePlace(Long placeId) {
 		return placeRepository.findById(placeId)
 			.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_NOT_FOUND));
@@ -598,18 +609,20 @@ public class AdminMapService {
 		}
 	}
 
-	private AdminGeoJsonFeatureResponse<JsonNode, AdminAreaBoundaryPropertiesResponse> toAreaBoundaryFeature(String gu) {
+	private AdminGeoJsonFeatureResponse<JsonNode, AdminAreaBoundaryPropertiesResponse> toAreaBoundaryFeature(String gu, String dong) {
 		if (!hasGu(gu)) {
 			return null;
 		}
-		String geoJson = adminAreaRepository.findGuBoundaryGeoJson(gu);
+		String geoJson = hasAreaScope(gu, dong)
+			? adminAreaRepository.findAreaBoundaryGeoJson(gu, dong)
+			: adminAreaRepository.findGuBoundaryGeoJson(gu);
 		if (geoJson == null || geoJson.isBlank()) {
 			return null;
 		}
 		try {
 			return AdminGeoJsonFeatureResponse.of(
 				objectMapper.readTree(geoJson),
-				new AdminAreaBoundaryPropertiesResponse(gu, ALL_DONG));
+				new AdminAreaBoundaryPropertiesResponse(gu, hasAreaScope(gu, dong) ? dong : ALL_DONG));
 		} catch (JsonProcessingException ignored) {
 			return null;
 		}

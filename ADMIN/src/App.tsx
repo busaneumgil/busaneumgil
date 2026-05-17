@@ -478,6 +478,7 @@ function AdminApp() {
     page,
     selectedAssignmentId,
     selectedGu,
+    selectedDong,
     draftEdits,
     setPage,
     setSelectedArea,
@@ -528,7 +529,7 @@ function AdminApp() {
             ? "편의시설 점을 클릭하면 근처 Roadview를 엽니다."
             : "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.",
     });
-  }, [page, selectedGu, selectedScopeDong]);
+  }, [page, selectedGu, selectedDong]);
 
   useEffect(() => {
     workspaceRef.current?.scrollTo?.({ top: 0, left: 0, behavior: "auto" });
@@ -616,22 +617,22 @@ function AdminApp() {
   const auditLogs = auditLogsQuery.data?.pages.flatMap((logPage) => logPage.logs) ?? [];
 
   const payloadQuery = useQuery({
-    queryKey: ["admin-road-network", selectedGu, selectedScopeDong, accessToken],
-    queryFn: () => fetchAdminRoadNetworkPayload({ gu: selectedGu, dong: selectedScopeDong, accessToken }),
+    queryKey: ["admin-road-network", selectedGu, selectedDong, accessToken],
+    queryFn: () => fetchAdminRoadNetworkPayload({ gu: selectedGu, dong: selectedDong, accessToken }),
     enabled: (page === "network" || page === "routeTuning") && usesRealAdminApi,
     retry: false,
   });
 
   const bridgeQuery = useQuery({
-    queryKey: ["admin-road-network-bridges", selectedGu, selectedScopeDong, accessToken],
-    queryFn: () => fetchAdminRoadNetworkBridges({ gu: selectedGu, dong: selectedScopeDong, accessToken }),
-    enabled: page === "network" && Boolean(selectedGu) && isAdminAuthenticated,
+    queryKey: ["admin-road-network-bridges", selectedGu, selectedDong, accessToken],
+    queryFn: () => fetchAdminRoadNetworkBridges({ gu: selectedGu, dong: selectedDong, accessToken }),
+    enabled: page === "network" && Boolean(selectedGu && selectedDong) && isAdminAuthenticated,
     retry: false,
   });
 
   const facilityQuery = useQuery({
-    queryKey: ["admin-facilities", selectedGu, selectedScopeDong, accessToken],
-    queryFn: () => fetchAdminFacilityPayload({ gu: selectedGu, dong: selectedScopeDong, accessToken }),
+    queryKey: ["admin-facilities", selectedGu, selectedDong, accessToken],
+    queryFn: () => fetchAdminFacilityPayload({ gu: selectedGu, dong: selectedDong, accessToken }),
     enabled: page === "facilities" && usesRealAdminApi,
     retry: false,
   });
@@ -757,6 +758,11 @@ function AdminApp() {
     queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
     queryClient.invalidateQueries({ queryKey: ["admin-road-network-bridges"] });
   }, [activeRoadEditJob, clearDraftForAssignment]);
+
+  const filteredDongs = useMemo(() => {
+    const areas = areasQuery.data ?? [];
+    return areas.filter((area) => area.gu === selectedGu);
+  }, [areasQuery.data, selectedGu]);
 
   const auditLogGuOptions = useMemo(() => {
     return Array.from(new Set((areasQuery.data ?? []).map((area) => area.gu))).sort();
@@ -981,7 +987,8 @@ function AdminApp() {
                     disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
                     onChange={(event) => {
                       const nextGu = event.target.value;
-                      setSelectedArea(nextGu, selectedScopeDong);
+                      const nextDong = (areasQuery.data ?? []).find((area) => area.gu === nextGu)?.dong ?? "";
+                      setSelectedArea(nextGu, nextDong);
                       setSelectedFacility(null);
                       setSelectedSegment(null);
                     }}
@@ -996,9 +1003,24 @@ function AdminApp() {
                     {!areasQuery.data?.length && <option value={selectedGu}>{selectedGu}</option>}
                   </select>
                 </label>
-                <label className="backend-field">
-                  범위
-                  <span>{selectedScopeDong}</span>
+                <label>
+                  동
+                  <select
+                    value={selectedDong}
+                    disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
+                    onChange={(event) => {
+                      setSelectedArea(selectedGu, event.target.value);
+                      setSelectedFacility(null);
+                      setSelectedSegment(null);
+                    }}
+                  >
+                    {filteredDongs.map((area) => (
+                      <option key={`${area.gu}-${area.dong}`} value={area.dong}>
+                        {area.dong}
+                      </option>
+                    ))}
+                    {!filteredDongs.length && <option value={selectedDong}>{selectedDong}</option>}
+                  </select>
                 </label>
               </>
             )}
@@ -1023,7 +1045,7 @@ function AdminApp() {
           <RouteTuningPage
             accessToken={accessToken}
             gu={selectedGu}
-            dong={selectedScopeDong}
+            dong={selectedDong}
             payload={payloadQuery.data}
             loading={payloadQuery.isLoading}
             error={payloadQuery.error}
@@ -2200,20 +2222,6 @@ function UserManagementPage({
   const guOptions = [...new Set(sourceAreas.map((area) => area.gu))].filter(Boolean).sort((left, right) => left.localeCompare(right, "ko"));
   const guAreas = guOptions.map((gu) => ({ gu, dong: allDongScope }));
   const [promoteUserId, setPromoteUserId] = useState("");
-  const [selectedGuFilter, setSelectedGuFilter] = useState("");
-  const guOptionsKey = guOptions.join("|");
-  useEffect(() => {
-    if (!guOptions.length) {
-      if (selectedGuFilter) setSelectedGuFilter("");
-      return;
-    }
-    if (!selectedGuFilter || !guOptions.includes(selectedGuFilter)) {
-      setSelectedGuFilter(guOptions[0]);
-    }
-  }, [guOptionsKey, selectedGuFilter]);
-  const filteredAreas = selectedGuFilter
-    ? guAreas.filter((area) => area.gu === selectedGuFilter)
-    : guAreas;
 
   return (
     <div className="user-management-layout">
@@ -2286,20 +2294,10 @@ function UserManagementPage({
       <section className="panel-section">
         <h3>구 담당자 및 작업 상태</h3>
         <p className="muted">보행 네트워크와 편의시설 담당자를 구 단위로 분리합니다. 담당자로 지정된 관리자만 해당 구를 수정할 수 있습니다.</p>
-        <div className="assignment-filter-row">
-          <label>
-            구
-            <select value={selectedGuFilter} onChange={(event) => setSelectedGuFilter(event.target.value)}>
-              {guOptions.map((gu) => (
-                <option key={gu} value={gu}>{gu}</option>
-              ))}
-            </select>
-          </label>
-        </div>
         <AssignmentTable
           title="보행 네트워크 담당 현황"
           assignmentType="ROAD_NETWORK"
-          normalizedAreas={filteredAreas}
+          normalizedAreas={guAreas}
           assignmentByArea={assignmentByArea}
           adminUsers={adminUsers}
           assignmentPending={assignmentPending}
@@ -2309,7 +2307,7 @@ function UserManagementPage({
         <AssignmentTable
           title="편의시설 담당 현황"
           assignmentType="FACILITY"
-          normalizedAreas={filteredAreas}
+          normalizedAreas={guAreas}
           assignmentByArea={assignmentByArea}
           adminUsers={adminUsers}
           assignmentPending={assignmentPending}

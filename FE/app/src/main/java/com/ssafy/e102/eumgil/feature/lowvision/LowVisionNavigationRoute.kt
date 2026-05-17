@@ -47,9 +47,17 @@ fun LowVisionNavigationRoute(
         }
     val activity = remember(context) { context.findComponentActivity() }
     val viewModelFactory =
-        remember(appContainer.currentLocationManager, appContainer.bookmarkRepository, appContainer.routeRepository) {
+        remember(
+            appContainer.currentLocationManager,
+            appContainer.currentHeadingManager,
+            appContainer.locationPermissionManager,
+            appContainer.bookmarkRepository,
+            appContainer.routeRepository,
+        ) {
             NavigationViewModel.provideFactory(
                 currentLocationManager = appContainer.currentLocationManager,
+                currentHeadingManager = appContainer.currentHeadingManager,
+                locationPermissionManager = appContainer.locationPermissionManager,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 routeRepository = appContainer.routeRepository,
                 isLowVisionMode = true,
@@ -111,6 +119,7 @@ fun LowVisionNavigationRoute(
         loadErrorMessage = null
         viewModel.setLowVisionMode(enabled = true)
         appContainer.currentLocationManager.startLocationUpdates()
+        appContainer.currentHeadingManager.startHeadingUpdates()
         appContainer.currentLocationManager.refreshLatestLocation()
         val origin =
             awaitLowVisionOriginSnapshot(
@@ -135,6 +144,7 @@ fun LowVisionNavigationRoute(
         onDispose {
             viewModel.setLowVisionMode(enabled = false)
             appContainer.currentLocationManager.stopLocationUpdates()
+            appContainer.currentHeadingManager.stopHeadingUpdates()
             textToSpeechController.stop()
             textToSpeechController.shutdown()
             routeChangeAlertPlayer.release()

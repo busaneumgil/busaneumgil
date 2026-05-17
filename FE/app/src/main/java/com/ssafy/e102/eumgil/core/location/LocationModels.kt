@@ -23,6 +23,8 @@ data class LocationSnapshot(
     val longitude: Double,
     val accuracyMeters: Float?,
     val recordedAtEpochMillis: Long,
+    val speedMetersPerSecond: Float? = null,
+    val bearingDegrees: Float? = null,
 )
 
 fun LocationSnapshot.isFreshCurrentLocation(

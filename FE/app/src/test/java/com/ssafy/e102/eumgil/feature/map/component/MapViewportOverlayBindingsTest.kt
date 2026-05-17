@@ -16,6 +16,7 @@ import com.ssafy.e102.eumgil.feature.navigation.NavigationMapOverlayUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapPointUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapSegmentUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationSegmentTravelKind
+import com.ssafy.e102.eumgil.feature.navigation.NavigationTrackingMode
 import com.ssafy.e102.eumgil.feature.navigation.navigationSegmentMarkerId
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapStatus
 import com.ssafy.e102.eumgil.feature.route.RoutePreviewMapUiState
@@ -83,6 +84,182 @@ class MapViewportOverlayBindingsTest {
         assertFalse(overlayState.points[2].includeInProjection)
         assertEquals("elevator", overlayState.points[2].clickTargetId)
         assertEquals(null, createKakaoRouteCameraRenderState(overlayState))
+    }
+
+    @Test
+    fun `focused navigation overlay uses selected focus as camera fallback instead of default`() {
+        val focusCoordinate = GeoCoordinate(latitude = 35.184, longitude = 129.091)
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        currentLocation =
+                            NavigationMapPointUiState(
+                                label = "Current",
+                                coordinate = GeoCoordinate(latitude = 35.179, longitude = 129.080),
+                            ),
+                        focusCoordinate = focusCoordinate,
+                        mapFocusMode = NavigationMapFocusMode.FOCUSED,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline =
+                                        listOf(
+                                            GeoCoordinate(latitude = 35.180, longitude = 129.088),
+                                            focusCoordinate,
+                                        ),
+                                    segmentStartCoordinate = focusCoordinate,
+                                    distanceMeters = 100,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Selected step",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                    isFocused = true,
+                                ),
+                            ),
+                    ),
+            )
+
+        assertTrue(overlayState.fitToProjection)
+        assertEquals(
+            MapCoordinate(latitude = focusCoordinate.latitude, longitude = focusCoordinate.longitude),
+            overlayState.fallbackCamera.center,
+        )
+        assertTrue(
+            overlayState.points.any { point ->
+                point.kind == MapViewportPointKind.FOCUS_HALO &&
+                    point.includeInProjection &&
+                    point.coordinate == overlayState.fallbackCamera.center
+            },
+        )
+    }
+
+    @Test
+    fun `focused navigation overlay falls back to focused polyline when focus coordinate is missing`() {
+        val focusedStart = GeoCoordinate(latitude = 35.186, longitude = 129.093)
+        val focusedEnd = GeoCoordinate(latitude = 35.188, longitude = 129.095)
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        focusCoordinate = null,
+                        focusedSegmentPolyline = listOf(focusedStart, focusedEnd),
+                        mapFocusMode = NavigationMapFocusMode.FOCUSED,
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline = listOf(focusedStart, focusedEnd),
+                                    distanceMeters = 100,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Selected step",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                    isFocused = true,
+                                ),
+                            ),
+                    ),
+            )
+
+        assertEquals(
+            MapCoordinate(latitude = focusedStart.latitude, longitude = focusedStart.longitude),
+            overlayState.fallbackCamera.center,
+        )
+    }
+
+    @Test
+    fun `active navigation overlay uses phone heading for follow camera and current location puck`() {
+        val current = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        currentLocation =
+                            NavigationMapPointUiState(
+                                label = "Current",
+                                coordinate = current,
+                            ),
+                        trackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING,
+                        headingDegrees = 275.0,
+                        selectedRoutePolyline =
+                            listOf(
+                                current,
+                                GeoCoordinate(latitude = 35.1796, longitude = 129.0806),
+                            ),
+                        activeSegmentPolyline =
+                            listOf(
+                                current,
+                                GeoCoordinate(latitude = 35.1796, longitude = 129.0806),
+                            ),
+                        mapFocusMode = NavigationMapFocusMode.ACTIVE,
+                    ),
+            )
+
+        assertFalse(overlayState.fitToProjection)
+        assertEquals(275.0, overlayState.fallbackCamera.bearingDegrees ?: -1.0, 0.0)
+        assertEquals(
+            0.0,
+            overlayState.points
+                .single { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION }
+                .headingDegrees ?: -1.0,
+            0.0,
+        )
+        assertEquals(
+            0.0,
+            overlayState.points
+                .single { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION_HEADING }
+                .headingDegrees ?: -1.0,
+            0.0,
+        )
+    }
+
+    @Test
+    fun `active navigation overlay falls back to route bearing when phone heading is unavailable`() {
+        val current = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        currentLocation =
+                            NavigationMapPointUiState(
+                                label = "Current",
+                                coordinate = current,
+                            ),
+                        trackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING,
+                        headingDegrees = null,
+                        selectedRoutePolyline =
+                            listOf(
+                                current,
+                                GeoCoordinate(latitude = 35.1846, longitude = 129.0756),
+                            ),
+                        activeSegmentPolyline =
+                            listOf(
+                                current,
+                                GeoCoordinate(latitude = 35.1846, longitude = 129.0756),
+                            ),
+                        mapFocusMode = NavigationMapFocusMode.ACTIVE,
+                    ),
+            )
+
+        assertFalse(overlayState.fitToProjection)
+        assertEquals(0.0, overlayState.fallbackCamera.bearingDegrees ?: -1.0, 0.0001)
+        assertEquals(
+            0.0,
+            overlayState.points
+                .single { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION }
+                .headingDegrees ?: -1.0,
+            0.0,
+        )
+        assertEquals(
+            0.0,
+            overlayState.points
+                .single { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION_HEADING }
+                .headingDegrees ?: -1.0,
+            0.0,
+        )
     }
 
     @Test
@@ -401,7 +578,7 @@ class MapViewportOverlayBindingsTest {
         )
         assertFalse(overlayState.polylines.first().includeInProjection)
         assertFalse(overlayState.polylines[1].includeInProjection)
-        assertTrue(overlayState.polylines[2].includeInProjection)
+        assertFalse(overlayState.polylines[2].includeInProjection)
         assertFalse(overlayState.polylines[0].showDirectionArrows)
         assertFalse(overlayState.polylines[1].showDirectionArrows)
         assertTrue(overlayState.polylines[2].showDirectionArrows)
@@ -478,6 +655,7 @@ class MapViewportOverlayBindingsTest {
                                 GeoCoordinate(latitude = 35.178, longitude = 129.063),
                             ),
                         focusCoordinate = GeoCoordinate(latitude = 35.1765, longitude = 129.0605),
+                        trackingMode = NavigationTrackingMode.FOLLOW,
                         mapFocusMode = NavigationMapFocusMode.ACTIVE,
                     ),
             )
@@ -504,7 +682,7 @@ class MapViewportOverlayBindingsTest {
             overlayState.points.map { it.kind },
         )
         assertEquals(
-            listOf(true, false, false, false),
+            listOf(false, false, false, false),
             overlayState.points.map { it.includeInProjection },
         )
         assertEquals(null, cameraState)
@@ -562,14 +740,14 @@ class MapViewportOverlayBindingsTest {
                     ),
             )
 
-        assertFalse(originOverlayState.points.any { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION })
+        assertTrue(originOverlayState.points.any { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION })
         assertEquals(
-            listOf(MapViewportPointKind.ORIGIN, MapViewportPointKind.DESTINATION),
+            listOf(MapViewportPointKind.CURRENT_LOCATION, MapViewportPointKind.ORIGIN, MapViewportPointKind.DESTINATION),
             originOverlayState.points.map { point -> point.kind },
         )
-        assertFalse(destinationOverlayState.points.any { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION })
+        assertTrue(destinationOverlayState.points.any { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION })
         assertEquals(
-            listOf(MapViewportPointKind.ORIGIN, MapViewportPointKind.DESTINATION),
+            listOf(MapViewportPointKind.CURRENT_LOCATION, MapViewportPointKind.ORIGIN, MapViewportPointKind.DESTINATION),
             destinationOverlayState.points.map { point -> point.kind },
         )
     }
@@ -760,13 +938,12 @@ class MapViewportOverlayBindingsTest {
         val junctionPoints = overlayState.points.filter { it.kind == MapViewportPointKind.SEGMENT_JUNCTION }
         assertEquals(
             listOf(
-                MapCoordinate(latitude = 35.170, longitude = 129.050),
                 MapCoordinate(latitude = 35.175, longitude = 129.058),
             ),
             junctionPoints.map { it.coordinate },
         )
         assertTrue(overlayState.points.any { it.kind == MapViewportPointKind.ORIGIN })
-        assertTrue(overlayState.points.none { it.kind == MapViewportPointKind.CURRENT_LOCATION })
+        assertTrue(overlayState.points.any { it.kind == MapViewportPointKind.CURRENT_LOCATION })
     }
 
     @Test
@@ -1118,7 +1295,7 @@ class MapViewportOverlayBindingsTest {
                 "id=navigation-junction-2 coord=35.181000,129.068000 tone=NAVY includeInProjection=false",
             ),
         )
-        assertTrue(summary.contains("projectionPoints=[navigation-focus:FOCUS_HALO]"))
+        assertTrue(summary.contains("navigation-focus:FOCUS_HALO"))
         assertTrue(summary.contains("projectionPolylines=[]"))
     }
 

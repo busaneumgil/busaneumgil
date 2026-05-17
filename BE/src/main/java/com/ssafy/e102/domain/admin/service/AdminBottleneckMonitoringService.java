@@ -28,6 +28,7 @@ import com.ssafy.e102.domain.admin.dto.response.AdminDashboardBottleneckResponse
 import com.ssafy.e102.domain.admin.repository.AdminBottleneckMonitoringQueryRepository;
 import com.ssafy.e102.domain.admin.repository.AdminBottleneckMonitoringQueryRepository.BottleneckCandidateRow;
 import com.ssafy.e102.domain.admin.repository.AdminBottleneckMonitoringQueryRepository.DailyTrendRow;
+import com.ssafy.e102.domain.place.repository.PlaceRepository;
 
 @Service
 @Transactional(readOnly = true)
@@ -43,9 +44,13 @@ public class AdminBottleneckMonitoringService {
 	private static final int IMPACT_LIMIT = 5;
 
 	private final AdminBottleneckMonitoringQueryRepository queryRepository;
+	private final AdminRouteDisplayNameResolver routeDisplayNameResolver;
 
-	public AdminBottleneckMonitoringService(AdminBottleneckMonitoringQueryRepository queryRepository) {
+	public AdminBottleneckMonitoringService(
+		AdminBottleneckMonitoringQueryRepository queryRepository,
+		PlaceRepository placeRepository) {
 		this.queryRepository = queryRepository;
+		this.routeDisplayNameResolver = new AdminRouteDisplayNameResolver(placeRepository);
 	}
 
 	public AdminBottleneckMonitoringResponse getMonitoring(LocalDate from, LocalDate to) {
@@ -274,8 +279,9 @@ public class AdminBottleneckMonitoringService {
 	}
 
 	private RankedCandidate toRankedCandidate(BottleneckCandidateRow row) {
+		List<GeoPointResponse> points = parsePoints(row.geometry());
 		return new RankedCandidate(
-			routeName(row),
+			routeName(row, points),
 			classify(row),
 			severity(row),
 			row);
@@ -323,17 +329,15 @@ public class AdminBottleneckMonitoringService {
 		return row.reportCount() > 0 || (row.averageSpeedMps() > 0 && row.averageSpeedMps() <= 1.0);
 	}
 
-	private String routeName(BottleneckCandidateRow row) {
-		if (hasText(row.startGu()) && hasText(row.startDong()) && hasText(row.endGu()) && hasText(row.endDong())) {
-			if (row.startGu().equals(row.endGu()) && row.startDong().equals(row.endDong())) {
-				return row.startGu() + " " + row.startDong() + " 순환축";
-			}
-			if (row.startGu().equals(row.endGu())) {
-				return row.startDong() + "-" + row.endDong() + " 이동축";
-			}
-			return row.startGu() + " " + row.startDong() + "-" + row.endGu() + " " + row.endDong() + " 이동축";
-		}
-		return "대표 이동축";
+	private String routeName(BottleneckCandidateRow row, List<GeoPointResponse> points) {
+		return routeDisplayNameResolver.resolve(
+			row.representativeTitle(),
+			points,
+			row.startGu(),
+			row.startDong(),
+			row.endGu(),
+			row.endDong(),
+			"대표 이동축");
 	}
 
 	private String address(BottleneckCandidateRow row) {

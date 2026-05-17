@@ -32,6 +32,7 @@ public class AdminRouteStatsQueryRepository {
 				coalesce(nullif(rs.route_snapshot_json ->> 'distanceMeter', '')::double precision, 0) as distance_meter,
 				coalesce(nullif(rs.route_snapshot_json ->> 'durationSecond', '')::double precision, 0) as duration_second,
 				rs.route_snapshot_json ->> 'geometry' as geometry,
+				rs.route_snapshot_json ->> 'title' as route_title,
 				rs.route_snapshot_json ->> 'transportMode' as transport_mode
 			from route_sessions rs
 			join users u on u.user_id = rs.user_id
@@ -171,6 +172,7 @@ public class AdminRouteStatsQueryRepository {
 				, route_candidates as (
 					select
 						geometry,
+						min(route_title) filter (where route_title is not null and route_title <> '') as representative_title,
 						avg(distance_meter) as average_distance_meter,
 						avg(duration_second) as average_duration_second,
 						count(*) as sample_count
@@ -181,6 +183,7 @@ public class AdminRouteStatsQueryRepository {
 				)
 				select
 					rc.geometry,
+					rc.representative_title,
 					rc.average_distance_meter,
 					rc.average_duration_second,
 					rc.sample_count,
@@ -227,6 +230,7 @@ public class AdminRouteStatsQueryRepository {
 				"limit", limit),
 			(resultSet, rowNum) -> new TopRouteRow(
 				resultSet.getString("geometry"),
+				resultSet.getString("representative_title"),
 				resultSet.getDouble("average_distance_meter"),
 				resultSet.getDouble("average_duration_second"),
 				resultSet.getLong("sample_count"),
@@ -281,6 +285,7 @@ public class AdminRouteStatsQueryRepository {
 
 	public record TopRouteRow(
 		String geometry,
+		String representativeTitle,
 		double averageDistanceMeter,
 		double averageDurationSecond,
 		long sampleCount,

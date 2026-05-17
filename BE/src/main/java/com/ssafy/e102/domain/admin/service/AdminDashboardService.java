@@ -45,7 +45,6 @@ public class AdminDashboardService {
 	private static final int DEFAULT_BOTTLENECK_LIMIT = 12;
 	private static final int MAX_BOTTLENECK_LIMIT = 50;
 	private static final int MAX_ROUTE_POINTS = 72;
-	private static final int BOTTLENECK_PLACE_NAME_RADIUS_METERS = 120;
 
 	private final UserRepository userRepository;
 	private final RouteSessionRepository routeSessionRepository;
@@ -54,6 +53,7 @@ public class AdminDashboardService {
 	private final RoadSegmentRepository roadSegmentRepository;
 	private final PlaceRepository placeRepository;
 	private final AdminAuditLogService adminAuditLogService;
+	private final AdminRouteDisplayNameResolver routeDisplayNameResolver;
 
 	public AdminDashboardService(
 		UserRepository userRepository,
@@ -70,6 +70,7 @@ public class AdminDashboardService {
 		this.roadSegmentRepository = roadSegmentRepository;
 		this.placeRepository = placeRepository;
 		this.adminAuditLogService = adminAuditLogService;
+		this.routeDisplayNameResolver = new AdminRouteDisplayNameResolver(placeRepository);
 	}
 
 	public AdminDashboardSummaryResponse getSummary(LocalDate from, LocalDate to) {
@@ -343,35 +344,14 @@ public class AdminDashboardService {
 		String value,
 		List<AdminDashboardBottleneckResponse.GeoPointResponse> points,
 		int fallbackIndex) {
-		if (value == null || value.isBlank()) {
-			return fallbackRouteName(fallbackIndex);
-		}
-		String normalized = value.strip();
-		if (!isGenericRouteTitle(normalized)) {
-			return normalized;
-		}
-		String nearbyPlaceName = nearbyPlaceName(points);
-		if (nearbyPlaceName != null && !nearbyPlaceName.isBlank()) {
-			return nearbyPlaceName.strip() + " 인근";
-		}
-		return fallbackRouteName(fallbackIndex);
-	}
-
-	private String nearbyPlaceName(List<AdminDashboardBottleneckResponse.GeoPointResponse> points) {
-		if (points.isEmpty()) {
-			return null;
-		}
-		AdminDashboardBottleneckResponse.GeoPointResponse center = points.get(points.size() / 2);
-		return placeRepository.findNearestPlaceName(center.lat(), center.lng(), BOTTLENECK_PLACE_NAME_RADIUS_METERS)
-			.orElse(null);
-	}
-
-	private boolean isGenericRouteTitle(String value) {
-		return switch (value) {
-			case "안전 경로", "추천 경로", "최단 경로", "최소 환승 경로", "최소 도보 경로",
-				"Safe Route", "Recommended Route", "Shortest Route", "Least Transfer Route", "Least Walk Route" -> true;
-			default -> false;
-		};
+		return routeDisplayNameResolver.resolve(
+			value,
+			points,
+			null,
+			null,
+			null,
+			null,
+			fallbackRouteName(fallbackIndex));
 	}
 
 	private String uniqueRouteName(String baseName, Map<String, Integer> usedNames) {

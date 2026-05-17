@@ -27,6 +27,7 @@ import com.ssafy.e102.domain.admin.repository.AdminRouteStatsQueryRepository.Hea
 import com.ssafy.e102.domain.admin.repository.AdminRouteStatsQueryRepository.MobilityBreakdownRow;
 import com.ssafy.e102.domain.admin.repository.AdminRouteStatsQueryRepository.SpeedTrendRow;
 import com.ssafy.e102.domain.admin.repository.AdminRouteStatsQueryRepository.TopRouteRow;
+import com.ssafy.e102.domain.place.repository.PlaceRepository;
 
 @Service
 @Transactional(readOnly = true)
@@ -46,9 +47,13 @@ public class AdminRouteStatsService {
 	private static final int TOP_ROUTE_LIMIT = 10;
 
 	private final AdminRouteStatsQueryRepository queryRepository;
+	private final AdminRouteDisplayNameResolver routeDisplayNameResolver;
 
-	public AdminRouteStatsService(AdminRouteStatsQueryRepository queryRepository) {
+	public AdminRouteStatsService(
+		AdminRouteStatsQueryRepository queryRepository,
+		PlaceRepository placeRepository) {
 		this.queryRepository = queryRepository;
+		this.routeDisplayNameResolver = new AdminRouteDisplayNameResolver(placeRepository);
 	}
 
 	public AdminRouteStatsResponse getRouteStats(LocalDate from, LocalDate to) {
@@ -124,7 +129,7 @@ public class AdminRouteStatsService {
 			List.of(
 				new AdminRouteStatsResponse.InfoItemResponse("수집 기간", normalizedFrom + " ~ " + normalizedTo),
 				new AdminRouteStatsResponse.InfoItemResponse("수집 기준", "route_sessions + users 실데이터 집계"),
-				new AdminRouteStatsResponse.InfoItemResponse("활용 주의", "경로명은 행정동 기반 대표 이동축으로 정리한 운영용 표기입니다.")));
+				new AdminRouteStatsResponse.InfoItemResponse("활용 주의", "경로명은 장소명 우선, 부족하면 행정동 기반 대표 이동축으로 표기합니다.")));
 	}
 
 	private List<AdminRouteStatsResponse.BreakdownItemResponse> buildTypeBreakdown(
@@ -249,7 +254,7 @@ public class AdminRouteStatsService {
 				continue;
 			}
 			String id = "route-density-" + Integer.toHexString(row.geometry().hashCode());
-			String name = routeName(row, index + 1);
+			String name = routeName(row, points, index + 1);
 			long routeCount = row.sampleCount();
 			double share = ratio(routeCount, totalTrips);
 			double averageSpeedMps = round(row.averageSpeedMps());
@@ -297,17 +302,15 @@ public class AdminRouteStatsService {
 		}
 	}
 
-	private String routeName(TopRouteRow row, int fallbackIndex) {
-		if (hasText(row.startGu()) && hasText(row.startDong()) && hasText(row.endGu()) && hasText(row.endDong())) {
-			if (row.startGu().equals(row.endGu()) && row.startDong().equals(row.endDong())) {
-				return row.startGu() + " " + row.startDong() + " 순환축";
-			}
-			if (row.startGu().equals(row.endGu())) {
-				return row.startDong() + "-" + row.endDong() + " 이동축";
-			}
-			return row.startGu() + " " + row.startDong() + "-" + row.endGu() + " " + row.endDong() + " 이동축";
-		}
-		return "대표 이동축 " + fallbackIndex;
+	private String routeName(TopRouteRow row, List<GeoPointResponse> points, int fallbackIndex) {
+		return routeDisplayNameResolver.resolve(
+			row.representativeTitle(),
+			points,
+			row.startGu(),
+			row.startDong(),
+			row.endGu(),
+			row.endDong(),
+			"대표 이동축 " + fallbackIndex);
 	}
 
 	private String toneForRank(int rank) {
@@ -341,10 +344,6 @@ public class AdminRouteStatsService {
 		return BigDecimal.valueOf(value)
 			.setScale(3, RoundingMode.HALF_UP)
 			.doubleValue();
-	}
-
-	private boolean hasText(String value) {
-		return value != null && !value.isBlank();
 	}
 
 	private record MobilityMeta(

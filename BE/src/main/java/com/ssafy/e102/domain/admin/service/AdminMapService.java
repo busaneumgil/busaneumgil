@@ -727,7 +727,16 @@ public class AdminMapService {
 		if (updateContext.requestedWalkAccess() == null) {
 			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "walk_access update not requested; runtime override unchanged");
 		}
-		return graphHopperAdminClient.reloadRoutingOverrides();
+		GraphHopperReloadResult reloadResult = graphHopperAdminClient.reloadRoutingOverrides();
+		if (updateContext.requestedWalkAccess() == AccessibilityState.NO) {
+			return reloadResult;
+		}
+		if (reloadResult.status() == GraphHopperReloadStatus.FAILED) {
+			return reloadResult;
+		}
+		return new GraphHopperReloadResult(
+			GraphHopperReloadStatus.APPLIED_WITH_WARNING,
+			"runtime override cleared, but reopening walk_access may still require a full GraphHopper rebuild if the current graph-cache is already blocked");
 	}
 
 	private AdminRoutingApplyStatus toAdminRoutingApplyStatus(GraphHopperReloadStatus applyStatus) {

@@ -268,7 +268,8 @@ class AdminMapServiceTest {
 
 		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.YES);
 		assertThat(response.segment().brailleBlockState()).isEqualTo(AccessibilityState.YES);
-		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED_WITH_WARNING);
+		assertThat(response.routingApplyMessage()).contains("full GraphHopper rebuild");
 		verify(routingSegmentOverrideRepository).deleteById(1L);
 		verify(graphHopperAdminClient).reloadRoutingOverrides();
 	}
@@ -290,7 +291,8 @@ class AdminMapServiceTest {
 			new AdminRoadSegmentAttributesUpdateRequest(AccessibilityState.UNKNOWN, null, null, null, null, null, null, true));
 
 		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.UNKNOWN);
-		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED_WITH_WARNING);
+		assertThat(response.routingApplyMessage()).contains("full GraphHopper rebuild");
 		verify(routingSegmentOverrideRepository).deleteById(1L);
 		verify(graphHopperAdminClient).reloadRoutingOverrides();
 	}

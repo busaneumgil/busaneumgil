@@ -27,6 +27,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
@@ -88,6 +89,7 @@ class AdminMapServiceTest {
 		geoPointConverter = new GeoPointConverter();
 		adminMapService = new AdminMapService(
 			adminAreaRepository,
+			new ObjectMapper(),
 			roadNodeRepository,
 			roadSegmentRepository,
 			segmentFeatureRepository,
@@ -114,18 +116,18 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("관리자 보행 네트워크는 행정동 경계와 교차하는 DB segment를 GeoJSON으로 변환한다")
+	@DisplayName("관리자 보행 네트워크는 구 경계와 교차하는 DB segment를 GeoJSON으로 변환한다")
 	void getRoadNetwork() {
 		RoadSegment roadSegment = roadSegment(1L);
-		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동"))
+		when(roadSegmentRepository.findAllIntersectingGu("강서구"))
 			.thenReturn(List.of(roadSegment));
-		when(roadSegmentRepository.countIntersectingArea("강서구", "명지동")).thenReturn(1L);
+		when(roadSegmentRepository.countIntersectingGu("강서구")).thenReturn(1L);
 		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());
 		when(roadNodeRepository.findAllById(any())).thenReturn(List.of(
 			roadNode(10L, 129.0, 35.0),
 			roadNode(20L, 129.1, 35.1)));
 
-		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "명지동", 10);
+		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "전체", 10);
 
 		assertThat(response.summary().segmentCount()).isEqualTo(1);
 		assertThat(response.segments().features()).hasSize(1);
@@ -150,12 +152,12 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("관리자 편의시설은 구/동이 있으면 행정동 주변 places를 조회한다")
+	@DisplayName("관리자 편의시설은 구가 있으면 구 경계 주변 places를 조회한다")
 	void getFacilitiesByArea() throws Exception {
 		Place place = place();
-		when(placeRepository.findAllIntersectingArea("강서구", "명지동", 10)).thenReturn(List.of(place));
+		when(placeRepository.findAllIntersectingGu("강서구", 10)).thenReturn(List.of(place));
 
-		AdminFacilityPayloadResponse response = adminMapService.getFacilities("강서구", "명지동", 10);
+		AdminFacilityPayloadResponse response = adminMapService.getFacilities("강서구", "전체", 10);
 
 		assertThat(response.summary().facilityCount()).isEqualTo(1);
 		assertThat(response.facilities().features()).hasSize(1);
@@ -181,7 +183,7 @@ class AdminMapServiceTest {
 	@DisplayName("관리자 장소 기본 정보를 부분 수정한다")
 	void updatePlace() throws Exception {
 		Place place = place();
-		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
+		when(placeRepository.existsIntersectingGuByPlaceId(1L, "강서구")).thenReturn(true);
 		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
 		when(placeRepository.findByProviderPlaceId("67890")).thenReturn(Optional.empty());
 
@@ -189,7 +191,7 @@ class AdminMapServiceTest {
 			adminUserId,
 			1L,
 			"강서구",
-			"명지동",
+			"전체",
 			new AdminPlaceUpdateRequest(
 				" 부산광역시청 ",
 				PlaceCategory.PUBLIC_OFFICE,
@@ -210,7 +212,7 @@ class AdminMapServiceTest {
 		Place place = place();
 		Place otherPlace = place();
 		ReflectionTestUtils.setField(otherPlace, "placeId", 2L);
-		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
+		when(placeRepository.existsIntersectingGuByPlaceId(1L, "강서구")).thenReturn(true);
 		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
 		when(placeRepository.findByProviderPlaceId("67890")).thenReturn(Optional.of(otherPlace));
 
@@ -218,7 +220,7 @@ class AdminMapServiceTest {
 			adminUserId,
 			1L,
 			"강서구",
-			"명지동",
+			"전체",
 			new AdminPlaceUpdateRequest(null, null, null, null, "67890")))
 			.isInstanceOf(PlaceException.class);
 	}
@@ -227,7 +229,7 @@ class AdminMapServiceTest {
 	@DisplayName("관리자 장소 접근성 속성은 요청 목록으로 전체 교체한다")
 	void updatePlaceAccessibilityFeatures() throws Exception {
 		Place place = place();
-		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
+		when(placeRepository.existsIntersectingGuByPlaceId(1L, "강서구")).thenReturn(true);
 		when(placeRepository.findWithAccessibilityFeaturesByPlaceId(1L)).thenReturn(Optional.of(place));
 		when(placeRepository.findById(1L)).thenReturn(Optional.of(place));
 		when(placeAccessibilityFeatureRepository.saveAll(any()))
@@ -237,7 +239,7 @@ class AdminMapServiceTest {
 			adminUserId,
 			1L,
 			"강서구",
-			"명지동",
+			"전체",
 			new AdminPlaceAccessibilityFeaturesUpdateRequest(List.of(
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, true),
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.accessibleToilet,
@@ -253,13 +255,13 @@ class AdminMapServiceTest {
 	@Test
 	@DisplayName("관리자 장소 접근성 속성은 같은 유형을 중복 요청할 수 없다")
 	void updatePlaceAccessibilityFeaturesDuplicateType() throws Exception {
-		when(placeRepository.existsIntersectingAreaByPlaceId(1L, "강서구", "명지동")).thenReturn(true);
+		when(placeRepository.existsIntersectingGuByPlaceId(1L, "강서구")).thenReturn(true);
 
 		assertThatThrownBy(() -> adminMapService.updatePlaceAccessibilityFeatures(
 			adminUserId,
 			1L,
 			"강서구",
-			"명지동",
+			"전체",
 			new AdminPlaceAccessibilityFeaturesUpdateRequest(List.of(
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, true),
 				new AdminPlaceAccessibilityFeaturesUpdateRequest.Feature(AccessibilityFeatureType.elevator, false)))))

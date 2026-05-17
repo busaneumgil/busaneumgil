@@ -30,6 +30,37 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 		join admin_areas aa
 			on ST_Intersects(p.point, ST_Buffer(aa.geom::geography, 100)::geometry)
 		where aa.gu = :gu
+		order by p.place_id asc
+		limit :limit
+		""", nativeQuery = true)
+	List<Place> findAllIntersectingGu(
+		@Param("gu")
+		String gu,
+		@Param("limit")
+		int limit);
+
+	@Query(value = """
+		select exists (
+			select 1
+			from places p
+			join admin_areas aa
+				on ST_Intersects(p.point, ST_Buffer(aa.geom::geography, 100)::geometry)
+			where p.place_id = :placeId
+				and aa.gu = :gu
+		)
+		""", nativeQuery = true)
+	boolean existsIntersectingGuByPlaceId(
+		@Param("placeId")
+		Long placeId,
+		@Param("gu")
+		String gu);
+
+	@Query(value = """
+		select distinct p.*
+		from places p
+		join admin_areas aa
+			on ST_Intersects(p.point, ST_Buffer(aa.geom::geography, 100)::geometry)
+		where aa.gu = :gu
 			and (
 				aa.dong = :dong
 				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong

@@ -51,12 +51,11 @@ public class AdminRoutePreviewService {
 	}
 
 	public AdminRoutePreviewResponse preview(AdminRoutePreviewRequest request) {
-		List<RoadSegment> segments = roadSegmentRepository.findAllIntersectingArea(
+		List<RoadSegment> segments = roadSegmentRepository.findAllIntersectingGu(
 			request.gu(),
-			request.dong(),
 			ROUTE_GRAPH_LIMIT);
 		if (segments.isEmpty()) {
-			throw new BusinessException(CommonErrorCode.NOT_FOUND, "선택한 구/동에 경로 계산 가능한 보행 네트워크가 없습니다.");
+			throw new BusinessException(CommonErrorCode.NOT_FOUND, "선택한 구에 경로 계산 가능한 보행 네트워크가 없습니다.");
 		}
 
 		Map<Long, Set<SegmentFeatureType>> featureTypesByEdgeId = loadFeatureTypes(segments);

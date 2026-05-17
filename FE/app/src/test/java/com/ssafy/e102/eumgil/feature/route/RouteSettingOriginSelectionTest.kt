@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -122,7 +123,7 @@ class RouteSettingOriginSelectionTest {
                 )
 
             advanceUntilIdle()
-            val event = async { viewModel.uiEvent.first() }
+            val event = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
             viewModel.startLocationUpdates()
 
             assertEquals(RouteSettingUiEvent.RequestLocationPermission, event.await())
@@ -148,7 +149,7 @@ class RouteSettingOriginSelectionTest {
                 )
 
             advanceUntilIdle()
-            val event = async { viewModel.uiEvent.first() }
+            val event = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
             viewModel.startLocationUpdates(requestLocationPermissionIfNeeded = false)
             runCurrent()
 
@@ -178,7 +179,7 @@ class RouteSettingOriginSelectionTest {
                 )
 
             advanceUntilIdle()
-            val event = async { viewModel.uiEvent.first() }
+            val event = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
             viewModel.startLocationUpdates()
             assertEquals(RouteSettingUiEvent.RequestLocationPermission, event.await())
 
@@ -388,6 +389,36 @@ class RouteSettingOriginSelectionTest {
                 routeRepository.queries[2].destination.coordinate.longitude,
                 0.0,
             )
+        }
+
+    @Test
+    fun `same destination reselection requeries route through explicit selection request`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = RecordingRouteRepository()
+            RouteSettingViewModel(
+                routeRepository = routeRepository,
+                destinationSelectionRepository = destinationSelectionRepository,
+                currentLocationManager =
+                    FakeCurrentLocationManager(
+                        initialLocation =
+                            testLocationSnapshot(
+                                latitude = 35.1701,
+                                longitude = 129.0712,
+                            ),
+                    ),
+            )
+
+            advanceUntilIdle()
+            destinationSelectionRepository.updateSelectedDestination(testDestination())
+            advanceUntilIdle()
+
+            assertEquals(2, routeRepository.callCount)
+            assertEquals(testDestination().latitude, routeRepository.queries.last().destination.coordinate.latitude, 0.0)
+            assertEquals(testDestination().longitude, routeRepository.queries.last().destination.coordinate.longitude, 0.0)
         }
 
     @Test

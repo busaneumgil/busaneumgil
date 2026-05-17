@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.BuildConfig
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.AccessibilityTag
@@ -106,32 +109,59 @@ fun MapScreen(
     val searchBarState = mapSearchBarState(uiState = uiState)
     val facilityDetailSheetUiState = mapFacilityDetailBottomSheetState(uiState = uiState)
     val recentDestinationSheetState = mapRecentDestinationBottomSheetState(uiState = uiState)
-
-    Box(modifier = modifier.fillMaxSize()) {
-        MapShellScaffold(
-            mapContent = {
-                MapViewport(
-                    state = viewportState,
-                    onMarkerClick = { markerId ->
-                        onAction(MapUiAction.MarkerTapped(markerId))
-                    },
-                    onCameraMoveEnd = { center, zoomLevel, isUserGesture, isSelectedMapPinVisibleInViewport ->
-                        onAction(
-                            MapUiAction.ViewportCameraChanged(
-                                center = center,
-                                zoomLevel = zoomLevel,
-                                isUserGesture = isUserGesture,
-                                isSelectedMapPinVisibleInViewport = isSelectedMapPinVisibleInViewport,
-                            ),
-                        )
-                    },
-                    onMapClick = { payload ->
-                        onAction(MapUiAction.MapTapped(payload))
-                    },
-                    modifier = Modifier.fillMaxSize(),
+    val routeEndpointPickerState = uiState.routeEndpointMapPickerState
+    val mapContent: @Composable () -> Unit = {
+        MapViewport(
+            state = viewportState,
+            onMarkerClick = { markerId ->
+                onAction(MapUiAction.MarkerTapped(markerId))
+            },
+            onCameraMoveEnd = { center, zoomLevel, isUserGesture, isSelectedMapPinVisibleInViewport ->
+                onAction(
+                    MapUiAction.ViewportCameraChanged(
+                        center = center,
+                        zoomLevel = zoomLevel,
+                        isUserGesture = isUserGesture,
+                        isSelectedMapPinVisibleInViewport = isSelectedMapPinVisibleInViewport,
+                    ),
                 )
             },
-            topOverlay = {
+            onMapClick = { payload ->
+                if (routeEndpointPickerState == null) {
+                    onAction(MapUiAction.MapTapped(payload))
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        if (routeEndpointPickerState != null) {
+            RouteEndpointMapPickerScaffold(
+                state = routeEndpointPickerState,
+                locationStatus = uiState.locationStatus,
+                recenterButtonState = uiState.recenterButtonState,
+                isRecenterButtonActive = uiState.isRecenterButtonActive,
+                mapContent = mapContent,
+                onBackClick = { onAction(MapUiAction.RouteEndpointMapPickerDismissed) },
+                onSelectClick = {
+                    onAction(
+                        MapUiAction.FacilitySetRouteEndpointClicked(
+                            routeEndpointPickerState.editingTarget,
+                        ),
+                    )
+                },
+                onRecenterClick = { onAction(MapUiAction.LocationActionClicked) },
+                onZoomInClick = { onAction(MapUiAction.ZoomInClicked) },
+                onZoomOutClick = { onAction(MapUiAction.ZoomOutClicked) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            MapShellScaffold(
+                mapContent = {
+                    mapContent()
+                },
+                topOverlay = {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                 ) {
@@ -158,8 +188,8 @@ fun MapScreen(
                         )
                     }
                 }
-            },
-            controlOverlay = {
+                },
+                controlOverlay = {
                 MapFloatingControls(
                     recenterButtonState = uiState.recenterButtonState,
                     isRecenterButtonActive = uiState.isRecenterButtonActive,
@@ -167,14 +197,15 @@ fun MapScreen(
                     onZoomInClick = { onAction(MapUiAction.ZoomInClicked) },
                     onZoomOutClick = { onAction(MapUiAction.ZoomOutClicked) },
                 )
-            },
-            bottomOverlay = {
+                },
+                bottomOverlay = {
                 RecentDestinationBottomSheetShell(
                     state =
                         recentDestinationSheetState.copy(
                             isVisible =
                                 recentDestinationSheetState.isVisible &&
                                     facilityDetailSheetUiState.isVisible.not() &&
+                                    uiState.routeEndpointMapPickerState == null &&
                                     uiState.isVoiceSearchVisible.not(),
                         ),
                     onViewAllClick = onNavigateToSavedRoutes,
@@ -215,43 +246,25 @@ fun MapScreen(
                         Column(
                             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                            ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        onAction(
-                                            MapUiAction.FacilitySetRouteEndpointClicked(
-                                                RouteEditingTarget.ORIGIN,
-                                            ),
-                                        )
-                                    },
-                                    enabled = facilityDetailSheetUiState.isRouteActionEnabled,
-                                    modifier =
-                                        Modifier
-                                            .weight(1f)
-                                            .height(56.dp),
-                                    shape = RoundedCornerShape(EumRadius.medium),
-                                ) {
-                                    IconTextButtonContent(
-                                        iconRes = R.drawable.ic_route_start_navigation_button,
-                                        label = stringResource(id = R.string.map_facility_detail_set_origin_action),
-                                    )
-                                }
+                            val pickerTarget = facilityDetailSheetUiState.routeEndpointPickerTarget
+                            if (pickerTarget != null) {
+                                val actionLabelRes =
+                                    when (pickerTarget) {
+                                        RouteEditingTarget.ORIGIN -> R.string.map_route_endpoint_picker_set_origin_action
+                                        RouteEditingTarget.DESTINATION -> R.string.map_route_endpoint_picker_set_destination_action
+                                    }
                                 NoRippleMapPrimaryActionButton(
                                     onClick = {
                                         onAction(
                                             MapUiAction.FacilitySetRouteEndpointClicked(
-                                                RouteEditingTarget.DESTINATION,
+                                                pickerTarget,
                                             ),
                                         )
                                     },
                                     enabled = facilityDetailSheetUiState.isRouteActionEnabled,
                                     modifier =
                                         Modifier
-                                            .weight(1f)
+                                            .fillMaxWidth()
                                             .height(56.dp),
                                     shape = RoundedCornerShape(EumRadius.medium),
                                     containerColor = MaterialTheme.colorScheme.primary,
@@ -259,10 +272,59 @@ fun MapScreen(
                                 ) {
                                     IconTextButtonContent(
                                         iconRes = R.drawable.ic_route_start_navigation_button,
-                                        label = stringResource(
-                                            id = R.string.map_facility_detail_set_destination_action,
-                                        ),
+                                        label = stringResource(id = actionLabelRes),
                                     )
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            onAction(
+                                                MapUiAction.FacilitySetRouteEndpointClicked(
+                                                    RouteEditingTarget.ORIGIN,
+                                                ),
+                                            )
+                                        },
+                                        enabled = facilityDetailSheetUiState.isRouteActionEnabled,
+                                        modifier =
+                                            Modifier
+                                                .weight(1f)
+                                                .height(56.dp),
+                                        shape = RoundedCornerShape(EumRadius.medium),
+                                    ) {
+                                        IconTextButtonContent(
+                                            iconRes = R.drawable.ic_route_start_navigation_button,
+                                            label = stringResource(id = R.string.map_facility_detail_set_origin_action),
+                                        )
+                                    }
+                                    NoRippleMapPrimaryActionButton(
+                                        onClick = {
+                                            onAction(
+                                                MapUiAction.FacilitySetRouteEndpointClicked(
+                                                    RouteEditingTarget.DESTINATION,
+                                                ),
+                                            )
+                                        },
+                                        enabled = facilityDetailSheetUiState.isRouteActionEnabled,
+                                        modifier =
+                                            Modifier
+                                                .weight(1f)
+                                                .height(56.dp),
+                                        shape = RoundedCornerShape(EumRadius.medium),
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    ) {
+                                        IconTextButtonContent(
+                                            iconRes = R.drawable.ic_route_start_navigation_button,
+                                            label = stringResource(
+                                                id = R.string.map_facility_detail_set_destination_action,
+                                            ),
+                                        )
+                                    }
                                 }
                             }
                             facilityDetailSheetUiState.bookmarkErrorMessage?.let { message ->
@@ -275,8 +337,9 @@ fun MapScreen(
                         }
                     },
                 )
-            },
-        )
+                },
+            )
+        }
 
         SnackbarHost(
             hostState = snackbarHostState,
@@ -323,6 +386,7 @@ private data class MapFacilityDetailSheetUiState(
     val isBookmarkUpdating: Boolean,
     val isBookmarkEnabled: Boolean,
     val isRouteActionEnabled: Boolean,
+    val routeEndpointPickerTarget: RouteEditingTarget?,
     val bookmarkErrorMessage: String?,
 ) {
     fun toShellState(): FacilityDetailBottomSheetShellState =
@@ -347,6 +411,216 @@ private data class MapRecentDestinationBottomSheetUiState(
             isVisible = isVisible,
             items = items,
         )
+}
+
+@Composable
+private fun RouteEndpointMapPickerScaffold(
+    state: RouteEndpointMapPickerState,
+    locationStatus: MapLocationStatus,
+    recenterButtonState: MapRecenterButtonState,
+    isRecenterButtonActive: Boolean,
+    mapContent: @Composable () -> Unit,
+    onBackClick: () -> Unit,
+    onSelectClick: () -> Unit,
+    onRecenterClick: () -> Unit,
+    onZoomInClick: () -> Unit,
+    onZoomOutClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier.fillMaxSize()) {
+        mapContent()
+
+        MapPickerCenterMarker(
+            modifier = Modifier.align(Alignment.Center),
+        )
+
+        MapFloatingControls(
+            recenterButtonState = recenterButtonState,
+            isRecenterButtonActive = isRecenterButtonActive,
+            onRecenterClick = onRecenterClick,
+            onZoomInClick = onZoomInClick,
+            onZoomOutClick = onZoomOutClick,
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = EumSpacing.medium),
+        )
+
+        RouteEndpointMapPickerTopOverlay(
+            onBackClick = onBackClick,
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth(),
+        )
+
+        RouteEndpointMapPickerBottomSheet(
+            state = state,
+            locationStatus = locationStatus,
+            onSelectClick = onSelectClick,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun RouteEndpointMapPickerTopOverlay(
+    onBackClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        EumCenteredTopBar(
+            title = stringResource(id = R.string.map_route_endpoint_picker_title),
+            onBackClick = onBackClick,
+            backContentDescription = stringResource(id = R.string.map_route_endpoint_picker_back),
+            titleFontWeight = FontWeight.SemiBold,
+        )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.background,
+            shadowElevation = 2.dp,
+        ) {
+            Text(
+                text = stringResource(id = R.string.map_route_endpoint_picker_instruction),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MapPickerCenterMarker(
+    modifier: Modifier = Modifier,
+) {
+    val description = stringResource(id = R.string.map_route_endpoint_picker_center_marker)
+    Box(
+        modifier =
+            modifier
+                .size(56.dp)
+                .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_map_selected_pin_blue),
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(52.dp),
+        )
+    }
+}
+
+@Composable
+private fun RouteEndpointMapPickerBottomSheet(
+    state: RouteEndpointMapPickerState,
+    locationStatus: MapLocationStatus,
+    onSelectClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val detail = state.candidateDetail
+    val coordinate = state.candidateCoordinate
+    val title =
+        detail?.name
+            ?.takeIf { name -> name.isNotBlank() }
+            ?: stringResource(id = R.string.map_facility_detail_loading_title)
+    val metaLabel =
+        if (state.isResolvingCandidate) {
+            stringResource(id = R.string.map_route_endpoint_picker_resolving_label)
+        } else {
+            detail?.let { candidate -> mapTapDetailMetaLabel(candidate, locationStatus) }
+                ?: stringResource(id = R.string.map_facility_detail_location_meta)
+        }
+    val address =
+        if (detail != null) {
+            mapTapDetailAddressLabel(detail)
+        } else {
+            coordinate?.let { selectedCoordinate -> coordinateText(selectedCoordinate) }
+                ?: stringResource(id = R.string.map_facility_detail_address_fallback)
+        }
+    val isSelectEnabled = detail?.hasValidCoordinate() == true
+
+    Surface(
+        modifier = modifier,
+        shape =
+            RoundedCornerShape(
+                topStart = EumRadius.scaleL,
+                topEnd = EumRadius.scaleL,
+            ),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 8.dp,
+        tonalElevation = 0.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.large),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            ) {
+                Text(
+                    text = metaLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = address,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                state.candidateErrorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            NoRippleMapPrimaryActionButton(
+                onClick = onSelectClick,
+                enabled = isSelectEnabled,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                shape = RoundedCornerShape(EumRadius.scaleM),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                IconTextButtonContent(
+                    iconRes = R.drawable.ic_route_start_navigation_button,
+                    label = stringResource(id = R.string.map_route_endpoint_picker_select_action),
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -1063,6 +1337,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                 isBookmarkUpdating = sheetState.isBookmarkUpdating,
                 isBookmarkEnabled = true,
                 isRouteActionEnabled = mapTapDetail.hasValidCoordinate(),
+                routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
                 bookmarkErrorMessage = sheetState.bookmarkErrorMessage,
             )
 
@@ -1082,6 +1357,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                 isBookmarkUpdating = true,
                 isBookmarkEnabled = false,
                 isRouteActionEnabled = false,
+                routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
                 bookmarkErrorMessage = null,
             )
 
@@ -1102,6 +1378,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                 isBookmarkUpdating = false,
                 isBookmarkEnabled = false,
                 isRouteActionEnabled = false,
+                routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
                 bookmarkErrorMessage = null,
             )
 
@@ -1130,6 +1407,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             isBookmarkUpdating = false,
             isBookmarkEnabled = false,
             isRouteActionEnabled = false,
+            routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
             bookmarkErrorMessage = null,
         )
     } else if (uiState.facilityDetailSheetState.mapTapDetail != null) {
@@ -1155,6 +1433,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
             isBookmarkEnabled = true,
             isRouteActionEnabled = mapTapDetail.hasValidCoordinate(),
+            routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
             bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage,
         )
     } else if (uiState.facilityDetailSheetState.isMapTapDetailLoading) {
@@ -1171,6 +1450,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             isBookmarkUpdating = true,
             isBookmarkEnabled = false,
             isRouteActionEnabled = false,
+            routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
             bookmarkErrorMessage = null,
         )
     } else if (uiState.facilityDetailSheetState.mapTapDetailErrorMessage != null) {
@@ -1190,6 +1470,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             isBookmarkUpdating = false,
             isBookmarkEnabled = false,
             isRouteActionEnabled = false,
+            routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
             bookmarkErrorMessage = null,
         )
     } else {
@@ -1214,6 +1495,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             isBookmarkUpdating = uiState.facilityDetailSheetState.isBookmarkUpdating,
             isBookmarkEnabled = true,
             isRouteActionEnabled = true,
+            routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
             bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage,
         )
     }

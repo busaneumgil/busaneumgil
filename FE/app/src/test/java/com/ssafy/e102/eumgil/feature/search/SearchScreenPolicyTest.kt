@@ -7,6 +7,48 @@ import org.junit.Test
 
 class SearchScreenPolicyTest {
     @Test
+    fun `apply to route search exposes route endpoint quick actions`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+
+        assertTrue(
+            "Apply-to-route search should show quick actions only in route assignment mode.",
+            source.contains("shouldShowRouteEndpointQuickActions(uiState.selectionMode)") &&
+                source.contains("RouteEndpointQuickActionSection("),
+        )
+        assertTrue(
+            "Route endpoint quick actions should dispatch dedicated current-location and map-picker actions.",
+            source.contains("SearchUiAction.CurrentLocationClicked") &&
+                source.contains("SearchUiAction.MapPickerClicked"),
+        )
+        val quickActionSection =
+            source
+                .substringAfter("private fun RouteEndpointQuickActionSection(")
+                .substringBefore("@Composable\nprivate fun RouteEndpointCurrentLocationButton")
+        assertTrue(
+            "Route endpoint quick actions should place current-location and map-picker buttons on one row.",
+            quickActionSection.contains("Row(") &&
+                quickActionSection.contains("horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)") &&
+                quickActionSection.contains("modifier = Modifier.weight(1f)"),
+        )
+        assertTrue(
+            "Route endpoint quick actions should use target-specific visible labels and accessibility copy.",
+            source.contains("R.string.search_screen_current_location_origin_action") &&
+                source.contains("R.string.search_screen_current_location_destination_action") &&
+                source.contains("R.string.search_screen_map_picker_origin_action") &&
+                source.contains("R.string.search_screen_map_picker_destination_action") &&
+                source.contains("R.string.search_screen_map_picker_origin_a11y") &&
+                source.contains("R.string.search_screen_map_picker_destination_a11y"),
+        )
+        assertTrue(
+            "Current-location failures should remain visible on the screen instead of being only transient feedback.",
+            source.contains("currentLocationQuickActionState") &&
+                source.contains("resolveSearchCurrentLocationStatusContent("),
+        )
+    }
+
+    @Test
     fun `search screen suppresses ripple on row taps that navigate away from the current view`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")

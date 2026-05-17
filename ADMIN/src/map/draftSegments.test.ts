@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { EditAction, SegmentFeature } from "../types";
-import { coordBounds, draftSegmentFeatures, isSameSnappedNode, roadNodeCandidates, resetPolygonDeleteSelection, segmentEndpointNodeCandidates, segmentsIntersectingBounds, segmentsTouchingPolygon, snapToSegmentEndpointNode, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
+import {
+  coordBounds,
+  describeCrossWalkProjection,
+  describeSideLineNodeSnap,
+  draftSegmentFeatures,
+  isSameSnappedNode,
+  roadNodeCandidates,
+  resetPolygonDeleteSelection,
+  segmentEndpointNodeCandidates,
+  segmentsIntersectingBounds,
+  segmentsTouchingPolygon,
+  snapToSegmentEndpointNode,
+  twoPointAddDraft,
+  visibleSegmentFeatures,
+} from "./draftSegments";
 
 function segment(edgeId: string, coordinates: Array<[number, number]>, fromNodeId?: string, toNodeId?: string): SegmentFeature {
   return {
@@ -127,6 +141,18 @@ describe("draft segment helpers", () => {
       fromNode: { mode: "existing", vertexId: "10" },
       toNode: { mode: "existing", vertexId: "11" },
     });
+  });
+
+  it("describes SIDE_LINE node snap as a saved adjustment", () => {
+    expect(describeSideLineNodeSnap("205921", 0.8873)).toBe(
+      "SIDE_LINE 끝점을 node #205921에 0.9m 보정했습니다. 저장 시 보정 좌표로 반영됩니다.",
+    );
+  });
+
+  it("describes CROSS_WALK projection as a saved adjustment", () => {
+    expect(describeCrossWalkProjection(0.8873)).toBe(
+      "CROSS_WALK 끝점을 기존 선 위로 0.9m 보정했습니다. 저장 시 보정 좌표로 반영됩니다.",
+    );
   });
 
   it("keeps polygon delete mode active after clearing a completed polygon", () => {

@@ -29,7 +29,7 @@ class LLMResponse:
 
 class BaseProvider(ABC):
     @abstractmethod
-    def call(self, user_input: str, system_prompt: str = "", messages: list = None) -> LLMResponse:
+    def call(self, user_input: str, system_prompt: str = "", messages: list = None, mode: str = "mobility", current_route: str = None) -> LLMResponse:
         pass
 
     @property

@@ -105,6 +105,32 @@ class PlaceVoiceAnalysisServiceTest {
 	}
 
 	@Test
+	@DisplayName("저시력자 장소 검색 1차 응답에 확인 문구가 없으면 실패로 처리한다")
+	void rejectLowVisionPlaceSearchWithoutConfirmationMessage() {
+		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
+			.thenReturn(new AiVoiceAnalyzeResult(
+				VoiceIntent.PLACE_SEARCH,
+				"부산대학교",
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null));
+
+		assertThatThrownBy(() -> placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
+			"부산대학교",
+			VoiceAnalysisMode.LOW_VISION,
+			List.of(),
+			null)))
+			.isInstanceOf(PlaceException.class)
+			.extracting("errorCode")
+			.isEqualTo(PlaceErrorCode.VOICE_ANALYSIS_AI_FAILED);
+	}
+
+	@Test
 	@DisplayName("AI 응답에 장소 검색 의도만 있고 장소명이 없으면 실패로 처리한다")
 	void rejectInvalidAiResult() {
 		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
@@ -156,5 +182,109 @@ class PlaceVoiceAnalysisServiceTest {
 		assertThat(response.placeName()).isNull();
 		assertThat(response.confirmed()).isFalse();
 		assertThat(response.confirmationMessage()).isEqualTo("찾으시는 장소를 다시 말씀해 주세요");
+	}
+
+	@Test
+	@DisplayName("카테고리 검색 의도에 카테고리가 없으면 실패로 처리한다")
+	void rejectInvalidCategorySearchResult() {
+		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
+			.thenReturn(new AiVoiceAnalyzeResult(
+				VoiceIntent.CATEGORY_SEARCH,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null));
+
+		assertThatThrownBy(() -> placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
+			"카페 찾아줘",
+			VoiceAnalysisMode.MOBILITY_IMPAIRED,
+			List.of(),
+			"map")))
+			.isInstanceOf(PlaceException.class)
+			.extracting("errorCode")
+			.isEqualTo(PlaceErrorCode.VOICE_ANALYSIS_AI_FAILED);
+	}
+
+	@Test
+	@DisplayName("경로 안내 의도에 도착지가 없으면 실패로 처리한다")
+	void rejectInvalidNavigateResult() {
+		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
+			.thenReturn(new AiVoiceAnalyzeResult(
+				VoiceIntent.NAVIGATE,
+				null,
+				null,
+				null,
+				null,
+				" ",
+				null,
+				null,
+				null,
+				null));
+
+		assertThatThrownBy(() -> placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
+			"길 안내해줘",
+			VoiceAnalysisMode.MOBILITY_IMPAIRED,
+			List.of(),
+			"map")))
+			.isInstanceOf(PlaceException.class)
+			.extracting("errorCode")
+			.isEqualTo(PlaceErrorCode.VOICE_ANALYSIS_AI_FAILED);
+	}
+
+	@Test
+	@DisplayName("제보 의도에 reportType이 없으면 실패로 처리한다")
+	void rejectInvalidReportResult() {
+		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
+			.thenReturn(new AiVoiceAnalyzeResult(
+				VoiceIntent.REPORT,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				"안내와 달리 계단이 있습니다",
+				null,
+				null));
+
+		assertThatThrownBy(() -> placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
+			"계단 제보할게요",
+			VoiceAnalysisMode.MOBILITY_IMPAIRED,
+			List.of(),
+			"navigation/guidance")))
+			.isInstanceOf(PlaceException.class)
+			.extracting("errorCode")
+			.isEqualTo(PlaceErrorCode.VOICE_ANALYSIS_AI_FAILED);
+	}
+
+	@Test
+	@DisplayName("북마크 추가 의도에 bookmarkAction이 없으면 실패로 처리한다")
+	void rejectInvalidBookmarkAddResult() {
+		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
+			.thenReturn(new AiVoiceAnalyzeResult(
+				VoiceIntent.BOOKMARK_ADD,
+				"부산역",
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null));
+
+		assertThatThrownBy(() -> placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
+			"부산역 북마크해줘",
+			VoiceAnalysisMode.MOBILITY_IMPAIRED,
+			List.of(),
+			"saved_route")))
+			.isInstanceOf(PlaceException.class)
+			.extracting("errorCode")
+			.isEqualTo(PlaceErrorCode.VOICE_ANALYSIS_AI_FAILED);
 	}
 }

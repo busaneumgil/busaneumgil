@@ -1178,7 +1178,7 @@ private fun ReportHistoryData.toReportRecentUiModel(): ReportRecentUiModel =
     ReportRecentUiModel(
         historyId = historyId,
         title = reportCategory.toReportTitle(),
-        address = address?.takeIf { it.isNotBlank() } ?: "부산광역시 강서구",
+        address = address?.takeIf { it.isNotBlank() } ?: "주소 정보 없음",
         submittedAtText = updatedAtMillis.formatReportHomeDate(),
         statusLabel =
             when (processingStatus) {

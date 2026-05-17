@@ -72,6 +72,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
@@ -99,6 +100,8 @@ fun ReportScreen(
     scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
+    var locationAddressSearchExpanded by remember { mutableStateOf(false) }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -116,6 +119,9 @@ fun ReportScreen(
             ReportBottomBar(
                 uiState = uiState,
                 onAction = onAction,
+                onLocationAddressSearchClick = {
+                    locationAddressSearchExpanded = true
+                },
             )
         },
     ) { innerPadding ->
@@ -135,7 +141,17 @@ fun ReportScreen(
                             Modifier.verticalScroll(scrollState)
                         },
                     )
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+                    .padding(
+                        start = EumSpacing.medium,
+                        top = EumSpacing.medium,
+                        end = EumSpacing.medium,
+                        bottom =
+                            if (uiState.currentStep == ReportStep.Home) {
+                                0.dp
+                            } else {
+                                EumSpacing.medium
+                            },
+                    ),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
             when (uiState.currentStep) {
@@ -153,6 +169,8 @@ fun ReportScreen(
                 ReportStep.LocationConfirm ->
                     ReportLocationStep(
                         input = uiState.location,
+                        selectedType = uiState.reportType.value,
+                        addressSearchExpanded = locationAddressSearchExpanded,
                         onAction = onAction,
                     )
                 ReportStep.DetailInput ->
@@ -196,6 +214,7 @@ internal fun reportTopBarShowsBackButton(step: ReportStep): Boolean =
 private fun ReportBottomBar(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
+    onLocationAddressSearchClick: () -> Unit,
 ) {
     when (uiState.currentStep) {
         ReportStep.Home -> Unit
@@ -211,8 +230,8 @@ private fun ReportBottomBar(
                 primaryLabel = "이 위치로 다음",
                 enabled = uiState.isLocationStepConfirmable,
                 onPrimaryClick = { onAction(ReportUiAction.NextStepClicked) },
-                secondaryLabel = "이전",
-                onSecondaryClick = { onAction(ReportUiAction.BackClicked) },
+                secondaryLabel = "주소 검색",
+                onSecondaryClick = onLocationAddressSearchClick,
             )
         ReportStep.DetailInput -> {
             val submitting = uiState.submitState is ReportSubmitState.Submitting
@@ -240,7 +259,7 @@ private fun ReportPrimaryActionBar(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
     ) {
         if (suppressRipple) {
             NoRippleReportPrimaryActionButton(
@@ -262,6 +281,7 @@ private fun ReportPrimaryActionBar(
                     Modifier
                         .fillMaxWidth()
                         .padding(EumSpacing.medium),
+                shape = RoundedCornerShape(EumRadius.small),
                 contentPadding = PaddingValues(vertical = EumSpacing.small),
             ) {
                 Text(text = label)
@@ -280,7 +300,7 @@ private fun ReportStepActionBar(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier =
@@ -368,7 +388,7 @@ private fun ReportHomeStep(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
         ReportHomeCtaCard(onAction = onAction)
-        ReportHomeStatusCard(
+        ReportHomeStatusSection(
             pendingCount = uiState.processingCounts.pending,
             approvedCount = uiState.processingCounts.approved,
             onHistoryClick = { onAction(ReportUiAction.ReportHistoryClicked) },
@@ -390,7 +410,8 @@ private fun ReportHomeCtaCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
         color = EumSurfaceInfo,
-        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.55f)),
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier =
@@ -416,22 +437,9 @@ private fun ReportHomeCtaCard(
                     color = EumTextSecondary,
                 )
                 Spacer(modifier = Modifier.height(EumSpacing.xSmall))
-                Button(
+                ReportHomeCtaButton(
                     onClick = { onAction(ReportUiAction.StartNewReportClicked) },
-                    contentPadding =
-                        PaddingValues(
-                            horizontal = EumSpacing.medium,
-                            vertical = EumSpacing.small,
-                        ),
-                ) {
-                    Text(
-                        text = "+",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(modifier = Modifier.width(EumSpacing.xSmall))
-                    Text(text = "불편한 길 제보하기")
-                }
+                )
             }
             Icon(
                 painter = painterResource(id = R.drawable.ic_map_selected_pin_blue),
@@ -444,70 +452,131 @@ private fun ReportHomeCtaCard(
 }
 
 @Composable
-private fun ReportHomeStatusCard(
+private fun ReportHomeCtaButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .height(52.dp)
+                .clickable(role = Role.Button, onClick = onClick),
+        shape = RoundedCornerShape(EumRadius.small),
+        color = EumPrimary600,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Surface(
+                modifier = Modifier.size(32.dp),
+                shape = RoundedCornerShape(percent = 50),
+                color = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "+",
+                        style =
+                            MaterialTheme.typography.titleMedium.copy(
+                                fontSize = 24.sp,
+                                lineHeight = 24.sp,
+                            ),
+                        fontWeight = FontWeight.Bold,
+                        color = EumPrimary600,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(EumSpacing.small))
+            Text(
+                text = "불편한 길 제보하기",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimary,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReportHomeStatusSection(
     pendingCount: Int,
     approvedCount: Int,
     onHistoryClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "내 제보 현황",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "전체 내역 >",
+                modifier = Modifier.clickable(onClick = onHistoryClick),
+                style = MaterialTheme.typography.bodyMedium,
+                color = EumTextMuted,
+            )
+        }
+        ReportHomeStatusCard(
+            pendingCount = pendingCount,
+            approvedCount = approvedCount,
+        )
+    }
+}
+
+@Composable
+private fun ReportHomeStatusCard(
+    pendingCount: Int,
+    approvedCount: Int,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
+        shadowElevation = 0.dp,
     ) {
-        Column(
+        Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "내 제보 현황",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = "전체 내역 >",
-                    modifier = Modifier.clickable(onClick = onHistoryClick),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = EumTextMuted,
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ReportHomeStatusCount(
-                    iconRes = R.drawable.ic_mypage_report_history,
-                    count = pendingCount,
-                    label = "접수됨",
-                    labelColor = EumTextMuted,
-                    modifier = Modifier.weight(1f),
-                )
-                Box(
-                    modifier =
-                        Modifier
-                            .height(56.dp)
-                            .width(1.dp)
-                            .background(EumBorderSubtle),
-                )
-                ReportHomeStatusCount(
-                    iconRes = R.drawable.ic_status_check,
-                    count = approvedCount,
-                    label = "반영 완료",
-                    labelColor = EumPrimary600,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            ReportHomeStatusCount(
+                iconRes = R.drawable.ic_mypage_report_history,
+                count = pendingCount,
+                label = "접수됨",
+                labelColor = EumTextMuted,
+                modifier = Modifier.weight(1f),
+            )
+            Box(
+                modifier =
+                    Modifier
+                        .height(56.dp)
+                        .width(1.dp)
+                        .background(EumBorderSubtle),
+            )
+            ReportHomeStatusCount(
+                iconRes = R.drawable.ic_status_check,
+                count = approvedCount,
+                label = "반영 완료",
+                labelColor = EumPrimary600,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -520,33 +589,59 @@ private fun ReportHomeStatusCount(
     labelColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Row(
         modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            painter = painterResource(id = iconRes),
-            contentDescription = null,
-            modifier = Modifier.size(36.dp),
-            tint = Color.Unspecified,
-        )
-        Text(
-            text = "${count}건",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
         Surface(
-            shape = RoundedCornerShape(50),
-            color = if (labelColor == EumPrimary600) EumPrimary200.copy(alpha = 0.55f) else EumSurfaceSubtle,
+            modifier = Modifier.size(48.dp),
+            shape = RoundedCornerShape(percent = 50),
+            color = if (labelColor == EumPrimary600) EumPrimary200.copy(alpha = 0.7f) else EumSurfaceSubtle,
         ) {
-            Text(
-                text = label,
-                modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = 4.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = labelColor,
-            )
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painter = painterResource(id = iconRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(26.dp),
+                    tint = Color.Unspecified,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(EumSpacing.small))
+        Column(
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                Text(
+                    text = count.toString(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "건",
+                    modifier = Modifier.padding(bottom = 2.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Normal,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = if (labelColor == EumPrimary600) EumPrimary200.copy(alpha = 0.55f) else EumSurfaceSubtle,
+            ) {
+                Text(
+                    text = label,
+                    modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = labelColor,
+                )
+            }
         }
     }
 }
@@ -583,7 +678,8 @@ private fun ReportHomeRecentSection(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(EumRadius.large),
             color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 2.dp,
+            border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
+            shadowElevation = 0.dp,
         ) {
             if (reports.isEmpty()) {
                 Box(
@@ -671,15 +767,26 @@ private fun ReportHomeRecentItem(
                 color = EumTextMuted,
             )
         }
-        Surface(
-            shape = RoundedCornerShape(50),
-            color = if (report.isApproved) EumPrimary200.copy(alpha = 0.55f) else EumSurfaceSubtle,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
-            Text(
-                text = report.statusLabel,
-                modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = 4.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = if (report.isApproved) EumPrimary600 else EumTextMuted,
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = if (report.isApproved) EumPrimary200.copy(alpha = 0.55f) else EumSurfaceSubtle,
+            ) {
+                Text(
+                    text = report.statusLabel,
+                    modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (report.isApproved) EumPrimary600 else EumTextMuted,
+                )
+            }
+            Icon(
+                painter = painterResource(id = R.drawable.ic_route_card_chevron),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = EumTextMuted,
             )
         }
     }
@@ -692,13 +799,25 @@ private fun ReportHomeNotice(modifier: Modifier = Modifier) {
         shape = RoundedCornerShape(50),
         color = EumSurfaceInfo,
     ) {
-        Text(
-            text = "제보 내용은 관리자의 검토 후 반영되며, 결과는 알림으로 안내드려요.",
-            modifier = Modifier.padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
-            style = MaterialTheme.typography.bodyMedium,
-            color = EumTextMuted,
-            textAlign = TextAlign.Center,
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_status_safe_info),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = EumTextMuted,
+            )
+            Text(
+                text = "제보 내용은 관리자의 검토 후 반영되며, 결과는 알림으로 안내드려요.",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                color = EumTextMuted,
+                textAlign = TextAlign.Start,
+            )
+        }
     }
 }
 
@@ -716,6 +835,7 @@ private fun ReportTypeStep(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
         ReportStepProgress(currentStep = ReportStep.TypeSelection)
+        Spacer(modifier = Modifier.height(EumSpacing.medium))
         Text(
             text = "어떤 문제를 제보하시나요?",
             style = MaterialTheme.typography.titleLarge,
@@ -820,13 +940,13 @@ private fun ReportTypeCard(
 ) {
     val borderColor =
         if (selected) {
-            MaterialTheme.colorScheme.primary
+            EumPrimary600
         } else {
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            EumBorderSubtle.copy(alpha = 0.6f)
         }
     val backgroundColor =
         if (selected) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            EumSurfaceInfo.copy(alpha = 0.72f)
         } else {
             MaterialTheme.colorScheme.surface
         }
@@ -838,12 +958,12 @@ private fun ReportTypeCard(
                 .clickable(onClick = onClick)
                 .semantics {
                     this.selected = selected
-                    contentDescription = "${type.label}. ${type.description}. $selectionLabel"
+                    contentDescription = "${type.label}. $selectionLabel"
                 },
         shape = RoundedCornerShape(EumRadius.large),
         color = backgroundColor,
-        border = BorderStroke(1.dp, borderColor),
-        shadowElevation = 1.dp,
+        border = BorderStroke(if (selected) 2.dp else 1.dp, borderColor),
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier =
@@ -868,14 +988,6 @@ private fun ReportTypeCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = type.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }
@@ -883,18 +995,29 @@ private fun ReportTypeCard(
 @Composable
 private fun ReportLocationStep(
     input: ReportLocationInput,
+    selectedType: ReportType?,
+    addressSearchExpanded: Boolean,
     onAction: (ReportUiAction) -> Unit,
 ) {
     val errorText = reportLocationErrorText(input.error)
-    val helperText =
-        errorText
-            ?: "지도를 드래그해 위치를 조정하거나, '현재 위치로 설정' 버튼으로 GPS 좌표를 적용할 수 있습니다."
     val isError = input.error != null
+    var hasRequestedCurrentLocationOnEnter by remember { mutableStateOf(false) }
+
+    LaunchedEffect(input.value, input.isResolvingCurrentLocation) {
+        if (!hasRequestedCurrentLocationOnEnter &&
+            input.value == null &&
+            !input.isResolvingCurrentLocation
+        ) {
+            hasRequestedCurrentLocationOnEnter = true
+            onAction(ReportUiAction.CurrentLocationResetClicked)
+        }
+    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
         ReportStepProgress(currentStep = ReportStep.LocationConfirm)
+        Spacer(modifier = Modifier.height(EumSpacing.medium))
         Text(
             text = "위치를 확인해주세요",
             style = MaterialTheme.typography.titleLarge,
@@ -909,6 +1032,9 @@ private fun ReportLocationStep(
         ReportMapPanel(
             location = input.value,
             source = input.source,
+            selectedType = selectedType,
+            isResolvingCurrentLocation = input.isResolvingCurrentLocation,
+            onCurrentLocationClick = { onAction(ReportUiAction.CurrentLocationResetClicked) },
             onCenterChanged = { latitude, longitude ->
                 onAction(
                     ReportUiAction.LocationSelected(
@@ -928,40 +1054,94 @@ private fun ReportLocationStep(
             location = input.value,
             addressText = input.addressText,
         )
-        Column(
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            val resolvingCurrent = input.isResolvingCurrentLocation
-            OutlinedButton(
-                onClick = { onAction(ReportUiAction.CurrentLocationResetClicked) },
-                enabled = !resolvingCurrent,
+        if (addressSearchExpanded) {
+            OutlinedTextField(
+                value = input.addressText,
+                onValueChange = { onAction(ReportUiAction.AddressTextChanged(it)) },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (resolvingCurrent) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(modifier = Modifier.width(EumSpacing.xSmall))
-                    Text(text = "위치 확인 중...")
-                } else {
-                    Text(text = "현재 위치로 설정")
-                }
-            }
-            // "지도에서 위치 선택" 버튼은 inline 지도가 직접 노출되어 사용자가 드래그·줌으로
-            // 위치를 조정할 수 있으므로 제거되었다 (Task 2.2).
+                placeholder = { Text(text = "상세 주소를 입력해주세요") },
+                singleLine = true,
+                isError = input.error == ReportLocationError.AddressTooLong,
+            )
         }
-        Text(
-            text = helperText,
-            style = MaterialTheme.typography.bodyMedium,
-            color =
-                if (isError) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-        )
+        if (isError && errorText != null) {
+            Text(
+                text = errorText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReportLocationCurrentButton(
+    isResolving: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .clickable(enabled = !isResolving, role = Role.Button, onClick = onClick),
+        shape = RoundedCornerShape(percent = 50),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.75f)),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (isResolving) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                    color = EumPrimary600,
+                )
+            } else {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_map_current_location),
+                    contentDescription = "현재 위치로 설정",
+                    modifier = Modifier.size(28.dp),
+                    tint = EumPrimary600,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportMapProblemChip(
+    type: ReportType,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.35f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            Icon(
+                painter = painterResource(id = type.iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(42.dp),
+                tint = Color.Unspecified,
+            )
+            Text(
+                text = type.label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -986,6 +1166,9 @@ private fun ReportLocationStep(
 private fun ReportMapPanel(
     location: ReportLocation?,
     source: ReportLocationSource,
+    selectedType: ReportType?,
+    isResolvingCurrentLocation: Boolean,
+    onCurrentLocationClick: () -> Unit,
     onCenterChanged: (latitude: Double, longitude: Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -997,6 +1180,7 @@ private fun ReportMapPanel(
     // 사용자 드래그 후 LocationSelected dispatch → state 갱신 → LaunchedEffect → moveCamera → onCameraMoveEnd
     // 이 순환이 무한 루프 되는 것을 막는다.
     val suppressNextCameraMoveEnd = remember { mutableStateOf(false) }
+    val hasUserMovedMap = remember { mutableStateOf(false) }
 
     // 초기 카메라 위치 — 진입 시점의 location 또는 부산시청.
     val initialPosition =
@@ -1052,7 +1236,7 @@ private fun ReportMapPanel(
                 .clip(mapShape)
                 .border(
                     width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                    color = EumBorderSubtle.copy(alpha = 0.45f),
                     shape = mapShape,
                 ),
     ) {
@@ -1067,8 +1251,10 @@ private fun ReportMapPanel(
                     object : android.widget.FrameLayout(ctx) {
                         override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
                             when (ev.actionMasked) {
-                                android.view.MotionEvent.ACTION_DOWN ->
+                                android.view.MotionEvent.ACTION_DOWN -> {
+                                    hasUserMovedMap.value = true
                                     parent?.requestDisallowInterceptTouchEvent(true)
+                                }
                                 android.view.MotionEvent.ACTION_UP,
                                 android.view.MotionEvent.ACTION_CANCEL,
                                 -> parent?.requestDisallowInterceptTouchEvent(false)
@@ -1116,6 +1302,9 @@ private fun ReportMapPanel(
                                     if (suppressNextCameraMoveEnd.value) {
                                         // 외부 카메라 이동(moveCamera 호출)으로 인한 콜백은 한 번만 무시.
                                         suppressNextCameraMoveEnd.value = false
+                                        return@setOnCameraMoveEndListener
+                                    }
+                                    if (!hasUserMovedMap.value) {
                                         return@setOnCameraMoveEndListener
                                     }
                                     val pos = cameraPosition.position
@@ -1167,6 +1356,23 @@ private fun ReportMapPanel(
                     .size(40.dp),
             tint = Color.Unspecified,
         )
+        if (selectedType != null) {
+            ReportMapProblemChip(
+                type = selectedType,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = EumSpacing.medium),
+            )
+        }
+        ReportLocationCurrentButton(
+            isResolving = isResolvingCurrentLocation,
+            onClick = onCurrentLocationClick,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(EumSpacing.medium),
+        )
     }
 }
 
@@ -1195,8 +1401,8 @@ private fun ReportLocationBottomCard(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(EumRadius.large),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
-        shadowElevation = 1.dp,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
@@ -1241,9 +1447,10 @@ private fun ReportDetailStep(
 ) {
     val reportType = uiState.reportType.value
     Column(
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
         ReportStepProgress(currentStep = ReportStep.DetailInput)
+        Spacer(modifier = Modifier.height(EumSpacing.medium))
         Text(
             text = "어떤 문제가 있었는지 알려주세요",
             style = MaterialTheme.typography.titleLarge,
@@ -1260,7 +1467,7 @@ private fun ReportDetailStep(
                 type = reportType,
                 locationText =
                     uiState.location.value?.address
-                        ?: uiState.location.addressText.ifBlank { "부산광역시 강서구" },
+                        ?: uiState.location.addressText.ifBlank { "위치 정보 없음" },
             )
         }
         ReportDescriptionSection(
@@ -1271,6 +1478,7 @@ private fun ReportDetailStep(
             input = uiState.photo,
             onAction = onAction,
         )
+        ReportPrivacyNotice()
         ReportSubmitFailureActions(
             uiState = uiState,
             onAction = onAction,
@@ -1288,21 +1496,21 @@ private fun ReportSelectedProblemCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, EumBorderSubtle),
-        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(EumSpacing.medium),
+                    .padding(horizontal = EumSpacing.medium, vertical = 18.dp),
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 painter = painterResource(id = type.iconRes),
                 contentDescription = null,
-                modifier = Modifier.size(56.dp),
+                modifier = Modifier.size(54.dp),
                 tint = Color.Unspecified,
             )
             Column(
@@ -1311,7 +1519,7 @@ private fun ReportSelectedProblemCard(
             ) {
                 Text(
                     text = type.label,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -1324,6 +1532,29 @@ private fun ReportSelectedProblemCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ReportPrivacyNotice(
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_status_safe_info),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = EumTextMuted,
+        )
+        Text(
+            text = "개인정보가 보이지 않도록 주의해주세요.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = EumTextMuted,
+        )
     }
 }
 
@@ -1363,7 +1594,7 @@ private fun ReportSubmitFailureBanner(
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(EumRadius.large),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.36f)),
-        shadowElevation = 1.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
@@ -1503,7 +1734,7 @@ private fun ReportCompleteSummaryCard(uiState: ReportUiState) {
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(EumRadius.large),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
@@ -1603,7 +1834,7 @@ private fun ReportPhotoSection(
                     if (isError) {
                         MaterialTheme.colorScheme.error
                     } else {
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                        EumBorderSubtle.copy(alpha = 0.65f)
                     },
             ),
     ) {
@@ -1636,12 +1867,22 @@ private fun ReportPhotoSection(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
                 ) {
-                    Text(
-                        text = "사진 추가 (선택)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "사진 추가",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "(선택)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = EumTextMuted,
+                        )
+                    }
                     Text(
                         text = "현장 사진을 첨부하면\n더 정확한 확인이 가능해요.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -1746,7 +1987,7 @@ private fun ReportPhotoThumb(
             modifier = Modifier.fillMaxSize(),
             shape = RoundedCornerShape(EumRadius.small),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
+            border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
         ) {
             // Coil SubcomposeAsyncImage로 실제 사진 썸네일 렌더링. 로딩 중·실패 시에는
             // fallback Composable(회색 박스 + 라벨)로 graceful degradation.
@@ -1778,7 +2019,7 @@ private fun ReportPhotoThumb(
                     },
             shape = RoundedCornerShape(percent = 50),
             color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+            border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.7f)),
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -1829,7 +2070,7 @@ private fun ReportPhotoAddTile(
                 },
         shape = RoundedCornerShape(EumRadius.small),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
     ) {
         Column(
             modifier =
@@ -1866,7 +2107,7 @@ private fun ReportDescriptionSection(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(EumRadius.medium),
+        shape = RoundedCornerShape(EumRadius.large),
         border =
             BorderStroke(
                 width = 1.dp,
@@ -1874,13 +2115,13 @@ private fun ReportDescriptionSection(
                     if (isError) {
                         MaterialTheme.colorScheme.error
                     } else {
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                        EumBorderSubtle.copy(alpha = 0.65f)
                     },
             ),
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
             Text(
                 text = "상세 설명",
@@ -1888,43 +2129,49 @@ private fun ReportDescriptionSection(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Text(
-                text = "아래 문제 상황을 자세히 알려주세요.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedTextField(
-                value = input.value,
-                onValueChange = { onAction(ReportUiAction.DescriptionChanged(it)) },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { focusState: FocusState ->
-                            if (!focusState.isFocused) {
-                                onAction(ReportUiAction.DescriptionBlurred)
-                            }
-                        },
-                placeholder = { Text(text = "예: 보도 중앙에 이동을 막는 장애물이 있어요.") },
-                isError = isError,
-                minLines = 4,
-                keyboardOptions =
-                    KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences,
-                    ),
-            )
-            Row(
+            Box(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
             ) {
+                OutlinedTextField(
+                    value = input.value,
+                    onValueChange = { onAction(ReportUiAction.DescriptionChanged(it)) },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(168.dp)
+                            .onFocusChanged { focusState: FocusState ->
+                                if (!focusState.isFocused) {
+                                    onAction(ReportUiAction.DescriptionBlurred)
+                                }
+                            },
+                    placeholder = {
+                        Text(
+                            text = "예: 안내와 달리 계단이 있어\n휠체어 이동이 어려웠어요.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = EumTextMuted,
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    isError = isError,
+                    minLines = 5,
+                    keyboardOptions =
+                        KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                        ),
+                )
                 Text(
                     text =
                         reportDescriptionErrorText(input.error) ?: charCountText,
-                    style = MaterialTheme.typography.labelMedium,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = EumSpacing.medium, bottom = EumSpacing.small),
+                    style = MaterialTheme.typography.bodyMedium,
                     color =
                         if (isError) {
                             MaterialTheme.colorScheme.error
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            EumTextMuted
                         },
                 )
             }
@@ -1963,17 +2210,6 @@ private val ReportType.label: String
             ReportType.RAMP -> "경사로 문제"
             ReportType.SIDEWALK_WIDTH -> "인도폭 문제"
             ReportType.OTHER_OBSTACLE -> "기타 장애물"
-        }
-
-private val ReportType.description: String
-    get() =
-        when (this) {
-            ReportType.STAIRS_STEP -> "안내와 달리 계단이나 단차가 있어요"
-            ReportType.BRAILLE_BLOCK -> "손상, 미설치, 잘못된 설치"
-            ReportType.SIDEWALK_MISSING -> "안내와 달리 보행 가능한 인도가 없어요"
-            ReportType.RAMP -> "경사로 이용이 어렵거나 위험해요"
-            ReportType.SIDEWALK_WIDTH -> "인도가 좁아 통행이 어려워요"
-            ReportType.OTHER_OBSTACLE -> "위 항목에 없는 보행 불편 상황"
         }
 
 @get:DrawableRes

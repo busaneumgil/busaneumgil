@@ -80,7 +80,7 @@ internal fun reportHistoryLayoutSpec(): ReportHistoryLayoutSpec =
         thumbnailCornerRadiusDp = 14,
         buttonCornerRadiusDp = 14,
         buttonMinHeightDp = 56,
-        cardShadowElevationDp = 2,
+        cardShadowElevationDp = 0,
     )
 
 private enum class ReportHistoryFilter(
@@ -486,7 +486,7 @@ private fun ReportHistoryDetailContent(
                     ) {
                         Text(
                             text = "목록으로",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
                     }
@@ -498,8 +498,8 @@ private fun ReportHistoryDetailContent(
                                 .heightIn(min = reportHistoryLayoutSpec().buttonMinHeightDp.dp),
                     ) {
                         Text(
-                            text = "비슷한 문제 다시 제보",
-                            style = MaterialTheme.typography.titleMedium,
+                            text = "다시 제보",
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
                     }
@@ -539,7 +539,7 @@ private fun ReportHistoryDetailSummaryCard(detail: ReportHistoryDetailUiModel) {
                         Text(
                             text = detail.title,
                             modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = EumTextPrimary,
                             maxLines = 2,
@@ -553,14 +553,14 @@ private fun ReportHistoryDetailSummaryCard(detail: ReportHistoryDetailUiModel) {
                     }
                     Text(
                         text = detail.locationText,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = EumTextMuted,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = detail.submittedAtText,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = EumTextMuted,
                     )
                 }
@@ -573,12 +573,12 @@ private fun ReportHistoryDetailSummaryCard(detail: ReportHistoryDetailUiModel) {
             ) {
                 Text(
                     text = "접수 번호",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = EumTextMuted,
                 )
                 Text(
                     text = detail.receiptNumberText,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = EumTextPrimary,
                 )
             }
@@ -600,13 +600,13 @@ private fun ReportHistoryDetailDescriptionCard(description: String) {
         ) {
             Text(
                 text = "제보 내용",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = EumTextPrimary,
             )
             Text(
                 text = description,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = EumTextPrimary,
             )
         }
@@ -627,7 +627,7 @@ private fun ReportHistoryProcessingCard(detail: ReportHistoryDetailUiModel) {
         ) {
             Text(
                 text = "처리 현황",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = EumTextPrimary,
             )
@@ -695,11 +695,12 @@ private fun ReportHistoryTimelineStep(
             }
         }
         Column(
+            modifier = Modifier.padding(top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = if (active) EumPrimary600 else EumTextPrimary,
             )

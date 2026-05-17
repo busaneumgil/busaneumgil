@@ -43,12 +43,23 @@ class PlaceVoiceAnalysisServiceTest {
 	@DisplayName("보행약자 음성 분석은 추출 장소명을 반환하고 확인 필드는 비운다")
 	void analyzeMobilityImpairedVoiceText() {
 		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
-			.thenReturn(new AiVoiceAnalyzeResult(VoiceIntent.PLACE_SEARCH, "이재모피자", true, "무시되는 문구"));
+			.thenReturn(new AiVoiceAnalyzeResult(
+				VoiceIntent.PLACE_SEARCH,
+				"이재모피자",
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				true,
+				"무시되는 문구"));
 
 		VoiceAnalyzeResponse response = placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
 			"마 이재모피자 어디있는지 알려주소",
 			VoiceAnalysisMode.MOBILITY_IMPAIRED,
-			List.of(new VoiceAnalyzeHistoryRequest("user", "이전 발화"))));
+			List.of(new VoiceAnalyzeHistoryRequest("user", "이전 발화")),
+			"navigation/guidance"));
 
 		assertThat(response.intent()).isEqualTo(VoiceIntent.PLACE_SEARCH);
 		assertThat(response.placeName()).isEqualTo("이재모피자");
@@ -56,7 +67,8 @@ class PlaceVoiceAnalysisServiceTest {
 		assertThat(response.confirmationMessage()).isNull();
 		ArgumentCaptor<AiVoiceAnalyzeCommand> captor = ArgumentCaptor.forClass(AiVoiceAnalyzeCommand.class);
 		verify(aiVoiceAnalysisClient).analyze(captor.capture());
-		assertThat(captor.getValue().history()).isEmpty();
+		assertThat(captor.getValue().history()).hasSize(1);
+		assertThat(captor.getValue().currentRoute()).isEqualTo("navigation/guidance");
 	}
 
 	@Test
@@ -67,6 +79,12 @@ class PlaceVoiceAnalysisServiceTest {
 				VoiceIntent.PLACE_SEARCH,
 				"부산대학교",
 				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
 				"부산대학교를 찾으시나요?"));
 
 		VoiceAnalyzeResponse response = placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
@@ -75,7 +93,8 @@ class PlaceVoiceAnalysisServiceTest {
 			List.of(
 				new VoiceAnalyzeHistoryRequest("user", "부산역 어디야"),
 				new VoiceAnalyzeHistoryRequest("assistant",
-					"{\"intent\":\"PLACE_SEARCH\",\"placeName\":\"부산역\"}"))));
+					"{\"intent\":\"PLACE_SEARCH\",\"placeName\":\"부산역\"}")),
+			null));
 
 		assertThat(response.placeName()).isEqualTo("부산대학교");
 		assertThat(response.confirmed()).isNull();
@@ -89,11 +108,22 @@ class PlaceVoiceAnalysisServiceTest {
 	@DisplayName("AI 응답에 장소 검색 의도만 있고 장소명이 없으면 실패로 처리한다")
 	void rejectInvalidAiResult() {
 		when(aiVoiceAnalysisClient.analyze(any(AiVoiceAnalyzeCommand.class)))
-			.thenReturn(new AiVoiceAnalyzeResult(VoiceIntent.PLACE_SEARCH, null, null, null));
+			.thenReturn(new AiVoiceAnalyzeResult(
+				VoiceIntent.PLACE_SEARCH,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null));
 
 		assertThatThrownBy(() -> placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
 			"어디야",
 			VoiceAnalysisMode.MOBILITY_IMPAIRED,
+			null,
 			null)))
 			.isInstanceOf(PlaceException.class)
 			.extracting("errorCode")
@@ -107,13 +137,20 @@ class PlaceVoiceAnalysisServiceTest {
 			.thenReturn(new AiVoiceAnalyzeResult(
 				VoiceIntent.UNKNOWN,
 				"부산역",
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
 				false,
 				"찾으시는 장소를 다시 말씀해 주세요"));
 
 		VoiceAnalyzeResponse response = placeVoiceAnalysisService.analyze(new VoiceAnalyzeRequest(
 			"어딘지 모르겠어",
 			VoiceAnalysisMode.LOW_VISION,
-			List.of()));
+			List.of(),
+			null));
 
 		assertThat(response.intent()).isEqualTo(VoiceIntent.UNKNOWN);
 		assertThat(response.placeName()).isNull();

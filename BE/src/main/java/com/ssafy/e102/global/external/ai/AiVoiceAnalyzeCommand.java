@@ -9,18 +9,19 @@ import com.ssafy.e102.domain.place.type.VoiceAnalysisMode;
 public record AiVoiceAnalyzeCommand(
 	String text,
 	VoiceAnalysisMode mode,
-	List<AiVoiceAnalyzeHistoryMessage> history) {
+	List<AiVoiceAnalyzeHistoryMessage> history,
+	String currentRoute) {
 
 	public static AiVoiceAnalyzeCommand from(VoiceAnalyzeRequest request) {
 		return new AiVoiceAnalyzeCommand(
 			request.text(),
 			request.mode(),
-			historyFrom(request.mode(), request.history()));
+			historyFrom(request.history()),
+			request.currentRoute());
 	}
 
-	private static List<AiVoiceAnalyzeHistoryMessage> historyFrom(VoiceAnalysisMode mode,
-		List<VoiceAnalyzeHistoryRequest> history) {
-		if (mode == VoiceAnalysisMode.MOBILITY_IMPAIRED || history == null) {
+	private static List<AiVoiceAnalyzeHistoryMessage> historyFrom(List<VoiceAnalyzeHistoryRequest> history) {
+		if (history == null) {
 			return List.of();
 		}
 		return history.stream()

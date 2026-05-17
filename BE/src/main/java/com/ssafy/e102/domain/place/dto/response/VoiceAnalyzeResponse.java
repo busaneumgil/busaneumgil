@@ -6,6 +6,12 @@ import com.ssafy.e102.global.external.ai.AiVoiceAnalyzeResult;
 public record VoiceAnalyzeResponse(
 	VoiceIntent intent,
 	String placeName,
+	String category,
+	String bookmarkAction,
+	String departure,
+	String destination,
+	String reportType,
+	String description,
 	Boolean confirmed,
 	String confirmationMessage) {
 
@@ -14,6 +20,12 @@ public record VoiceAnalyzeResponse(
 		return new VoiceAnalyzeResponse(
 			result.intent(),
 			placeNameOrNull(result),
+			result.category(),
+			result.bookmarkAction(),
+			result.departure(),
+			result.destination(),
+			result.reportType(),
+			result.description(),
 			confirmed,
 			confirmationMessage);
 	}

@@ -69,7 +69,6 @@ class MyPageViewModel(
             is MyPageUiAction.MainMenuClicked -> {
                 viewModelScope.launch {
                     when (action.menuItem) {
-                        MyPageMenuItem.REPORT_HISTORY -> uiEventChannel.send(MyPageUiEvent.NavigateToReportHistory)
                         MyPageMenuItem.APP_HELP -> uiEventChannel.send(MyPageUiEvent.NavigateToGuide)
                         MyPageMenuItem.PRIVACY_POLICY -> uiEventChannel.send(MyPageUiEvent.OpenPrivacyPolicy)
                         MyPageMenuItem.SERVICE_TERMS -> uiEventChannel.send(MyPageUiEvent.OpenServiceTerms)

@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.report.dto.response;
 import java.time.LocalDateTime;
 
 import com.ssafy.e102.domain.report.entity.HazardReport;
+import com.ssafy.e102.domain.report.type.ReportStatus;
 import com.ssafy.e102.domain.report.type.ReportType;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
@@ -10,6 +11,7 @@ import com.ssafy.e102.global.geo.dto.GeoPointResponse;
 public record HazardReportSummaryResponse(
 	Long reportId,
 	ReportType reportType,
+	ReportStatus status,
 	String address,
 	String description,
 	GeoPointResponse reportPoint,
@@ -26,6 +28,7 @@ public record HazardReportSummaryResponse(
 		return new HazardReportSummaryResponse(
 			hazardReport.getReportId(),
 			hazardReport.getReportType(),
+			hazardReport.getStatus(),
 			hazardReport.getAddress(),
 			toDescriptionPreview(hazardReport.getDescription()),
 			geoPointConverter.toResponse(hazardReport.getReportPoint()),

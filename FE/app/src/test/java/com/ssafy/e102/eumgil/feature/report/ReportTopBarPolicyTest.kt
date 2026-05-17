@@ -7,8 +7,8 @@ import org.junit.Test
 
 class ReportTopBarPolicyTest {
     @Test
-    fun `report root step hides back button`() {
-        assertFalse(reportTopBarShowsBackButton(ReportStep.TypeSelection))
+    fun `report type selection step keeps back button to return to report home`() {
+        assertTrue(reportTopBarShowsBackButton(ReportStep.TypeSelection))
     }
 
     @Test
@@ -30,38 +30,38 @@ class ReportTopBarPolicyTest {
 
     @Test
     fun `type selection step always shows base label regardless of selected type`() {
-        assertEquals("제보", reportStepTitle(ReportStep.TypeSelection))
-        assertEquals("제보", reportStepTitle(ReportStep.TypeSelection, ReportType.STAIRS_STEP))
+        assertEquals("제보하기", reportStepTitle(ReportStep.TypeSelection))
+        assertEquals("제보하기", reportStepTitle(ReportStep.TypeSelection, ReportType.STAIRS_STEP))
     }
 
     @Test
-    fun `location confirm step shows only type label when type is selected`() {
+    fun `location confirm step keeps report form title when type is selected`() {
         assertEquals(
-            "계단·단차 있음",
+            "제보하기",
             reportStepTitle(ReportStep.LocationConfirm, ReportType.STAIRS_STEP),
         )
         assertEquals(
-            "점자블록 문제",
+            "제보하기",
             reportStepTitle(ReportStep.LocationConfirm, ReportType.BRAILLE_BLOCK),
         )
         assertEquals(
-            "경사로 문제",
+            "제보하기",
             reportStepTitle(ReportStep.LocationConfirm, ReportType.RAMP),
         )
     }
 
     @Test
-    fun `detail input step shows only type label when type is selected`() {
+    fun `detail input step keeps report form title when type is selected`() {
         assertEquals(
-            "계단·단차 있음",
+            "제보하기",
             reportStepTitle(ReportStep.DetailInput, ReportType.STAIRS_STEP),
         )
         assertEquals(
-            "인도 없음",
+            "제보하기",
             reportStepTitle(ReportStep.DetailInput, ReportType.SIDEWALK_MISSING),
         )
         assertEquals(
-            "기타 장애물",
+            "제보하기",
             reportStepTitle(ReportStep.DetailInput, ReportType.OTHER_OBSTACLE),
         )
     }
@@ -69,8 +69,8 @@ class ReportTopBarPolicyTest {
     @Test
     fun `intermediate steps fall back to step name when type is null`() {
         // type이 null인 경우는 비정상 흐름(필수값 위반)이지만 graceful fallback으로 단계명 노출.
-        assertEquals("위치 확인", reportStepTitle(ReportStep.LocationConfirm, null))
-        assertEquals("상세 정보 입력", reportStepTitle(ReportStep.DetailInput, null))
+        assertEquals("제보하기", reportStepTitle(ReportStep.LocationConfirm, null))
+        assertEquals("제보하기", reportStepTitle(ReportStep.DetailInput, null))
     }
 
     @Test

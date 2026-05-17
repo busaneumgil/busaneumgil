@@ -40,6 +40,7 @@ data class CreateHazardReportResponseDto(
 data class HazardReportListItemDto(
     val reportId: Long,
     val reportType: String,
+    val status: String,
     val reportPoint: HazardReportPointDto,
     val createdAt: String,
     val representativeImageUrl: String?,
@@ -59,6 +60,7 @@ data class HazardReportPageDto(
 data class HazardReportDetailDto(
     val reportId: Long,
     val reportType: String,
+    val status: String,
     val description: String?,
     val reportPoint: HazardReportPointDto,
     val createdAt: String,

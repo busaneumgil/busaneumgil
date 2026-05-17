@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
@@ -263,4 +264,9 @@ private fun TextToSpeechAudioConfig.toAudioAttributes(): AudioAttributes =
     AudioAttributes.Builder()
         .setUsage(usage)
         .setContentType(contentType)
+        .apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                setAllowedCapturePolicy(capturePolicy)
+            }
+        }
         .build()

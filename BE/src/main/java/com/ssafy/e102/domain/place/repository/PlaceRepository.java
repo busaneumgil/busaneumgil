@@ -103,4 +103,23 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 		boolean featureTypesEmpty,
 		@Param("limit")
 		int limit);
+
+	@Query(value = """
+		select p.name
+		from places p
+		where ST_DWithin(
+			CAST(p.point AS geography),
+			CAST(ST_SetSRID(ST_MakePoint(:lng, :lat), 4326) AS geography),
+			:radius
+		)
+		order by ST_DistanceSphere(p.point, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326))
+		limit 1
+		""", nativeQuery = true)
+	Optional<String> findNearestPlaceName(
+		@Param("lat")
+		double lat,
+		@Param("lng")
+		double lng,
+		@Param("radius")
+		int radius);
 }

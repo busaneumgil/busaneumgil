@@ -2,11 +2,13 @@ package com.ssafy.e102.domain.admin.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.TreeMap;
 
 import org.locationtech.jts.geom.Coordinate;
@@ -43,6 +45,7 @@ public class AdminDashboardService {
 	private static final int DEFAULT_BOTTLENECK_LIMIT = 12;
 	private static final int MAX_BOTTLENECK_LIMIT = 50;
 	private static final int MAX_ROUTE_POINTS = 72;
+	private static final int BOTTLENECK_PLACE_NAME_RADIUS_METERS = 120;
 
 	private final UserRepository userRepository;
 	private final RouteSessionRepository routeSessionRepository;
@@ -172,6 +175,7 @@ public class AdminDashboardService {
 		var routeSegments = new ArrayList<AdminDashboardBottleneckResponse.BottleneckRouteSegmentResponse>();
 		var hotspots = new ArrayList<AdminDashboardBottleneckResponse.BottleneckHotspotResponse>();
 		var topBottlenecks = new ArrayList<AdminDashboardBottleneckResponse.TopBottleneckResponse>();
+		Map<String, Integer> usedNames = new HashMap<>();
 
 		for (int index = 0; index < candidates.size(); index++) {
 			RouteSessionRepository.BottleneckRouteCandidate candidate = candidates.get(index);
@@ -183,7 +187,7 @@ public class AdminDashboardService {
 			double speed = round(speed(candidate));
 			long sampleCount = valueOrZero(candidate.getSampleCount());
 			long reportCount = valueOrZero(candidate.getReportCount());
-			String name = routeName(candidate.getName(), index + 1);
+			String name = uniqueRouteName(routeName(candidate.getName(), points, index + 1), usedNames);
 
 			routeSegments.add(new AdminDashboardBottleneckResponse.BottleneckRouteSegmentResponse(
 				id,
@@ -335,10 +339,50 @@ public class AdminDashboardService {
 		return value == null ? 0 : value;
 	}
 
-	private String routeName(String value, int fallbackIndex) {
+	private String routeName(
+		String value,
+		List<AdminDashboardBottleneckResponse.GeoPointResponse> points,
+		int fallbackIndex) {
 		if (value == null || value.isBlank()) {
-			return "병목 후보 경로 " + fallbackIndex;
+			return fallbackRouteName(fallbackIndex);
 		}
-		return value.strip();
+		String normalized = value.strip();
+		if (!isGenericRouteTitle(normalized)) {
+			return normalized;
+		}
+		String nearbyPlaceName = nearbyPlaceName(points);
+		if (nearbyPlaceName != null && !nearbyPlaceName.isBlank()) {
+			return nearbyPlaceName.strip() + " 인근";
+		}
+		return fallbackRouteName(fallbackIndex);
+	}
+
+	private String nearbyPlaceName(List<AdminDashboardBottleneckResponse.GeoPointResponse> points) {
+		if (points.isEmpty()) {
+			return null;
+		}
+		AdminDashboardBottleneckResponse.GeoPointResponse center = points.get(points.size() / 2);
+		return placeRepository.findNearestPlaceName(center.lat(), center.lng(), BOTTLENECK_PLACE_NAME_RADIUS_METERS)
+			.orElse(null);
+	}
+
+	private boolean isGenericRouteTitle(String value) {
+		return switch (value) {
+			case "안전 경로", "추천 경로", "최단 경로", "최소 환승 경로", "최소 도보 경로",
+				"Safe Route", "Recommended Route", "Shortest Route", "Least Transfer Route", "Least Walk Route" -> true;
+			default -> false;
+		};
+	}
+
+	private String uniqueRouteName(String baseName, Map<String, Integer> usedNames) {
+		int occurrence = usedNames.merge(baseName, 1, Integer::sum);
+		if (occurrence <= 1) {
+			return baseName;
+		}
+		return baseName + " (" + occurrence + ")";
+	}
+
+	private String fallbackRouteName(int fallbackIndex) {
+		return "병목 후보 경로 " + fallbackIndex;
 	}
 }

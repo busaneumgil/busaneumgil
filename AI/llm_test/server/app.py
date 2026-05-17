@@ -130,6 +130,18 @@ def voice_analyze():
         )
         latency_ms = int(time.time() * 1000) - start_ms
 
+        # ── AI 호출 실패 체크 ──────────────────────────────
+        if result.error:
+            logger.warning(
+                "event=voice_analyze_provider_error request_id=%s mode=%s error=%s latency_ms=%s",
+                get_request_id(), mode, result.error, latency_ms,
+            )
+            return jsonify({
+                "status": "V5020",
+                "data": None,
+                "message": "음성 분석 AI 호출에 실패했습니다."
+            }), 502
+
         # ── 응답 필드 처리 ─────────────────────────────────
         confirmed_val = result.confirmed if mode == "LOW_VISION" else None
         confirmation_msg = result.confirmation_message if mode == "LOW_VISION" else None

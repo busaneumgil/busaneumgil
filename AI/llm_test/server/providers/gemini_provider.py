@@ -525,5 +525,5 @@ confirmed 파라미터 없이 confirm_ 도구를 호출할 때는 반드시 conf
                 raw_text="",
                 intent="UNKNOWN",
                 success=False,
-                error=str(e),
+                error=str(e) or type(e).__name__,
             )

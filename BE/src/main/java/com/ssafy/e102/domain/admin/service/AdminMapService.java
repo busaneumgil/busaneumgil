@@ -609,7 +609,8 @@ public class AdminMapService {
 		}
 	}
 
-	private AdminGeoJsonFeatureResponse<JsonNode, AdminAreaBoundaryPropertiesResponse> toAreaBoundaryFeature(String gu, String dong) {
+	private AdminGeoJsonFeatureResponse<JsonNode, AdminAreaBoundaryPropertiesResponse> toAreaBoundaryFeature(String gu,
+		String dong) {
 		if (!hasGu(gu)) {
 			return null;
 		}

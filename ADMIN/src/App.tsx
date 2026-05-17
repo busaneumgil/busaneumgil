@@ -460,6 +460,7 @@ function AdminApp() {
   const [selectedFacility, setSelectedFacility] = useState<FacilityFeature | null>(null);
   const [selectedFacilityCategories, setSelectedFacilityCategories] = useState<PlaceCategory[]>(() => [...placeCategories]);
   const [selectedSegment, setSelectedSegment] = useState<SegmentFeature | null>(null);
+  const [networkDetailPanelCollapsed, setNetworkDetailPanelCollapsed] = useState(false);
   const [facilityLocationPickEnabled, setFacilityLocationPickEnabled] = useState(false);
   const [facilityPickedLocation, setFacilityPickedLocation] = useState<{ point: GeoPoint; address?: string; nonce: number } | null>(null);
   const [accessToken, setAccessToken] = useState(getStoredAdminAccessToken);
@@ -1111,7 +1112,7 @@ function AdminApp() {
         )}
 
         {page === "network" && (
-          <div className="editor-layout">
+          <div className={`editor-layout ${networkDetailPanelCollapsed ? "detail-panel-collapsed" : ""}`}>
             <SegmentMap
               payload={payloadQuery.data}
               bridgePayload={bridgeQuery.data}
@@ -1128,6 +1129,15 @@ function AdminApp() {
               onRoadviewChange={setRoadviewDock}
               editable={canEditSelectedArea}
             />
+            <button
+              type="button"
+              className="detail-panel-toggle"
+              aria-expanded={!networkDetailPanelCollapsed}
+              aria-label={networkDetailPanelCollapsed ? "우측 패널 펼치기" : "우측 패널 접기"}
+              onClick={() => setNetworkDetailPanelCollapsed((collapsed) => !collapsed)}
+            >
+              {networkDetailPanelCollapsed ? "<" : ">"}
+            </button>
             <aside className="detail-panel">
               <section className="panel-section roadview-dock-section">
                 <div className="roadview-panel docked">
@@ -1188,7 +1198,7 @@ function AdminApp() {
                     작업 #{activeRoadEditJob.jobId} {activeRoadEditJob.message}
                     {roadEditResult && (
                       <>
-                        {" "}추가 {roadEditResult.addedSegments}, 삭제 {roadEditResult.deletedSegments},
+                        {" "}추가 {roadEditResult.addedSegments}, 제외 {roadEditResult.skippedSegments ?? 0}, 삭제 {roadEditResult.deletedSegments},
                         생성 node {roadEditResult.createdNodes}, snap {roadEditResult.snappedNodes}
                       </>
                     )}

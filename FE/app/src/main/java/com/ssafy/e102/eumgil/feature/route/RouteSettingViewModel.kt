@@ -82,6 +82,7 @@ class RouteSettingViewModel(
     private var activeRouteLoadId: Long = 0L
     private var lastObservedSelectionState = destinationSelectionRepository.selectionState.value
     private var detailNavigationRequest: RouteNavigationRequest? = null
+    private var isManualTransitRefreshInFlight: Boolean = false
 
     init {
         currentLocationManager.refreshLatestLocation()
@@ -105,6 +106,7 @@ class RouteSettingViewModel(
             is RouteSettingUiAction.RouteOptionDetailClicked -> openRouteDetail(action.routeOption)
             RouteSettingUiAction.WaypointsSwapClicked -> swapWaypoints()
             RouteSettingUiAction.StartNavigationClicked -> startNavigation()
+            RouteSettingUiAction.TransitRefreshClicked -> refreshSelectedTransitRoutes()
         }
     }
 
@@ -741,6 +743,66 @@ class RouteSettingViewModel(
             )
     }
 
+    private fun refreshSelectedTransitRoutes() {
+        val currentState = mutableUiState.value
+        if (
+            isManualTransitRefreshInFlight ||
+            currentState.selectedTravelMode != RouteTravelMode.TRANSIT ||
+            currentState.selectedRoute == null
+        ) {
+            return
+        }
+        val currentSearchData = latestSearchDataByMode[RouteTravelMode.TRANSIT] ?: return
+        cancelStagedTransitEnhancement()
+        isManualTransitRefreshInFlight = true
+        mutableUiState.update { state ->
+            state.copy(
+                isTransitRefreshing = true,
+                loadNoticeMessage = null,
+                ctaAcknowledged = false,
+            )
+        }
+
+        viewModelScope.launch {
+            try {
+                val selectedOption = selectedOptionForMode(RouteTravelMode.TRANSIT)
+                runCatching {
+                    loadFreshSearchDataForMode(
+                        mode = RouteTravelMode.TRANSIT,
+                        query = currentSearchData.query,
+                    )
+                }.onSuccess { searchData ->
+                    latestSearchDataByMode = latestSearchDataByMode + (RouteTravelMode.TRANSIT to searchData)
+                    mutableUiState.value =
+                        buildUiState(
+                            searchData = searchData,
+                            originResolution = currentOriginResolution(searchData.result.origin),
+                            destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value),
+                            selectedTravelMode = RouteTravelMode.TRANSIT,
+                            requestedOption = selectedOption,
+                            ctaAcknowledged = false,
+                        ).copy(isTransitRefreshing = false)
+                }.onFailure { throwable ->
+                    if (throwable is CancellationException) throw throwable
+                    mutableUiState.update { state ->
+                        state.copy(
+                            isTransitRefreshing = false,
+                            loadNoticeMessage = throwable.toRouteLoadErrorMessage(),
+                            loadDebugMessage =
+                                combineRouteLoadDebugMessages(
+                                    primary = state.loadDebugMessage,
+                                    secondary = throwable.toRouteLoadDebugMessage(RouteTravelMode.TRANSIT),
+                                ),
+                            ctaAcknowledged = false,
+                        )
+                    }
+                }
+            } finally {
+                isManualTransitRefreshInFlight = false
+            }
+        }
+    }
+
     private fun swapWaypoints() {
         if (mutableUiState.value.destinationHandoffState != RouteDestinationHandoffState.DIRECT) {
             return
@@ -992,6 +1054,19 @@ class RouteSettingViewModel(
         if (throwable is CancellationException) throw throwable
         latestSearchDataByMode = latestSearchDataByMode - mode
         val errorMessage = throwable.toRouteLoadErrorMessage()
+        val isNoRouteFailure = throwable.isNoRouteFailure()
+        val resolvedTravelMode =
+            if (isNoRouteFailure) {
+                RouteTravelMode.TRANSIT
+            } else {
+                mode
+            }
+        val resolvedOption =
+            if (isNoRouteFailure) {
+                TRANSIT_DEFAULT_SELECTED_OPTION
+            } else {
+                selectedOption
+            }
         mutableUiState.update { state ->
             state.copy(
                 isLoading = false,
@@ -1005,9 +1080,9 @@ class RouteSettingViewModel(
                 destinationHandoffState = destinationResolution.handoffState,
                 destinationFallbackMessage = destinationResolution.fallbackMessage,
                 isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
-                selectedTravelMode = mode,
+                selectedTravelMode = resolvedTravelMode,
                 pendingTravelMode = null,
-                selectedOption = selectedOption,
+                selectedOption = resolvedOption,
                 optionCards = emptyList(),
                 selectedRoute = null,
                 routePreviewMap =
@@ -1019,7 +1094,7 @@ class RouteSettingViewModel(
                 sourceLabel = null,
                 cta = errorCtaUiState(),
                 ctaAcknowledged = false,
-                showsDuribalCallAction = throwable.isNoRouteFailure(),
+                showsDuribalCallAction = isNoRouteFailure,
             )
         }
     }

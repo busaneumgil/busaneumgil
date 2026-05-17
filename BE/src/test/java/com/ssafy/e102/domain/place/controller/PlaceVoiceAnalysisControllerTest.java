@@ -21,6 +21,8 @@ import com.ssafy.e102.domain.place.dto.request.VoiceAnalyzeRequest;
 import com.ssafy.e102.domain.place.dto.response.VoiceAnalyzeResponse;
 import com.ssafy.e102.domain.place.service.PlaceVoiceAnalysisService;
 import com.ssafy.e102.domain.place.type.VoiceIntent;
+import com.ssafy.e102.global.exception.BusinessException;
+import com.ssafy.e102.global.exception.CommonErrorCode;
 import com.ssafy.e102.global.exception.GlobalExceptionHandler;
 
 class PlaceVoiceAnalysisControllerTest {
@@ -42,7 +44,17 @@ class PlaceVoiceAnalysisControllerTest {
 	@DisplayName("STT 텍스트 의미 분석 요청을 받아 추출된 장소명을 반환한다")
 	void analyzeVoiceText() throws Exception {
 		when(placeVoiceAnalysisService.analyze(any(VoiceAnalyzeRequest.class)))
-			.thenReturn(new VoiceAnalyzeResponse(VoiceIntent.PLACE_SEARCH, "이재모피자", null, null));
+			.thenReturn(new VoiceAnalyzeResponse(
+				VoiceIntent.PLACE_SEARCH,
+				"이재모피자",
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null));
 
 		mockMvc.perform(post("/voice/analyze")
 			.contentType(MediaType.APPLICATION_JSON)
@@ -67,5 +79,21 @@ class PlaceVoiceAnalysisControllerTest {
 			.andExpect(jsonPath("$.status").value("C4000"));
 
 		verifyNoInteractions(placeVoiceAnalysisService);
+	}
+
+	@Test
+	@DisplayName("음성 분석 서비스가 입력 오류를 던지면 C4000으로 응답한다")
+	void mapServiceInvalidInputToBadRequest() throws Exception {
+		when(placeVoiceAnalysisService.analyze(any(VoiceAnalyzeRequest.class)))
+			.thenThrow(new BusinessException(CommonErrorCode.INVALID_INPUT, "잘못된 입력입니다."));
+
+		mockMvc.perform(post("/voice/analyze")
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"text\":\"...\",\"mode\":\"LOW_VISION\"}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value("C4000"))
+			.andExpect(jsonPath("$.message").value("잘못된 입력입니다."));
+
+		verify(placeVoiceAnalysisService).analyze(any(VoiceAnalyzeRequest.class));
 	}
 }

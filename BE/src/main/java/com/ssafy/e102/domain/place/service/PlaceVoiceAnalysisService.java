@@ -22,19 +22,38 @@ public class PlaceVoiceAnalysisService {
 
 	public VoiceAnalyzeResponse analyze(VoiceAnalyzeRequest request) {
 		AiVoiceAnalyzeResult result = aiVoiceAnalysisClient.analyze(AiVoiceAnalyzeCommand.from(request));
-		validateResult(result);
-		if (request.mode() == VoiceAnalysisMode.MOBILITY_IMPAIRED) {
-			return VoiceAnalyzeResponse.of(result, null, null);
-		}
+		validateResult(request.mode(), result);
 		return VoiceAnalyzeResponse.of(result, result.confirmed(), result.confirmationMessage());
 	}
 
-	private void validateResult(AiVoiceAnalyzeResult result) {
+	private void validateResult(VoiceAnalysisMode mode, AiVoiceAnalyzeResult result) {
 		if (result == null || result.intent() == null) {
 			throw new PlaceException(PlaceErrorCode.VOICE_ANALYSIS_AI_FAILED);
 		}
-		if (result.intent() == VoiceIntent.PLACE_SEARCH
-			&& (result.placeName() == null || result.placeName().isBlank())) {
+		switch (result.intent()) {
+			case PLACE_SEARCH -> {
+				requireNotBlank(result.placeName());
+				requireLowVisionConfirmationMessage(mode, result);
+			}
+			case CATEGORY_SEARCH -> requireNotBlank(result.category());
+			case BOOKMARK_ADD, BOOKMARK_DELETE -> {
+				requireNotBlank(result.placeName());
+				requireNotBlank(result.bookmarkAction());
+			}
+			case NAVIGATE -> requireNotBlank(result.destination());
+			case REPORT -> requireNotBlank(result.reportType());
+			default -> {}
+		}
+	}
+
+	private void requireLowVisionConfirmationMessage(VoiceAnalysisMode mode, AiVoiceAnalyzeResult result) {
+		if (mode == VoiceAnalysisMode.LOW_VISION && result.confirmed() == null) {
+			requireNotBlank(result.confirmationMessage());
+		}
+	}
+
+	private void requireNotBlank(String value) {
+		if (value == null || value.isBlank()) {
 			throw new PlaceException(PlaceErrorCode.VOICE_ANALYSIS_AI_FAILED);
 		}
 	}

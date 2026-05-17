@@ -71,7 +71,9 @@ class AdminRoadNetworkEditServiceTest {
 			.contains("join road_nodes from_node")
 			.contains("join road_nodes to_node")
 			.contains("ST_SetPoint")
-			.contains("ST_NPoints(raw_geom) - 1");
+			.contains("ST_NPoints(raw_geom) - 1")
+			.contains("segment_pieces")
+			.contains("admin_edit_new_segment_split_points");
 	}
 
 	@Test
@@ -100,13 +102,32 @@ class AdminRoadNetworkEditServiceTest {
 
 		ReflectionTestUtils.invokeMethod(adminRoadNetworkEditService, "splitExistingSegmentsForProjectedAddEndpoints");
 
-		verify(jdbcTemplate, times(2)).execute(sqlCaptor.capture());
-		assertThat(sqlCaptor.getAllValues().get(0))
+		verify(jdbcTemplate, times(5)).execute(sqlCaptor.capture());
+		assertThat(String.join("\n", sqlCaptor.getAllValues()))
 			.contains("admin_edit_add_split_points")
 			.contains("s.segment_type in ('CROSS_WALK', 'SIDE_LINE')")
 			.contains("projection_distance_meter")
 			.contains("ST_ClosestPoint")
 			.contains("ST_LineLocatePoint");
+	}
+
+	@Test
+	@DisplayName("add 교차점 split SQL은 신규 SIDE_LINE과 기존 SIDE_LINE의 내부 교차점 node를 만든다")
+	void splitExistingSegmentsForProjectedAddEndpointsCreatesIntersectionNodes() {
+		ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+		when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(0L);
+
+		ReflectionTestUtils.invokeMethod(adminRoadNetworkEditService, "splitExistingSegmentsForProjectedAddEndpoints");
+
+		verify(jdbcTemplate, times(5)).execute(sqlCaptor.capture());
+		assertThat(String.join("\n", sqlCaptor.getAllValues()))
+			.contains("admin_edit_intersection_split_points")
+			.contains("ST_Intersection")
+			.contains("GeometryType(intersection_dump.geom) = 'POINT'")
+			.contains("admin_edit_new_segment_split_points")
+			.contains("raw_add_intersections")
+			.contains("left_add.edit_seq < right_add.edit_seq")
+			.contains("edge_split_fraction");
 	}
 
 	@Test

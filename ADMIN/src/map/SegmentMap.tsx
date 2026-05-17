@@ -269,7 +269,8 @@ export function SegmentMap({
           drawSelectedSegment(feature);
           return;
         }
-        if (modeRef.current === "delete" && polygonDeleteActiveRef.current) {
+        if (isCoordinatePickMode()) {
+          preventMapClickPropagation();
           handleMapCoordinate(coord, latLng);
           return;
         }
@@ -305,7 +306,7 @@ export function SegmentMap({
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
+  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, mode, polygonDeleteActive, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
 
   useEffect(() => {
     if (detailedSegmentsVisible) {
@@ -424,6 +425,15 @@ export function SegmentMap({
     }
   }
 
+  function isCoordinatePickMode() {
+    return modeRef.current === "add" || (modeRef.current === "delete" && polygonDeleteActiveRef.current);
+  }
+
+  function preventMapClickPropagation() {
+    const kakaoEvent = window.kakao?.maps?.event as { preventMap?: () => void } | undefined;
+    kakaoEvent?.preventMap?.();
+  }
+
   function clearTempOverlays() {
     tempOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     tempOverlaysRef.current = [];
@@ -431,7 +441,7 @@ export function SegmentMap({
     polygonShapeRef.current = null;
   }
 
-  function drawPoint(coord: Coord, color: string, radius: number): KakaoOverlay | null {
+  function drawPoint(coord: Coord, color: string, radius: number, onClick?: (coord: Coord, latLng: unknown) => void): KakaoOverlay | null {
     if (!window.kakao?.maps || !mapRef.current) return null;
     const circle = new window.kakao.maps.Circle({
       map: mapRef.current,
@@ -442,7 +452,15 @@ export function SegmentMap({
       strokeOpacity: 1,
       fillColor: color,
       fillOpacity: 0.95,
+      clickable: Boolean(onClick),
     });
+    if (onClick) {
+      window.kakao.maps.event.addListener(circle, "click", (event: unknown) => {
+        preventMapClickPropagation();
+        const latLng = (event as { latLng?: unknown }).latLng ?? kakaoLatLngAtCoord(coord);
+        onClick(coord, latLng);
+      });
+    }
     return circle;
   }
 
@@ -451,10 +469,17 @@ export function SegmentMap({
     clearPendingEditOverlays();
 
     draftSegmentFeatures(draftEditsRef.current).forEach((feature) => {
-      const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, () => undefined, { draft: true, hitArea: false });
+      const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, (coord, latLng) => {
+        if (!isCoordinatePickMode()) return;
+        preventMapClickPropagation();
+        handleMapCoordinate(coord, latLng);
+      }, { draft: true, hitArea: false });
       if (segmentOverlays) pendingEditOverlaysRef.current.push(...segmentOverlays);
       feature.geometry.coordinates.forEach((coord) => {
-        const point = drawPoint(coord, "#ef4444", 2);
+        const point = drawPoint(coord, "#ef4444", 2, (pointCoord, latLng) => {
+          if (!isCoordinatePickMode()) return;
+          handleMapCoordinate(pointCoord, latLng);
+        });
         if (point) pendingEditOverlaysRef.current.push(point);
       });
     });

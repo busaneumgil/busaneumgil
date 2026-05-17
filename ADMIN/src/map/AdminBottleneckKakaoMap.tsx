@@ -131,6 +131,35 @@ export function AdminBottleneckKakaoMap({
     fittedBoundsKeyRef.current = boundsKey;
   }, [boundsKey, boundsPoints, mapReady]);
 
+  useEffect(() => {
+    if (!mapReady || !containerRef.current) return;
+
+    let frame = 0;
+    const relayout = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const map = mapRef.current;
+        if (!map) return;
+        map.relayout?.();
+        if (boundsPoints.length > 0) {
+          fitMapBounds(boundsPoints);
+        }
+      });
+    };
+
+    const timers = [0, 120, 360, 800].map((delay) => window.setTimeout(relayout, delay));
+    const observer = new ResizeObserver(relayout);
+    observer.observe(containerRef.current);
+    window.addEventListener("resize", relayout);
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      observer.disconnect();
+      window.removeEventListener("resize", relayout);
+      window.cancelAnimationFrame(frame);
+    };
+  }, [boundsKey, boundsPoints, mapReady]);
+
   function fitMapBounds(points: GeoPoint[]) {
     if (!mapRef.current || !window.kakao?.maps || points.length === 0) return;
     const bounds = new window.kakao.maps.LatLngBounds();

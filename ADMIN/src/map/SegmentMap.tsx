@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import type { BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentFeatureType, SegmentPayload } from "../types";
 import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
-import { deletedEdgeIds, draftSegmentFeatures, resetPolygonDeleteSelection, segmentsTouchingPolygon, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
+import { deletedEdgeIds, draftSegmentFeatures, isSameSnappedNode, newNodeRef, resetPolygonDeleteSelection, roadNodeCandidates, segmentEndpointNodeCandidates, segmentsTouchingPolygon, snapToSegmentEndpointNode, type SnappedSegmentEndpoint, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
 import { shouldShowRoadAttributeReference } from "./networkReferenceLayer";
 import { roadAttributeStrokeColor, roadAttributeStrokeStyle, roadAttributeStrokeWeight } from "./roadAttributeStyle";
 import { roadviewUnavailableMessage, shouldOpenRoadviewForMode } from "./roadviewMode";
@@ -68,6 +68,7 @@ const segmentFeatureColors: Record<SegmentFeatureType, string> = {
 type RouteAttributeLayer = "slope" | "width" | "surface" | "walkAccess" | "crosswalk" | "signal" | "audioSignal" | "brailleBlock" | "stairs";
 type RouteLineLayer = "safe" | "fast";
 const routeAttributeLayerTypes: RouteAttributeLayer[] = ["slope", "width", "surface", "walkAccess", "crosswalk", "signal", "audioSignal", "brailleBlock", "stairs"];
+const routeAttributeLegendLayerTypes: RouteAttributeLayer[] = routeAttributeLayerTypes.filter((layer) => layer !== "walkAccess");
 const routeEventLayerTypes: RouteAttributeLayer[] = ["crosswalk", "signal", "audioSignal", "brailleBlock", "stairs"];
 const routeAttributeLabels: Record<RouteAttributeLayer, string> = {
   slope: "경사도",
@@ -90,10 +91,6 @@ const routeAttributeColors: Record<RouteAttributeLayer, string> = {
   audioSignal: "#0f766e",
   brailleBlock: "#7c3aed",
   stairs: "#7c2d12",
-};
-const routeLineLabels: Record<RouteLineLayer, string> = {
-  safe: "안전 경로",
-  fast: "빠른 경로",
 };
 const routeLineColors: Record<RouteLineLayer, string> = {
   safe: "#dc2626",
@@ -156,6 +153,7 @@ export function SegmentMap({
   const modeRef = useRef<EditorMode>("idle");
   const addTypeRef = useRef<AddType>("SIDE_LINE");
   const addPointsRef = useRef<Array<[number, number]>>([]);
+  const addEndpointSnapsRef = useRef<SnappedSegmentEndpoint[]>([]);
   const polygonPointsRef = useRef<Coord[]>([]);
   const polygonDeleteActiveRef = useRef(false);
   const onDraftEditRef = useRef(onDraftEdit);
@@ -193,10 +191,6 @@ export function SegmentMap({
     audioSignal: true,
     brailleBlock: true,
     stairs: true,
-  });
-  const [routeLineLayers, setRouteLineLayers] = useState<Record<RouteLineLayer, boolean>>({
-    safe: true,
-    fast: true,
   });
   const detailedSegmentsVisible = mapLevel <= DETAIL_SEGMENT_MAX_LEVEL;
 
@@ -256,7 +250,7 @@ export function SegmentMap({
     overlaysRef.current = [];
     segmentOverlayByEdgeRef.current.clear();
 
-    const useHitArea = toolbarMode === "editor" && mode === "delete";
+    const useHitArea = toolbarMode === "editor";
     const canRenderDetails = detailedSegmentsVisible;
     const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
     const segmentFeatures = canRenderDetails
@@ -310,7 +304,7 @@ export function SegmentMap({
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, mode, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
+  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
 
   useEffect(() => {
     if (detailedSegmentsVisible) {
@@ -323,11 +317,11 @@ export function SegmentMap({
 
   useEffect(() => {
     renderReferenceOverlays();
-  }, [detailedSegmentsVisible, mode, referenceLayers, roadAttributePayload, stairPayload, audioSignalPayload, brailleBlockPayload]);
+  }, [detailedSegmentsVisible, referenceLayers, roadAttributePayload, stairPayload, audioSignalPayload, brailleBlockPayload]);
 
   useEffect(() => {
     renderRouteOverlays();
-  }, [routeLineLayers, routeLines, mapReady]);
+  }, [routeLines, mapReady]);
 
   useEffect(() => {
     renderRoutePointOverlays();
@@ -354,6 +348,7 @@ export function SegmentMap({
     setModeState(nextMode);
     if (nextMode !== "add") {
       addPointsRef.current = [];
+      addEndpointSnapsRef.current = [];
       clearTempOverlays();
       setPendingAddCount(0);
     }
@@ -366,6 +361,11 @@ export function SegmentMap({
   function setAddType(nextAddType: AddType) {
     addTypeRef.current = nextAddType;
     setAddTypeState(nextAddType);
+    addPointsRef.current = [];
+    addEndpointSnapsRef.current = [];
+    clearTempOverlays();
+    setPendingAddCount(0);
+    setSnapMessage(null);
   }
 
   function shouldRenderDetailedSegments() {
@@ -393,17 +393,35 @@ export function SegmentMap({
     }
 
     if (modeRef.current === "add") {
-      const nextCoord = addTypeRef.current === "CROSS_WALK" ? snapCrossWalkEndpoint(coord) : coord;
-      addPointsRef.current = [...addPointsRef.current, nextCoord];
+      const endpoint = snapAddEndpoint(coord);
+      addEndpointSnapsRef.current = [...addEndpointSnapsRef.current, endpoint];
+      addPointsRef.current = addEndpointSnapsRef.current.map((item) => item.coord);
       redrawAddPreview();
       setPendingAddCount(addPointsRef.current.length);
-      const result = twoPointAddDraft(addTypeRef.current, addPointsRef.current);
+      if (isSameSnappedNode(addEndpointSnapsRef.current[0], addEndpointSnapsRef.current[1])) {
+        const first = addEndpointSnapsRef.current[0];
+        addEndpointSnapsRef.current = first ? [first] : [];
+        addPointsRef.current = addEndpointSnapsRef.current.map((item) => item.coord);
+        redrawAddPreview();
+        setPendingAddCount(addPointsRef.current.length);
+        setSnapMessage("시작점과 끝점이 같은 node에 붙습니다. 다른 끝점을 선택하세요.");
+        return;
+      }
+      const result = twoPointAddDraft(addTypeRef.current, addPointsRef.current, addEndpointSnapsRef.current);
+      if (result.rejectedReason) {
+        addPointsRef.current = result.remainingPoints;
+        addEndpointSnapsRef.current = [];
+        clearTempOverlays();
+        setPendingAddCount(result.remainingPoints.length);
+        setSnapMessage(result.rejectedReason);
+        return;
+      }
       if (!result.edit) return;
       onDraftEditRef.current(result.edit);
       addPointsRef.current = result.remainingPoints;
+      addEndpointSnapsRef.current = [];
       clearTempOverlays();
       setPendingAddCount(result.remainingPoints.length);
-      setMode("idle");
       return;
     }
 
@@ -491,6 +509,9 @@ export function SegmentMap({
       return roadSegmentLayers.crossWalk;
     }
     if (segmentType === "TRANSITION_CONNECTOR") {
+      if (toolbarMode === "routeAttributeLegend") {
+        return false;
+      }
       return roadSegmentLayers.transitionConnector;
     }
     return roadSegmentLayers.sideLine;
@@ -500,16 +521,16 @@ export function SegmentMap({
     if (!window.kakao?.maps || !mapRef.current) return;
     routeOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     routeOverlaysRef.current = [];
-    const safeLine = routeLineLayers.safe ? createRoutePolyline(routeLines?.safe ?? [], routeLineColors.safe, {
+    const safeLine = createRoutePolyline(routeLines?.safe ?? [], routeLineColors.safe, {
       strokeWeight: 9,
       strokeOpacity: 0.72,
       zIndex: 32,
-    }) : null;
-    const fastLine = routeLineLayers.fast ? createRoutePolyline(routeLines?.fast ?? [], routeLineColors.fast, {
+    });
+    const fastLine = createRoutePolyline(routeLines?.fast ?? [], routeLineColors.fast, {
       strokeWeight: 5,
       strokeOpacity: 0.92,
       zIndex: 34,
-    }) : null;
+    });
     if (safeLine) {
       safeLine.setMap(mapRef.current);
       routeOverlaysRef.current.push(safeLine);
@@ -657,8 +678,9 @@ export function SegmentMap({
 
   function redrawAddPreview() {
     clearTempOverlays();
-    addPointsRef.current.forEach((coord) => {
-      const point = drawPoint(coord, "#ef4444", 2);
+    addPointsRef.current.forEach((coord, index) => {
+      const endpoint = addEndpointSnapsRef.current[index];
+      const point = drawPoint(coord, endpoint?.snapped ? "#22c55e" : "#ef4444", endpoint?.snapped ? 2.8 : 2);
       if (point) tempOverlaysRef.current.push(point);
     });
     if (addPointsRef.current.length >= 2) {
@@ -802,6 +824,24 @@ export function SegmentMap({
     return new window.kakao!.maps.LatLng(coord[1], coord[0]);
   }
 
+  function snapAddEndpoint(coord: Coord): SnappedSegmentEndpoint {
+    if (addTypeRef.current === "CROSS_WALK") {
+      const snappedCoord = snapCrossWalkEndpoint(coord);
+      return { coord: snappedCoord, snapped: false, nodeRef: newNodeRef(snappedCoord) };
+    }
+    const explicitNodeCandidates = roadNodeCandidates(payload?.roadNodes?.features ?? []);
+    const candidates = explicitNodeCandidates.length
+      ? explicitNodeCandidates
+      : segmentEndpointNodeCandidates(visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current));
+    const endpoint = snapToSegmentEndpointNode(coord, candidates);
+    if (!endpoint.snapped) {
+      setSnapMessage(null);
+      return endpoint;
+    }
+    setSnapMessage(`SIDE_LINE 끝점을 node #${endpoint.nodeId}에 ${(endpoint.distanceMeter ?? 0).toFixed(1)}m 보정했습니다.`);
+    return endpoint;
+  }
+
   function snapCrossWalkEndpoint(coord: Coord): Coord {
     const candidates = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current)
       .filter((feature) => {
@@ -827,27 +867,27 @@ export function SegmentMap({
     <section className="map-shell">
       <div ref={containerRef} className="map-canvas" />
       {toolbarMode === "editor" ? (
-        <div className="map-toolbar">
-          <button className={mode === "delete" ? "selected-tool" : ""} onClick={() => setMode("delete")} disabled={!editable}>Delete</button>
-          <button className={mode === "add" ? "selected-tool" : ""} onClick={() => setMode("add")} disabled={!editable}>Add</button>
-          <select value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add" || !editable}>
+        <div className="map-toolbar editor-toolbar">
+          <button type="button" className={`toolbar-button ${mode === "delete" ? "selected-tool" : ""}`} onClick={() => setMode("delete")} disabled={!editable}>Delete</button>
+          <button type="button" className={`toolbar-button ${mode === "add" ? "selected-tool" : ""}`} onClick={() => setMode("add")} disabled={!editable}>Add</button>
+          <select className="toolbar-select" value={addType} onChange={(event) => setAddType(event.target.value as AddType)} disabled={mode !== "add" || !editable}>
             <option value="SIDE_LINE">SIDE_LINE</option>
             <option value="CROSS_WALK">CROSS_WALK</option>
           </select>
           {mode === "delete" && (
             <>
-              <button className={`danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)} disabled={!editable}>영역 선택</button>
-              <button className="danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3 || !editable}>영역 삭제</button>
-              {polygonDeleteActive && <span className="toolbar-hint">지도에서 3~5개 점을 찍어 삭제 영역을 만듭니다.</span>}
+              <button type="button" className={`toolbar-button danger-outline ${polygonDeleteActive ? "selected-tool" : ""}`} onClick={() => setPolygonDeleteActiveState(!polygonDeleteActive)} disabled={!editable}>영역 선택</button>
+              <button type="button" className="toolbar-button danger-soft" onClick={deletePolygon} disabled={polygonPointCount < 3 || !editable}>영역 삭제</button>
+              {polygonDeleteActive && <span className="toolbar-hint">3~5개 점 선택</span>}
             </>
           )}
-          <button className={mode === "roadview" ? "selected-tool" : ""} onClick={() => setMode("roadview")}>Roadview</button>
-          <button className={showBridgeGuides ? "selected-tool" : ""} onClick={() => setShowBridgeGuides((visible) => !visible)}>
-            연결 가이드 {bridgeCandidateCount}
+          <button type="button" className={`toolbar-button ${mode === "roadview" ? "selected-tool" : ""}`} onClick={() => setMode("roadview")}>Roadview</button>
+          <button type="button" className={`toolbar-button guide-button ${showBridgeGuides ? "selected-tool" : ""}`} onClick={() => setShowBridgeGuides((visible) => !visible)}>
+            연결 {bridgeCandidateCount}
           </button>
           <span className="draft-count-badge">변경 {draftEditCount}건</span>
-          <button onClick={onUndoDraftEdit} disabled={!draftEditCount || !onUndoDraftEdit}>Undo</button>
-          <button onClick={onClearDraftEdits} disabled={!draftEditCount || !onClearDraftEdits}>Clear</button>
+          <button type="button" className="toolbar-button" onClick={onUndoDraftEdit} disabled={!draftEditCount || !onUndoDraftEdit}>Undo</button>
+          <button type="button" className="toolbar-button" onClick={onClearDraftEdits} disabled={!draftEditCount || !onClearDraftEdits}>Clear</button>
         </div>
       ) : toolbarMode === "roadSegmentLegend" ? (
         <div className="map-toolbar attribute-legend">
@@ -884,28 +924,13 @@ export function SegmentMap({
             active={roadSegmentLayers.crossWalk}
             onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, crossWalk: !layers.crossWalk }))}
           />
-          <LegendItem
-            color="#64748b"
-            label={`CONNECTOR ${roadSegmentCounts.transitionConnector}`}
-            active={roadSegmentLayers.transitionConnector}
-            onClick={() => setRoadSegmentLayers((layers) => ({ ...layers, transitionConnector: !layers.transitionConnector }))}
-          />
-          {routeAttributeLayerTypes.map((layer) => (
+          {routeAttributeLegendLayerTypes.map((layer) => (
             <LegendItem
               key={layer}
               color={routeAttributeColors[layer]}
               label={`${routeAttributeLabels[layer]} ${routeAttributeCounts.get(layer) ?? 0}`}
               active={routeAttributeLayers[layer]}
               onClick={() => setRouteAttributeLayers((layers) => ({ ...layers, [layer]: !layers[layer] }))}
-            />
-          ))}
-          {(Object.keys(routeLineLabels) as RouteLineLayer[]).map((layer) => (
-            <LegendItem
-              key={layer}
-              color={routeLineColors[layer]}
-              label={routeLineLabels[layer]}
-              active={routeLineLayers[layer]}
-              onClick={() => setRouteLineLayers((layers) => ({ ...layers, [layer]: !layers[layer] }))}
             />
           ))}
         </div>

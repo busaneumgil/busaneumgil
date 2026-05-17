@@ -136,13 +136,13 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(0, locationManager.refreshLatestLocationCallCount)
-            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.activeSegmentIndex)
-            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(0, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
             assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
-            assertEquals(-1, viewModel.uiState.value.segmentSync.railItems.firstOrNull()?.index)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.railItems.firstOrNull()?.index)
             assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
             assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
-            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("300m 후 직진 이동입니다", viewModel.uiState.value.stepCard.heroTitle)
             assertEquals("목적지까지 약 15분", viewModel.uiState.value.stepCard.heroDescription)
         }
 
@@ -162,12 +162,12 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.activeSegmentIndex)
-            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertEquals(1, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
             assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
             assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
-            assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
-            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("2 / 2", viewModel.uiState.value.progressLabel)
+            assertEquals("600m 후 우회전입니다", viewModel.uiState.value.stepCard.heroTitle)
         }
 
     @Test
@@ -497,7 +497,7 @@ class NavigationViewModelTest {
             assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
             assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
             assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
-            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("300m 후 직진 이동입니다", viewModel.uiState.value.stepCard.heroTitle)
         }
 
     @Test

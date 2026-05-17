@@ -247,7 +247,8 @@ class RouteSettingLayoutPolicyTest {
             "Transit options should scroll above the fixed start button on a white surface.",
             transitPaneSection.contains("color = Color.White") &&
                 transitPaneSection.contains(".verticalScroll(rememberScrollState())") &&
-                transitPaneSection.contains("bottom = RouteSettingBottomBarOverlayClearance"),
+                transitPaneSection.contains("val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()") &&
+                transitPaneSection.contains("bottom = bottomBarOverlayClearance"),
         )
     }
 

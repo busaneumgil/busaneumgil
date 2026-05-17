@@ -47,7 +47,7 @@ class LowVisionNavigationCompleteScreenTest {
         assertTrue(source.contains("runCatching"))
         assertTrue(source.contains("}.onSuccess {"))
         assertTrue(source.contains("onNavigateToBookmark()"))
-        assertTrue(source.contains("destination.toLowVisionBookmarkData()"))
+        assertTrue(source.contains("destination.toBookmarkDataOrNull()"))
         assertTrue(!source.contains("SaveBookmarkClicked"))
         assertTrue(!source.contains("NavigationViewModel"))
     }

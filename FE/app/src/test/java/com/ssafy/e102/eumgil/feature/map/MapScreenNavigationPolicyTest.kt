@@ -12,8 +12,8 @@ class MapScreenNavigationPolicyTest {
                 .readText()
 
         assertTrue(
-            "Facility detail route CTA should keep using the primary route label from the map screen.",
-            source.contains("R.string.map_facility_detail_route_entry_action"),
+            "Facility detail route CTA should keep using the destination route label from the map screen.",
+            source.contains("R.string.map_facility_detail_set_destination_action"),
         )
         assertTrue(
             "Facility detail route CTA should suppress ripple because it leaves the map for route setting.",

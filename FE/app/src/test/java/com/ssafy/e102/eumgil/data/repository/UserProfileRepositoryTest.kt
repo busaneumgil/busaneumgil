@@ -114,7 +114,7 @@ class UserProfileRepositoryTest {
         }
 
     @Test
-    fun `sync my profile unauthorized failure preserves local state and returns auth failure`() =
+    fun `sync my profile reissue failure preserves local state and returns auth failure`() =
         runTest {
             val authSessionRepository =
                 RecordingUserProfileAuthSessionRepository(
@@ -149,7 +149,10 @@ class UserProfileRepositoryTest {
                                     message = "unauthorized",
                                 ),
                         ),
-                    authRemoteDataSource = FakeUserProfileAuthRemoteDataSource(),
+                    authRemoteDataSource =
+                        FakeUserProfileAuthRemoteDataSource(
+                            reissueThrowable = IllegalStateException("reissue failed"),
+                        ),
                     authSessionRepository = authSessionRepository,
                     settingsRepository = settingsRepository,
                 )
@@ -157,6 +160,7 @@ class UserProfileRepositoryTest {
             val result = repository.syncMyProfile()
 
             assertSame(UserProfileSyncResult.AuthenticationFailed, result)
+            assertTrue(authSessionRepository.clearAuthSessionCalled)
             assertNull(authSessionRepository.savedAuthSession)
             assertNull(settingsRepository.savedPrimaryUserType)
             assertNull(settingsRepository.savedMobilitySubtype)
@@ -316,12 +320,14 @@ private class FakeUserProfileAuthRemoteDataSource(
             accessToken = "unused-access-token",
             refreshToken = "unused-refresh-token",
         ),
+    private val reissueThrowable: Throwable? = null,
 ) : AuthRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "https://example.com")) {
     var latestRefreshToken: String? = null
         private set
 
     override suspend fun reissue(refreshToken: String): ReissueResponseDto {
         latestRefreshToken = refreshToken
+        reissueThrowable?.let { throw it }
         return reissueResponse
     }
 }
@@ -332,6 +338,8 @@ private class RecordingUserProfileAuthSessionRepository(
     var savedAuthSession: AuthSession? = null
         private set
     var savedIsProfileCompleted: Boolean = false
+        private set
+    var clearAuthSessionCalled: Boolean = false
         private set
 
     override fun observeAuthGateState(): Flow<AuthGateState> = emptyFlow()
@@ -352,7 +360,9 @@ private class RecordingUserProfileAuthSessionRepository(
 
     override suspend fun markProfileCompleted() = Unit
 
-    override suspend fun clearAuthSession() = Unit
+    override suspend fun clearAuthSession() {
+        clearAuthSessionCalled = true
+    }
 }
 
 private class RecordingUserProfileSettingsRepository(

@@ -103,11 +103,29 @@ private tailrec fun Context.findComponentActivity(): ComponentActivity? =
     }
 
 internal fun createServiceTermsIntent(): Intent =
-    createExternalLinkIntent(SERVICE_TERMS_URL)
+    serviceTermsIntentSpec().toIntent()
 
 internal fun createPrivacyPolicyIntent(): Intent =
-    createExternalLinkIntent(PRIVACY_POLICY_URL)
+    privacyPolicyIntentSpec().toIntent()
 
-private fun createExternalLinkIntent(url: String): Intent =
-    Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+internal data class MyPageExternalLinkIntentSpec(
+    val action: String,
+    val dataString: String,
+    val flags: Int,
+)
+
+internal fun serviceTermsIntentSpec(): MyPageExternalLinkIntentSpec =
+    externalLinkIntentSpec(SERVICE_TERMS_URL)
+
+internal fun privacyPolicyIntentSpec(): MyPageExternalLinkIntentSpec =
+    externalLinkIntentSpec(PRIVACY_POLICY_URL)
+
+private fun externalLinkIntentSpec(url: String): MyPageExternalLinkIntentSpec =
+    MyPageExternalLinkIntentSpec(
+        action = Intent.ACTION_VIEW,
+        dataString = url,
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK,
+    )
+
+private fun MyPageExternalLinkIntentSpec.toIntent(): Intent =
+    Intent(action, Uri.parse(dataString)).addFlags(flags)

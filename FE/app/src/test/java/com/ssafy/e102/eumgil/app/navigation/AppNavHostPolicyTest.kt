@@ -1,6 +1,9 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import java.io.File
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.voiceassistant.VoiceAssistantAction
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -49,6 +52,31 @@ class AppNavHostPolicyTest {
                 shouldPauseForMapVoiceInput = false,
                 voiceAssistantVisible = false,
             ),
+        )
+    }
+
+    @Test
+    fun `legacy search voice route remains a map alias only for compatibility`() {
+        assertEquals(TopLevelRoute.Map.route, SearchRoute.VoiceInput.route.toCurrentTopLevelRoute())
+    }
+
+    @Test
+    fun `global voice assistant search request preserves route editing target`() {
+        assertEquals(
+            VoiceAssistantNavigationRequest.Route(
+                SearchRoute.Results.createRoute("부산역", RouteEditingTarget.ORIGIN),
+            ),
+            VoiceAssistantAction
+                .SearchPlace(query = "부산역", editingTarget = RouteEditingTarget.ORIGIN)
+                .toNavigationRequest(),
+        )
+        assertEquals(
+            VoiceAssistantNavigationRequest.Route(
+                SearchRoute.Results.createRoute("부산역", RouteEditingTarget.DESTINATION),
+            ),
+            VoiceAssistantAction
+                .SearchPlace(query = "부산역", editingTarget = RouteEditingTarget.DESTINATION)
+                .toNavigationRequest(),
         )
     }
 

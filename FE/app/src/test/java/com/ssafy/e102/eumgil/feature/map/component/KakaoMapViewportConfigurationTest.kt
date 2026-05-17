@@ -118,8 +118,8 @@ class KakaoMapViewportConfigurationTest {
 
         assertTrue(
             "Kakao route-arrow debugging should keep the SDK raw rotationAngle value and the converted degree value side by side.",
-            source.contains("val cameraBearingRadians = cameraPosition?.rotationAngle ?: 0.0") &&
-                source.contains("val cameraBearingDegrees = Math.toDegrees(cameraBearingRadians)") &&
+            source.contains("bearingRadians = rotationAngle") &&
+                source.contains("bearingDegrees = Math.toDegrees(rotationAngle)") &&
                 source.contains("bearingRad=") &&
                 source.contains("bearingDeg="),
         )
@@ -131,10 +131,16 @@ class KakaoMapViewportConfigurationTest {
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
                 .readText()
 
+        val trackingLoop =
+            source
+                .substringAfter("private fun startProjectedMarkerTracking()")
+                .substringBefore("private fun stopProjectedMarkerTracking()")
+
         assertTrue(
             "Route arrows should be re-synchronized inside the animation-frame tracking loop so they do not wait until camera move end during rotation gestures.",
-            Regex("""latestState\?\.let \{ state ->\s*syncMarkers\(readyMap = readyMap, state = state\)\s*}\s*updateProjectedMarkerOverlays""")
-                .containsMatchIn(source),
+            trackingLoop.contains("syncMarkers(") &&
+                trackingLoop.contains("reason = \"camera-move-tracking\"") &&
+                trackingLoop.contains("updateProjectedMarkerOverlays(readyMap = readyMap, state = latestState)"),
         )
     }
 
@@ -183,18 +189,18 @@ class KakaoMapViewportConfigurationTest {
         assertTrue(
             "Facility markers should recreate a dedicated Kakao label layer instead of projecting every facility marker through Compose.",
             source.contains("LabelLayerOptions") &&
-                source.contains("from(KAKAO_MARKER_LAYER_ID)") &&
-                source.contains("markerLayer.addLabel("),
+                source.contains("getOrCreateLabelLayer(KAKAO_MARKER_LAYER_ID") &&
+                source.contains("layer.addLabel("),
         )
         assertTrue(
             "Facility labels should use runtime-generated bitmap styles so vector drawables are not handed to Kakao labels directly.",
             source.contains("KakaoFacilityMarkerStyleCache") &&
                 source.contains("LabelStyle") &&
-                source.contains(".from(bitmapFor("),
+                source.contains("createFacilityMarkerBitmap("),
         )
         assertTrue(
             "The renderer should still clear old label layers before re-adding the current facility labels.",
-            source.contains("removeAllLabelLayer()"),
+            source.contains("layer.removeAll()"),
         )
         assertFalse(
             "Facility markers should no longer use the dedicated Compose projection overlay path.",

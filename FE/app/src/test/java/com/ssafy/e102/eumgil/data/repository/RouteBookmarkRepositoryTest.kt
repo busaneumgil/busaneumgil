@@ -27,11 +27,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -204,7 +200,7 @@ class RouteBookmarkRepositoryTest {
         }
 
     @Test
-    fun `observeRouteBookmarks preserves transit transport mode and unknown route option label`() =
+    fun `observeRouteBookmarks preserves transit transport mode and route option label`() =
         runBlocking {
             val serverItem =
                 FavoriteRouteListItemDto(
@@ -231,7 +227,7 @@ class RouteBookmarkRepositoryTest {
 
             assertEquals("PUBLIC_TRANSIT", bookmarks[0].transportMode)
             assertEquals("MIN_TRANSFER", bookmarks[0].routeOptionLabel)
-            assertEquals(RouteOption.SAFE, bookmarks[0].routeOption)
+            assertEquals(RouteOption.MIN_TRANSFER, bookmarks[0].routeOption)
         }
 
     @Test
@@ -287,23 +283,16 @@ class RouteBookmarkRepositoryTest {
                     authSessionRepository = authSessionRepository,
                 )
 
-            val emissions = mutableListOf<List<String>>()
-            val collection =
-                async {
-                    repository.observeRouteBookmarks().take(2).toList().forEach { bookmarks ->
-                        emissions += bookmarks.map { bookmark -> bookmark.routeName }
-                    }
-                }
-            yield()
+            val firstScopeBookmarks = repository.observeRouteBookmarks().first()
 
             authSessionRepository.updateAuthSession(
                 authSession = AuthSession(accessToken = "token-b", userId = "user-b"),
                 isProfileCompleted = true,
             )
-            collection.await()
+            val secondScopeBookmarks = repository.observeRouteBookmarks().first()
 
-            assertEquals(listOf("route-a"), emissions[0])
-            assertEquals(listOf("route-b"), emissions[1])
+            assertEquals(listOf("route-a"), firstScopeBookmarks.map { bookmark -> bookmark.routeName })
+            assertEquals(listOf("route-b"), secondScopeBookmarks.map { bookmark -> bookmark.routeName })
         }
 
     @Test

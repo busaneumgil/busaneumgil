@@ -179,6 +179,11 @@ sealed interface SearchRoute : AppRoute {
             }
     }
 
+    /**
+     * Legacy search voice route kept for compatibility.
+     *
+     * New search microphone entry points open the global voice assistant instead of navigating here.
+     */
     data object VoiceInput : SearchRoute {
         const val ARG_EDITING_TARGET: String = Entry.ARG_EDITING_TARGET
 

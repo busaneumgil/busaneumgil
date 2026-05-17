@@ -30,6 +30,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,12 +47,11 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderInfo
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumStatusDanger
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumStatusWarning
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceInfo
+import kotlinx.coroutines.launch
 
 enum class VoiceAssistantOverlayVisualState {
     Idle,
@@ -56,16 +62,9 @@ enum class VoiceAssistantOverlayVisualState {
     Error,
 }
 
-internal data class VoiceAssistantOverlayActionCopy(
-    @StringRes val titleRes: Int,
-    @StringRes val descriptionRes: Int,
-    val supportingText: String? = null,
-)
-
 private data class VoiceAssistantOverlayStateCopy(
     @StringRes val badgeRes: Int,
     @StringRes val titleRes: Int,
-    @StringRes val descriptionRes: Int,
     @DrawableRes val iconRes: Int,
 )
 
@@ -89,61 +88,6 @@ internal fun resolveVoiceAssistantOverlayVisualState(uiState: UiState): VoiceAss
         else -> VoiceAssistantOverlayVisualState.Idle
     }
 
-internal fun resolveVoiceAssistantOverlayActionCopy(
-    action: VoiceAssistantAction,
-): VoiceAssistantOverlayActionCopy =
-    when (action) {
-        is VoiceAssistantAction.SearchPlace ->
-            VoiceAssistantOverlayActionCopy(
-                titleRes = R.string.voice_assistant_overlay_action_search_place_title,
-                descriptionRes = R.string.voice_assistant_overlay_action_search_place_description,
-                supportingText = action.query,
-            )
-
-        is VoiceAssistantAction.OpenReport ->
-            VoiceAssistantOverlayActionCopy(
-                titleRes = R.string.voice_assistant_overlay_action_open_report_title,
-                descriptionRes = R.string.voice_assistant_overlay_action_open_report_description,
-            )
-
-        is VoiceAssistantAction.OpenSavedRoutes ->
-            VoiceAssistantOverlayActionCopy(
-                titleRes = R.string.voice_assistant_overlay_action_open_saved_routes_title,
-                descriptionRes = R.string.voice_assistant_overlay_action_open_saved_routes_description,
-            )
-
-        is VoiceAssistantAction.OpenMyPage ->
-            VoiceAssistantOverlayActionCopy(
-                titleRes = R.string.voice_assistant_overlay_action_open_my_page_title,
-                descriptionRes = R.string.voice_assistant_overlay_action_open_my_page_description,
-            )
-
-        is VoiceAssistantAction.OpenMap ->
-            VoiceAssistantOverlayActionCopy(
-                titleRes = R.string.voice_assistant_overlay_action_open_map_title,
-                descriptionRes = R.string.voice_assistant_overlay_action_open_map_description,
-            )
-
-        is VoiceAssistantAction.StopNavigation ->
-            VoiceAssistantOverlayActionCopy(
-                titleRes = R.string.voice_assistant_overlay_action_stop_navigation_title,
-                descriptionRes = R.string.voice_assistant_overlay_action_stop_navigation_description,
-            )
-
-        is VoiceAssistantAction.ResumeNavigationGuidance ->
-            VoiceAssistantOverlayActionCopy(
-                titleRes = R.string.voice_assistant_overlay_action_resume_navigation_title,
-                descriptionRes = R.string.voice_assistant_overlay_action_resume_navigation_description,
-            )
-
-        is VoiceAssistantAction.UnknownCommand ->
-            VoiceAssistantOverlayActionCopy(
-                titleRes = R.string.voice_assistant_overlay_action_unknown_title,
-                descriptionRes = R.string.voice_assistant_overlay_action_unknown_description,
-                supportingText = action.rawCommand,
-            )
-    }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceAssistantOverlay(
@@ -151,17 +95,45 @@ fun VoiceAssistantOverlay(
     onAction: (UiAction) -> Unit,
     visible: Boolean,
     modifier: Modifier = Modifier,
-    assistantMessage: String? = null,
-    pendingAction: VoiceAssistantAction? = uiState.pendingConfirmationAction,
     bottomSheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
 ) {
-    if (!visible) return
+    var shouldRender by remember { mutableStateOf(visible) }
+    val coroutineScope = rememberCoroutineScope()
+    val currentOnAction by rememberUpdatedState(onAction)
+
+    fun requestDismiss() {
+        coroutineScope.launch {
+            if (bottomSheetState.isVisible) {
+                bottomSheetState.hide()
+            }
+            shouldRender = false
+            currentOnAction(UiAction.Dismissed)
+        }
+    }
+
+    LaunchedEffect(visible) {
+        if (visible) {
+            shouldRender = true
+        } else if (shouldRender) {
+            if (bottomSheetState.isVisible) {
+                bottomSheetState.hide()
+            }
+            shouldRender = false
+        }
+    }
+
+    LaunchedEffect(shouldRender, visible) {
+        if (shouldRender && visible && !bottomSheetState.isVisible) {
+            bottomSheetState.show()
+        }
+    }
+
+    if (!shouldRender) return
 
     val visualState = resolveVoiceAssistantOverlayVisualState(uiState)
-    val displayedAction = pendingAction ?: uiState.pendingConfirmationAction ?: uiState.lastResolvedAction
 
     ModalBottomSheet(
-        onDismissRequest = { onAction(UiAction.Dismissed) },
+        onDismissRequest = { requestDismiss() },
         sheetState = bottomSheetState,
         dragHandle = null,
         shape =
@@ -176,11 +148,14 @@ fun VoiceAssistantOverlay(
         windowInsets = VoiceAssistantOverlayWindowInsets,
     ) {
         VoiceAssistantOverlayContent(
-            uiState = uiState,
             visualState = visualState,
-            displayedAction = displayedAction,
-            assistantMessage = assistantMessage,
-            onAction = onAction,
+            onAction = { action ->
+                if (action == UiAction.Dismissed) {
+                    requestDismiss()
+                } else {
+                    onAction(action)
+                }
+            },
             modifier =
                 modifier
                     .fillMaxWidth()
@@ -193,18 +168,11 @@ fun VoiceAssistantOverlay(
 
 @Composable
 private fun VoiceAssistantOverlayContent(
-    uiState: UiState,
     visualState: VoiceAssistantOverlayVisualState,
-    displayedAction: VoiceAssistantAction?,
-    assistantMessage: String?,
     onAction: (UiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val stateCopy = voiceAssistantOverlayStateCopy(visualState)
-    val resolvedAssistantMessage =
-        assistantMessage?.takeIf { message -> message.isNotBlank() }
-            ?: uiState.errorMessage?.takeIf { message -> message.isNotBlank() }
-            ?: stringResource(id = stateCopy.descriptionRes)
 
     Column(
         modifier = modifier,
@@ -216,26 +184,6 @@ private fun VoiceAssistantOverlayContent(
         VoiceAssistantOverlayStatusHero(
             stateCopy = stateCopy,
             visualState = visualState,
-        )
-        VoiceAssistantOverlayInfoCard(
-            label = stringResource(id = R.string.voice_assistant_overlay_assistant_message_label),
-            body = resolvedAssistantMessage,
-        )
-        VoiceAssistantOverlayInfoCard(
-            label = stringResource(id = R.string.voice_assistant_overlay_transcript_label),
-            body =
-                uiState.transcript
-                    .takeIf { transcript -> transcript.isNotBlank() }
-                    ?: stringResource(id = R.string.voice_assistant_overlay_transcript_empty),
-        )
-        displayedAction?.let { action ->
-            VoiceAssistantOverlayActionCard(
-                visualState = visualState,
-                action = action,
-            )
-        } ?: VoiceAssistantOverlayInfoCard(
-            label = stringResource(id = R.string.voice_assistant_overlay_pending_action_label),
-            body = stringResource(id = R.string.voice_assistant_overlay_pending_action_empty),
         )
         VoiceAssistantOverlayActions(
             visualState = visualState,
@@ -328,114 +276,6 @@ private fun VoiceAssistantOverlayStatusHero(
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
-    }
-}
-
-@Composable
-private fun VoiceAssistantOverlayInfoCard(
-    label: String,
-    body: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.scaleM),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.64f)),
-        shadowElevation = 2.dp,
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = body,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
-}
-
-@Composable
-private fun VoiceAssistantOverlayActionCard(
-    visualState: VoiceAssistantOverlayVisualState,
-    action: VoiceAssistantAction,
-) {
-    val actionCopy = resolveVoiceAssistantOverlayActionCopy(action)
-    val labelRes =
-        if (visualState == VoiceAssistantOverlayVisualState.ConfirmationRequired) {
-            R.string.voice_assistant_overlay_pending_confirmation_action_label
-        } else {
-            R.string.voice_assistant_overlay_pending_action_label
-        }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.scaleM),
-        color = EumSurfaceInfo,
-        border = BorderStroke(1.dp, EumBorderInfo),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(EumSpacing.medium),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-            ) {
-                Box(
-                    modifier = Modifier.size(VoiceAssistantOverlayActionIconContainerSize),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_voice_speaker_wave),
-                        contentDescription = null,
-                        modifier = Modifier.size(VoiceAssistantOverlayActionIconSize),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
-            ) {
-                Text(
-                    text = stringResource(id = labelRes),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = stringResource(id = actionCopy.titleRes),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = stringResource(id = actionCopy.descriptionRes),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                actionCopy.supportingText?.takeIf { text -> text.isNotBlank() }?.let { text ->
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -547,7 +387,6 @@ private fun voiceAssistantOverlayStateCopy(
             VoiceAssistantOverlayStateCopy(
                 badgeRes = R.string.voice_assistant_overlay_status_idle_badge,
                 titleRes = R.string.voice_assistant_overlay_status_idle_title,
-                descriptionRes = R.string.voice_assistant_overlay_status_idle_description,
                 iconRes = R.drawable.ic_voice_mic,
             )
 
@@ -555,7 +394,6 @@ private fun voiceAssistantOverlayStateCopy(
             VoiceAssistantOverlayStateCopy(
                 badgeRes = R.string.voice_assistant_overlay_status_listening_badge,
                 titleRes = R.string.voice_assistant_overlay_status_listening_title,
-                descriptionRes = R.string.voice_assistant_overlay_status_listening_description,
                 iconRes = R.drawable.ic_voice_mic,
             )
 
@@ -563,7 +401,6 @@ private fun voiceAssistantOverlayStateCopy(
             VoiceAssistantOverlayStateCopy(
                 badgeRes = R.string.voice_assistant_overlay_status_processing_badge,
                 titleRes = R.string.voice_assistant_overlay_status_processing_title,
-                descriptionRes = R.string.voice_assistant_overlay_status_processing_description,
                 iconRes = R.drawable.ic_status_processing,
             )
 
@@ -571,7 +408,6 @@ private fun voiceAssistantOverlayStateCopy(
             VoiceAssistantOverlayStateCopy(
                 badgeRes = R.string.voice_assistant_overlay_status_result_ready_badge,
                 titleRes = R.string.voice_assistant_overlay_status_result_ready_title,
-                descriptionRes = R.string.voice_assistant_overlay_status_result_ready_description,
                 iconRes = R.drawable.ic_status_check,
             )
 
@@ -579,7 +415,6 @@ private fun voiceAssistantOverlayStateCopy(
             VoiceAssistantOverlayStateCopy(
                 badgeRes = R.string.voice_assistant_overlay_status_confirmation_required_badge,
                 titleRes = R.string.voice_assistant_overlay_status_confirmation_required_title,
-                descriptionRes = R.string.voice_assistant_overlay_status_confirmation_required_description,
                 iconRes = R.drawable.ic_status_warning,
             )
 
@@ -587,7 +422,6 @@ private fun voiceAssistantOverlayStateCopy(
             VoiceAssistantOverlayStateCopy(
                 badgeRes = R.string.voice_assistant_overlay_status_error_badge,
                 titleRes = R.string.voice_assistant_overlay_status_error_title,
-                descriptionRes = R.string.voice_assistant_overlay_status_error_description,
                 iconRes = R.drawable.ic_status_danger,
             )
     }
@@ -617,5 +451,3 @@ private val VoiceAssistantOverlayButtonMinHeight = 48.dp
 private val VoiceAssistantOverlayStatusIconContainerSize = 88.dp
 private val VoiceAssistantOverlayStatusIconSize = 36.dp
 private val VoiceAssistantOverlayProgressSize = 40.dp
-private val VoiceAssistantOverlayActionIconContainerSize = 44.dp
-private val VoiceAssistantOverlayActionIconSize = 24.dp

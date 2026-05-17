@@ -76,6 +76,8 @@ public class SecurityConfig {
 				.authenticated()
 				.requestMatchers("/places", "/places/**")
 				.authenticated()
+				.requestMatchers("/voice/**")
+				.authenticated()
 				.requestMatchers("/routes/**", "/route-ratings/**")
 				.authenticated()
 				.requestMatchers("/hazard-reports", "/hazard-reports/**")

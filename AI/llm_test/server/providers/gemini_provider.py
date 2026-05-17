@@ -3,7 +3,6 @@ import time
 import requests
 from providers.base_provider import BaseProvider, LLMResponse
 from providers.utils import clean_text
-from utils.cost_calculator import calculate_cost
 
 
 class GeminiProvider(BaseProvider):
@@ -498,7 +497,6 @@ currentRoute가 제공되면 현재 화면 위치로 활용하세요.
 
             input_tokens = data["usageMetadata"]["promptTokenCount"]
             output_tokens = data["usageMetadata"]["candidatesTokenCount"]
-            cost = calculate_cost("gemini", input_tokens, output_tokens)
 
             return LLMResponse(
                 provider="gemini",
@@ -517,7 +515,6 @@ currentRoute가 제공되면 현재 화면 위치로 활용하세요.
                 total_latency_ms=0.0,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
-                cost_credit=cost,
                 success=True,
                 error=None,
             )

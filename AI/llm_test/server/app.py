@@ -4,7 +4,6 @@ import os
 import re
 import time
 import uuid
-from dataclasses import asdict
 
 from env_loader import load_runtime_env
 
@@ -16,7 +15,6 @@ if not os.getenv("GMS_KEY"):
 
 from config import Config
 from utils.logger import get_logger
-from utils.result_logger import save_result
 from providers.gemini_provider import GeminiProvider
 
 logger = get_logger(__name__)
@@ -83,37 +81,6 @@ def log_unhandled_exception(exception) -> None:
         request.path,
         format_remote_addr(),
     )
-
-
-@app.route('/api/chat/llm', methods=['POST'])
-def chat_llm():
-    """단일 모델 호출 (PoC용)"""
-    body = request.get_json()
-    text = body.get("text", "")
-    model_key = body.get("model", Config.DEFAULT_MODEL)
-    stt_start_ms = body.get("stt_start_ms", int(time.time() * 1000))
-
-    provider = PROVIDERS.get(model_key)
-    if not provider:
-        logger.warning(
-            "event=chat_llm_invalid_model request_id=%s model=%s",
-            get_request_id(),
-            model_key,
-        )
-        return jsonify({"error": f"Unknown model: {model_key}"}), 400
-
-    result = provider.call(text)
-    result.total_latency_ms = int(time.time() * 1000) - stt_start_ms
-    save_result(text, stt_start_ms, [result])
-    logger.info(
-        "event=chat_llm_completed request_id=%s model=%s latency_ms=%s success=%s",
-        get_request_id(),
-        model_key,
-        result.total_latency_ms,
-        result.success,
-    )
-
-    return jsonify(asdict(result))
 
 
 @app.route('/voice/analyze', methods=['POST'])

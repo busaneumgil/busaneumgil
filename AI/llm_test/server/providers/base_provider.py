@@ -22,7 +22,6 @@ class LLMResponse:
     total_latency_ms: float = 0.0             # STT 시작 ~ 버튼 생성 전체 시간 (ms)
     input_tokens: int = 0                     # 입력 토큰 수
     output_tokens: int = 0                    # 출력 토큰 수
-    cost_credit: float = 0.0                  # 차감 크레딧 (토큰 수 × 단가)
     success: bool = False                     # 의도 추출 성공 여부
     error: Optional[str] = None              # 실패 시 에러 메시지
 

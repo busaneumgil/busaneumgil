@@ -15,11 +15,17 @@ import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
+import com.ssafy.e102.eumgil.data.repository.ReportHistoryData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxPhotoData
+import com.ssafy.e102.eumgil.data.repository.ReportProcessingCounts
+import com.ssafy.e102.eumgil.data.repository.ReportProcessingStatus
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -62,7 +68,7 @@ class ReportViewModel(
     init {
         loadLatestDraft()
         observeNetworkAvailability()
-        observeReportProcessingCounts()
+        observeReportOverview()
     }
 
     /**
@@ -77,10 +83,19 @@ class ReportViewModel(
         }
     }
 
-    private fun observeReportProcessingCounts() {
+    private fun observeReportOverview() {
         viewModelScope.launch {
-            reportRepository.observeReportProcessingCounts().collect { counts ->
-                mutableUiState.update { state -> state.copy(processingCounts = counts) }
+            reportRepository.observeReportHistoryEntries().collect { reports ->
+                mutableUiState.update { state ->
+                    state.copy(
+                        processingCounts = reports.toProcessingCounts(),
+                        recentReports =
+                            reports
+                                .sortedByDescending(ReportHistoryData::updatedAtMillis)
+                                .take(REPORT_HOME_RECENT_LIMIT)
+                                .map(ReportHistoryData::toReportRecentUiModel),
+                    )
+                }
             }
         }
     }
@@ -118,6 +133,12 @@ class ReportViewModel(
                 if (mutableUiState.value.screenState is ReportScreenState.Completed) {
                     resetForm()
                 }
+                mutableUiState.update { state ->
+                    state.copy(
+                        screenState = ReportScreenState.Editing,
+                        currentStep = ReportStep.TypeSelection,
+                    )
+                }
             }
             ReportUiAction.BackToMapClicked -> {
                 if (mutableUiState.value.screenState is ReportScreenState.Completed) {
@@ -153,6 +174,7 @@ class ReportViewModel(
         val state = mutableUiState.value
         val nextStep =
             when (state.currentStep) {
+                ReportStep.Home -> ReportStep.TypeSelection
                 ReportStep.TypeSelection ->
                     if (state.reportType.value != null) ReportStep.LocationConfirm else null
                 ReportStep.LocationConfirm ->
@@ -263,7 +285,7 @@ class ReportViewModel(
 
         // 같은 type을 다시 누른 경우는 idempotent. TypeSelection 단계라면 다음 단계로만 진행한다.
         if (state.reportType.value == type) {
-            if (state.currentStep == ReportStep.TypeSelection) {
+            if (state.currentStep == ReportStep.Home || state.currentStep == ReportStep.TypeSelection) {
                 applyReportType(type)
             }
             return
@@ -285,7 +307,7 @@ class ReportViewModel(
     private fun applyReportType(type: ReportType) {
         mutableUiState.update { state ->
             val nextStep =
-                if (state.currentStep == ReportStep.TypeSelection) {
+                if (state.currentStep == ReportStep.Home || state.currentStep == ReportStep.TypeSelection) {
                     ReportStep.LocationConfirm
                 } else {
                     state.currentStep
@@ -802,6 +824,7 @@ class ReportViewModel(
         mutableUiState.value =
             ReportUiState(
                 processingCounts = currentState.processingCounts,
+                recentReports = currentState.recentReports,
                 isOnline = currentState.isOnline,
             )
     }
@@ -833,6 +856,7 @@ class ReportViewModel(
         // 지도 드래그·핀치 후 onCameraMoveEnd가 짧은 간격으로 여러 번 fire될 때 API 과호출을
         // 방지하기 위한 debounce. 사용자가 카메라를 멈춘 직후의 좌표만 lookup하도록 한다.
         private const val REVERSE_GEOCODE_DEBOUNCE_MS = 300L
+        private const val REPORT_HOME_RECENT_LIMIT = 3
 
         fun provideFactory(
             reportRepository: ReportRepository,
@@ -862,7 +886,8 @@ class ReportViewModel(
 
 private fun ReportStep.previousOrNull(): ReportStep? =
     when (this) {
-        ReportStep.TypeSelection -> null
+        ReportStep.Home -> null
+        ReportStep.TypeSelection -> ReportStep.Home
         ReportStep.LocationConfirm -> ReportStep.TypeSelection
         ReportStep.DetailInput -> ReportStep.LocationConfirm
         ReportStep.Complete -> null
@@ -1134,11 +1159,50 @@ private fun ReportPhotoInput.validated(touched: Boolean = isTouched): ReportPhot
     )
 
 private fun ReportDescriptionInput.withValue(description: String): ReportDescriptionInput =
-    copy(
-        value = description,
-        isDirty = true,
-        error = validateDescription(description),
+    description
+        .take(ReportFormLimits.DESCRIPTION_MAX_LENGTH)
+        .let { limitedDescription ->
+            copy(
+                value = limitedDescription,
+                isDirty = true,
+                error = validateDescription(limitedDescription),
+            )
+        }
+
+private fun List<ReportHistoryData>.toProcessingCounts(): ReportProcessingCounts =
+    ReportProcessingCounts(
+        pending = count { it.processingStatus == ReportProcessingStatus.PENDING },
+        approved = count { it.processingStatus == ReportProcessingStatus.APPROVED },
     )
+
+private fun ReportHistoryData.toReportRecentUiModel(): ReportRecentUiModel =
+    ReportRecentUiModel(
+        historyId = historyId,
+        title = reportCategory.toReportTitle(),
+        address = address?.takeIf { it.isNotBlank() } ?: "부산광역시 강서구",
+        submittedAtText = updatedAtMillis.formatReportHomeDate(),
+        statusLabel =
+            when (processingStatus) {
+                ReportProcessingStatus.APPROVED -> "반영 완료"
+                ReportProcessingStatus.REJECTED -> "처리 종료"
+                ReportProcessingStatus.PENDING, null -> "접수됨"
+            },
+        isApproved = processingStatus == ReportProcessingStatus.APPROVED,
+    )
+
+private fun String.toReportTitle(): String =
+    when (this) {
+        "STAIRS_STEP", "STAIRS" -> "계단·단차 있음"
+        "BRAILLE_BLOCK", "TACTILE_BLOCK", "GUIDANCE_BLOCK" -> "점자블록 문제"
+        "SIDEWALK_MISSING" -> "인도 없음"
+        "RAMP", "SLOPE" -> "경사로 문제"
+        "SIDEWALK_WIDTH" -> "인도폭 문제"
+        "OTHER_OBSTACLE", "CONSTRUCTION", "ELEVATOR", "FACILITY_DAMAGE" -> "기타 장애물"
+        else -> "제보 내역"
+    }
+
+private fun Long.formatReportHomeDate(): String =
+    SimpleDateFormat("yyyy.MM.dd", Locale.KOREAN).format(Date(this))
 
 private fun ReportDescriptionInput.validated(
     touched: Boolean = isTouched,

@@ -29,11 +29,11 @@ import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
 import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.feature.arrival.ArrivalRoute as ArrivalScreenRoute
 import com.ssafy.e102.eumgil.feature.map.MapRoute
-import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as NavigationGuidanceViewModel
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
+import com.ssafy.e102.eumgil.feature.report.ReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
 import com.ssafy.e102.eumgil.feature.route.RouteDetailEntryRoute
 import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
@@ -145,9 +145,6 @@ fun NavGraphBuilder.mainNavGraph(
                         inclusive = true
                     }
                 }
-            },
-            onNavigateToReportHistory = {
-                navController.navigate(MyPageSubRoute.ReportHistory.route)
             },
             onNavigateToGuide = {
                 navController.navigate(resolveMyPageGuideRoute())
@@ -525,12 +522,7 @@ fun NavGraphBuilder.mainNavGraph(
                 navController.popBackStack()
             },
             onNavigateToReportHistory = {
-                // ReportHistory는 마이페이지의 하위 경로이므로, 제보 탭 stack에 push하지 않고
-                // 먼저 마이페이지 탭으로 switch한 다음 그 위에 push한다.
-                // 이렇게 해야 사용자가 다시 제보 탭을 눌렀을 때 ReportHistory가 따라오지 않고
-                // 깨끗한 제보 폼(6 grid)으로 돌아간다.
-                navController.navigateToTopLevel(TopLevelDestination.MyPage)
-                navController.navigate(MyPageSubRoute.ReportHistory.route)
+                navController.navigate(ReportRoute.History.route)
             },
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
@@ -538,21 +530,12 @@ fun NavGraphBuilder.mainNavGraph(
         )
     }
 
-    composable(route = MyPageSubRoute.ReportHistory.route) {
-        MyPageReportHistoryRoute(
+    composable(route = ReportRoute.History.route) {
+        ReportHistoryRoute(
             onNavigateBack = {
-                val didPopToMyPage =
-                    navController.popBackStack(
-                        route = TopLevelRoute.MyPage.route,
-                        inclusive = false,
-                    )
-                if (!didPopToMyPage) {
-                    navController.navigateToTopLevel(TopLevelDestination.MyPage)
-                }
+                navController.popBackStack()
             },
             onNavigateToReport = {
-                // 제보 작성은 제보 탭의 top-level destination이므로 마이페이지 stack에 push하지 말고
-                // 정상적으로 제보 탭으로 switch한다.
                 navController.navigateToTopLevel(TopLevelDestination.Report)
             },
         )

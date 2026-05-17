@@ -1,4 +1,4 @@
-package com.ssafy.e102.eumgil.feature.mypage
+package com.ssafy.e102.eumgil.feature.report
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -22,14 +22,14 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class MyPageReportHistoryViewModel(
+class ReportHistoryViewModel(
     private val reportRepository: ReportRepository,
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(MyPageReportHistoryUiState())
-    val uiState: StateFlow<MyPageReportHistoryUiState> = mutableUiState.asStateFlow()
+    private val mutableUiState = MutableStateFlow(ReportHistoryUiState())
+    val uiState: StateFlow<ReportHistoryUiState> = mutableUiState.asStateFlow()
 
-    private val mutableUiEvent = MutableSharedFlow<MyPageReportHistoryUiEvent>()
-    val uiEvent: SharedFlow<MyPageReportHistoryUiEvent> = mutableUiEvent.asSharedFlow()
+    private val mutableUiEvent = MutableSharedFlow<ReportHistoryUiEvent>()
+    val uiEvent: SharedFlow<ReportHistoryUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var observeHistoryJob: Job? = null
     private var loadDetailJob: Job? = null
@@ -38,15 +38,15 @@ class MyPageReportHistoryViewModel(
         observeReportHistory()
     }
 
-    fun onAction(action: MyPageReportHistoryUiAction) {
+    fun onAction(action: ReportHistoryUiAction) {
         when (action) {
-            MyPageReportHistoryUiAction.BackClicked ->
-                emitUiEvent(MyPageReportHistoryUiEvent.NavigateBack)
-            is MyPageReportHistoryUiAction.ReportClicked ->
+            ReportHistoryUiAction.BackClicked ->
+                emitUiEvent(ReportHistoryUiEvent.NavigateBack)
+            is ReportHistoryUiAction.ReportClicked ->
                 loadReportDetail(action.outboxId)
-            MyPageReportHistoryUiAction.ReportCtaClicked ->
-                emitUiEvent(MyPageReportHistoryUiEvent.NavigateToReport)
-            MyPageReportHistoryUiAction.RetryClicked ->
+            ReportHistoryUiAction.ReportCtaClicked ->
+                emitUiEvent(ReportHistoryUiEvent.NavigateToReport)
+            ReportHistoryUiAction.RetryClicked ->
                 observeReportHistory()
         }
     }
@@ -55,7 +55,7 @@ class MyPageReportHistoryViewModel(
         observeHistoryJob?.cancel()
         mutableUiState.update { state ->
             state.copy(
-                screenState = MyPageReportHistoryScreenState.LOADING,
+                screenState = ReportHistoryScreenState.LOADING,
                 selectedDetail = null,
                 detailLoadingHistoryId = null,
                 errorMessage = null,
@@ -67,7 +67,7 @@ class MyPageReportHistoryViewModel(
                     .catch {
                         mutableUiState.update { state ->
                             state.copy(
-                                screenState = MyPageReportHistoryScreenState.ERROR,
+                                screenState = ReportHistoryScreenState.ERROR,
                                 reports = emptyList(),
                                 selectedDetail = null,
                                 detailLoadingHistoryId = null,
@@ -84,9 +84,9 @@ class MyPageReportHistoryViewModel(
                             state.copy(
                                 screenState =
                                     if (reports.isEmpty()) {
-                                        MyPageReportHistoryScreenState.EMPTY
+                                        ReportHistoryScreenState.EMPTY
                                     } else {
-                                        MyPageReportHistoryScreenState.CONTENT
+                                        ReportHistoryScreenState.CONTENT
                                     },
                                 reports = reports,
                                 selectedDetail =
@@ -117,7 +117,7 @@ class MyPageReportHistoryViewModel(
                                 mutableUiState.update { state ->
                                     state.copy(detailLoadingHistoryId = null)
                                 }
-                                emitUiEvent(MyPageReportHistoryUiEvent.ShowSnackbar(REPORT_DETAIL_LOAD_FAILURE_MESSAGE))
+                                emitUiEvent(ReportHistoryUiEvent.ShowSnackbar(REPORT_DETAIL_LOAD_FAILURE_MESSAGE))
                             } else {
                                 mutableUiState.update { state ->
                                     state.copy(
@@ -131,13 +131,13 @@ class MyPageReportHistoryViewModel(
                             mutableUiState.update { state ->
                                 state.copy(detailLoadingHistoryId = null)
                             }
-                            emitUiEvent(MyPageReportHistoryUiEvent.ShowSnackbar(REPORT_DETAIL_LOAD_FAILURE_MESSAGE))
+                            emitUiEvent(ReportHistoryUiEvent.ShowSnackbar(REPORT_DETAIL_LOAD_FAILURE_MESSAGE))
                         },
                     )
             }
     }
 
-    private fun emitUiEvent(event: MyPageReportHistoryUiEvent) {
+    private fun emitUiEvent(event: ReportHistoryUiEvent) {
         viewModelScope.launch {
             mutableUiEvent.emit(event)
         }
@@ -151,8 +151,8 @@ class MyPageReportHistoryViewModel(
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    if (modelClass.isAssignableFrom(MyPageReportHistoryViewModel::class.java)) {
-                        return MyPageReportHistoryViewModel(reportRepository = reportRepository) as T
+                    if (modelClass.isAssignableFrom(ReportHistoryViewModel::class.java)) {
+                        return ReportHistoryViewModel(reportRepository = reportRepository) as T
                     }
 
                     error("Unknown ViewModel class: ${modelClass.name}")
@@ -161,8 +161,8 @@ class MyPageReportHistoryViewModel(
     }
 }
 
-private fun ReportHistoryData.toReportHistoryUiModel(): MyPageReportHistoryUiModel =
-    MyPageReportHistoryUiModel(
+private fun ReportHistoryData.toReportHistoryUiModel(): ReportHistoryUiModel =
+    ReportHistoryUiModel(
         outboxId = historyId,
         title = reportCategory.toReportHistoryTitle(),
         address = address?.takeIf { it.isNotBlank() } ?: toCoordinateText(),
@@ -172,8 +172,8 @@ private fun ReportHistoryData.toReportHistoryUiModel(): MyPageReportHistoryUiMod
         updatedAtMillis = updatedAtMillis,
     )
 
-private fun ReportHistoryDetailData.toReportHistoryDetailUiModel(): MyPageReportHistoryDetailUiModel =
-    MyPageReportHistoryDetailUiModel(
+private fun ReportHistoryDetailData.toReportHistoryDetailUiModel(): ReportHistoryDetailUiModel =
+    ReportHistoryDetailUiModel(
         historyId = historyId,
         title = reportCategory.toReportHistoryTitle(),
         description = description?.takeIf { it.isNotBlank() } ?: "상세 설명이 없습니다.",

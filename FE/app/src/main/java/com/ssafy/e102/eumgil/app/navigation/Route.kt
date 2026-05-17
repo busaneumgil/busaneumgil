@@ -322,11 +322,9 @@ sealed interface ReportRoute : AppRoute {
     data object Report : ReportRoute {
         override val route: String = "report"
     }
-}
 
-sealed interface MyPageSubRoute : AppRoute {
-    data object ReportHistory : MyPageSubRoute {
-        override val route: String = "my_page/report_history"
+    data object History : ReportRoute {
+        override val route: String = "report/history"
     }
 }
 

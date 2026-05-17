@@ -10,8 +10,11 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
+import com.ssafy.e102.eumgil.data.repository.ReportHistoryData
+import com.ssafy.e102.eumgil.data.repository.ReportHistorySource
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
 import com.ssafy.e102.eumgil.data.repository.ReportProcessingCounts
+import com.ssafy.e102.eumgil.data.repository.ReportProcessingStatus
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
@@ -502,7 +505,7 @@ class ReportViewModelTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
 
-            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+            assertEquals(ReportStep.Home, viewModel.uiState.value.currentStep)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
             advanceUntilIdle()
@@ -564,7 +567,7 @@ class ReportViewModelTest {
         }
 
     @Test
-    fun `back click on type selection emits NavigateBack`() =
+    fun `back click on home emits NavigateBack`() =
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
@@ -575,7 +578,7 @@ class ReportViewModelTest {
             advanceUntilIdle()
 
             assertEquals(ReportUiEvent.NavigateBack, event.await())
-            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+            assertEquals(ReportStep.Home, viewModel.uiState.value.currentStep)
         }
 
     @Test
@@ -804,7 +807,7 @@ class ReportViewModelTest {
         }
 
     @Test
-    fun `description max length 300 marks error when exceeded`() =
+    fun `description max length 300 hard limits extra input`() =
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
@@ -813,8 +816,9 @@ class ReportViewModelTest {
             viewModel.onAction(ReportUiAction.DescriptionChanged(longText))
             advanceUntilIdle()
 
-            val descError = viewModel.uiState.value.description.error
-            assertEquals(ReportDescriptionError.TooLong, descError)
+            val description = viewModel.uiState.value.description
+            assertEquals(ReportFormLimits.DESCRIPTION_MAX_LENGTH, description.value.length)
+            assertNull(description.error)
         }
 
     @Test
@@ -995,7 +999,7 @@ class ReportViewModelTest {
         }
 
     @Test
-    fun `tab reentered after complete resets form to type selection`() =
+    fun `tab reentered after complete resets form to report home`() =
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
@@ -1021,7 +1025,7 @@ class ReportViewModelTest {
             advanceUntilIdle()
 
             val resetState = viewModel.uiState.value
-            assertEquals(ReportStep.TypeSelection, resetState.currentStep)
+            assertEquals(ReportStep.Home, resetState.currentStep)
             assertEquals(null, resetState.reportType.value)
             assertTrue(resetState.screenState is ReportScreenState.Editing)
         }
@@ -1077,7 +1081,7 @@ class ReportViewModelTest {
             advanceUntilIdle()
 
             val preservedState = viewModel.uiState.value
-            assertEquals(ReportStep.TypeSelection, preservedState.currentStep)
+            assertEquals(ReportStep.Home, preservedState.currentStep)
             assertTrue(preservedState.screenState is ReportScreenState.Editing)
             assertTrue(preservedState.hasExistingDraft)
             assertEquals("draft-1", preservedState.draftId)
@@ -1151,7 +1155,7 @@ class ReportViewModelTest {
 
             assertEquals(ReportUiEvent.NavigateToMap, backToMapEvent.await())
             val resetState = viewModel.uiState.value
-            assertEquals(ReportStep.TypeSelection, resetState.currentStep)
+            assertEquals(ReportStep.Home, resetState.currentStep)
             assertEquals(null, resetState.reportType.value)
         }
 
@@ -1194,7 +1198,7 @@ class ReportViewModelTest {
             // 다이얼로그가 뜨는 동안에는 아직 reportType이 적용되지 않아야 한다.
             val midState = viewModel.uiState.value
             assertNull(midState.reportType.value)
-            assertEquals(ReportStep.TypeSelection, midState.currentStep)
+            assertEquals(ReportStep.Home, midState.currentStep)
             assertNull(repository.deletedDraftId)
         }
 
@@ -1593,7 +1597,17 @@ private class FakeReportRepository(
 
     override fun observeReportHistory(): Flow<List<ReportOutboxData>> = flowOf(emptyList())
 
-    override fun observeReportProcessingCounts(): Flow<ReportProcessingCounts> = flowOf(processingCounts)
+    override fun observeReportHistoryEntries(): Flow<List<ReportHistoryData>> =
+        flowOf(
+            buildList {
+                repeat(processingCounts.pending) { index ->
+                    add(fakeHistoryData("pending-$index", ReportProcessingStatus.PENDING))
+                }
+                repeat(processingCounts.approved) { index ->
+                    add(fakeHistoryData("approved-$index", ReportProcessingStatus.APPROVED))
+                }
+            },
+        )
 
     override suspend fun getLatestDraft(): ReportDraftData? = latestDraft
 
@@ -1627,6 +1641,26 @@ private class FakeReportRepository(
         return submitResultFactory(outboxId)
     }
 }
+
+private fun fakeHistoryData(
+    historyId: String,
+    status: ReportProcessingStatus,
+): ReportHistoryData =
+    ReportHistoryData(
+        historyId = historyId,
+        reportCategory = ReportType.BRAILLE_BLOCK.apiValue,
+        processingStatus = status,
+        description = null,
+        address = "부산광역시 강서구 명지국제8로 10",
+        latitude = 35.1,
+        longitude = 128.9,
+        photoUri = null,
+        imageUrl = null,
+        source = ReportHistorySource.Server,
+        serverReportId = null,
+        createdAtMillis = 1_700_000_000_000L,
+        updatedAtMillis = 1_700_000_000_000L,
+    )
 
 // ─── Test helpers ─────────────────────────────────────────────────────────
 //

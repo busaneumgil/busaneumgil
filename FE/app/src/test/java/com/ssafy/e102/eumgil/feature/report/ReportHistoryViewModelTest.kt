@@ -1,4 +1,4 @@
-package com.ssafy.e102.eumgil.feature.mypage
+package com.ssafy.e102.eumgil.feature.report
 
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportHistoryData
@@ -24,7 +24,7 @@ import org.junit.Rule
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class MyPageReportHistoryViewModelTest {
+class ReportHistoryViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
@@ -32,7 +32,7 @@ class MyPageReportHistoryViewModelTest {
     fun `history items are mapped in latest updated order`() =
         runTest {
             val repository = FakeReportHistoryRepository()
-            val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
+            val viewModel = ReportHistoryViewModel(reportRepository = repository)
 
             repository.emit(
                 listOf(
@@ -58,7 +58,7 @@ class MyPageReportHistoryViewModelTest {
 
             val uiState = viewModel.uiState.value
 
-            assertEquals(MyPageReportHistoryScreenState.CONTENT, uiState.screenState)
+            assertEquals(ReportHistoryScreenState.CONTENT, uiState.screenState)
             assertEquals(listOf("server:7", "outbox:old"), uiState.reports.map { it.outboxId })
             assertEquals("기타 장애물", uiState.reports.first().title)
             assertEquals("위치 35.179600, 129.075600", uiState.reports.first().address)
@@ -71,12 +71,12 @@ class MyPageReportHistoryViewModelTest {
     fun `empty history exposes empty state`() =
         runTest {
             val repository = FakeReportHistoryRepository()
-            val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
+            val viewModel = ReportHistoryViewModel(reportRepository = repository)
 
             repository.emit(emptyList())
             advanceUntilIdle()
 
-            assertEquals(MyPageReportHistoryScreenState.EMPTY, viewModel.uiState.value.screenState)
+            assertEquals(ReportHistoryScreenState.EMPTY, viewModel.uiState.value.screenState)
             assertTrue(viewModel.uiState.value.reports.isEmpty())
         }
 
@@ -84,19 +84,19 @@ class MyPageReportHistoryViewModelTest {
     fun `repository failure exposes error state`() =
         runTest {
             val repository = FakeReportHistoryRepository()
-            val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
+            val viewModel = ReportHistoryViewModel(reportRepository = repository)
 
             repository.fail()
             advanceUntilIdle()
 
-            assertEquals(MyPageReportHistoryScreenState.ERROR, viewModel.uiState.value.screenState)
+            assertEquals(ReportHistoryScreenState.ERROR, viewModel.uiState.value.screenState)
         }
 
     @Test
     fun `report click loads selected detail`() =
         runTest {
             val repository = FakeReportHistoryRepository()
-            val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
+            val viewModel = ReportHistoryViewModel(reportRepository = repository)
             repository.emit(
                 listOf(
                     reportHistory(
@@ -125,7 +125,7 @@ class MyPageReportHistoryViewModelTest {
                 )
             advanceUntilIdle()
 
-            viewModel.onAction(MyPageReportHistoryUiAction.ReportClicked("server:7"))
+            viewModel.onAction(ReportHistoryUiAction.ReportClicked("server:7"))
             advanceUntilIdle()
 
             val detail = viewModel.uiState.value.selectedDetail
@@ -139,28 +139,28 @@ class MyPageReportHistoryViewModelTest {
     fun `report cta emits navigate to report event`() =
         runTest {
             val repository = FakeReportHistoryRepository()
-            val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
+            val viewModel = ReportHistoryViewModel(reportRepository = repository)
             val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
             advanceUntilIdle()
 
-            viewModel.onAction(MyPageReportHistoryUiAction.ReportCtaClicked)
+            viewModel.onAction(ReportHistoryUiAction.ReportCtaClicked)
             advanceUntilIdle()
 
-            assertEquals(MyPageReportHistoryUiEvent.NavigateToReport, event.await())
+            assertEquals(ReportHistoryUiEvent.NavigateToReport, event.await())
         }
 
     @Test
     fun `back click emits navigate back event`() =
         runTest {
             val repository = FakeReportHistoryRepository()
-            val viewModel = MyPageReportHistoryViewModel(reportRepository = repository)
+            val viewModel = ReportHistoryViewModel(reportRepository = repository)
             val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
             advanceUntilIdle()
 
-            viewModel.onAction(MyPageReportHistoryUiAction.BackClicked)
+            viewModel.onAction(ReportHistoryUiAction.BackClicked)
             advanceUntilIdle()
 
-            assertEquals(MyPageReportHistoryUiEvent.NavigateBack, event.await())
+            assertEquals(ReportHistoryUiEvent.NavigateBack, event.await())
         }
 }
 

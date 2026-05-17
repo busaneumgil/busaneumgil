@@ -1,4 +1,4 @@
-package com.ssafy.e102.eumgil.feature.mypage
+package com.ssafy.e102.eumgil.feature.report
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -65,17 +65,17 @@ internal fun reportHistoryLayoutSpec(): ReportHistoryLayoutSpec =
     )
 
 @Composable
-fun MyPageReportHistoryScreen(
-    uiState: MyPageReportHistoryUiState,
+fun ReportHistoryScreen(
+    uiState: ReportHistoryUiState,
     snackbarHostState: SnackbarHostState,
-    onAction: (MyPageReportHistoryUiAction) -> Unit,
+    onAction: (ReportHistoryUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            MyPageReportHistoryTopBar(
-                onBackClick = { onAction(MyPageReportHistoryUiAction.BackClicked) },
+            ReportHistoryTopBar(
+                onBackClick = { onAction(ReportHistoryUiAction.BackClicked) },
             )
         },
         snackbarHost = {
@@ -91,7 +91,7 @@ fun MyPageReportHistoryScreen(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
             when (uiState.screenState) {
-                MyPageReportHistoryScreenState.LOADING ->
+                ReportHistoryScreenState.LOADING ->
                     item {
                         ReportHistoryStateCard(
                             title = "제보 내역을 불러오는 중입니다",
@@ -100,7 +100,7 @@ fun MyPageReportHistoryScreen(
                         )
                     }
 
-                MyPageReportHistoryScreenState.EMPTY ->
+                ReportHistoryScreenState.EMPTY ->
                     item {
                         ReportHistoryStateCard(
                             title = "아직 제보 내역이 없어요",
@@ -108,30 +108,30 @@ fun MyPageReportHistoryScreen(
                             primaryActionLabel = "제보하기",
                             primaryActionSuppressRipple = true,
                             onPrimaryActionClick = {
-                                onAction(MyPageReportHistoryUiAction.ReportCtaClicked)
+                                onAction(ReportHistoryUiAction.ReportCtaClicked)
                             },
                         )
                     }
 
-                MyPageReportHistoryScreenState.ERROR ->
+                ReportHistoryScreenState.ERROR ->
                     item {
                         ReportHistoryStateCard(
                             title = "제보 내역을 불러오지 못했습니다",
                             description = uiState.errorMessage ?: "잠시 후 다시 시도해 주세요.",
                             primaryActionLabel = "다시 시도",
                             onPrimaryActionClick = {
-                                onAction(MyPageReportHistoryUiAction.RetryClicked)
+                                onAction(ReportHistoryUiAction.RetryClicked)
                             },
                             secondaryActionLabel = "제보하기",
                             secondaryActionSuppressRipple = true,
                             onSecondaryActionClick = {
-                                onAction(MyPageReportHistoryUiAction.ReportCtaClicked)
+                                onAction(ReportHistoryUiAction.ReportCtaClicked)
                             },
                             isError = true,
                         )
                     }
 
-                MyPageReportHistoryScreenState.CONTENT -> {
+                ReportHistoryScreenState.CONTENT -> {
                     if (shouldShowReportHistoryCreateCta(uiState.screenState)) {
                         item {
                             ReportHistoryStateCard(
@@ -140,7 +140,7 @@ fun MyPageReportHistoryScreen(
                                 primaryActionLabel = "제보하기",
                                 primaryActionSuppressRipple = true,
                                 onPrimaryActionClick = {
-                                    onAction(MyPageReportHistoryUiAction.ReportCtaClicked)
+                                    onAction(ReportHistoryUiAction.ReportCtaClicked)
                                 },
                             )
                         }
@@ -169,7 +169,7 @@ fun MyPageReportHistoryScreen(
                         ReportHistoryCard(
                             report = report,
                             onClick = {
-                                onAction(MyPageReportHistoryUiAction.ReportClicked(report.outboxId))
+                                onAction(ReportHistoryUiAction.ReportClicked(report.outboxId))
                             },
                         )
                     }
@@ -179,11 +179,11 @@ fun MyPageReportHistoryScreen(
     }
 }
 
-internal fun shouldShowReportHistoryCreateCta(screenState: MyPageReportHistoryScreenState): Boolean =
-    screenState == MyPageReportHistoryScreenState.CONTENT
+internal fun shouldShowReportHistoryCreateCta(screenState: ReportHistoryScreenState): Boolean =
+    screenState == ReportHistoryScreenState.CONTENT
 
 @Composable
-private fun MyPageReportHistoryTopBar(onBackClick: () -> Unit) {
+private fun ReportHistoryTopBar(onBackClick: () -> Unit) {
     EumCenteredTopBar(
         title = "제보 내역",
         onBackClick = onBackClick,
@@ -194,7 +194,7 @@ private fun MyPageReportHistoryTopBar(onBackClick: () -> Unit) {
 
 @Composable
 private fun ReportHistoryCard(
-    report: MyPageReportHistoryUiModel,
+    report: ReportHistoryUiModel,
     onClick: () -> Unit,
 ) {
     val spec = reportHistoryLayoutSpec()
@@ -264,7 +264,7 @@ private fun ReportHistoryCard(
 }
 
 @Composable
-private fun ReportHistoryDetailCard(detail: MyPageReportHistoryDetailUiModel) {
+private fun ReportHistoryDetailCard(detail: ReportHistoryDetailUiModel) {
     val spec = reportHistoryLayoutSpec()
 
     Surface(
@@ -426,7 +426,7 @@ private fun ReportHistoryStateCard(
                     horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
                 ) {
                     if (primaryActionSuppressRipple) {
-                        NoRippleMyPageReportHistoryNavigationButton(
+                        NoRippleReportHistoryNavigationButton(
                             onClick = onPrimaryActionClick,
                             modifier =
                                 Modifier
@@ -466,7 +466,7 @@ private fun ReportHistoryStateCard(
                     }
                     if (secondaryActionLabel != null && onSecondaryActionClick != null) {
                         if (secondaryActionSuppressRipple) {
-                            NoRippleMyPageReportHistoryNavigationButton(
+                            NoRippleReportHistoryNavigationButton(
                                 onClick = onSecondaryActionClick,
                                 modifier =
                                     Modifier
@@ -505,7 +505,7 @@ private fun ReportHistoryStateCard(
 }
 
 @Composable
-private fun NoRippleMyPageReportHistoryNavigationButton(
+private fun NoRippleReportHistoryNavigationButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,

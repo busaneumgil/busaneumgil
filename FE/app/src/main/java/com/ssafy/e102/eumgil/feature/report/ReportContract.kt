@@ -11,7 +11,7 @@ object ReportFormLimits {
 
 data class ReportUiState(
     val screenState: ReportScreenState = ReportScreenState.Editing,
-    val currentStep: ReportStep = ReportStep.TypeSelection,
+    val currentStep: ReportStep = ReportStep.Home,
     val draftId: String? = null,
     val hasExistingDraft: Boolean = false,
     val reportType: ReportTypeInput = ReportTypeInput(),
@@ -22,6 +22,7 @@ data class ReportUiState(
     val outboxState: ReportOutboxState = ReportOutboxState.NotSaved,
     val submitState: ReportSubmitState = ReportSubmitState.Idle,
     val processingCounts: ReportProcessingCounts = ReportProcessingCounts(),
+    val recentReports: List<ReportRecentUiModel> = emptyList(),
     val submittedAtMillis: Long? = null,
     // Task 4.1 — 단말 네트워크 연결성. 오프라인이면 서버 제출 자체를 막아 무의미한 retry를 피한다.
     // 기본값 true: 정보가 없을 때는 사용자가 시도할 수 있게 두는 게 더 자연스럽다.
@@ -50,11 +51,21 @@ data class ReportUiState(
 }
 
 enum class ReportStep {
+    Home,
     TypeSelection,
     LocationConfirm,
     DetailInput,
     Complete,
 }
+
+data class ReportRecentUiModel(
+    val historyId: String,
+    val title: String,
+    val address: String,
+    val submittedAtText: String,
+    val statusLabel: String,
+    val isApproved: Boolean,
+)
 
 data class ReportTypeInput(
     val value: ReportType? = null,

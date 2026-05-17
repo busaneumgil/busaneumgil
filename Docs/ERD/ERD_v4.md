@@ -1,4 +1,4 @@
-# 📋 ERD v4 — SHP 기반 보행 네트워크, 편의시설 카테고리, 경로 안내 세션 최신화
+﻿# 📋 ERD v4 — SHP 기반 보행 네트워크, 편의시설 카테고리, 경로 안내 세션 최신화
 
 > **작성일:** 2026-04-23
 > **기준 문서:** `docs/erd.md` (원본 OSM 기반)
@@ -71,6 +71,7 @@
 
 - `road_nodes`
 - `road_segments`
+- `routing_segment_overrides`
 - `admin_areas`
 - `source_features`
 - `segment_features`
@@ -110,6 +111,7 @@ erDiagram
     ROAD_NODES ||--o{ ROAD_SEGMENTS : fromNode
     ROAD_NODES ||--o{ ROAD_SEGMENTS : toNode
     ROAD_SEGMENTS ||--o{ SEGMENT_FEATURES : has
+    ROAD_SEGMENTS ||--o| ROUTING_SEGMENT_OVERRIDES : overriddenBy
     SUBWAY_STATIONS ||--o{ SUBWAY_TIMETABLES : has
     SUBWAY_STATIONS ||--o{ SUBWAY_STATION_ELEVATORS : maps
 
@@ -202,6 +204,11 @@ erDiagram
         ENUM stairs_state
         ENUM signal_state
         VARCHAR segment_type
+    }
+
+    ROUTING_SEGMENT_OVERRIDES {
+        BIGINT edge_id PK, FK
+        ENUM walk_access
     }
 
     ADMIN_AREAS {
@@ -1152,3 +1159,4 @@ ODsay `loadLane` 호출 결과를 `map_obj` 기준으로 영속 저장한다.
 
 - 물리 FK 관계가 아니다.
 - `gu`, `dong` 문자열 계약으로 관리자 화면의 선택 가능한 구/동과 담당자 row를 맞춘다.
+

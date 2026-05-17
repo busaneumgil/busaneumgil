@@ -21,7 +21,6 @@ import com.graphhopper.resources.InfoResource;
 import com.graphhopper.resources.NearestResource;
 import com.graphhopper.resources.RouteResource;
 import com.graphhopper.routing.util.EncodingManager;
-import com.graphhopper.storage.BaseGraph;
 import com.graphhopper.storage.index.LocationIndex;
 import com.graphhopper.util.TranslationMap;
 import io.dropwizard.core.ConfiguredBundle;
@@ -59,10 +58,10 @@ public class IeumGraphHopperBundle implements ConfiguredBundle<GraphHopperBundle
         @Override public void dispose(LocationIndex instance) { }
     }
 
-    public static class BaseGraphFactory implements Factory<BaseGraph> {
-        @Inject GraphHopper graphHopper;
-        @Override public BaseGraph provide() { return graphHopper.getBaseGraph(); }
-        @Override public void dispose(BaseGraph instance) { }
+    public static class RoutingSegmentOverrideStoreFactory implements Factory<RoutingSegmentOverrideStore> {
+        @Inject IeumGraphHopperManaged managed;
+        @Override public RoutingSegmentOverrideStore provide() { return managed.getRoutingSegmentOverrideStore(); }
+        @Override public void dispose(RoutingSegmentOverrideStore instance) { }
     }
 
     public static class ProfileResolverFactory implements Factory<ProfileResolver> {
@@ -118,13 +117,14 @@ public class IeumGraphHopperBundle implements ConfiguredBundle<GraphHopperBundle
             protected void configure() {
                 bind(configuration.getGraphHopperConfiguration()).to(GraphHopperConfig.class);
                 bind(graphHopper).to(GraphHopper.class);
+                bind(managed).to(IeumGraphHopperManaged.class);
                 bindFactory(ProfileResolverFactory.class).to(ProfileResolver.class);
                 bindFactory(GHRequestTransformerFactory.class).to(GHRequestTransformer.class);
                 bindFactory(HasElevationFactory.class).to(Boolean.class).named("hasElevation");
                 bindFactory(LocationIndexFactory.class).to(LocationIndex.class);
                 bindFactory(TranslationMapFactory.class).to(TranslationMap.class);
                 bindFactory(EncodingManagerFactory.class).to(EncodingManager.class);
-                bindFactory(BaseGraphFactory.class).to(BaseGraph.class);
+                bindFactory(RoutingSegmentOverrideStoreFactory.class).to(RoutingSegmentOverrideStore.class);
             }
         });
 
@@ -132,6 +132,7 @@ public class IeumGraphHopperBundle implements ConfiguredBundle<GraphHopperBundle
         environment.jersey().register(NearestResource.class);
         environment.jersey().register(I18NResource.class);
         environment.jersey().register(InfoResource.class);
+        environment.jersey().register(RoutingOverrideReloadResource.class);
         environment.healthChecks().register("graphhopper", new GraphHopperHealthCheck(graphHopper));
         environment.jersey().register(environment.healthChecks());
         environment.jersey().register(HealthCheckResource.class);

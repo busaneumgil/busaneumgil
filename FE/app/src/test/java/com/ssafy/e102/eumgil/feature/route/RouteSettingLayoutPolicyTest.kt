@@ -471,7 +471,9 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(detailScreenSection.contains("rememberMapOverlayViewportControlState()"))
         assertTrue(source.contains("mapControlState.zoomIn()"))
         assertTrue(source.contains("mapControlState.zoomOut()"))
-        assertTrue(source.contains("mapControlState.recenter()"))
+        assertTrue(source.contains("RouteSettingUiAction.CurrentLocationClicked"))
+        assertTrue(source.contains("recenterToCurrentLocation("))
+        assertTrue(source.contains("recenter()"))
         assertTrue(mapControlsSection.contains("onActionClick = onActionClick"))
         assertTrue(mapControlsSection.contains("onZoomInClick = onZoomInClick"))
         assertTrue(mapControlsSection.contains("onZoomOutClick = onZoomOutClick"))
@@ -1504,7 +1506,7 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `route setting transit refresh action floats diagonally above the start cta`() {
+    fun `route setting refresh action floats diagonally above the start cta`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
@@ -1515,21 +1517,20 @@ class RouteSettingLayoutPolicyTest {
         val bottomBarSection =
             source
                 .substringAfter("private fun RouteSettingBottomBar(")
-                .substringBefore("@Composable\nprivate fun RouteTransitRefreshFloatingButton")
+                .substringBefore("@Composable\nprivate fun RouteRefreshFloatingButton")
         val refreshButtonSection =
             source
-                .substringAfter("private fun RouteTransitRefreshFloatingButton(")
+                .substringAfter("private fun RouteRefreshFloatingButton(")
                 .substringBefore("@Composable\nprivate fun RouteSettingCtaContent")
 
         assertTrue(
-            "Transit route selection should expose manual refresh only for a selected transit route.",
-            screenSection.contains("uiState.selectedTravelMode == RouteTravelMode.TRANSIT") &&
-                screenSection.contains("uiState.selectedRoute != null") &&
-                screenSection.contains("RouteSettingUiAction.TransitRefreshClicked"),
+            "Route selection should expose manual refresh whenever a route is selected.",
+            screenSection.contains("showRefreshAction = uiState.selectedRoute != null") &&
+                screenSection.contains("RouteSettingUiAction.RouteRefreshClicked"),
         )
         assertTrue(
             "The refresh action should sit at the CTA top end and offset upward as a diagonal floating button.",
-            bottomBarSection.contains("RouteTransitRefreshFloatingButton(") &&
+            bottomBarSection.contains("RouteRefreshFloatingButton(") &&
                 bottomBarSection.contains(".align(Alignment.TopEnd)") &&
                 bottomBarSection.contains(".offset(y = -RouteTransitRefreshButtonDiagonalOffset)"),
         )

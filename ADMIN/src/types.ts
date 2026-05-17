@@ -416,6 +416,15 @@ export interface AdminRoadSegmentAttributesUpdateRequest {
   surfaceState?: SurfaceState | null;
   stairsState?: AccessibilityState | null;
   signalState?: AccessibilityState | null;
+  applyRoutingImmediately?: boolean | null;
+}
+
+export type AdminRoutingApplyStatus = "SKIPPED" | "APPLIED" | "APPLIED_WITH_WARNING" | "FAILED";
+
+export interface AdminRoadSegmentUpdateResponse {
+  segment: SegmentFeature["properties"];
+  routingApplyStatus: AdminRoutingApplyStatus;
+  routingApplyMessage: string | null;
 }
 
 export type WalkRouteProfile =
@@ -596,6 +605,176 @@ export interface AdminDashboardBottleneckRouteSegment {
   averageSpeedMps: number;
   reportCount: number;
   sampleCount: number;
+}
+
+export type AdminRouteStatsMobilityFilter =
+  | "ALL"
+  | "MOBILITY_SUPPORT"
+  | "POWER_WHEELCHAIR"
+  | "MANUAL_WHEELCHAIR"
+  | "VISUAL_IMPAIRMENT";
+
+export type AdminRouteStatsTimeGranularity = "DAILY" | "WEEKLY" | "MONTHLY";
+export type AdminRouteStatsMapMode = "HEATMAP" | "WAYPOINT" | "DENSITY";
+
+export interface AdminRouteStatsResponse {
+  period: {
+    from: string;
+    to: string;
+  };
+  summary: {
+    totalTrips: number;
+    metricLabel: string;
+  };
+  filters: {
+    mobilityOptions: Array<{
+      value: AdminRouteStatsMobilityFilter;
+      label: string;
+    }>;
+    timeGranularityOptions: Array<{
+      value: AdminRouteStatsTimeGranularity;
+      label: string;
+    }>;
+    defaults: {
+      mobility: AdminRouteStatsMobilityFilter;
+      timeGranularity: AdminRouteStatsTimeGranularity;
+    };
+  };
+  map: {
+    title: string;
+    legendMinLabel: string;
+    legendMaxLabel: string;
+    metricOptions: Array<{
+      value: string;
+      label: string;
+    }>;
+    selectedMetric: string;
+    modeOptions: Array<{
+      value: AdminRouteStatsMapMode;
+      label: string;
+    }>;
+    selectedMode: AdminRouteStatsMapMode;
+    showDistrictBoundary: boolean;
+    hotspots: AdminDashboardBottleneckHotspot[];
+    routeSegments: AdminDashboardBottleneckRouteSegment[];
+  };
+  topRoutesDefinition: string;
+  topRoutes: Array<{
+    rank: number;
+    name: string;
+    routeCount: number;
+    share: number;
+    tone: "danger" | "hot" | "warm" | "clear";
+  }>;
+  typeBreakdown: Array<{
+    label: string;
+    count: number;
+    share: number;
+    color: string;
+  }>;
+  hourlyHeatmap: {
+    title: string;
+    helperText: string;
+    xLabels: string[];
+    yLabels: string[];
+    values: number[][];
+  };
+  speedTrend: {
+    labels: string[];
+    series: Array<{
+      label: string;
+      color: string;
+      values: number[];
+    }>;
+  };
+  distanceDistribution: {
+    buckets: string[];
+    series: Array<{
+      label: string;
+      color: string;
+      count: number[];
+      share: number[];
+    }>;
+  };
+  averageDistance: Array<{
+    label: string;
+    kilometer: number;
+    color: string;
+  }>;
+  infoItems: Array<{
+    label: string;
+    value: string;
+  }>;
+}
+
+export interface AdminBottleneckMonitoringResponse {
+  title: string;
+  subtitle: string;
+  dateRangeLabel: string;
+  exportLabel: string;
+  summaryCards: Array<{
+    label: string;
+    valueLabel: string;
+    deltaLabel: string;
+    comparisonLabel: string;
+    tone: "danger" | "warning" | "success";
+    icon: "alert" | "fire" | "users" | "check";
+  }>;
+  trend: {
+    labels: string[];
+    series: Array<{
+      label: string;
+      color: string;
+      values: number[];
+    }>;
+    maxValue: number;
+  };
+  distribution: {
+    totalCount: number;
+    items: Array<{
+      label: string;
+      count: number;
+      share: number;
+      color: string;
+    }>;
+  };
+  map: {
+    hotspots: AdminDashboardBottleneckHotspot[];
+    routeSegments: AdminDashboardBottleneckRouteSegment[];
+  };
+  table: {
+    filters: {
+      typeLabel: string;
+      statusLabel: string;
+      sortLabel: string;
+      pageSizeLabel: string;
+    };
+    rows: Array<{
+      rank: number;
+      location: string;
+      address: string;
+      typeLabel: string;
+      typeTone: "blue" | "green" | "orange" | "purple";
+      affectedUsersLabel: string;
+      statusLabel: string;
+      statusTone: "danger" | "warning" | "neutral";
+      reportedAt: string;
+    }>;
+    pagination: {
+      currentPage: number;
+      pages: number[];
+    };
+  };
+  impactTop: {
+    sortLabel: string;
+    items: Array<{
+      rank: number;
+      location: string;
+      affectedUsersLabel: string;
+      statusLabel: string;
+      statusTone: "danger" | "warning" | "neutral";
+    }>;
+  };
 }
 
 export interface AdminHazardReportSummary {

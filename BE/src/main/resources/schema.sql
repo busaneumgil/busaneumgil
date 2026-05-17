@@ -53,3 +53,12 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_log_id
 
 CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_filter
     ON admin_audit_logs (action, gu, dong, actor_user_id, log_id DESC);
+
+CREATE TABLE IF NOT EXISTS routing_segment_overrides (
+    edge_id BIGINT PRIMARY KEY,
+    walk_access VARCHAR(30) NOT NULL,
+    CONSTRAINT fk_routing_segment_overrides_edge_id
+        FOREIGN KEY (edge_id)
+        REFERENCES road_segments (edge_id)
+        ON DELETE CASCADE
+);

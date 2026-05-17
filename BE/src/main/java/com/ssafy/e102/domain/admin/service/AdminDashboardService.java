@@ -2,11 +2,13 @@ package com.ssafy.e102.domain.admin.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.TreeMap;
 
 import org.locationtech.jts.geom.Coordinate;
@@ -51,6 +53,7 @@ public class AdminDashboardService {
 	private final RoadSegmentRepository roadSegmentRepository;
 	private final PlaceRepository placeRepository;
 	private final AdminAuditLogService adminAuditLogService;
+	private final AdminRouteDisplayNameResolver routeDisplayNameResolver;
 
 	public AdminDashboardService(
 		UserRepository userRepository,
@@ -67,6 +70,7 @@ public class AdminDashboardService {
 		this.roadSegmentRepository = roadSegmentRepository;
 		this.placeRepository = placeRepository;
 		this.adminAuditLogService = adminAuditLogService;
+		this.routeDisplayNameResolver = new AdminRouteDisplayNameResolver(placeRepository);
 	}
 
 	public AdminDashboardSummaryResponse getSummary(LocalDate from, LocalDate to) {
@@ -172,6 +176,7 @@ public class AdminDashboardService {
 		var routeSegments = new ArrayList<AdminDashboardBottleneckResponse.BottleneckRouteSegmentResponse>();
 		var hotspots = new ArrayList<AdminDashboardBottleneckResponse.BottleneckHotspotResponse>();
 		var topBottlenecks = new ArrayList<AdminDashboardBottleneckResponse.TopBottleneckResponse>();
+		Map<String, Integer> usedNames = new HashMap<>();
 
 		for (int index = 0; index < candidates.size(); index++) {
 			RouteSessionRepository.BottleneckRouteCandidate candidate = candidates.get(index);
@@ -183,7 +188,7 @@ public class AdminDashboardService {
 			double speed = round(speed(candidate));
 			long sampleCount = valueOrZero(candidate.getSampleCount());
 			long reportCount = valueOrZero(candidate.getReportCount());
-			String name = routeName(candidate.getName(), index + 1);
+			String name = uniqueRouteName(routeName(candidate.getName(), points, index + 1), usedNames);
 
 			routeSegments.add(new AdminDashboardBottleneckResponse.BottleneckRouteSegmentResponse(
 				id,
@@ -335,10 +340,29 @@ public class AdminDashboardService {
 		return value == null ? 0 : value;
 	}
 
-	private String routeName(String value, int fallbackIndex) {
-		if (value == null || value.isBlank()) {
-			return "병목 후보 경로 " + fallbackIndex;
+	private String routeName(
+		String value,
+		List<AdminDashboardBottleneckResponse.GeoPointResponse> points,
+		int fallbackIndex) {
+		return routeDisplayNameResolver.resolve(
+			value,
+			points,
+			null,
+			null,
+			null,
+			null,
+			fallbackRouteName(fallbackIndex));
+	}
+
+	private String uniqueRouteName(String baseName, Map<String, Integer> usedNames) {
+		int occurrence = usedNames.merge(baseName, 1, Integer::sum);
+		if (occurrence <= 1) {
+			return baseName;
 		}
-		return value.strip();
+		return baseName + " (" + occurrence + ")";
+	}
+
+	private String fallbackRouteName(int fallbackIndex) {
+		return "병목 후보 경로 " + fallbackIndex;
 	}
 }

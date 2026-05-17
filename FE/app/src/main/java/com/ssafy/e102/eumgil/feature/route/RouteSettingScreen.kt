@@ -248,6 +248,9 @@ fun RouteSettingScreen(
                         onOptionDetailClick = { routeOption ->
                             onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
                         },
+                        onCurrentLocationClick = {
+                            onAction(RouteSettingUiAction.CurrentLocationClicked)
+                        },
                     )
                 }
                 if (!showsRouteLoadingScreen && !showsRouteUnsupportedAreaScreen && !showsRouteFailureScreen) {
@@ -256,12 +259,10 @@ fun RouteSettingScreen(
                         enabled = uiState.isStartEnabled,
                         supportingText = ctaSupportingText,
                         selectedRoute = uiState.selectedRoute,
-                        showRefreshAction =
-                            uiState.selectedTravelMode == RouteTravelMode.TRANSIT &&
-                                uiState.selectedRoute != null,
-                        isRefreshInProgress = uiState.isTransitRefreshing,
+                        showRefreshAction = uiState.selectedRoute != null,
+                        isRefreshInProgress = uiState.isRouteRefreshing,
                         onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
-                        onRefreshClick = { onAction(RouteSettingUiAction.TransitRefreshClicked) },
+                        onRefreshClick = { onAction(RouteSettingUiAction.RouteRefreshClicked) },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
@@ -295,6 +296,7 @@ fun RouteDetailScreen(
     onBackClick: () -> Unit,
     onCloseClick: () -> Unit = onBackClick,
     onStartClick: () -> Unit,
+    onCurrentLocationClick: () -> Unit = {},
     pendingLowFloorReservation: LowFloorBusReservation? = null,
     isLowFloorReservationRequesting: Boolean = false,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit = {},
@@ -364,7 +366,10 @@ fun RouteDetailScreen(
             )
 
             RouteMapControls(
-                onActionClick = { mapControlState.recenter() },
+                onActionClick = {
+                    onCurrentLocationClick()
+                    mapControlState.recenterToCurrentLocationOrRoute(uiState.currentLocationRecenterCoordinate)
+                },
                 onZoomInClick = { mapControlState.zoomIn() },
                 onZoomOutClick = { mapControlState.zoomOut() },
                 modifier =
@@ -2902,12 +2907,32 @@ private fun routeTravelModeTabContentColor(isSelected: Boolean): Color =
         RouteTravelModeInactiveContentColor
     }
 
+private val RouteSettingUiState.currentLocationRecenterCoordinate: GeoCoordinate?
+    get() =
+        currentLocationCoordinate ?: origin.coordinate.takeIf {
+            originState == RouteOriginState.CURRENT_LOCATION_RESOLVED
+        }
+
+private fun MapOverlayViewportControlState.recenterToCurrentLocationOrRoute(currentLocation: GeoCoordinate?) {
+    if (currentLocation == null) {
+        recenter()
+        return
+    }
+    recenterToCurrentLocation(
+        MapCoordinate(
+            latitude = currentLocation.latitude,
+            longitude = currentLocation.longitude,
+        ),
+    )
+}
+
 @Composable
 private fun RouteMapStage(
     uiState: RouteSettingUiState,
     modifier: Modifier = Modifier,
     onOptionClick: (RouteOption) -> Unit = {},
     onOptionDetailClick: (RouteOption) -> Unit = {},
+    onCurrentLocationClick: () -> Unit = {},
 ) {
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
@@ -2970,7 +2995,10 @@ private fun RouteMapStage(
                         .padding(end = EumSpacing.small)
                 }
             RouteMapControls(
-                onActionClick = { mapControlState.recenter() },
+                onActionClick = {
+                    onCurrentLocationClick()
+                    mapControlState.recenterToCurrentLocationOrRoute(uiState.currentLocationRecenterCoordinate)
+                },
                 onZoomInClick = { mapControlState.zoomIn() },
                 onZoomOutClick = { mapControlState.zoomOut() },
                 modifier = mapControlsModifier,
@@ -4232,7 +4260,7 @@ private fun RouteSettingBottomBar(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (showRefreshAction) {
-                RouteTransitRefreshFloatingButton(
+                RouteRefreshFloatingButton(
                     isRefreshing = isRefreshInProgress,
                     enabled = !isRefreshInProgress,
                     onClick = onRefreshClick,
@@ -4247,7 +4275,7 @@ private fun RouteSettingBottomBar(
 }
 
 @Composable
-private fun RouteTransitRefreshFloatingButton(
+private fun RouteRefreshFloatingButton(
     isRefreshing: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -4263,7 +4291,7 @@ private fun RouteTransitRefreshFloatingButton(
                     role = Role.Button,
                     onClick = onClick,
                 ).semantics {
-                    contentDescription = "대중교통 도착정보 새로고침"
+                    contentDescription = "경로 새로고침"
                     stateDescription = if (isRefreshing) "새로고침 중" else "새로고침 가능"
                 },
         shape = CircleShape,

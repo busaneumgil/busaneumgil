@@ -29,10 +29,11 @@ data class RouteSettingUiState(
     val optionCards: List<RouteOptionCardUiState> = emptyList(),
     val selectedRoute: RouteSelectedRouteUiState? = null,
     val routePreviewMap: RoutePreviewMapUiState = RoutePreviewMapUiState(),
+    val currentLocationCoordinate: GeoCoordinate? = null,
     val sourceLabel: String? = null,
     val cta: RouteSettingCtaUiState = RouteSettingCtaUiState(),
     val ctaAcknowledged: Boolean = false,
-    val isTransitRefreshing: Boolean = false,
+    val isRouteRefreshing: Boolean = false,
     val showsDuribalCallAction: Boolean = false,
     val unsupportedArea: RouteUnsupportedAreaUiState? = null,
 ) {
@@ -310,7 +311,9 @@ sealed interface RouteSettingUiAction {
 
     data object StartNavigationClicked : RouteSettingUiAction
 
-    data object TransitRefreshClicked : RouteSettingUiAction
+    data object RouteRefreshClicked : RouteSettingUiAction
+
+    data object CurrentLocationClicked : RouteSettingUiAction
 }
 
 sealed interface RouteSettingUiEvent {

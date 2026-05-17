@@ -47,4 +47,18 @@ describe("RouteStatsPage", () => {
     expect(html).not.toContain("route-stats-map-footer");
     expect(html.indexOf("요일·시간대 이동 분포")).toBeLessThan(html.indexOf("시간대별 평균 속도"));
   });
+
+  it("shows only loading state when real route stats data has not arrived yet", () => {
+    const html = renderToStaticMarkup(<RouteStatsPage loading />);
+
+    expect(html).toContain("경로/이동 통계를 불러오는 중입니다.");
+    expect(html).not.toContain("35,284건");
+    expect(html).not.toContain("주요 이동 구간 TOP 7");
+  });
+
+  it("does not render duplicate loading state when stale data already exists", () => {
+    const html = renderToStaticMarkup(<RouteStatsPage data={routeStatsMockResponse} loading />);
+
+    expect(html).not.toContain("경로/이동 통계를 불러오는 중입니다.");
+  });
 });

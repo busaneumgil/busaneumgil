@@ -11,5 +11,6 @@ public record AdminRoadSegmentAttributesUpdateRequest(
 	WidthState widthState,
 	SurfaceState surfaceState,
 	AccessibilityState stairsState,
-	AccessibilityState signalState) {
+	AccessibilityState signalState,
+	Boolean applyRoutingImmediately) {
 }

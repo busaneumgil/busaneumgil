@@ -61,8 +61,9 @@ class MapFloatingControlsConfigurationTest {
             sharedSource.contains("private val MAP_FLOATING_ACTION_ICON_SIZE = 18.dp"),
         )
         assertTrue(
-            "Shared map floating controls should route the action icon through the shared icon frame size token.",
-            sharedSource.contains("modifier = Modifier.size(MAP_FLOATING_ACTION_ICON_SIZE)"),
+            "Shared map floating controls should keep the default icon size token while allowing contextual actions to override it.",
+            sharedSource.contains("val iconSize: Dp = MAP_FLOATING_ACTION_ICON_SIZE") &&
+                sharedSource.contains("modifier = Modifier.size(state.iconSize)"),
         )
         assertTrue(
             "MAP screen map controls should delegate to the shared component.",

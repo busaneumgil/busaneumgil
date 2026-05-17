@@ -47,5 +47,10 @@ class EumMapFloatingControlsAdoptionTest {
                 source.contains("R.drawable.ic_nav_report") &&
                 source.contains("R.string.navigation_map_control_report"),
         )
+        assertTrue(
+            "Navigation guidance report shortcut should be black and larger than the default map action icon without changing the current-location button.",
+            source.contains("tint = Color.Black") &&
+                source.contains("iconSize = 24.dp"),
+        )
     }
 }

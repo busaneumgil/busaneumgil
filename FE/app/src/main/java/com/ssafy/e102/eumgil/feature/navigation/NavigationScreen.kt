@@ -1060,7 +1060,8 @@ private fun NavigationMapControls(
         topActionButtonState =
             EumMapFloatingActionButtonState(
                 iconRes = R.drawable.ic_nav_report,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = Color.Black,
+                iconSize = 24.dp,
                 contentDescription = stringResource(id = R.string.navigation_map_control_report),
                 enabled = true,
             ),

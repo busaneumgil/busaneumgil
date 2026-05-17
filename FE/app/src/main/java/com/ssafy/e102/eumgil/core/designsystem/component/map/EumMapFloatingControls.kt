@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -35,6 +36,7 @@ data class EumMapFloatingActionButtonState(
     val label: String? = null,
     val enabled: Boolean = true,
     val tint: Color,
+    val iconSize: Dp = MAP_FLOATING_ACTION_ICON_SIZE,
 )
 
 @Composable
@@ -114,7 +116,7 @@ private fun EumMapFloatingActionButton(
                 Icon(
                     painter = painterResource(id = state.iconRes),
                     contentDescription = state.contentDescription,
-                    modifier = Modifier.size(MAP_FLOATING_ACTION_ICON_SIZE),
+                    modifier = Modifier.size(state.iconSize),
                     tint = state.tint,
                 )
             } else {

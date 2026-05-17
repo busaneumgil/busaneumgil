@@ -156,6 +156,7 @@ export function SegmentMap({
   const addEndpointSnapsRef = useRef<SnappedSegmentEndpoint[]>([]);
   const polygonPointsRef = useRef<Coord[]>([]);
   const polygonDeleteActiveRef = useRef(false);
+  const lastEditCoordinateClickRef = useRef<{ coord: Coord; mode: EditorMode; timestamp: number } | null>(null);
   const onDraftEditRef = useRef(onDraftEdit);
   const onSelectSegmentRef = useRef(onSelectSegment);
   const routePointPickModeRef = useRef(routePointPickMode);
@@ -250,9 +251,8 @@ export function SegmentMap({
     overlaysRef.current = [];
     segmentOverlayByEdgeRef.current.clear();
 
-    const segmentClickEnabled = toolbarMode !== "editor"
-      || (mode !== "add" && !(mode === "delete" && polygonDeleteActive));
-    const useHitArea = toolbarMode === "editor" && segmentClickEnabled;
+    const coordinatePickMode = toolbarMode === "editor" && (mode === "add" || (mode === "delete" && polygonDeleteActive));
+    const useHitArea = toolbarMode === "editor" && !coordinatePickMode;
     const canRenderDetails = detailedSegmentsVisible;
     const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
     overlaysRef.current.push(...createAreaBoundaryOverlay(payload?.areaBoundary, mapRef.current));
@@ -285,7 +285,7 @@ export function SegmentMap({
           segmentType: feature.properties.segmentType,
           reason: "ADMIN_click_delete",
         } as EditAction);
-      }, { clickable: segmentClickEnabled, hitArea: useHitArea, style: routeAttributeStyleOverride });
+      }, { hitArea: useHitArea, style: routeAttributeStyleOverride });
       if (segmentOverlays) {
         overlaysRef.current.push(...segmentOverlays);
         segmentOverlayByEdgeRef.current.set(String(feature.properties.edgeId), segmentOverlays);
@@ -390,6 +390,10 @@ export function SegmentMap({
       return;
     }
 
+    if (isCoordinateEditMode(modeRef.current)) {
+      if (isDuplicateEditCoordinateClick(coord, modeRef.current)) return;
+    }
+
     if (shouldOpenRoadviewForMode(modeRef.current)) {
       showRoadviewAt(latLng);
       return;
@@ -424,6 +428,18 @@ export function SegmentMap({
       polygonPointsRef.current = [...polygonPointsRef.current, coord];
       redrawPolygon();
     }
+  }
+
+  function isCoordinateEditMode(currentMode: EditorMode) {
+    return currentMode === "add" || (currentMode === "delete" && polygonDeleteActiveRef.current);
+  }
+
+  function isDuplicateEditCoordinateClick(coord: Coord, currentMode: EditorMode) {
+    const now = Date.now();
+    const last = lastEditCoordinateClickRef.current;
+    lastEditCoordinateClickRef.current = { coord, mode: currentMode, timestamp: now };
+    if (!last || last.mode !== currentMode || now - last.timestamp > 120) return false;
+    return coordinateDistanceMeter(coord, last.coord) < 0.05;
   }
 
   function clearTempOverlays() {
@@ -1472,6 +1488,13 @@ function localMetersToLngLat(point: { x: number; y: number }, originLat: number)
   const metersPerDegreeLat = 111_320;
   const metersPerDegreeLng = 111_320 * Math.cos((originLat * Math.PI) / 180);
   return [point.x / metersPerDegreeLng, point.y / metersPerDegreeLat];
+}
+
+function coordinateDistanceMeter(a: Coord, b: Coord) {
+  const originLat = (a[1] + b[1]) / 2;
+  const aMeters = lngLatToLocalMeters(a, originLat);
+  const bMeters = lngLatToLocalMeters(b, originLat);
+  return Math.hypot(aMeters.x - bMeters.x, aMeters.y - bMeters.y);
 }
 
 function escapeHtml(value: string): string {

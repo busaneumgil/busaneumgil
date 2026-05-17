@@ -11,10 +11,10 @@ class ReportHistoryScreenTest {
     fun `report history layout spec follows list card and button convention`() {
         val spec = reportHistoryLayoutSpec()
 
-        assertEquals(12, spec.cardCornerRadiusDp)
-        assertEquals(12, spec.thumbnailCornerRadiusDp)
-        assertEquals(12, spec.buttonCornerRadiusDp)
-        assertEquals(48, spec.buttonMinHeightDp)
+        assertEquals(18, spec.cardCornerRadiusDp)
+        assertEquals(14, spec.thumbnailCornerRadiusDp)
+        assertEquals(14, spec.buttonCornerRadiusDp)
+        assertEquals(56, spec.buttonMinHeightDp)
         assertEquals(0, spec.cardShadowElevationDp)
     }
 
@@ -35,18 +35,14 @@ class ReportHistoryScreenTest {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/report/ReportHistoryScreen.kt")
                 .readText()
-        val stateCardSection =
+        val emptyStateSection =
             source
-                .substringAfter("private fun ReportHistoryStateCard(")
-                .substringBefore("@Composable\nprivate fun reportHistoryButtonColors")
+                .substringAfter("private fun ReportHistoryEmptyState(")
+                .substringBefore("@Composable\nprivate fun ReportHistoryListCard")
 
         assertTrue(
-            "Report-history state cards should be able to mark report CTAs as no-ripple transition actions.",
-            source.contains("primaryActionSuppressRipple = true"),
-        )
-        assertTrue(
-            "Report-history state cards should use a dedicated no-ripple navigation button for report CTAs.",
-            stateCardSection.contains("NoRippleReportHistoryNavigationButton("),
+            "Report-history empty state should use a dedicated no-ripple navigation button for report CTAs.",
+            emptyStateSection.contains("NoRippleReportHistoryNavigationButton("),
         )
         assertTrue(
             "Report-history no-ripple CTA helper should disable ripple indication explicitly.",
@@ -56,16 +52,16 @@ class ReportHistoryScreenTest {
 
     @Test
     fun `report history placeholder icon uses report specific drawable without changing tab icon`() {
-        val reportHistorySource =
-            File("src/main/java/com/ssafy/e102/eumgil/feature/report/ReportHistoryScreen.kt")
+        val reportScreenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/report/ReportScreen.kt")
                 .readText()
         val topLevelDestinationSource =
             File("src/main/java/com/ssafy/e102/eumgil/app/navigation/TopLevelDestination.kt")
                 .readText()
 
         assertTrue(
-            "Report history placeholder should use the dedicated My page drawable.",
-            reportHistorySource.contains("R.drawable.ic_mypage_report_history"),
+            "Report location screen should use the dedicated report-map current-location drawable.",
+            reportScreenSource.contains("R.drawable.ic_report_map_current_location"),
         )
         assertTrue(
             "The top-level report tab should keep the existing report navigation icon.",

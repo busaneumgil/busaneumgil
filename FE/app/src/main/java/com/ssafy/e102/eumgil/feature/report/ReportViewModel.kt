@@ -68,6 +68,7 @@ class ReportViewModel(
     init {
         observeNetworkAvailability()
         observeReportOverview()
+        loadLatestDraft()
     }
 
     /**

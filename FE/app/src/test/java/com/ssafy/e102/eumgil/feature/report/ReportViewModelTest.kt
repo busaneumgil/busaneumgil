@@ -636,8 +636,25 @@ class ReportViewModelTest {
             viewModel.onAction(ReportUiAction.ReportHistoryClicked)
             advanceUntilIdle()
 
-            assertEquals(ReportUiEvent.NavigateToReportHistory, event.await())
+            assertEquals(ReportUiEvent.NavigateToReportHistory(), event.await())
             assertEquals(ReportUiState(), viewModel.uiState.value)
+        }
+
+    @Test
+    fun `recent report click navigates to report history detail`() =
+        runTest {
+            val viewModel = createReportViewModel(FakeReportRepository())
+            val event =
+                backgroundScope.async(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.first { emittedEvent ->
+                        emittedEvent is ReportUiEvent.NavigateToReportHistory
+                    } as ReportUiEvent.NavigateToReportHistory
+                }
+
+            viewModel.onAction(ReportUiAction.RecentReportClicked("history-1"))
+            advanceUntilIdle()
+
+            assertEquals("history-1", event.await().historyId)
         }
 
     @Test
@@ -1285,7 +1302,7 @@ class ReportViewModelTest {
             advanceUntilIdle()
 
             // 현재 STAIRS_STEP인 상태에서 같은 STAIRS_STEP을 다시 누르면 다이얼로그 없이 idempotent.
-            // (TypeSelection 단계라면 다음 단계로 진행만 한다.)
+            // TypeSelection 화면의 단계 전환은 별도 다음 CTA가 담당한다.
             viewModel.onAction(ReportUiAction.BackClicked)
             advanceUntilIdle()
             // 이제 TypeSelection으로 복귀
@@ -1296,7 +1313,7 @@ class ReportViewModelTest {
 
             val state = viewModel.uiState.value
             assertEquals(ReportType.STAIRS_STEP, state.reportType.value)
-            assertEquals(ReportStep.LocationConfirm, state.currentStep)
+            assertEquals(ReportStep.TypeSelection, state.currentStep)
         }
 
     @Test

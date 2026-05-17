@@ -114,6 +114,18 @@ export interface RoadNodeFeature {
   };
 }
 
+export interface AreaBoundaryFeature {
+  type: "Feature";
+  geometry: {
+    type: "LineString" | "MultiLineString" | "Polygon" | "MultiPolygon";
+    coordinates: unknown;
+  };
+  properties: {
+    gu: string;
+    dong: string;
+  };
+}
+
 export interface SegmentPayload {
   summary?: {
     segmentCount?: number;
@@ -135,6 +147,7 @@ export interface SegmentPayload {
     type: "FeatureCollection";
     features: RoadNodeFeature[];
   };
+  areaBoundary?: AreaBoundaryFeature | null;
   bridges?: {
     type: "FeatureCollection";
     features: BridgeFeature[];
@@ -254,6 +267,7 @@ export interface FacilityPayload {
     type: "FeatureCollection";
     features: FacilityFeature[];
   };
+  areaBoundary?: AreaBoundaryFeature | null;
 }
 
 export type ReferenceLayerKey = "roadAttributes" | "stairs" | "audioSignals" | "brailleBlocks";
@@ -328,6 +342,7 @@ export interface ManualEditDocument {
 
 export interface RoadNetworkEditApplyResponse {
   addedSegments: number;
+  skippedSegments?: number;
   deletedSegments: number;
   createdNodes: number;
   snappedNodes: number;

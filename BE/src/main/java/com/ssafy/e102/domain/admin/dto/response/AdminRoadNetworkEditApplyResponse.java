@@ -4,6 +4,7 @@ import java.util.List;
 
 public record AdminRoadNetworkEditApplyResponse(
 	int addedSegments,
+	int skippedSegments,
 	int deletedSegments,
 	int createdNodes,
 	int snappedNodes,

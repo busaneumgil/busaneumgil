@@ -29,10 +29,14 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceAccessibilityFeaturesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminPlaceUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminRoadSegmentAttributesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminAreaBoundaryPropertiesResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse.AdminFacilitySummaryResponse;
@@ -84,8 +88,10 @@ public class AdminMapService {
 	private static final Sort PLACE_SORT = Sort.by(Sort.Direction.ASC, "placeId");
 	private static final double BRIDGE_MAX_DISTANCE_METER = 50.0;
 	private static final double BRIDGE_AUTO_DISTANCE_METER = 12.0;
+	private static final String ALL_DONG = AdminService.ALL_DONG;
 
 	private final AdminAreaRepository adminAreaRepository;
+	private final ObjectMapper objectMapper;
 	private final RoadNodeRepository roadNodeRepository;
 	private final RoadSegmentRepository roadSegmentRepository;
 	private final SegmentFeatureRepository segmentFeatureRepository;
@@ -99,6 +105,7 @@ public class AdminMapService {
 
 	public AdminMapService(
 		AdminAreaRepository adminAreaRepository,
+		ObjectMapper objectMapper,
 		RoadNodeRepository roadNodeRepository,
 		RoadSegmentRepository roadSegmentRepository,
 		SegmentFeatureRepository segmentFeatureRepository,
@@ -110,6 +117,7 @@ public class AdminMapService {
 		GraphHopperAdminClient graphHopperAdminClient,
 		PlatformTransactionManager transactionManager) {
 		this.adminAreaRepository = adminAreaRepository;
+		this.objectMapper = objectMapper;
 		this.roadNodeRepository = roadNodeRepository;
 		this.roadSegmentRepository = roadSegmentRepository;
 		this.segmentFeatureRepository = segmentFeatureRepository;
@@ -150,9 +158,12 @@ public class AdminMapService {
 	public AdminRoadNetworkResponse getRoadNetwork(String gu, String dong, int limit) {
 		List<RoadSegment> roadSegments;
 		long segmentCount;
-		if (hasArea(gu, dong)) {
+		if (hasAreaScope(gu, dong)) {
 			roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
 			segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
+		} else if (hasGu(gu)) {
+			roadSegments = roadSegmentRepository.findAllIntersectingGu(gu);
+			segmentCount = roadSegmentRepository.countIntersectingGu(gu);
 		} else {
 			Page<RoadSegment> page = roadSegmentRepository.findAll(PageRequest.of(0, limit, ROAD_SEGMENT_SORT));
 			roadSegments = page.getContent();
@@ -190,14 +201,17 @@ public class AdminMapService {
 				.map(LineString::getEnvelopeInternal)
 				.toList()),
 			AdminGeoJsonFeatureCollectionResponse.of(features),
-			AdminGeoJsonFeatureCollectionResponse.of(nodeFeatures));
+			AdminGeoJsonFeatureCollectionResponse.of(nodeFeatures),
+			toAreaBoundaryFeature(gu, dong));
 	}
 
 	public AdminRoadNetworkBridgePayloadResponse getRoadNetworkBridges(String gu, String dong) {
-		if (!hasArea(gu, dong)) {
-			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "구/동은 필수입니다.");
+		if (!hasGu(gu)) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "구는 필수입니다.");
 		}
-		List<RoadSegment> roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
+		List<RoadSegment> roadSegments = hasAreaScope(gu, dong)
+			? roadSegmentRepository.findAllIntersectingArea(gu, dong)
+			: roadSegmentRepository.findAllIntersectingGu(gu);
 		BridgeGraph bridgeGraph = buildBridgeGraph(roadSegments);
 		List<BridgeCandidate> candidates = findBridgeCandidates(bridgeGraph);
 		List<AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadNetworkBridgePropertiesResponse>> features = candidates
@@ -221,8 +235,10 @@ public class AdminMapService {
 
 	public AdminFacilityPayloadResponse getFacilities(String gu, String dong, int limit) {
 		List<Place> places;
-		if (hasArea(gu, dong)) {
+		if (hasAreaScope(gu, dong)) {
 			places = placeRepository.findAllIntersectingArea(gu, dong, limit);
+		} else if (hasGu(gu)) {
+			places = placeRepository.findAllIntersectingGu(gu, limit);
 		} else {
 			places = placeRepository.findAll(PageRequest.of(0, limit, PLACE_SORT)).getContent();
 		}
@@ -249,7 +265,8 @@ public class AdminMapService {
 				.map(Place::getPoint)
 				.map(Point::getEnvelopeInternal)
 				.toList()),
-			AdminGeoJsonFeatureCollectionResponse.of(features));
+			AdminGeoJsonFeatureCollectionResponse.of(features),
+			toAreaBoundaryFeature(gu, dong));
 	}
 
 	public AdminPlaceDetailResponse getPlace(Long placeId) {
@@ -263,18 +280,33 @@ public class AdminMapService {
 		String gu,
 		String dong,
 		AdminRoadSegmentAttributesUpdateRequest request) {
-		RoadSegmentUpdateContext updateContext = Objects.requireNonNull(
-			transactionTemplate.execute(transactionStatus -> updateRoadSegmentAttributesInTransaction(
-				userId,
-				edgeId,
-				gu,
-				dong,
-				request)));
-		GraphHopperPatchResult routingPatchResult = resolveRoutingPatchResult(edgeId, updateContext);
-		return new AdminRoadSegmentUpdateResponse(
-			updateContext.after(),
-			toAdminRoutingPatchStatus(routingPatchResult.status()),
-			routingPatchResult.message());
+		adminService.requireCanEditArea(userId, gu, dong, AdminAreaAssignmentType.ROAD_NETWORK);
+		if (!roadSegmentRepository.existsIntersectingGuByEdgeId(edgeId, gu)) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "??? ??? segment???????????????.");
+		}
+		RoadSegment roadSegment = roadSegmentRepository.findById(edgeId)
+			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "segment????? ????????."));
+		AdminRoadSegmentPropertiesResponse before = toRoadSegmentProperties(roadSegment);
+		roadSegment.updateAttributes(
+			request.walkAccess(),
+			request.brailleBlockState(),
+			request.audioSignalState(),
+			request.widthState(),
+			request.surfaceState(),
+			request.stairsState(),
+			request.signalState());
+		AdminRoadSegmentPropertiesResponse after = toRoadSegmentProperties(roadSegment);
+		adminAuditLogService.record(
+			userId,
+			"ROAD_SEGMENT_ATTRIBUTES_UPDATE",
+			"ROAD_SEGMENT",
+			String.valueOf(edgeId),
+			gu,
+			dong,
+			"??? segment ??? ????edgeId=" + edgeId,
+			before,
+			after);
+		return after;
 	}
 
 	@Transactional
@@ -555,8 +587,12 @@ public class AdminMapService {
 		return envelope;
 	}
 
-	private boolean hasArea(String gu, String dong) {
-		return gu != null && !gu.isBlank() && dong != null && !dong.isBlank();
+	private boolean hasGu(String gu) {
+		return gu != null && !gu.isBlank();
+	}
+
+	private boolean hasAreaScope(String gu, String dong) {
+		return hasGu(gu) && dong != null && !dong.isBlank() && !ALL_DONG.equals(dong);
 	}
 
 	private Place requirePlace(Long placeId) {
@@ -582,8 +618,28 @@ public class AdminMapService {
 
 	private void validateEditablePlace(UUID userId, Long placeId, String gu, String dong) {
 		adminService.requireCanEditArea(userId, gu, dong, AdminAreaAssignmentType.FACILITY);
-		if (!placeRepository.existsIntersectingAreaByPlaceId(placeId, gu, dong)) {
-			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, "담당 구/동의 장소만 수정할 수 있습니다.");
+		if (!placeRepository.existsIntersectingGuByPlaceId(placeId, gu)) {
+			throw new PlaceException(PlaceErrorCode.INVALID_PLACE_REQUEST, "담당 구의 장소만 수정할 수 있습니다.");
+		}
+	}
+
+	private AdminGeoJsonFeatureResponse<JsonNode, AdminAreaBoundaryPropertiesResponse> toAreaBoundaryFeature(String gu,
+		String dong) {
+		if (!hasGu(gu)) {
+			return null;
+		}
+		String geoJson = hasAreaScope(gu, dong)
+			? adminAreaRepository.findAreaBoundaryGeoJson(gu, dong)
+			: adminAreaRepository.findGuBoundaryGeoJson(gu);
+		if (geoJson == null || geoJson.isBlank()) {
+			return null;
+		}
+		try {
+			return AdminGeoJsonFeatureResponse.of(
+				objectMapper.readTree(geoJson),
+				new AdminAreaBoundaryPropertiesResponse(gu, hasAreaScope(gu, dong) ? dong : ALL_DONG));
+		} catch (JsonProcessingException ignored) {
+			return null;
 		}
 	}
 

@@ -31,4 +31,37 @@ public interface AdminAreaRepository extends JpaRepository<AdminArea, Long> {
 		String gu,
 		@Param("dong")
 		String dong);
+
+	@Query("""
+		select count(adminArea) > 0
+		from AdminArea adminArea
+		where adminArea.gu = :gu
+		""")
+	boolean existsGu(
+		@Param("gu")
+		String gu);
+
+	@Query(value = """
+		select ST_AsGeoJSON(ST_Boundary(ST_UnaryUnion(ST_Collect(geom))))
+		from admin_areas
+		where gu = :gu
+		""", nativeQuery = true)
+	String findGuBoundaryGeoJson(
+		@Param("gu")
+		String gu);
+
+	@Query(value = """
+		select ST_AsGeoJSON(ST_Boundary(ST_UnaryUnion(ST_Collect(geom))))
+		from admin_areas
+		where gu = :gu
+			and (
+				dong = :dong
+				or replace(replace(replace(replace(dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+			)
+		""", nativeQuery = true)
+	String findAreaBoundaryGeoJson(
+		@Param("gu")
+		String gu,
+		@Param("dong")
+		String dong);
 }

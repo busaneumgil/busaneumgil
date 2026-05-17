@@ -74,6 +74,26 @@ class GraphHopperAdminClientTest {
 	}
 
 	@Test
+	@DisplayName("GraphHopper hot patch는 active 실패 후 previous만 성공해도 FAILED를 반환한다")
+	void patchWalkAccessReturnsFailedWhenOnlyPreviousSucceeds() {
+		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))
+			.andExpect(method(HttpMethod.PATCH))
+			.andRespond(withServerError());
+		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))
+			.andExpect(method(HttpMethod.PATCH))
+			.andRespond(withServerError());
+		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/edges/123/walk-access"))
+			.andExpect(method(HttpMethod.PATCH))
+			.andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+		GraphHopperAdminClient.GraphHopperPatchResult result = client.patchWalkAccess(123L, AccessibilityState.NO);
+
+		assertThat(result.status()).isEqualTo(GraphHopperPatchStatus.FAILED);
+		assertThat(result.message()).contains("slot=green");
+		server.verify();
+	}
+
+	@Test
 	@DisplayName("GraphHopper hot patch 실패 시 동일 endpoint에 즉시 재시도 후 FAILED를 반환한다")
 	void patchWalkAccessRetriesAndReturnsFailed() {
 		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))

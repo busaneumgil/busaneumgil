@@ -54,11 +54,16 @@ public class GraphHopperAdminClient {
 	public GraphHopperPatchResult patchWalkAccess(long edgeId, AccessibilityState walkAccess) {
 		GraphHopperEndpointSelection endpointSelection = endpointProvider.selectEndpoint();
 		List<EndpointTarget> endpointTargets = resolveTargets(endpointSelection);
+		EndpointPatchResult activePatchResult = null;
 		List<String> patchedSlots = new ArrayList<>();
 		List<String> failureMessages = new ArrayList<>();
 
-		for (EndpointTarget endpointTarget : endpointTargets) {
+		for (int index = 0; index < endpointTargets.size(); index++) {
+			EndpointTarget endpointTarget = endpointTargets.get(index);
 			EndpointPatchResult patchResult = patchEndpointWithRetry(endpointTarget, edgeId, walkAccess);
+			if (index == 0) {
+				activePatchResult = patchResult;
+			}
 			if (patchResult.success()) {
 				patchedSlots.add(endpointTarget.slot());
 				continue;
@@ -71,7 +76,7 @@ public class GraphHopperAdminClient {
 				GraphHopperPatchStatus.APPLIED,
 				"Patched GraphHopper slot(s): " + String.join(", ", patchedSlots));
 		}
-		if (!patchedSlots.isEmpty()) {
+		if (activePatchResult != null && activePatchResult.success()) {
 			return new GraphHopperPatchResult(
 				GraphHopperPatchStatus.APPLIED_WITH_WARNING,
 				"Patched GraphHopper slot(s): "

@@ -7,10 +7,19 @@ export function BottleneckMonitoringPage({
   loading,
   error,
 }: {
-  data: BottleneckMonitoringResponse;
+  data?: BottleneckMonitoringResponse;
   loading: boolean;
   error?: Error | null;
 }) {
+  if (!data) {
+    return (
+      <section className="bottleneck-monitoring-page admin-page-content">
+        {loading && <p className="admin-card-inline-state">병목구간 통계를 불러오는 중입니다.</p>}
+        {error && <p className="admin-card-inline-state error">{error.message}</p>}
+      </section>
+    );
+  }
+
   const [typeFilter, setTypeFilter] = useState(data.table.filters.typeLabel);
   const [statusFilter, setStatusFilter] = useState(data.table.filters.statusLabel);
   const [sortFilter, setSortFilter] = useState(data.table.filters.sortLabel);

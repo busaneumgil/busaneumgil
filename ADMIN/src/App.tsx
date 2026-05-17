@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import adminLogoUrl from "./assets/app_logo.png";
 import { BottleneckMonitoringPage } from "./bottleneck/BottleneckMonitoringPage";
-import { bottleneckMonitoringMockResponse, composeBottleneckMonitoringData } from "./bottleneck/bottleneckMonitoringContract";
+import { bottleneckMonitoringMockResponse } from "./bottleneck/bottleneckMonitoringContract";
 import {
   createAdminRoadNetworkEditJob,
   fetchAdminAreaAssignments,
   fetchAdminAuditLogs,
   fetchAdminAreas,
+  fetchAdminBottleneckMonitoring,
   fetchAdminDashboardBottlenecks,
   fetchAdminDashboardSummary,
   fetchAdminFacilityPayload,
@@ -16,6 +17,7 @@ import {
   fetchAdminRoadNetworkPayload,
   fetchAdminRoadNetworkEditJob,
   fetchAdminHazardReports,
+  fetchAdminRouteStats,
   fetchAdminUsers,
   adminAccessTokenRefreshedEvent,
   getStoredAdminAccessToken,
@@ -572,9 +574,17 @@ function AdminApp() {
     refetchInterval: 60_000,
   });
 
+  const routeStatsQuery = useQuery({
+    queryKey: ["admin-route-stats", accessToken],
+    queryFn: () => fetchAdminRouteStats(accessToken),
+    enabled: page === "routeStats" && usesRealAdminApi,
+    retry: false,
+    refetchInterval: 60_000,
+  });
+
   const bottleneckMonitoringQuery = useQuery({
     queryKey: ["admin-bottleneck-monitoring", accessToken],
-    queryFn: () => fetchAdminDashboardBottlenecks({ accessToken, limit: 20 }),
+    queryFn: () => fetchAdminBottleneckMonitoring(accessToken),
     enabled: page === "bottleneckMonitoring" && usesRealAdminApi,
     retry: false,
     refetchInterval: 60_000,
@@ -1033,6 +1043,9 @@ function AdminApp() {
             bottlenecks={dashboardBottlenecksQuery.data}
             bottlenecksLoading={dashboardBottlenecksQuery.isLoading}
             bottlenecksError={dashboardBottlenecksQuery.error}
+            onOpenRouteStats={() => setPage("routeStats")}
+            onOpenBottleneckMonitoring={() => setPage("bottleneckMonitoring")}
+            onOpenHazards={() => setPage("hazards")}
           />
         )}
 
@@ -1062,7 +1075,13 @@ function AdminApp() {
           />
         )}
 
-        {page === "routeStats" && <RouteStatsPage data={routeStatsMockResponse} />}
+        {page === "routeStats" && (
+          <RouteStatsPage
+            data={usesRealAdminApi ? routeStatsQuery.data : routeStatsMockResponse}
+            loading={usesRealAdminApi && routeStatsQuery.isLoading}
+            error={routeStatsQuery.error}
+          />
+        )}
 
         {page === "users" && (
           <UserManagementPage
@@ -1206,9 +1225,7 @@ function AdminApp() {
 
         {page === "bottleneckMonitoring" && (
           <BottleneckMonitoringPage
-            data={usesRealAdminApi
-              ? composeBottleneckMonitoringData(bottleneckMonitoringQuery.data)
-              : bottleneckMonitoringMockResponse}
+            data={usesRealAdminApi ? bottleneckMonitoringQuery.data : bottleneckMonitoringMockResponse}
             loading={usesRealAdminApi && bottleneckMonitoringQuery.isLoading}
             error={bottleneckMonitoringQuery.error}
           />
@@ -1356,6 +1373,9 @@ function HomeDashboardPage({
   bottlenecks,
   bottlenecksLoading,
   bottlenecksError,
+  onOpenRouteStats,
+  onOpenBottleneckMonitoring,
+  onOpenHazards,
 }: {
   summary?: AdminDashboardSummaryResponse;
   loading: boolean;
@@ -1364,6 +1384,9 @@ function HomeDashboardPage({
   bottlenecks?: AdminDashboardBottleneckResponse;
   bottlenecksLoading: boolean;
   bottlenecksError?: Error | null;
+  onOpenRouteStats?: () => void;
+  onOpenBottleneckMonitoring?: () => void;
+  onOpenHazards?: () => void;
 }) {
   const periodLabel = summary
     ? summary.period.from === summary.period.to
@@ -1446,9 +1469,14 @@ function HomeDashboardPage({
 
           <div className="admin-home-main">
             <div className="admin-home-left">
-              <MovementChartCard metrics={summary.routes.dailyMovement ?? []} />
-              <BottleneckTableCard bottlenecks={bottlenecks} loading={bottlenecksLoading} error={bottlenecksError} />
-              <RecentReportsCard summary={summary} />
+              <MovementChartCard metrics={summary.routes.dailyMovement ?? []} onMore={onOpenRouteStats} />
+              <BottleneckTableCard
+                bottlenecks={bottlenecks}
+                loading={bottlenecksLoading}
+                error={bottlenecksError}
+                onMore={onOpenBottleneckMonitoring}
+              />
+              <RecentReportsCard summary={summary} onMore={onOpenHazards} />
             </div>
 
             <div className="admin-home-right">
@@ -1516,15 +1544,24 @@ function OverviewMetricCard({
 function DashboardCardHeader({
   title,
   action,
+  onActionClick,
+  actionTarget,
 }: {
   title: string;
   action?: string;
+  onActionClick?: () => void;
+  actionTarget?: string;
 }) {
   return (
     <header className="admin-card-header">
       <h3>{title}</h3>
       {action && (
-        <button type="button" className="admin-card-more">
+        <button
+          type="button"
+          className="admin-card-more"
+          onClick={onActionClick}
+          data-action-target={actionTarget}
+        >
           {action}
           <DashboardIcon name="chevron" />
         </button>
@@ -1533,7 +1570,13 @@ function DashboardCardHeader({
   );
 }
 
-function MovementChartCard({ metrics }: { metrics: AdminDashboardDailyMovementMetric[] }) {
+function MovementChartCard({
+  metrics,
+  onMore,
+}: {
+  metrics: AdminDashboardDailyMovementMetric[];
+  onMore?: () => void;
+}) {
   const chartMetrics = metrics.slice(-7);
   const plot = {
     left: 42,
@@ -1554,7 +1597,12 @@ function MovementChartCard({ metrics }: { metrics: AdminDashboardDailyMovementMe
 
   return (
     <article className="admin-dashboard-card movement-chart-card">
-      <DashboardCardHeader title="사용자 이동 통계" action="더보기" />
+      <DashboardCardHeader
+        title="사용자 이동 통계"
+        action="더보기"
+        onActionClick={onMore}
+        actionTarget="routeStats"
+      />
       <div className="movement-legend">
         <span className="legend-route">이동 경로 수 (건)</span>
         <span className="legend-users">이용자 수 (명)</span>
@@ -1626,10 +1674,12 @@ function BottleneckTableCard({
   bottlenecks,
   loading,
   error,
+  onMore,
 }: {
   bottlenecks?: AdminDashboardBottleneckResponse;
   loading: boolean;
   error?: Error | null;
+  onMore?: () => void;
 }) {
   const rows = (bottlenecks?.topBottlenecks ?? [])
     .slice(0, 5)
@@ -1647,7 +1697,12 @@ function BottleneckTableCard({
 
   return (
     <article className="admin-dashboard-card bottleneck-rank-card">
-      <DashboardCardHeader title="병목 구간 TOP 5" action="더보기" />
+      <DashboardCardHeader
+        title="병목 구간 TOP 5"
+        action="더보기"
+        onActionClick={onMore}
+        actionTarget="bottleneckMonitoring"
+      />
       {loading && <p className="admin-card-inline-state">병목 후보를 불러오는 중입니다.</p>}
       {error && <p className="admin-card-inline-state error">{error.message}</p>}
       <div className="admin-table-scroll">
@@ -1705,8 +1760,10 @@ function formatSpeed(speed: number) {
 
 function RecentReportsCard({
   summary,
+  onMore,
 }: {
   summary: AdminDashboardSummaryResponse;
+  onMore?: () => void;
 }) {
   const rows = (summary.operations.recentReports ?? [])
     .slice(0, 3)
@@ -1719,7 +1776,12 @@ function RecentReportsCard({
 
   return (
     <article className="admin-dashboard-card recent-report-card">
-      <DashboardCardHeader title="최근 불편 신고" action="더보기" />
+      <DashboardCardHeader
+        title="최근 불편 신고"
+        action="더보기"
+        onActionClick={onMore}
+        actionTarget="hazards"
+      />
       <div className="admin-table-scroll">
         <table className="admin-home-table recent-report-table">
           <thead>

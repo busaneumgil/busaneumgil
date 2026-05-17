@@ -13,6 +13,7 @@ import type {
   AdminAreaAssignmentListResponse,
   AdminAuditLogListResponse,
   AdminDashboardBottleneckResponse,
+  AdminBottleneckMonitoringResponse,
   AdminUserListResponse,
   AdminUserResponse,
   FacilityPayload,
@@ -20,6 +21,7 @@ import type {
   PlaceAccessibilityFeature,
   RoadNetworkEditApplyResponse,
   RoadNetworkEditJobResponse,
+  AdminRouteStatsResponse,
   HazardReportStatus,
   SegmentPayload,
   TokenResponse,
@@ -234,6 +236,14 @@ export async function fetchAdminDashboardBottlenecks({
   if (from) params.set("from", from);
   if (to) params.set("to", to);
   return requestAdminJson<AdminDashboardBottleneckResponse>(`/admin/dashboard/bottlenecks?${params.toString()}`, accessToken);
+}
+
+export async function fetchAdminRouteStats(accessToken: string): Promise<AdminRouteStatsResponse> {
+  return requestAdminJson<AdminRouteStatsResponse>("/admin/dashboard/route-stats", accessToken);
+}
+
+export async function fetchAdminBottleneckMonitoring(accessToken: string): Promise<AdminBottleneckMonitoringResponse> {
+  return requestAdminJson<AdminBottleneckMonitoringResponse>("/admin/dashboard/bottleneck-monitoring", accessToken);
 }
 
 export async function updateAdminUserRole(

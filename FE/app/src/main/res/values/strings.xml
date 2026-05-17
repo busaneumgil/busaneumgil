@@ -303,6 +303,7 @@
     <string name="report_complete_cta_history">제보 내역 확인하기</string>
     <string name="report_complete_cta_new_report">다른 제보하기</string>
     <string name="report_complete_cta_back_to_map">지도로 돌아가기</string>
+    <string name="report_complete_cta_back_to_navigation">길안내로 돌아가기</string>
     <string name="report_complete_photo_attached">%1$d장 첨부됨</string>
     <string name="saved_route_address_empty">주소 정보 없음</string>
     <string name="saved_route_edit">편집</string>
@@ -714,6 +715,7 @@
     <string name="navigation_map_control_zoom_in">+</string>
     <string name="navigation_map_control_zoom_out">-</string>
     <string name="navigation_map_control_recenter">위치</string>
+    <string name="navigation_map_control_report">제보하기</string>
     <string name="navigation_summary_eta_title">도착까지</string>
     <string name="navigation_summary_distance_title">남은거리</string>
     <string name="navigation_detail_button_label">상세 정보</string>

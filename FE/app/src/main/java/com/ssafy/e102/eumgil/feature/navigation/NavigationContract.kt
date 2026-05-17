@@ -219,6 +219,8 @@ sealed interface NavigationUiAction {
 
     data object RouteDetailClicked : NavigationUiAction
 
+    data object ReportClicked : NavigationUiAction
+
     data object CurrentLocationClicked : NavigationUiAction
 
     data object MapCameraMovedByUser : NavigationUiAction
@@ -254,6 +256,8 @@ sealed interface NavigationUiEvent {
     data class NavigateToRouteDetail(
         val routeOption: RouteOption,
     ) : NavigationUiEvent
+
+    data object NavigateToReport : NavigationUiEvent
 
     data object NavigateToMap : NavigationUiEvent
 

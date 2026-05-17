@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 fun NavigationRoute(
     onNavigateBack: () -> Unit,
     onNavigateToRouteDetail: (RouteOption) -> Unit = {},
+    onNavigateToReport: () -> Unit = {},
     onNavigateToMap: () -> Unit,
     onNavigateToSavedRoute: () -> Unit,
     onNavigateToArrival: () -> Unit,
@@ -98,6 +99,7 @@ fun NavigationRoute(
         useLowVisionUi,
         onNavigateBack,
         onNavigateToRouteDetail,
+        onNavigateToReport,
         onNavigateToMap,
         onNavigateToSavedRoute,
         onNavigateToArrival,
@@ -108,6 +110,7 @@ fun NavigationRoute(
                 when (event) {
                     NavigationUiEvent.NavigateBack -> onNavigateBack()
                     is NavigationUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
+                    NavigationUiEvent.NavigateToReport -> onNavigateToReport()
                     NavigationUiEvent.NavigateToMap -> onNavigateToMap()
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
                     NavigationUiEvent.NavigateToArrival -> onNavigateToArrival()

@@ -98,6 +98,7 @@ fun LowVisionNavigationRoute(
                 when (event) {
                     NavigationUiEvent.NavigateBack -> Unit
                     is NavigationUiEvent.NavigateToRouteDetail -> Unit
+                    NavigationUiEvent.NavigateToReport -> Unit
                     NavigationUiEvent.NavigateToMap,
                     NavigationUiEvent.NavigateToArrival,
                         -> onNavigateToComplete()

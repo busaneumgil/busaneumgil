@@ -282,6 +282,9 @@ class NavigationViewModel(
                     }
                 }
             }
+            NavigationUiAction.ReportClicked -> {
+                emitUiEvent(NavigationUiEvent.NavigateToReport)
+            }
             NavigationUiAction.CurrentLocationClicked -> {
                 val didRequestRefresh = requestCurrentLocationRefresh()
                 currentHeadingManager.startHeadingUpdates()

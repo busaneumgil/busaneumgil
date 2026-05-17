@@ -25,6 +25,11 @@ class MapFloatingControlsConfigurationTest {
             source.contains("modifier = Modifier.size(48.dp)"),
         )
         assertTrue(
+            "Shared map floating controls should expose an optional same-shape top action for contextual map shortcuts.",
+            source.contains("topActionButtonState: EumMapFloatingActionButtonState? = null") &&
+                source.contains("onTopActionClick: () -> Unit = {}"),
+        )
+        assertTrue(
             "Shared map floating controls should group zoom in and zoom out inside one stacked card.",
             source.contains("HorizontalDivider"),
         )

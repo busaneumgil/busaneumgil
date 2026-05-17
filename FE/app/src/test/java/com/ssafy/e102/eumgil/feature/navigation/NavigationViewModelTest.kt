@@ -59,6 +59,18 @@ class NavigationViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
+    fun `report click emits guidance report navigation event`() =
+        runTest {
+            val viewModel = createViewModel()
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(NavigationUiAction.ReportClicked)
+            advanceUntilIdle()
+
+            assertEquals(NavigationUiEvent.NavigateToReport, eventDeferred.await())
+        }
+
+    @Test
     fun `location updates rebuild runtime remaining distance and eta from route progress`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()

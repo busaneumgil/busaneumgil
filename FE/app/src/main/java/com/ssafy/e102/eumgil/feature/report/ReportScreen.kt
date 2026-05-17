@@ -1615,12 +1615,16 @@ private fun ReportCompleteStep(
     ) {
         ReportCompleteHero()
         ReportCompleteSummaryCard(uiState = uiState)
-        ReportCompleteCtaSection(onAction = onAction)
+        ReportCompleteCtaSection(
+            entryPoint = uiState.entryPoint,
+            onAction = onAction,
+        )
     }
 }
 
 @Composable
 private fun ReportCompleteCtaSection(
+    entryPoint: ReportEntryPoint,
     onAction: (ReportUiAction) -> Unit,
 ) {
     Column(
@@ -1643,10 +1647,16 @@ private fun ReportCompleteCtaSection(
             onClick = { onAction(ReportUiAction.BackToMapClicked) },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(text = stringResource(id = R.string.report_complete_cta_back_to_map))
+            Text(text = stringResource(id = entryPoint.completeReturnLabelRes()))
         }
     }
 }
+
+private fun ReportEntryPoint.completeReturnLabelRes(): Int =
+    when (this) {
+        ReportEntryPoint.TopLevel -> R.string.report_complete_cta_back_to_map
+        ReportEntryPoint.NavigationGuidance -> R.string.report_complete_cta_back_to_navigation
+    }
 
 @Composable
 private fun ReportCompleteHero() {

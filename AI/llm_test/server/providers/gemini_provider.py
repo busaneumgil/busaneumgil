@@ -463,7 +463,6 @@ currentRoute가 제공되면 현재 화면 위치로 활용하세요.
                 }
                 for m in messages
             ]
-            contents.append({"role": "user", "parts": [{"text": user_input}]})
         else:
             contents = [{"role": "user", "parts": [{"text": user_input}]}]
 

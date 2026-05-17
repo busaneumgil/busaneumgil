@@ -32,6 +32,7 @@ data class RouteSettingUiState(
     val sourceLabel: String? = null,
     val cta: RouteSettingCtaUiState = RouteSettingCtaUiState(),
     val ctaAcknowledged: Boolean = false,
+    val isTransitRefreshing: Boolean = false,
     val showsDuribalCallAction: Boolean = false,
 ) {
     val isStartEnabled: Boolean
@@ -303,6 +304,8 @@ sealed interface RouteSettingUiAction {
     data object WaypointsSwapClicked : RouteSettingUiAction
 
     data object StartNavigationClicked : RouteSettingUiAction
+
+    data object TransitRefreshClicked : RouteSettingUiAction
 }
 
 sealed interface RouteSettingUiEvent {

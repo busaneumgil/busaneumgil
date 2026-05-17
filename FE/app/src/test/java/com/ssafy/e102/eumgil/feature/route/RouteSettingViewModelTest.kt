@@ -552,6 +552,10 @@ class RouteSettingViewModelTest {
     @Test
     fun `route no path failure exposes no route specific failure copy`() =
         runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
             val viewModel =
                 RouteSettingViewModel(
                     routeRepository =
@@ -563,10 +567,7 @@ class RouteSettingViewModelTest {
                                 httpStatusCode = 404,
                             ),
                         ),
-                    destinationSelectionRepository =
-                        InMemoryDestinationSelectionRepository().apply {
-                            updateSelectedDestination(testDestination())
-                        },
+                    destinationSelectionRepository = destinationSelectionRepository,
                 )
 
             advanceUntilIdle()
@@ -574,6 +575,9 @@ class RouteSettingViewModelTest {
             val uiState = viewModel.uiState.value
 
             assertFalse(uiState.cta.isEnabled)
+            assertEquals(RouteTravelMode.TRANSIT, uiState.selectedTravelMode)
+            assertEquals(RouteOption.RECOMMENDED, uiState.selectedOption)
+            assertTrue(uiState.showsDuribalCallAction)
             assertEquals("탐색 가능한 경로가 없어요. 출발지나 도착지를 다시 선택해 주세요.", uiState.loadErrorMessage)
             assertEquals(RoutePreviewMapStatus.NO_ROUTE, uiState.routePreviewMap.status)
             assertEquals("탐색 가능한 경로가 없어요. 출발지나 도착지를 다시 선택해 주세요.", uiState.routePreviewMap.fallbackMessage)
@@ -1144,6 +1148,38 @@ class RouteSettingViewModelTest {
             assertEquals("Safe Route", viewModel.uiState.value.selectedRoute?.title)
             assertEquals(1, routeRepository.walkSearchCount)
             assertEquals(1, routeRepository.transitSearchCount)
+        }
+
+    @Test
+    fun `manual transit refresh reloads selected transit options with a fresh search`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val routeRepository = TransitModeRecordingRouteRepository(walkSafeDistanceMeters = 720)
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(RouteSettingUiAction.TravelModeSelected(RouteTravelMode.TRANSIT))
+            advanceUntilIdle()
+
+            assertEquals(1, routeRepository.transitSearchCount)
+            assertEquals("transit-search-1", routeRepository.lastTransitSearchId)
+
+            viewModel.onAction(RouteSettingUiAction.TransitRefreshClicked)
+            advanceUntilIdle()
+
+            assertEquals(RouteTravelMode.TRANSIT, viewModel.uiState.value.selectedTravelMode)
+            assertEquals(1, routeRepository.transitSearchCount)
+            assertEquals(1, routeRepository.freshTransitSearchCount)
+            assertEquals("transit-fresh-search-1", routeRepository.lastTransitSearchId)
+            assertFalse(viewModel.uiState.value.isTransitRefreshing)
+            assertTrue(viewModel.uiState.value.isStartEnabled)
         }
 
     @Test
@@ -1784,6 +1820,10 @@ private class TransitModeRecordingRouteRepository(
         private set
     var transitSearchCount: Int = 0
         private set
+    var freshTransitSearchCount: Int = 0
+        private set
+    var lastTransitSearchId: String? = null
+        private set
     var lastSelectedRouteId: String? = null
         private set
     var lastSelectedSearchId: String? = null
@@ -1800,10 +1840,11 @@ private class TransitModeRecordingRouteRepository(
 
     override suspend fun getTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData {
         transitSearchCount += 1
+        lastTransitSearchId = "transit-search-$transitSearchCount"
         val searchData =
             buildTransitSearchData(
             query = query,
-            searchId = "transit-search-$transitSearchCount",
+            searchId = checkNotNull(lastTransitSearchId),
         )
         if (!omitFirstTransitWalkSegmentPolyline) return searchData
         return searchData.copy(
@@ -1823,6 +1864,15 @@ private class TransitModeRecordingRouteRepository(
                             )
                         },
                 ),
+        )
+    }
+
+    override suspend fun getFreshTransitRouteSearchData(query: RouteSearchQuery): RouteSearchData {
+        freshTransitSearchCount += 1
+        lastTransitSearchId = "transit-fresh-search-$freshTransitSearchCount"
+        return buildTransitSearchData(
+            query = query,
+            searchId = checkNotNull(lastTransitSearchId),
         )
     }
 

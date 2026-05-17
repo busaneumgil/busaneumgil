@@ -40,9 +40,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -286,11 +288,162 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `navigation briefing text does not duplicate segment distance`() =
+    fun `realtime guidance automatically speaks once when activated and ignores distance only updates`() =
         runTest {
-            val viewModel = createViewModel()
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+            val spokenBriefings = mutableListOf<String>()
+            val collector =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.collect { event ->
+                        if (event is NavigationUiEvent.SpeakBriefing) {
+                            spokenBriefings += event.text
+                        }
+                    }
+                }
 
             viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            viewModel.enableReadyTts()
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            assertEquals(1, spokenBriefings.size)
+
+            locationManager.emitLocation(WALK_PRE_TURN_POINT.toLocationSnapshot(recordedAtEpochMillis = 4_000L))
+            advanceUntilIdle()
+
+            assertEquals(1, spokenBriefings.size)
+            collector.cancel()
+        }
+
+    @Test
+    fun `realtime guidance speaks near threshold once and suppresses arrival duplicate`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+            val spokenBriefings = mutableListOf<String>()
+            val collector =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.collect { event ->
+                        if (event is NavigationUiEvent.SpeakBriefing) {
+                            spokenBriefings += event.text
+                        }
+                    }
+                }
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            viewModel.enableReadyTts()
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            locationManager.emitLocation(WALK_NEAR_TURN_POINT.toLocationSnapshot(recordedAtEpochMillis = 4_000L))
+            advanceUntilIdle()
+
+            assertEquals(2, spokenBriefings.size)
+            assertTrue(spokenBriefings.last().contains("곧"))
+
+            locationManager.emitLocation(WALK_VERY_NEAR_TURN_POINT.toLocationSnapshot(recordedAtEpochMillis = 5_500L))
+            advanceUntilIdle()
+
+            assertEquals(2, spokenBriefings.size)
+            collector.cancel()
+        }
+
+    @Test
+    fun `short realtime guidance within near threshold speaks only near copy`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+            val spokenBriefings = mutableListOf<String>()
+            val collector =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.collect { event ->
+                        if (event is NavigationUiEvent.SpeakBriefing) {
+                            spokenBriefings += event.text
+                        }
+                    }
+                }
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            viewModel.enableReadyTts()
+            locationManager.emitLocation(WALK_NEAR_TURN_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_NEAR_TURN_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            assertEquals(1, spokenBriefings.size)
+            assertTrue(spokenBriefings.single().contains("곧"))
+            collector.cancel()
+        }
+
+    @Test
+    fun `route detail preview suppresses automatic speech while manual replay still speaks`() =
+        runTest {
+            val viewModel = createViewModel()
+            val spokenBriefings = mutableListOf<String>()
+            val collector =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.collect { event ->
+                        if (event is NavigationUiEvent.SpeakBriefing) {
+                            spokenBriefings += event.text
+                        }
+                    }
+                }
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            viewModel.enableReadyTts()
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            advanceUntilIdle()
+
+            assertTrue(spokenBriefings.isEmpty())
+
+            viewModel.onAction(NavigationUiAction.BriefingReplayClicked)
+            advanceUntilIdle()
+
+            assertEquals(1, spokenBriefings.size)
+            collector.cancel()
+        }
+
+    @Test
+    fun `side rail inspection does not automatically speak selected preview`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+            val spokenBriefings = mutableListOf<String>()
+            val collector =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.collect { event ->
+                        if (event is NavigationUiEvent.SpeakBriefing) {
+                            spokenBriefings += event.text
+                        }
+                    }
+                }
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            viewModel.enableReadyTts()
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            assertEquals(1, spokenBriefings.size)
+
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 1))
+            advanceUntilIdle()
+
+            assertEquals(1, spokenBriefings.size)
+            collector.cancel()
+        }
+
+    @Test
+    fun `navigation briefing text does not duplicate segment distance`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
             advanceUntilIdle()
 
             assertEquals("300m 후 직진", viewModel.uiState.value.tts.briefingText)
@@ -330,6 +483,44 @@ class NavigationViewModelTest {
 
             assertEquals(listOf("transit-route-1" to 2), routeRepository.transitRefreshCalls)
             assertTrue(viewModel.uiState.value.stepCard.supportingText.contains("실시간 기준 100번 버스 6분 후 도착 예정"))
+        }
+
+    @Test
+    fun `walk to transit leg refreshes within 300 meters with one minute cooldown`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val routeRepository = FakeRouteRepository()
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    routeRepository = routeRepository,
+                )
+
+            viewModel.bindNavigationRequest(testTransitNavigationRequest())
+            advanceUntilIdle()
+
+            locationManager.emitLocation(TRANSIT_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(TRANSIT_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            assertEquals(listOf("transit-route-1" to 2), routeRepository.transitRefreshCalls)
+
+            locationManager.emitLocation(TRANSIT_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 33_000L))
+            advanceUntilIdle()
+
+            assertEquals(
+                "The same transit leg should not refresh again before one minute has elapsed.",
+                listOf("transit-route-1" to 2),
+                routeRepository.transitRefreshCalls,
+            )
+
+            locationManager.emitLocation(TRANSIT_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 64_000L))
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("transit-route-1" to 2, "transit-route-1" to 2),
+                routeRepository.transitRefreshCalls,
+            )
         }
 
     @Test
@@ -1041,11 +1232,14 @@ class NavigationViewModelTest {
     @Test
     fun `navigation entry keeps initial briefing pending until tts becomes ready`() =
         runTest {
-            val viewModel = createViewModel()
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
 
             viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
             advanceUntilIdle()
-            val briefingText = viewModel.uiState.value.tts.briefingText
+            val briefingText = viewModel.uiState.value.stepCard.heroTitle
             val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
             advanceUntilIdle()
 
@@ -1067,9 +1261,12 @@ class NavigationViewModelTest {
     @Test
     fun `initial briefing auto play does not repeat for duplicate ready updates`() =
         runTest {
-            val viewModel = createViewModel()
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
 
             viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
             advanceUntilIdle()
             val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
             advanceUntilIdle()
@@ -1366,6 +1563,22 @@ private fun createViewModel(
         bookmarkRepository = bookmarkRepository,
         routeRepository = routeRepository,
         initialLowVisionMode = initialLowVisionMode,
+    )
+
+private fun NavigationViewModel.enableReadyTts() {
+    updateTextToSpeechState(
+        isEnabled = true,
+        canSpeak = true,
+        status = NavigationTtsStatus.Ready,
+    )
+}
+
+private fun GeoCoordinate.toLocationSnapshot(recordedAtEpochMillis: Long): LocationSnapshot =
+    LocationSnapshot(
+        latitude = latitude,
+        longitude = longitude,
+        accuracyMeters = 5f,
+        recordedAtEpochMillis = recordedAtEpochMillis,
     )
 
 private class FakeCurrentLocationManager(
@@ -2418,6 +2631,8 @@ private fun lowVisionRemainingSearchData(
 
 private val WALK_START_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
 private val WALK_PRE_TURN_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.077905)
+private val WALK_NEAR_TURN_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.07806)
+private val WALK_VERY_NEAR_TURN_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.07808)
 private val WALK_MID_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0781)
 private val WALK_END_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0806)
 private val OFF_ROUTE_POINT = GeoCoordinate(latitude = 35.1815, longitude = 129.0756)

@@ -113,6 +113,7 @@ class MyPageReportHistoryViewModelTest {
                 ReportHistoryDetailData(
                     historyId = "server:7",
                     reportCategory = ReportType.SIDEWALK_MISSING.apiValue,
+                    processingStatus = null,
                     description = "보행 가능한 인도가 없습니다.",
                     address = null,
                     latitude = 35.1796,
@@ -220,6 +221,7 @@ private fun reportHistory(
     ReportHistoryData(
         historyId = historyId,
         reportCategory = reportCategory,
+        processingStatus = null,
         description = null,
         address = address,
         latitude = 35.1796,

@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
+import com.ssafy.e102.eumgil.data.repository.ReportProcessingCounts
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
@@ -38,6 +39,22 @@ import org.junit.Test
 class ReportViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
+
+    @Test
+    fun `processing counts are exposed in report ui state`() =
+        runTest {
+            val viewModel =
+                createReportViewModel(
+                    repository =
+                        FakeReportRepository(
+                            processingCounts = ReportProcessingCounts(pending = 3, approved = 2),
+                        ),
+                )
+            advanceUntilIdle()
+
+            assertEquals(3, viewModel.uiState.value.processingCounts.pending)
+            assertEquals(2, viewModel.uiState.value.processingCounts.approved)
+        }
 
     @Test
     fun `save draft stores partial input and exposes saved state`() =
@@ -1560,6 +1577,7 @@ private class FakeReportRepository(
     private var latestDraft: ReportDraftData? = null,
     private val failOutbox: Boolean = false,
     private val failDeleteDraft: Boolean = false,
+    private val processingCounts: ReportProcessingCounts = ReportProcessingCounts(),
     private val submitResultFactory: (String) -> ReportSubmitResult = { _ ->
         ReportSubmitResult.Skipped
     },
@@ -1574,6 +1592,8 @@ private class FakeReportRepository(
         private set
 
     override fun observeReportHistory(): Flow<List<ReportOutboxData>> = flowOf(emptyList())
+
+    override fun observeReportProcessingCounts(): Flow<ReportProcessingCounts> = flowOf(processingCounts)
 
     override suspend fun getLatestDraft(): ReportDraftData? = latestDraft
 

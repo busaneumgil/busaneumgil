@@ -62,6 +62,7 @@ class ReportViewModel(
     init {
         loadLatestDraft()
         observeNetworkAvailability()
+        observeReportProcessingCounts()
     }
 
     /**
@@ -72,6 +73,14 @@ class ReportViewModel(
         viewModelScope.launch {
             networkMonitor.observeOnlineState().collect { online ->
                 mutableUiState.update { state -> state.copy(isOnline = online) }
+            }
+        }
+    }
+
+    private fun observeReportProcessingCounts() {
+        viewModelScope.launch {
+            reportRepository.observeReportProcessingCounts().collect { counts ->
+                mutableUiState.update { state -> state.copy(processingCounts = counts) }
             }
         }
     }
@@ -789,7 +798,12 @@ class ReportViewModel(
     }
 
     private fun resetForm() {
-        mutableUiState.value = ReportUiState()
+        val currentState = mutableUiState.value
+        mutableUiState.value =
+            ReportUiState(
+                processingCounts = currentState.processingCounts,
+                isOnline = currentState.isOnline,
+            )
     }
 
     private fun emitUiEvent(event: ReportUiEvent) {
@@ -1192,4 +1206,3 @@ private fun ReportSubmitFailureReason.toFailureReason(): ReportFailureReason =
         ReportSubmitFailureReason.Network -> ReportFailureReason.NetworkUnavailable
         ReportSubmitFailureReason.Unknown -> ReportFailureReason.ServerSubmitFailed
     }
-

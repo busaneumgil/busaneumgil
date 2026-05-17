@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.feature.report
 
+import com.ssafy.e102.eumgil.data.repository.ReportProcessingCounts
+
 object ReportFormLimits {
     const val DESCRIPTION_MAX_LENGTH = 300
     const val ADDRESS_MAX_LENGTH = 120
@@ -19,6 +21,7 @@ data class ReportUiState(
     val draftSaveState: ReportDraftSaveState = ReportDraftSaveState.Idle,
     val outboxState: ReportOutboxState = ReportOutboxState.NotSaved,
     val submitState: ReportSubmitState = ReportSubmitState.Idle,
+    val processingCounts: ReportProcessingCounts = ReportProcessingCounts(),
     val submittedAtMillis: Long? = null,
     // Task 4.1 — 단말 네트워크 연결성. 오프라인이면 서버 제출 자체를 막아 무의미한 retry를 피한다.
     // 기본값 true: 정보가 없을 때는 사용자가 시도할 수 있게 두는 게 더 자연스럽다.

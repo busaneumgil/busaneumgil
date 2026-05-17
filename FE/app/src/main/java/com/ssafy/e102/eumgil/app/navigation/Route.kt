@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.app.navigation
 import android.net.Uri
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -169,46 +170,59 @@ sealed interface LowVisionRoute : AppRoute {
 sealed interface SearchRoute : AppRoute {
     data object Entry : SearchRoute {
         const val ARG_EDITING_TARGET: String = "editingTarget"
+        const val ARG_SELECTION_MODE: String = "selectionMode"
 
-        override val route: String = "search?$ARG_EDITING_TARGET={$ARG_EDITING_TARGET}"
+        override val route: String =
+            "search?$ARG_EDITING_TARGET={$ARG_EDITING_TARGET}&$ARG_SELECTION_MODE={$ARG_SELECTION_MODE}"
 
-        fun createRoute(editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION): String =
-            if (editingTarget == RouteEditingTarget.DESTINATION) {
-                "search"
-            } else {
-                "search?$ARG_EDITING_TARGET=${editingTarget.name.navArgEncode()}"
-            }
+        fun createRoute(
+            editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+            selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
+        ): String =
+            buildSearchRoute(
+                baseRoute = "search",
+                editingTarget = editingTarget,
+                selectionMode = selectionMode,
+            )
     }
 
     data object VoiceInput : SearchRoute {
         const val ARG_EDITING_TARGET: String = Entry.ARG_EDITING_TARGET
+        const val ARG_SELECTION_MODE: String = Entry.ARG_SELECTION_MODE
 
-        override val route: String = "search/voice?$ARG_EDITING_TARGET={$ARG_EDITING_TARGET}"
+        override val route: String =
+            "search/voice?$ARG_EDITING_TARGET={$ARG_EDITING_TARGET}&$ARG_SELECTION_MODE={$ARG_SELECTION_MODE}"
 
-        fun createRoute(editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION): String =
-            if (editingTarget == RouteEditingTarget.DESTINATION) {
-                "search/voice"
-            } else {
-                "search/voice?$ARG_EDITING_TARGET=${editingTarget.name.navArgEncode()}"
-            }
+        fun createRoute(
+            editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+            selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
+        ): String =
+            buildSearchRoute(
+                baseRoute = "search/voice",
+                editingTarget = editingTarget,
+                selectionMode = selectionMode,
+            )
     }
 
     data object Results : SearchRoute {
         const val ARG_QUERY: String = "query"
         const val ARG_EDITING_TARGET: String = Entry.ARG_EDITING_TARGET
+        const val ARG_SELECTION_MODE: String = Entry.ARG_SELECTION_MODE
 
-        override val route: String = "search/results/{$ARG_QUERY}?$ARG_EDITING_TARGET={$ARG_EDITING_TARGET}"
+        override val route: String =
+            "search/results/{$ARG_QUERY}?$ARG_EDITING_TARGET={$ARG_EDITING_TARGET}" +
+                "&$ARG_SELECTION_MODE={$ARG_SELECTION_MODE}"
 
         fun createRoute(
             query: String,
             editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+            selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
         ): String =
-            buildString {
-                append("search/results/${Uri.encode(query)}")
-                if (editingTarget != RouteEditingTarget.DESTINATION) {
-                    append("?$ARG_EDITING_TARGET=${editingTarget.name.navArgEncode()}")
-                }
-            }
+            buildSearchRoute(
+                baseRoute = "search/results/${Uri.encode(query)}",
+                editingTarget = editingTarget,
+                selectionMode = selectionMode,
+            )
     }
 }
 
@@ -322,6 +336,28 @@ private fun String.navArgEncode(): String =
     URLEncoder
         .encode(this, StandardCharsets.UTF_8.toString())
         .replace("+", "%20")
+
+private fun buildSearchRoute(
+    baseRoute: String,
+    editingTarget: RouteEditingTarget,
+    selectionMode: SearchSelectionMode,
+): String {
+    val queryParameters =
+        buildList {
+            if (editingTarget != RouteEditingTarget.DESTINATION) {
+                add("${SearchRoute.Entry.ARG_EDITING_TARGET}=${editingTarget.name.navArgEncode()}")
+            }
+            if (selectionMode != SearchSelectionMode.PREVIEW_ON_MAP) {
+                add("${SearchRoute.Entry.ARG_SELECTION_MODE}=${selectionMode.name.navArgEncode()}")
+            }
+        }
+
+    return if (queryParameters.isEmpty()) {
+        baseRoute
+    } else {
+        "$baseRoute?${queryParameters.joinToString(separator = "&")}"
+    }
+}
 
 private const val ROUTE_SETTING_BASE_ROUTE: String = "route_setting"
 

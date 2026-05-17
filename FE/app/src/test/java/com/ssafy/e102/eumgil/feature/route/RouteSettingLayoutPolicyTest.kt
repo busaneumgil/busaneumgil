@@ -1,10 +1,10 @@
 ﻿package com.ssafy.e102.eumgil.feature.route
 
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -46,6 +46,51 @@ class RouteSettingLayoutPolicyTest {
         assertEquals(RouteSettingTravelModeActiveColor.PrimaryBlue, policy.travelModeActiveColor)
         assertEquals(RouteSettingTravelModeInactiveColor.Grey700, policy.travelModeInactiveColor)
         assertEquals(RouteSettingTravelModeIconSize.Emphasized, policy.travelModeIconSize)
+    }
+
+    @Test
+    fun `route setting waypoint input uses muted labels and pale blue background`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val headerSection =
+            source
+                .substringAfter("private fun RouteSearchHeaderKakao(")
+                .substringBefore("@Composable\nprivate fun RouteSearchHeaderModeTab")
+        val waypointCardSection =
+            source
+                .substringAfter("private fun RouteWaypointCard(")
+                .substringBefore("private fun resolveOriginWaypointPresentation")
+        val waypointRowSection =
+            source
+                .substringAfter("private fun RouteWaypointRow(")
+                .substringBefore("@Composable\nprivate fun RouteOriginStatusText")
+
+        assertTrue(source.contains("RouteWaypointInputContainerColor = Color(0xFFF5F8FF)"))
+        assertTrue(source.contains("RouteWaypointInputLabelColor = Color(0xFF94A3B8)"))
+        assertTrue(source.contains("RouteSearchHeaderEmphasizedBoxColor = Color(0xFFF5F8FF)"))
+        assertTrue(source.contains("RouteWaypointOriginLabelColor = Color(0xFF16A34A)"))
+        assertTrue(source.contains("RouteWaypointDestinationLabelColor = Color(0xFFF14337)"))
+        assertTrue(headerSection.contains("color = headerPolicy.summaryContainerColor"))
+        assertTrue(waypointCardSection.contains("color = RouteWaypointInputContainerColor"))
+        assertTrue(waypointRowSection.contains("color = RouteWaypointInputLabelColor"))
+    }
+
+    @Test
+    fun `transit route option cards emphasize label and travel time typography`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val compactCardSection =
+            source
+                .substringAfter("private fun RouteCompactOptionCard(")
+                .substringBefore("@Composable\nprivate fun RouteSearchLoadingState")
+
+        assertTrue(source.contains("RouteTransitOptionTitleFontSize = 13.sp"))
+        assertTrue(source.contains("RouteTransitOptionEstimatedTimeFontSize = 20.sp"))
+        assertTrue(compactCardSection.contains("isEmphasized = isTransitCard"))
+        assertTrue(compactCardSection.contains("fontSize = RouteTransitOptionEstimatedTimeFontSize"))
+        assertTrue(source.contains("fontSize = RouteTransitOptionTitleFontSize"))
     }
 
     @Test
@@ -278,7 +323,8 @@ class RouteSettingLayoutPolicyTest {
             "Transit options should scroll above the fixed start button on a white surface.",
             transitPaneSection.contains("color = Color.White") &&
                 transitPaneSection.contains(".verticalScroll(rememberScrollState())") &&
-                transitPaneSection.contains("bottom = RouteSettingBottomBarOverlayClearance"),
+                transitPaneSection.contains("val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()") &&
+                transitPaneSection.contains("bottom = bottomBarOverlayClearance"),
         )
     }
 
@@ -289,7 +335,7 @@ class RouteSettingLayoutPolicyTest {
 
         assertEquals(R.string.route_setting_screen_title, headerPolicy.titleResId)
         assertEquals(EumPrimary600, headerPolicy.containerColor)
-        assertEquals(EumWhite, headerPolicy.summaryContainerColor)
+        assertEquals(Color(0xFFF5F8FF), headerPolicy.summaryContainerColor)
         assertEquals(2, modeTabs.size)
         assertEquals(RouteTravelMode.TRANSIT, modeTabs[0].mode)
         assertEquals(RouteTravelMode.WALK, modeTabs[1].mode)
@@ -339,15 +385,19 @@ class RouteSettingLayoutPolicyTest {
 
         assertTrue(
             "Walk preview cards should sit above the fixed bottom CTA instead of being covered by it.",
-            mapStageSection.contains("bottom = RouteWalkPreviewCarouselBottomPadding"),
+            mapStageSection.contains("bottom = walkPreviewBottomPadding"),
+        )
+        assertTrue(
+            "Walk preview cards should use the same navigation-bar inset basis as the shared bottom CTA.",
+            mapStageSection.contains("WindowInsets.navigationBars.getBottom(this).toDp()") &&
+                mapStageSection.contains("val walkPreviewBottomPadding = routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset)") &&
+                source.contains("RouteWalkPreviewToStartButtonGap = 22.dp"),
         )
         assertTrue(
             "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
                 source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
-                source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarOverlayClearance + RouteWalkPreviewCtaOverlapClearance") &&
-                source.contains("RouteWalkPreviewCtaOverlapClearance = 56.dp") &&
-                source.contains("RouteWalkMapControlsBottomPadding = RouteWalkPreviewCarouselBottomPadding + RouteWalkPreviewCardMinHeight + 70.dp"),
+                !source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp"),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",
@@ -385,15 +435,13 @@ class RouteSettingLayoutPolicyTest {
                 .substringAfter("private fun RouteMapStage(")
                 .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
 
+        assertEquals(102.dp, routeWalkPreviewCarouselBottomPadding(0.dp))
+        assertEquals(150.dp, routeWalkPreviewCarouselBottomPadding(48.dp))
+        assertEquals(288.dp, routeWalkMapControlsBottomPadding(0.dp))
+        assertEquals(336.dp, routeWalkMapControlsBottomPadding(48.dp))
         assertTrue(
-            "Walk preview cards should be raised 70dp above the fixed start button.",
-            source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarOverlayClearance + RouteWalkPreviewCtaOverlapClearance") &&
-                source.contains("RouteWalkPreviewCtaOverlapClearance = 56.dp"),
-        )
-        assertTrue(
-            "Map controls should use a bottom padding derived from the raised preview card plus an extra 70dp gap.",
-            source.contains("RouteWalkMapControlsBottomPadding = RouteWalkPreviewCarouselBottomPadding + RouteWalkPreviewCardMinHeight + 70.dp") &&
-                mapStageSection.contains("bottom = RouteWalkMapControlsBottomPadding"),
+            "Map controls should use a bottom padding derived from the inset-aware preview card offset plus an extra gap.",
+            mapStageSection.contains("bottom = mapControlsBottomPadding"),
         )
     }
 
@@ -473,7 +521,7 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "Compact route sheet cards should also reduce the time and distance typography.",
-            compactCardSection.contains("style = MaterialTheme.typography.titleSmall") &&
+            compactCardSection.contains("MaterialTheme.typography.titleSmall") &&
                 compactCardSection.contains("style = MaterialTheme.typography.labelMedium"),
         )
         assertTrue(
@@ -578,11 +626,14 @@ class RouteSettingLayoutPolicyTest {
 
         assertTrue(
             "Transit bottom sheet content should reserve clearance so low-floor reservations are not hidden behind the shared CTA.",
-            routeSheetSection.contains("bottom = RouteSettingBottomBarOverlayClearance"),
+            routeSheetSection.contains("val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()") &&
+                routeSheetSection.contains("bottom = bottomBarOverlayClearance"),
         )
         assertTrue(
-            "Transit CTA clearance should be derived from the actual CTA height and requested bottom gap.",
-            source.contains("RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium"),
+            "Transit CTA clearance should be derived from the actual CTA height plus the live navigation bar inset, not a fixed extra dp token.",
+            source.contains("private fun routeSettingBottomBarOverlayClearance(") &&
+                source.contains("WindowInsets.navigationBars.getBottom(density).toDp()") &&
+                !source.contains("RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium"),
         )
     }
 
@@ -595,11 +646,34 @@ class RouteSettingLayoutPolicyTest {
             source
                 .substringAfter("fun RouteSettingScreen(")
                 .substringBefore("if (isDuribalConfirmDialogVisible)")
+        val headerModeTabSection =
+            source
+                .substringAfter("private fun RouteSearchHeaderKakao(")
+                .substringBefore("@Composable\nprivate fun RouteSearchHeaderModeTab")
+        val routeOptionSection =
+            source
+                .substringAfter("private fun RouteOptionSection(")
+                .substringBefore("@Composable\nprivate fun RouteLoadingScreen")
         val failureScreen =
             source
                 .substringAfter("private fun RouteFailureScreen(")
                 .substringBefore("@Composable\nprivate fun RouteFailureFallbackState")
 
+        assertTrue(
+            "No-route recovery should keep only the transit tab active so users land on the Duribal fallback path.",
+            headerModeTabSection.contains("enabled = routeSearchHeaderModeTabEnabled(") &&
+                source.contains("private fun routeSearchHeaderModeTabEnabled(") &&
+                source.contains("mode == RouteTravelMode.TRANSIT") &&
+                source.contains("state.showsDuribalCallAction"),
+        )
+        assertTrue(
+            "When the backend reports no route, the transit tab should surface a dedicated Duribal card with call and cancel actions.",
+            routeOptionSection.contains("RouteDuribalCallPromptCard(") &&
+                source.contains("private fun RouteDuribalCallPromptCard(") &&
+                source.contains("route_setting_duribal_call_prompt_title") &&
+                source.contains("route_setting_duribal_call_prompt_call") &&
+                source.contains("route_setting_duribal_call_prompt_cancel"),
+        )
         assertTrue(
             "When route search fails, the screen should render a full failure state instead of the map and keep the start CTA hidden.",
             screenSection.indexOf("RouteFailureScreen(") in 0 until screenSection.indexOf("RouteMapStage(") &&
@@ -615,6 +689,13 @@ class RouteSettingLayoutPolicyTest {
                 failureScreen.contains("route_setting_duribal_call_prompt_call") &&
                 failureScreen.contains("Button(") &&
                 failureScreen.contains("onClick = onDuribalCallClick"),
+        )
+        assertTrue(
+            "Transit loading should use a full-screen centered modal instead of a local result-list spinner.",
+            screenSection.contains("RouteSearchFullscreenLoadingOverlay(") &&
+                source.contains("private fun RouteSearchFullscreenLoadingOverlay(") &&
+                source.contains("contentAlignment = Alignment.Center") &&
+                routeOptionSection.contains("uiState.isLoading && uiState.optionCards.isEmpty() -> Unit"),
         )
     }
 
@@ -1127,8 +1208,8 @@ class RouteSettingLayoutPolicyTest {
 
         assertTrue(
             "The open detail side panel must reserve bottom clearance so the arrival row is not hidden by the fixed CTA.",
-            timelinePanelSection.contains("contentPadding = PaddingValues(bottom = RouteDetailSidePanelBottomClearance)") &&
-                source.contains("RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance") &&
+            timelinePanelSection.contains("val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()") &&
+                timelinePanelSection.contains("contentPadding = PaddingValues(bottom = bottomBarOverlayClearance)") &&
                 !source.contains("RouteDetailSidePanelBottomActionSpace"),
         )
         assertTrue(
@@ -1419,6 +1500,70 @@ class RouteSettingLayoutPolicyTest {
             source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp") &&
                 bottomBarSection.contains("start = RouteSettingBottomBarHorizontalPadding") &&
                 bottomBarSection.contains("end = RouteSettingBottomBarHorizontalPadding"),
+        )
+    }
+
+    @Test
+    fun `route setting transit refresh action floats diagonally above the start cta`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("@Composable\nfun RouteDetailScreen")
+        val bottomBarSection =
+            source
+                .substringAfter("private fun RouteSettingBottomBar(")
+                .substringBefore("@Composable\nprivate fun RouteTransitRefreshFloatingButton")
+        val refreshButtonSection =
+            source
+                .substringAfter("private fun RouteTransitRefreshFloatingButton(")
+                .substringBefore("@Composable\nprivate fun RouteSettingCtaContent")
+
+        assertTrue(
+            "Transit route selection should expose manual refresh only for a selected transit route.",
+            screenSection.contains("uiState.selectedTravelMode == RouteTravelMode.TRANSIT") &&
+                screenSection.contains("uiState.selectedRoute != null") &&
+                screenSection.contains("RouteSettingUiAction.TransitRefreshClicked"),
+        )
+        assertTrue(
+            "The refresh action should sit at the CTA top end and offset upward as a diagonal floating button.",
+            bottomBarSection.contains("RouteTransitRefreshFloatingButton(") &&
+                bottomBarSection.contains(".align(Alignment.TopEnd)") &&
+                bottomBarSection.contains(".offset(y = -RouteTransitRefreshButtonDiagonalOffset)"),
+        )
+        assertTrue(
+            "The refresh action should be a circular icon button with a progress state.",
+            refreshButtonSection.contains("CircleShape") &&
+                refreshButtonSection.contains("R.drawable.ic_status_refresh") &&
+                refreshButtonSection.contains("CircularProgressIndicator(") &&
+                source.contains("RouteTransitRefreshButtonSize = 44.dp"),
+        )
+    }
+
+    @Test
+    fun `route start CTA centers icon and label as a single group`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val ctaSection =
+            source
+                .substringAfter("private fun RouteSettingCtaContent(")
+                .substringBefore("@Composable\nprivate fun RouteMapBackdrop")
+
+        assertTrue(
+            "Route start CTA should wrap the icon and label in a single row so the combined content stays centered inside the full-width button.",
+            ctaSection.contains(
+                "Row(\n                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),\n                verticalAlignment = Alignment.CenterVertically,\n            )",
+            ),
+        )
+        assertTrue(
+            "Route start CTA should keep the navigation-start icon and labelLarge text together in that centered content row.",
+            ctaSection.contains("painter = painterResource(id = R.drawable.ic_route_start_navigation_button)") &&
+                ctaSection.contains(
+                    "Text(\n                    text = buttonLabel,\n                    style = MaterialTheme.typography.labelLarge,",
+                ),
         )
     }
 

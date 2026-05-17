@@ -1,5 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="map_route_endpoint_picker_title">지도에서 선택</string>
+    <string name="map_route_endpoint_picker_back">뒤로가기</string>
+    <string name="map_route_endpoint_picker_instruction">지도를 움직여 아이콘을 원하는 위치로 옮기세요</string>
+    <string name="map_route_endpoint_picker_center_marker">지도 중심 선택 위치</string>
+    <string name="map_route_endpoint_picker_resolving_label">주소 확인 중</string>
+    <string name="map_route_endpoint_picker_select_action">선택</string>
+    <string name="map_route_endpoint_picker_set_origin_action">이 위치를 출발지로 설정</string>
+    <string name="map_route_endpoint_picker_set_destination_action">이 위치를 도착지로 설정</string>
+    <string name="search_screen_map_picker_action">지도에서 직접 선택</string>
+    <string name="search_screen_current_location_origin_action">현위치</string>
+    <string name="search_screen_current_location_destination_action">현위치</string>
+    <string name="search_screen_current_location_origin_a11y">현위치를 출발지로 사용</string>
+    <string name="search_screen_current_location_destination_a11y">현위치를 도착지로 사용</string>
+    <string name="search_screen_map_picker_origin_action">지도에서 선택</string>
+    <string name="search_screen_map_picker_destination_action">지도에서 선택</string>
+    <string name="search_screen_map_picker_origin_a11y">지도에서 출발지 직접 선택</string>
+    <string name="search_screen_map_picker_destination_a11y">지도에서 도착지 직접 선택</string>
+    <string name="search_screen_current_location_resolving_status">현위치를 확인하고 있어요.</string>
+    <string name="search_screen_current_location_origin_applied_status">현위치를 출발지로 적용했습니다.</string>
+    <string name="search_screen_current_location_destination_applied_status">현위치를 도착지로 적용했습니다.</string>
+    <string name="search_screen_current_location_permission_denied_status">위치 권한이 꺼져 있어요. 권한을 허용하면 현위치를 사용할 수 있습니다.</string>
+    <string name="search_screen_current_location_unavailable_status">현재 위치를 찾지 못했습니다. 잠시 뒤 다시 시도하거나 지도에서 선택해 주세요.</string>
+    <string name="search_screen_current_location_access_unavailable_status">기기 위치 서비스를 사용할 수 없어요. 설정을 확인하거나 지도에서 직접 선택해 주세요.</string>
     <string name="app_name">부산이음길</string>
     <string name="auth_login_service_name">부산이음길</string>
     <string name="auth_login_service_english_name">Busan EumGil</string>
@@ -665,8 +688,8 @@
     <string name="arrival_action_go_home">홈으로 돌아가기</string>
     <string name="arrival_action_explore_new_route">새 경로 탐색하기</string>
     <string name="arrival_evaluation_title">경로 평가</string>
-    <string name="arrival_evaluation_save_route">이 경로 저장하기</string>
-    <string name="arrival_evaluation_route_saved">경로 저장 완료</string>
+    <string name="arrival_evaluation_save_route">경로저장</string>
+    <string name="arrival_evaluation_route_saved">저장 완료</string>
     <string name="arrival_evaluation_route_save_cancel">경로 저장 취소</string>
     <string name="arrival_evaluation_submit">평가 등록</string>
     <string name="arrival_evaluation_close">평가 건너뛰기</string>

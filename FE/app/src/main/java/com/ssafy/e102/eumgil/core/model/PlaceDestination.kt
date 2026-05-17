@@ -7,6 +7,10 @@ data class PlaceDestination(
     val latitude: Double,
     val longitude: Double,
     val category: PlaceCategory? = null,
+    val serverPlaceId: Long? = null,
+    val provider: String? = null,
+    val providerPlaceId: String? = null,
+    val providerCategory: String? = null,
 )
 
 // Search, facility detail, and saved-place handoff all converge on the same minimal destination payload.
@@ -18,6 +22,10 @@ fun SearchResult.toPlaceDestination(): PlaceDestination =
         latitude = latitude,
         longitude = longitude,
         category = category,
+        serverPlaceId = serverPlaceId?.toLongOrNull(),
+        provider = bookmarkProvider(),
+        providerPlaceId = bookmarkProviderPlaceId(),
+        providerCategory = category?.name,
     )
 
 fun SearchResult.toPlaceDestinationOrNull(): PlaceDestination? =
@@ -36,6 +44,7 @@ fun FacilityDetailSeed.toPlaceDestination(): PlaceDestination =
         latitude = coordinate.latitude,
         longitude = coordinate.longitude,
         category = category.toPlaceCategory(),
+        serverPlaceId = facilityId.toLongOrNull(),
     )
 
 fun PlaceDestination.hasValidCoordinate(): Boolean =

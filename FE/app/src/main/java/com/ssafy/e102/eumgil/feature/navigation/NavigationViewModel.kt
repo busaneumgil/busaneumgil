@@ -25,6 +25,7 @@ import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
+import com.ssafy.e102.eumgil.data.repository.toBookmarkDataOrNull
 import com.ssafy.e102.eumgil.feature.route.RouteDetailStepKind
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.feature.route.RouteTransitOptionLabelUiState
@@ -57,6 +58,7 @@ private const val NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS = 25.0
 private const val NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS = 40.0
 private const val NAVIGATION_ROUTE_JOIN_STABLE_UPDATE_COUNT = 2
 private const val NAVIGATION_ROUTE_JOIN_STABLE_DURATION_MILLIS = 3_000L
+private const val NAVIGATION_AUTO_TTS_NEAR_DISTANCE_METERS = 10
 
 private enum class NavigationGuidanceMode {
     RouteDetail,
@@ -76,6 +78,9 @@ class NavigationViewModel(
     val uiEvent: SharedFlow<NavigationUiEvent> = mutableUiEvent.asSharedFlow()
 
     private var initialBriefingRequested = false
+    private var hasPendingBriefingPlayback = false
+    private var hasPendingInitialBriefing = false
+    private var hasAutoPlayedInitialBriefing = false
     private var navigationRequest: RouteNavigationRequest? = null
     private var routeSession: NavigationRouteSession? = null
     private var lastProcessedLocationEpochMillis: Long? = null
@@ -109,6 +114,8 @@ class NavigationViewModel(
     private var lowVisionActualMetricsLastAttemptCoordinate: GeoCoordinate? = null
     private var lowVisionActualMetricsLastAttemptRecordedAtMillis: Long? = null
     private var lastLowVisionRouteChangeAlertSegmentIndex: Int? = null
+    private val spokenInitialGuidanceKeys = mutableSetOf<String>()
+    private val spokenNearGuidanceKeys = mutableSetOf<String>()
     init {
         collectLocationUpdates()
     }
@@ -193,6 +200,10 @@ class NavigationViewModel(
         latestTransitPresentation =
             routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
         initialBriefingRequested = false
+        hasPendingBriefingPlayback = false
+        hasPendingInitialBriefing = false
+        hasAutoPlayedInitialBriefing = false
+        resetAutomaticTtsHistory()
         publishNavigationState()
 
         currentLocationManager.startLocationUpdates()
@@ -220,7 +231,7 @@ class NavigationViewModel(
     }
 
     fun currentRouteBookmarkDraft(): RouteBookmarkDraft? =
-        navigationRequest?.toRouteBookmarkDraft(routeSession?.route)
+        navigationRequest?.toRouteBookmarkDraft(routeSession = routeSession)
 
     fun currentRatingSessionId(): String? =
         routeSession?.latestEndedSessionId ?: routeSession?.sessionId
@@ -282,6 +293,8 @@ class NavigationViewModel(
                 )
             state.copy(tts = nextTts.copy(fallbackMessage = nextTts.toFallbackMessage()))
         }
+        maybeSpeakRealtimeGuidanceAutomatically()
+        playPendingBriefingIfPossible()
     }
 
     override fun onCleared() {
@@ -349,6 +362,7 @@ class NavigationViewModel(
         }
 
         publishNavigationState()
+        maybeSpeakRealtimeGuidanceAutomatically()
     }
 
     private fun resolveGuidanceMode(
@@ -778,7 +792,7 @@ class NavigationViewModel(
     private fun requestInitialBriefingIfNeeded() {
         if (initialBriefingRequested) return
         initialBriefingRequested = true
-        requestBriefing()
+        maybeSpeakRealtimeGuidanceAutomatically()
     }
 
     private fun requestExitNavigationConfirmation() {
@@ -794,11 +808,12 @@ class NavigationViewModel(
         }
 
         if (enabled) {
-            val tts = uiState.value.tts
-            if (tts.canRequestBriefing) {
+            requestBriefingPlayback()
+            val briefingText = consumePendingBriefingTextIfPossible()
+            if (briefingText != null) {
                 emitUiEvents(
                     NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true),
-                    NavigationUiEvent.SpeakBriefing(tts.briefingText),
+                    NavigationUiEvent.SpeakBriefing(briefingText),
                 )
             } else {
                 emitUiEvent(NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true))
@@ -812,31 +827,112 @@ class NavigationViewModel(
     }
 
     private fun requestBriefing() {
+        requestBriefingPlayback()
+        val briefingText = consumePendingBriefingTextIfPossible() ?: return
+        emitUiEvent(NavigationUiEvent.SpeakBriefing(briefingText))
+    }
+
+    private fun requestBriefingPlayback() {
+        hasPendingBriefingPlayback = true
+    }
+
+    private fun playPendingBriefingIfPossible() {
+        val briefingText = consumePendingBriefingTextIfPossible() ?: return
+        emitUiEvent(NavigationUiEvent.SpeakBriefing(briefingText))
+    }
+
+    private fun consumePendingBriefingTextIfPossible(): String? {
+        val tts = uiState.value.tts
+        if (!tts.canRequestBriefing) return null
+        val shouldAutoPlayInitialBriefing = hasPendingInitialBriefing && !hasAutoPlayedInitialBriefing
+        if (!hasPendingBriefingPlayback && !shouldAutoPlayInitialBriefing) return null
+
+        val briefingText =
+            tts.briefingText
+                .trim()
+                .takeIf(String::isNotEmpty)
+                ?: return null
+        if (shouldAutoPlayInitialBriefing) {
+            hasPendingInitialBriefing = false
+            hasAutoPlayedInitialBriefing = true
+        }
+        hasPendingBriefingPlayback = false
+        return briefingText
+    }
+
+    private fun resetAutomaticTtsHistory() {
+        spokenInitialGuidanceKeys.clear()
+        spokenNearGuidanceKeys.clear()
+    }
+
+    private fun maybeSpeakRealtimeGuidanceAutomatically() {
         val tts = uiState.value.tts
         if (!tts.canRequestBriefing) return
-        emitUiEvent(NavigationUiEvent.SpeakBriefing(tts.briefingText))
+        if (guidanceMode != NavigationGuidanceMode.Realtime) return
+        if (isInspectingSegments) return
+
+        val currentSession = routeSession ?: return
+        val route = currentSession.route
+        val progress = latestProgress ?: return
+        if (progress.activeSegmentIndex != activeSegmentIndex) return
+        if (progress.distanceToRouteMeters > NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS) return
+
+        val segment = route.segments.getOrNull(activeSegmentIndex) ?: return
+        val heroDetail = route.toNavigationHeroDetail(segment)
+        val guidanceKey =
+            currentSession.toAutomaticTtsGuidanceKey(
+                segmentIndex = activeSegmentIndex,
+                segment = segment,
+                guidanceAction = heroDetail.guidanceAction,
+            )
+        val distanceToGuidanceMeters =
+            route.distanceToNextSegmentBoundaryMeters(progress)
+                ?: progress.remainingRouteDistanceMeters.takeIf {
+                    progress.activeSegmentIndex >= route.segments.lastIndex
+                }
+                ?: segment.guidanceDisplayDistanceMeters()
+        val shouldSpeakNear = distanceToGuidanceMeters <= NAVIGATION_AUTO_TTS_NEAR_DISTANCE_METERS
+
+        if (shouldSpeakNear) {
+            if (spokenNearGuidanceKeys.add(guidanceKey)) {
+                spokenInitialGuidanceKeys += guidanceKey
+                emitUiEvent(
+                    NavigationUiEvent.SpeakBriefing(
+                        heroDetail.guidanceAction.toNearGuidanceText(heroDetail.title),
+                    ),
+                )
+            }
+            return
+        }
+
+        if (spokenInitialGuidanceKeys.add(guidanceKey)) {
+            emitUiEvent(NavigationUiEvent.SpeakBriefing(uiState.value.stepCard.heroTitle))
+        }
     }
 
     private fun saveDestinationBookmarkAndNavigate() {
         viewModelScope.launch {
-            val bookmark = navigationRequest?.toDestinationBookmarkData()
+            val bookmark = navigationRequest?.toDestinationBookmarkDataOrNull()
+            if (bookmark == null) {
+                emitUiEvent(NavigationUiEvent.ShowToast(NAVIGATION_BOOKMARK_UNAVAILABLE_MESSAGE))
+                return@launch
+            }
             val saveResult =
                 runCatching {
-                    bookmark?.let { pendingBookmark ->
-                        bookmarkRepository.saveBookmark(pendingBookmark)
-                    }
+                    bookmarkRepository.saveBookmark(bookmark)
                 }
 
             saveResult
                 .onSuccess {
                     println(
-                        "BookmarkSaveTrace[NavigationViewModel] result=success placeId=${bookmark?.placeId.orEmpty()}",
+                        "BookmarkSaveTrace[NavigationViewModel] result=success placeId=${bookmark.placeId}",
                     )
                     completeNavigation(NavigationUiEvent.NavigateToSavedRoute)
                 }.onFailure { throwable ->
                     println(
-                        "BookmarkSaveTrace[NavigationViewModel] result=failure placeId=${bookmark?.placeId.orEmpty()} message=${throwable.message.orEmpty()}",
+                        "BookmarkSaveTrace[NavigationViewModel] result=failure placeId=${bookmark.placeId} message=${throwable.message.orEmpty()}",
                     )
+                    emitUiEvent(NavigationUiEvent.ShowToast(NAVIGATION_BOOKMARK_SAVE_FAILURE_MESSAGE))
                 }
         }
     }
@@ -941,6 +1037,7 @@ class NavigationViewModel(
             }.onSuccess { rerouteData ->
                 rerouteData.route?.let { reroutedRoute ->
                     routeSession = routeSession?.withReroutedRoute(reroutedRoute)
+                    resetAutomaticTtsHistory()
                     latestProgress = reroutedRoute.evaluateProgress(currentCoordinate)
                     val remainingMetrics =
                         latestProgress?.let { progress ->
@@ -1020,6 +1117,24 @@ private data class NavigationRouteSession(
             transitRefreshByLegSequence = emptyMap(),
             lastTransitRefreshAtMillisByLegSequence = emptyMap(),
         )
+
+    fun toAutomaticTtsGuidanceKey(
+        segmentIndex: Int,
+        segment: RouteSegment,
+        guidanceAction: NavigationGuidanceAction,
+    ): String =
+        listOf(
+            sessionId.orEmpty(),
+            routeId.orEmpty(),
+            route.serverRouteId.orEmpty(),
+            segmentIndex.toString(),
+            segment.sequence.toString(),
+            segment.sourceLegSequence?.toString().orEmpty(),
+            segment.sourceStepSequence?.toString().orEmpty(),
+            segment.guidanceType?.name.orEmpty(),
+            segment.guidanceDirection?.name.orEmpty(),
+            guidanceAction.name,
+        ).joinToString(separator = "|")
 
     fun resolveTransitRefreshTrigger(
         progress: NavigationProgressSnapshot,
@@ -1254,6 +1369,28 @@ private data class RouteSegmentProjection(
     val distanceToSegmentMeters: Double,
     val distanceAlongSegmentMeters: Double,
 )
+
+private fun RouteNavigationRequest.toDestinationBookmarkDataOrNull(): BookmarkData? =
+    destination.toBookmarkDataOrNull(
+        fallbackPlaceId = destination.toNavigationDestinationPlaceId(),
+        fallbackPlaceName = destination.name.orEmpty().ifBlank { "목적지" },
+    )
+
+private fun RouteNavigationRequest.toRouteBookmarkDraft(
+    routeSession: NavigationRouteSession? = null,
+    route: RouteCandidate? = routeSession?.route ?: selectedRoute,
+): RouteBookmarkDraft =
+    RouteBookmarkDraft(
+        routeId = routeSession?.routeId ?: selectionHandoff?.routeId ?: route?.serverRouteId ?: selectedRoute.serverRouteId,
+        startLabel = origin.name.orEmpty().ifBlank { "출발지" },
+        endLabel = destination.name.orEmpty().ifBlank { "목적지" },
+        startPoint = origin.coordinate,
+        endPoint = destination.coordinate,
+        routeOption = route?.routeOption ?: selectedRoute.routeOption,
+        distanceMeters = route?.summary?.distanceMeters?.takeIf { distance -> distance > 0 },
+        durationMinutes = route?.summary?.estimatedTimeMinutes?.takeIf { duration -> duration > 0 },
+        routeSnapshot = route,
+    )
 
 private fun RouteNavigationRequest.toDestinationBookmarkData(): BookmarkData {
     val destinationWaypoint = destination
@@ -1688,9 +1825,10 @@ internal class RemainingDistanceCalculator(
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val MIN_LOCATION_UPDATE_INTERVAL_MILLIS = 1_000L
-private const val TRANSIT_REFRESH_COOLDOWN_MILLIS = 30_000L
-private const val BUS_STOP_REFRESH_DISTANCE_METERS = 30.0
-private const val SUBWAY_ELEVATOR_REFRESH_DISTANCE_METERS = 25.0
+private const val TRANSIT_REFRESH_COOLDOWN_MILLIS = 60_000L
+private const val TRANSIT_BOARDING_REFRESH_DISTANCE_METERS = 300.0
+private const val BUS_STOP_REFRESH_DISTANCE_METERS = TRANSIT_BOARDING_REFRESH_DISTANCE_METERS
+private const val SUBWAY_ELEVATOR_REFRESH_DISTANCE_METERS = TRANSIT_BOARDING_REFRESH_DISTANCE_METERS
 private const val REROUTE_DEVIATION_DISTANCE_METERS = 10.0
 private const val REROUTE_MAX_GPS_ACCURACY_METERS = 20f
 private const val REROUTE_OFF_ROUTE_CONSECUTIVE_COUNT = 2
@@ -2497,12 +2635,8 @@ private fun RouteNavigationRequest.toNavigationBriefingText(
 ): String =
     selectedRoute.segments
         .getOrNull(activeSegmentIndex)
-        ?.let { segment ->
-            listOf(
-                segment.distanceMeters.toNavigationDistanceLabel(),
-                segment.toCompactNavigationInstruction(),
-            ).joinToString(separator = " ")
-        } ?: fallback
+        ?.toCompactNavigationInstruction()
+        ?: fallback
 
 private fun NavigationTtsUiState.toFallbackMessage(): String =
     when {
@@ -2640,6 +2774,24 @@ private fun NavigationGuidanceAction.toImmediateGuidanceText(fallbackTitle: Stri
         NavigationGuidanceAction.ARRIVAL -> "목적지에 도착했습니다"
         NavigationGuidanceAction.START -> "출발합니다"
         else -> fallbackTitle
+    }
+
+private fun NavigationGuidanceAction.toNearGuidanceText(fallbackTitle: String): String =
+    when (this) {
+        NavigationGuidanceAction.CROSSWALK -> "곧 횡단보도입니다. 신호를 확인하고 건너세요"
+        NavigationGuidanceAction.TURN_LEFT -> "곧 좌회전입니다"
+        NavigationGuidanceAction.TURN_RIGHT -> "곧 우회전입니다"
+        NavigationGuidanceAction.STRAIGHT -> "곧 직진 구간입니다"
+        NavigationGuidanceAction.CURB_GAP -> "곧 단차 구간입니다"
+        NavigationGuidanceAction.STAIRS -> "곧 계단 구간입니다"
+        NavigationGuidanceAction.CONSTRUCTION -> "곧 공사 구간입니다"
+        NavigationGuidanceAction.ELEVATOR -> "곧 엘리베이터 이용 지점입니다"
+        NavigationGuidanceAction.BUS -> "곧 버스 탑승 지점입니다"
+        NavigationGuidanceAction.SUBWAY -> "곧 지하철 탑승 지점입니다"
+        NavigationGuidanceAction.ALIGHT -> "곧 하차 지점입니다"
+        NavigationGuidanceAction.ARRIVAL -> "곧 목적지입니다"
+        NavigationGuidanceAction.START -> "곧 출발 지점입니다"
+        else -> "곧 $fallbackTitle"
     }
 
 private fun NavigationGuidanceAction.toUpcomingGuidanceText(
@@ -2827,6 +2979,8 @@ private const val LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_DISTANCE_METERS = 20.0
 private const val LOW_VISION_ACTUAL_METRICS_REUSE_DISTANCE_METERS = 25.0
 private const val LOW_VISION_ACTUAL_METRICS_CACHE_MAX_AGE_MILLIS = 10_000L
 private const val NAVIGATION_TRANSIT_OPTION_LABEL_LIMIT = 4
+private const val NAVIGATION_BOOKMARK_UNAVAILABLE_MESSAGE = "서버에 저장할 수 있는 목적지에서만 북마크를 저장할 수 있습니다."
+private const val NAVIGATION_BOOKMARK_SAVE_FAILURE_MESSAGE = "북마크를 저장하지 못했습니다. 다시 시도해 주세요."
 
 private object NoOpRouteRepository : RouteRepository {
     override suspend fun getRouteSearchData(query: RouteSearchQuery): RouteSearchData =

@@ -148,6 +148,12 @@ public class AdminRoadNetworkEditJobService {
 
 	private void markFailed(Long jobId, Exception exception) {
 		log.error("event=admin_road_network_edit_job_failed jobId={}", jobId, exception);
+		if (exception instanceof BusinessException businessException
+			&& businessException.getMessage() != null
+			&& !businessException.getMessage().isBlank()) {
+			markFailed(jobId, businessException.getMessage());
+			return;
+		}
 		markFailed(jobId, EDIT_JOB_FAILED_MESSAGE);
 	}
 

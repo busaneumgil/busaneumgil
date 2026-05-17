@@ -1,5 +1,6 @@
 package com.ssafy.e102.domain.admin.dto.request;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import com.ssafy.e102.domain.route.type.SegmentType;
@@ -20,14 +21,30 @@ public record AdminRoadNetworkEditApplyRequest(
 	public record Edit(
 		String action,
 		SegmentType segmentType,
-		Geometry geom,
+		LineGeometry geom,
+		NodeRef fromNode,
+		NodeRef toNode,
 		Long edgeId,
 		Long vertexId,
 		String reason) {
 	}
 
-	public record Geometry(
+	public record LineGeometry(
 		String type,
 		List<List<Double>> coordinates) {
+	}
+
+	public record PointGeometry(
+		String type,
+		List<Double> coordinates) {
+	}
+
+	public record NodeRef(
+		String mode,
+		Long vertexId,
+		String tempNodeId,
+		String sourceNodeKey,
+		PointGeometry geom,
+		BigDecimal snapDistanceMeter) {
 	}
 }

@@ -35,6 +35,10 @@ data class SavedPlaceUiModel(
     val category: String?,
     val latitude: Double,
     val longitude: Double,
+    val serverPlaceId: Long? = null,
+    val provider: String? = null,
+    val providerPlaceId: String? = null,
+    val providerCategory: String? = null,
     val distanceMeters: Int? = null,
 )
 

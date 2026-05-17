@@ -113,23 +113,25 @@ class SavedRouteViewModelTest {
             advanceUntilIdle()
 
             val preview = destinationPreviewRepository.pendingPreview.value
-            val destination = preview?.destination
 
             assertEquals(SavedRouteUiEvent.NavigateToMap, uiEvent.await())
-            assertEquals("bookmark-place-1", destination?.placeId)
-            assertEquals(PlaceCategory.ELEVATOR, destination?.category)
             assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertEquals("bookmark-place-1", preview?.destination?.placeId)
+            assertEquals(PlaceCategory.ELEVATOR, preview?.destination?.category)
+            assertEquals(RouteEditingTarget.DESTINATION, preview?.editingTarget)
         }
 
     @Test
     fun `place click does not store recent destination for map home sheet`() =
         runTest {
             val searchRepository = FakeSearchRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             val viewModel =
                 SavedRouteViewModel(
                     bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
                     routeBookmarkRepository = FakeRouteBookmarkRepository(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationPreviewRepository = destinationPreviewRepository,
                     searchRepository = searchRepository,
                 )
 
@@ -139,6 +141,7 @@ class SavedRouteViewModelTest {
             advanceUntilIdle()
 
             assertTrue(searchRepository.savedRecentDestinations.isEmpty())
+            assertEquals("bookmark-place-1", destinationPreviewRepository.pendingPreview.value?.destination?.placeId)
             /*
             assertEquals(1, searchRepository.savedRecentDestinations.size)
             assertEquals(
@@ -160,11 +163,13 @@ class SavedRouteViewModelTest {
     fun `place click does not wait for recent destination save before navigating to map`() =
         runTest {
             val searchRepository = FakeSearchRepository(saveGate = CompletableDeferred())
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
             val viewModel =
                 SavedRouteViewModel(
                     bookmarkRepository = FakeBookmarkRepository(bookmarks = listOf(testPlaceBookmark())),
                     routeBookmarkRepository = FakeRouteBookmarkRepository(),
                     destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationPreviewRepository = destinationPreviewRepository,
                     searchRepository = searchRepository,
                 )
 
@@ -177,6 +182,7 @@ class SavedRouteViewModelTest {
             assertEquals(SavedRouteUiEvent.NavigateToMap, uiEvent.await())
             assertEquals(0, searchRepository.pendingSaveCount)
             assertTrue(searchRepository.savedRecentDestinations.isEmpty())
+            assertEquals("bookmark-place-1", destinationPreviewRepository.pendingPreview.value?.destination?.placeId)
         }
 
     @Test

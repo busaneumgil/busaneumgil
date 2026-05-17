@@ -30,6 +30,7 @@ enum class RouteSelectionRequestReason {
 data class RouteSelectionRequest(
     val state: RouteSelectionState,
     val reason: RouteSelectionRequestReason,
+    val changedEndpoints: Boolean,
 )
 
 interface DestinationSelectionRepository {
@@ -82,15 +83,17 @@ class InMemoryDestinationSelectionRepository : DestinationSelectionRepository {
     }
 
     override fun updateSelectedOrigin(origin: PlaceDestination) {
+        val previousState = mutableSelectionState.value
         mutableSelectedOrigin.value = origin
         syncSelectionState()
-        emitSelectionRequest(RouteSelectionRequestReason.ORIGIN_UPDATED)
+        emitSelectionRequest(RouteSelectionRequestReason.ORIGIN_UPDATED, previousState)
     }
 
     override fun updateSelectedDestination(destination: PlaceDestination) {
+        val previousState = mutableSelectionState.value
         mutableSelectedDestination.value = destination
         syncSelectionState()
-        emitSelectionRequest(RouteSelectionRequestReason.DESTINATION_UPDATED)
+        emitSelectionRequest(RouteSelectionRequestReason.DESTINATION_UPDATED, previousState)
     }
 
     override fun updateSelectionForEditingTarget(destination: PlaceDestination) {
@@ -104,10 +107,11 @@ class InMemoryDestinationSelectionRepository : DestinationSelectionRepository {
         origin: PlaceDestination,
         destination: PlaceDestination,
     ) {
+        val previousState = mutableSelectionState.value
         mutableSelectedOrigin.value = origin
         mutableSelectedDestination.value = destination
         syncSelectionState()
-        emitSelectionRequest(RouteSelectionRequestReason.SWAPPED)
+        emitSelectionRequest(RouteSelectionRequestReason.SWAPPED, previousState)
     }
 
     override fun clearSelectedOriginSilently() {
@@ -116,15 +120,17 @@ class InMemoryDestinationSelectionRepository : DestinationSelectionRepository {
     }
 
     override fun clearSelectedOrigin() {
+        val previousState = mutableSelectionState.value
         mutableSelectedOrigin.value = null
         syncSelectionState()
-        emitSelectionRequest(RouteSelectionRequestReason.ORIGIN_CLEARED)
+        emitSelectionRequest(RouteSelectionRequestReason.ORIGIN_CLEARED, previousState)
     }
 
     override fun clearSelectedDestination() {
+        val previousState = mutableSelectionState.value
         mutableSelectedDestination.value = null
         syncSelectionState()
-        emitSelectionRequest(RouteSelectionRequestReason.DESTINATION_CLEARED)
+        emitSelectionRequest(RouteSelectionRequestReason.DESTINATION_CLEARED, previousState)
     }
 
     private fun syncSelectionState() {
@@ -136,11 +142,18 @@ class InMemoryDestinationSelectionRepository : DestinationSelectionRepository {
             )
     }
 
-    private fun emitSelectionRequest(reason: RouteSelectionRequestReason) {
+    private fun emitSelectionRequest(
+        reason: RouteSelectionRequestReason,
+        previousState: RouteSelectionState,
+    ) {
+        val currentState = mutableSelectionState.value
         mutableSelectionRequests.tryEmit(
             RouteSelectionRequest(
-                state = mutableSelectionState.value,
+                state = currentState,
                 reason = reason,
+                changedEndpoints =
+                    previousState.selectedOrigin != currentState.selectedOrigin ||
+                        previousState.selectedDestination != currentState.selectedDestination,
             ),
         )
     }

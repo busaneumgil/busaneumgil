@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.navigation
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
@@ -73,6 +74,10 @@ fun NavigationRoute(
         )
     }
 
+    LaunchedEffect(textToSpeechController, uiState.tts.isEnabled) {
+        textToSpeechController.setEnabled(uiState.tts.isEnabled)
+    }
+
     BackHandler(
         enabled = !useLowVisionUi && !uiState.isExitConfirmDialogVisible,
     ) {
@@ -97,6 +102,8 @@ fun NavigationRoute(
                     NavigationUiEvent.NavigateToMap -> onNavigateToMap()
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
                     NavigationUiEvent.NavigateToArrival -> onNavigateToArrival()
+                    is NavigationUiEvent.ShowToast ->
+                        Toast.makeText(appContext, event.message, Toast.LENGTH_SHORT).show()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
                     NavigationUiEvent.PlayRouteChangeAlert -> routeChangeAlertPlayer.play()
                     NavigationUiEvent.StopBriefing -> textToSpeechController.stop()

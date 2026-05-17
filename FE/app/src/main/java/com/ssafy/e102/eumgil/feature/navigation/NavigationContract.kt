@@ -248,6 +248,10 @@ sealed interface NavigationUiEvent {
 
     data object NavigateToArrival : NavigationUiEvent
 
+    data class ShowToast(
+        val message: String,
+    ) : NavigationUiEvent
+
     data class SpeakBriefing(
         val text: String,
     ) : NavigationUiEvent

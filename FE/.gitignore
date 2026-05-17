@@ -4,6 +4,8 @@
 .gradle-user/
 .android/
 .kotlin/
+.codex-gradle-home/
+.codex-android-home/
 .codex_tmp/
 .idea/
 *.iml

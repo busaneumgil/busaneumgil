@@ -438,7 +438,14 @@ class SavedRouteViewModel(
         }
 
         destinationSelectionRepository.setEditingTarget(RouteEditingTarget.DESTINATION)
-        destinationSelectionRepository.updateSelectedDestination(destination)
+        if (event == SavedRouteUiEvent.NavigateToMap) {
+            destinationPreviewRepository.requestPreview(
+                destination = destination,
+                editingTarget = RouteEditingTarget.DESTINATION,
+            )
+        } else {
+            destinationSelectionRepository.updateSelectedDestination(destination)
+        }
         viewModelScope.launch {
             mutableUiEvent.emit(event)
         }
@@ -640,7 +647,7 @@ class SavedRouteViewModel(
             bookmarkRepository: BookmarkRepository,
             routeBookmarkRepository: RouteBookmarkRepository,
             destinationSelectionRepository: DestinationSelectionRepository,
-            destinationPreviewRepository: DestinationPreviewRepository,
+            destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
             searchRepository: SearchRepository? = null,
             currentLocationManager: CurrentLocationManager? = null,
             isLowVisionMode: Boolean = false,
@@ -677,6 +684,10 @@ private fun BookmarkData.toSavedPlaceUiModel(): SavedPlaceUiModel =
         category = category,
         latitude = latitude,
         longitude = longitude,
+        serverPlaceId = serverPlaceId,
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        providerCategory = providerCategory,
     )
 
 private fun BookmarkData.toSavedPlaceUiModel(distanceMeters: Int?): SavedPlaceUiModel =
@@ -705,6 +716,10 @@ private fun SavedPlaceUiModel.toPlaceDestination(): PlaceDestination =
         latitude = latitude,
         longitude = longitude,
         category = category.toPlaceCategoryOrNull(),
+        serverPlaceId = serverPlaceId,
+        provider = provider,
+        providerPlaceId = providerPlaceId,
+        providerCategory = providerCategory,
     )
 
 private fun SavedRouteBookmarkUiModel.toOriginPlaceDestination(): PlaceDestination =

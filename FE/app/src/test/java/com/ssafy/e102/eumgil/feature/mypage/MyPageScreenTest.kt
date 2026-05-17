@@ -157,6 +157,29 @@ class MyPageScreenTest {
     }
 
     @Test
+    fun `my page screen renders duribal call confirmation dialog with yes and no actions`() {
+        val myPageSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+        val dialogSource =
+            File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/component/dialog/EumDuribalCallConfirmDialog.kt")
+                .readText()
+
+        assertTrue(
+            "MyPageScreen should render the duribal confirmation dialog instead of dialing immediately from the button tap.",
+            myPageSource.contains("isDuribalConfirmDialogVisible") &&
+                myPageSource.contains("EumDuribalCallConfirmDialog("),
+        )
+        assertTrue(
+            "Duribal confirmation dialog should expose explicit yes and no actions for the restored CTA flow.",
+            dialogSource.contains("onConfirm") &&
+                dialogSource.contains("onDismiss") &&
+                dialogSource.contains("my_page_duribal_call_dialog_confirm") &&
+                dialogSource.contains("my_page_duribal_call_dialog_dismiss"),
+        )
+    }
+
+    @Test
     fun `duribal confirm dialog follows app custom dialog shell`() {
         val dialogSource =
             File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/component/dialog/EumDuribalCallConfirmDialog.kt")

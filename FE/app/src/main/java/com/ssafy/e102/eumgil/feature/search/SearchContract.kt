@@ -5,15 +5,36 @@ import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 
+enum class SearchSelectionMode {
+    PREVIEW_ON_MAP,
+    APPLY_TO_ROUTE,
+}
+
 data class SearchUiState(
     val query: String = "",
     val hasEditedQuery: Boolean = false,
     val editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    val selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     val recentSearches: List<RecentSearch> = emptyList(),
     val sortOption: SearchSortOption = SearchSortOption.RELEVANCE,
     val resultState: SearchResultUiState = SearchResultUiState.Initial,
     val voiceInputState: SearchVoiceInputUiState = SearchVoiceInputUiState(),
+    val currentLocationQuickActionState: SearchCurrentLocationQuickActionUiState =
+        SearchCurrentLocationQuickActionUiState(),
 )
+
+data class SearchCurrentLocationQuickActionUiState(
+    val status: SearchCurrentLocationQuickActionStatus = SearchCurrentLocationQuickActionStatus.Idle,
+)
+
+enum class SearchCurrentLocationQuickActionStatus {
+    Idle,
+    Resolving,
+    Applied,
+    PermissionDenied,
+    LocationUnavailable,
+    LocationAccessUnavailable,
+}
 
 data class SearchVoiceInputUiState(
     val isActive: Boolean = false,
@@ -38,6 +59,7 @@ sealed interface SearchUiAction {
 
     data class EditingTargetConfigured(
         val editingTarget: RouteEditingTarget,
+        val selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     ) : SearchUiAction
 
     data class EntryRouteEntered(
@@ -45,6 +67,12 @@ sealed interface SearchUiAction {
     ) : SearchUiAction
 
     data object VoiceInputClicked : SearchUiAction
+
+    data object CurrentLocationClicked : SearchUiAction
+
+    data object MapPickerClicked : SearchUiAction
+
+    data object RefreshLocationPermission : SearchUiAction
 
     data object VoiceRouteEntered : SearchUiAction
 
@@ -61,6 +89,7 @@ sealed interface SearchUiAction {
 
     data class ResultsRouteEntered(
         val query: String,
+        val selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     ) : SearchUiAction
 
     data class QueryChanged(
@@ -116,15 +145,24 @@ sealed interface SearchUiEvent {
     data class NavigateToResults(
         val query: String,
         val editingTarget: RouteEditingTarget,
+        val selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     ) : SearchUiEvent
 
     data object StartVoiceCapture : SearchUiEvent
 
     data object StopVoiceCapture : SearchUiEvent
 
-    data object NavigateToRouteSetting : SearchUiEvent
+    data object RequestLocationPermission : SearchUiEvent
+
+    data class NavigateToRouteSetting(
+        val locationPermissionPrechecked: Boolean = false,
+    ) : SearchUiEvent
 
     data object NavigateToMapPreview : SearchUiEvent
+
+    data class NavigateToRouteEndpointMapPicker(
+        val editingTarget: RouteEditingTarget,
+    ) : SearchUiEvent
 
     data object NavigateToRouteBriefing : SearchUiEvent
 

@@ -70,6 +70,12 @@ class DefaultVoiceAnalyzeRepository(
         VoiceAnalyzeResult(
             intent = runCatching { enumValueOf<VoiceAnalyzeIntent>(intent) }.getOrDefault(VoiceAnalyzeIntent.UNKNOWN),
             placeName = placeName,
+            category = category,
+            bookmarkAction = bookmarkAction,
+            departure = departure,
+            destination = destination,
+            reportType = reportType,
+            description = description,
             confirmed = confirmed,
             confirmationMessage = confirmationMessage,
         )

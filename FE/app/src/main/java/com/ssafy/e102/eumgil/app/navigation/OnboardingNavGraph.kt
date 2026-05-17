@@ -324,7 +324,7 @@ internal fun resolveOnboardingTermsCompletedRoute(selectedPrimaryUserType: Strin
 
 internal fun resolveTutorialOnboardingCompletedRoute(): String = TopLevelRoute.Map.route
 
-internal fun resolveTutorialGuideCompletedRoute(): String = MyPageSubRoute.AppInfo.route
+internal fun resolveTutorialGuideCompletedRoute(): String = TopLevelRoute.MyPage.route
 
 internal fun resolveProfileEditCompletedRoute(selectedPrimaryUserType: String?): String =
     if (selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue) {

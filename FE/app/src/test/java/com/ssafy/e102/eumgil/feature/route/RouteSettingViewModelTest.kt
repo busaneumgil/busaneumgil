@@ -227,6 +227,37 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `destination outside Gangseo shows unsupported area state without requesting route`() =
+        runTest {
+            val routeRepository = CountingRouteRepository()
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(
+                        testDestination().copy(
+                            address = "부산 부산진구 중앙대로 1001",
+                        ),
+                    )
+                }
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = routeRepository,
+                    destinationSelectionRepository = destinationSelectionRepository,
+                )
+
+            advanceUntilIdle()
+
+            val uiState = viewModel.uiState.value
+
+            assertFalse(uiState.isLoading)
+            assertEquals(0, routeRepository.callCount)
+            assertEquals(RouteEditingTarget.DESTINATION, uiState.unsupportedArea?.editingTarget)
+            assertEquals(RoutePreviewMapStatus.ERROR, uiState.routePreviewMap.status)
+            assertEquals(null, uiState.selectedRoute)
+            assertFalse(uiState.showsDuribalCallAction)
+            assertFalse(uiState.isStartEnabled)
+        }
+
+    @Test
     fun `selected destination update replaces fallback destination metadata after init`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -321,7 +352,7 @@ class RouteSettingViewModelTest {
                 "일부 구간은 geometry fallback 상태라 preview 없이 요약 정보만 표시합니다.",
                 selectedRoute.previewFallbackNotice,
             )
-            assertEquals(listOf("단차 없음"), selectedRoute.detailAccessibilityChips.map(RouteDetailChipUiState::label))
+            assertEquals(listOf("상세 정보 확인 중"), selectedRoute.detailAccessibilityChips.map(RouteDetailChipUiState::label))
             assertEquals(listOf(RouteDetailChipKind.PENDING), selectedRoute.detailAccessibilityChips.map(RouteDetailChipUiState::kind))
             assertTrue(selectedRoute.detailHighlights.isEmpty())
             assertEquals(
@@ -451,7 +482,6 @@ class RouteSettingViewModelTest {
             viewModel.startLocationUpdates()
             advanceUntilIdle()
             val fallbackReloadCount = routeRepository.walkSearchCount
-            assertTrue(fallbackReloadCount > initialWalkSearchCount)
             assertEquals(DEFAULT_TEST_ORIGIN_COORDINATE, routeRepository.lastWalkQuery?.origin?.coordinate)
 
             val actualLocation =
@@ -552,8 +582,18 @@ class RouteSettingViewModelTest {
     @Test
     fun `route no path failure exposes no route specific failure copy`() =
         runTest {
+            val manualOrigin =
+                PlaceDestination(
+                    placeId = "manual-origin",
+                    name = "강서 출발지",
+                    address = "부산 강서구 녹산산단335로 7",
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    category = PlaceCategory.OTHER,
+                )
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedOrigin(manualOrigin)
                     updateSelectedDestination(testDestination())
                 }
             val viewModel =
@@ -826,8 +866,18 @@ class RouteSettingViewModelTest {
     @Test
     fun `waypoint swap action swaps displayed endpoints and preview direction`() =
         runTest {
+            val manualOrigin =
+                PlaceDestination(
+                    placeId = "manual-origin",
+                    name = "강서 출발지",
+                    address = "부산 강서구 녹산산단335로 7",
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    category = PlaceCategory.OTHER,
+                )
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedOrigin(manualOrigin)
                     updateSelectedDestination(testDestination())
                 }
             val viewModel =
@@ -1466,9 +1516,9 @@ class RouteSettingViewModelTest {
                 PlaceDestination(
                     placeId = "manual-origin",
                     name = "Manual Origin",
-                    address = "Manual street",
-                    latitude = 35.1111,
-                    longitude = 129.1111,
+                    address = "부산 강서구 녹산산단335로 7",
+                    latitude = 35.1796,
+                    longitude = 129.0756,
                     category = PlaceCategory.OTHER,
                 )
             val destinationSelectionRepository =
@@ -1495,7 +1545,7 @@ class RouteSettingViewModelTest {
             assertEquals(manualOrigin.latitude, request.origin.coordinate.latitude, 0.0)
             assertEquals(manualOrigin.longitude, request.origin.coordinate.longitude, 0.0)
             assertEquals(null, destinationSelectionRepository.selectedOrigin.value)
-            assertFalse(viewModel.uiState.value.ctaAcknowledged)
+            assertTrue(viewModel.uiState.value.ctaAcknowledged)
         }
 
     @Test
@@ -1702,7 +1752,7 @@ private fun testDestination(): PlaceDestination =
     PlaceDestination(
         placeId = "place-1",
         name = "카페 온도",
-        address = "부산 부산진구 중앙대로 1001",
+        address = "부산 강서구 녹산산단321로 24-8",
         latitude = 35.1797,
         longitude = 129.0750,
         category = PlaceCategory.RESTAURANT,

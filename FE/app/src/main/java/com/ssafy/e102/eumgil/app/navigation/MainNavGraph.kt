@@ -29,7 +29,6 @@ import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
 import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.feature.arrival.ArrivalRoute as ArrivalScreenRoute
 import com.ssafy.e102.eumgil.feature.map.MapRoute
-import com.ssafy.e102.eumgil.feature.mypage.MyPageAppInfoRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
@@ -150,8 +149,8 @@ fun NavGraphBuilder.mainNavGraph(
             onNavigateToReportHistory = {
                 navController.navigate(MyPageSubRoute.ReportHistory.route)
             },
-            onNavigateToAppInfo = {
-                navController.navigate(MyPageSubRoute.AppInfo.route)
+            onNavigateToGuide = {
+                navController.navigate(resolveMyPageGuideRoute())
             },
         )
     }
@@ -559,32 +558,6 @@ fun NavGraphBuilder.mainNavGraph(
         )
     }
 
-    composable(route = MyPageSubRoute.AppInfo.route) {
-        MyPageAppInfoRoute(
-            onNavigateBack = {
-                val didPopToMyPage =
-                    navController.popBackStack(
-                        route = TopLevelRoute.MyPage.route,
-                        inclusive = false,
-                    )
-                if (!didPopToMyPage) {
-                    navController.navigateToTopLevel(TopLevelDestination.MyPage)
-                }
-            },
-            onNavigateToLogin = {
-                navController.navigate(AuthRoute.Login.route) {
-                    launchSingleTop = true
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        inclusive = true
-                    }
-                }
-            },
-            onNavigateToGuide = {
-                navController.navigate(resolveAppInfoGuideRoute())
-            },
-        )
-    }
-
     composable(route = TutorialRoute.Guide.route) {
         MobilityTutorialRoute(
             entryPoint = TutorialEntryPoint.GUIDE,
@@ -695,7 +668,7 @@ internal fun resolveArrivalHomeRoute(selectedPrimaryUserType: String?): String =
 
 internal fun resolveSearchResultBriefingRoute(): String = LowVisionRoute.RouteBriefing.route
 
-internal fun resolveAppInfoGuideRoute(): String = TutorialRoute.Guide.route
+internal fun resolveMyPageGuideRoute(): String = TutorialRoute.Guide.route
 
 internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue

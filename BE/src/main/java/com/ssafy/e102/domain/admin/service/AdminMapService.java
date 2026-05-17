@@ -168,7 +168,8 @@ public class AdminMapService {
 			.toList();
 
 		return new AdminRoadNetworkResponse(
-			new AdminRoadNetworkSummaryResponse(segmentCount, features.size(), nodeFeatures.size(), nodeFeatures.size()),
+			new AdminRoadNetworkSummaryResponse(segmentCount, features.size(), nodeFeatures.size(),
+				nodeFeatures.size()),
 			toBbox(roadSegments.stream()
 				.map(RoadSegment::getGeom)
 				.map(LineString::getEnvelopeInternal)

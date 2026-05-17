@@ -69,6 +69,8 @@ class MyPageScreenTest {
     fun `main menu rows suppress ripple only for entries that open another screen`() {
         assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.REPORT_HISTORY))
         assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.APP_HELP))
+        assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.PRIVACY_POLICY))
+        assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.SERVICE_TERMS))
         assertFalse(shouldSuppressMyPageMenuRipple(MyPageMenuItem.NOTICE))
     }
 
@@ -101,55 +103,36 @@ class MyPageScreenTest {
     }
 
     @Test
-    fun `my page main menu exposes duribal call button`() {
+    fun `my page body exposes target profile quick actions menu and footer`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
                 .readText()
-        val mainMenuSection =
-            source
-                .substringAfter("private fun MainMenuSection(")
-                .substringBefore("@Composable\nprivate fun MyPageMenuRow")
 
         assertTrue(
-            "My page should expose the duribal CTA again.",
-            source.contains("DuribalCallButton(") ||
-                source.contains("ic_mypage_duribal_call") ||
-                source.contains("my_page_duribal_call_button") ||
-                mainMenuSection.contains("onDuribalCallClick"),
+            "My page should expose the target profile overview card.",
+            source.contains("ProfileOverviewCard(") &&
+                source.contains("ProfileStatsRow("),
         )
         assertTrue(
-            "The regular menu rows should remain in the main menu after removing the duribal CTA.",
-            mainMenuSection.contains("MyPageMenuRow("),
+            "My page should expose the target quick action cards for Duribal and guide.",
+            source.contains("QuickActionGrid(") &&
+                source.contains("R.string.my_page_duribal_title") &&
+                source.contains("R.string.my_page_guide_title"),
         )
         assertTrue(
-            "The restored duribal CTA should sit below the main menu and directly above logout.",
-            source.indexOf("MainMenuSection(") <
-                source.indexOf("DuribalCallButton(onClick = onDuribalCallClick)") &&
-                source.indexOf("DuribalCallButton(onClick = onDuribalCallClick)") <
-                source.indexOf("MyPageUiAction.LogoutClicked"),
+            "The regular policy/report menu rows and footer actions should be visible above the bottom tab.",
+            source.contains("MyPageMenuItem.REPORT_HISTORY") &&
+                source.contains("MyPageMenuItem.PRIVACY_POLICY") &&
+                source.contains("MyPageMenuItem.SERVICE_TERMS") &&
+                source.contains("MyPageFooter("),
         )
     }
 
     @Test
-    fun `duribal call button centers icon and label as a single group`() {
-        val source =
-            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
-                .readText()
-        val buttonSection =
-            source
-                .substringAfter("private fun DuribalCallButton(")
-                .substringBefore("@Composable\nprivate fun MyPageMenuRow")
-
-        assertTrue(
-            "Duribal call CTA should wrap its icon and label in a single row so the combined content stays centered inside the full-width button.",
-            buttonSection.contains(
-                "Row(\n            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),\n            verticalAlignment = Alignment.CenterVertically,\n        )",
-            ),
-        )
-        assertFalse(
-            "Duribal call CTA should not rely on text-only start padding because the icon and label are centered together as one group.",
-            buttonSection.contains("modifier = Modifier.padding(start = EumSpacing.small)"),
-        )
+    fun `my page display name falls back to generic user label`() {
+        assertEquals("사용자", resolveDisplayName(MyPageUiState(displayName = null)))
+        assertEquals("사용자", resolveDisplayName(MyPageUiState(displayName = " ")))
+        assertEquals("민들레", resolveDisplayName(MyPageUiState(displayName = " 민들레 ")))
     }
 
     @Test

@@ -97,6 +97,7 @@ public class PlaceService {
 	private static final String SEARCH_SORT_RELEVANCE = "relevance";
 	private static final String KAKAO_SEARCH_SORT_ACCURACY = "accuracy";
 	private static final String KAKAO_SEARCH_SORT_DISTANCE = "distance";
+	private static final String BUSAN_SEARCH_RECT = "128.75,34.85,129.35,35.40";
 	private static final String BUSAN_REGION_PREFIX = "부산";
 	private final PlaceRepository placeRepository;
 	private final BookmarkRepository bookmarkRepository;
@@ -153,7 +154,7 @@ public class PlaceService {
 				parsedRadius,
 				kakaoPage,
 				parsedSize,
-				searchSort.kakaoSort);
+				searchSort);
 			List<KakaoPlaceDocument> searchDocuments = searchBatch.documents()
 				.stream()
 				.limit(parsedSize)
@@ -184,12 +185,13 @@ public class PlaceService {
 		Integer radius,
 		int startPage,
 		int size,
-		String sort) {
+		PlaceSearchSort sort) {
 		List<KakaoPlaceDocument> documents = new ArrayList<>();
 		int page = startPage;
 		long totalElements = 0;
 		boolean isEnd = false;
 		boolean shouldBackfillBusanResults = lat != null && lng != null;
+		String rect = sort == PlaceSearchSort.RELEVANCE ? BUSAN_SEARCH_RECT : null;
 
 		while (page <= MAX_KAKAO_SEARCH_PAGE && documents.size() < size) {
 			KakaoPlaceSearchResult kakaoResult = kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
@@ -197,9 +199,10 @@ public class PlaceService {
 				lat,
 				lng,
 				radius,
+				rect,
 				page,
 				size,
-				sort));
+				sort.kakaoSort));
 			totalElements = kakaoResult.totalElements();
 			documents.addAll(filterBusanSearchDocuments(kakaoResult.documents()));
 			isEnd = kakaoResult.isEnd();

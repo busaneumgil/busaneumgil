@@ -2,10 +2,31 @@ package com.ssafy.e102.eumgil.feature.mypage
 
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.AuthSession
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.InitSettings
+import com.ssafy.e102.eumgil.core.model.RecentDestination
+import com.ssafy.e102.eumgil.core.model.RouteBookmark
+import com.ssafy.e102.eumgil.core.model.RouteBookmarkDetail
+import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
+import com.ssafy.e102.eumgil.core.model.RouteBookmarkSaveRequest
+import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.core.model.SearchQuery
+import com.ssafy.e102.eumgil.core.model.SearchResult
+import com.ssafy.e102.eumgil.data.repository.AccountWithdrawalRepository
+import com.ssafy.e102.eumgil.data.repository.AccountWithdrawalResult
 import com.ssafy.e102.eumgil.data.repository.AuthLogoutRepository
 import com.ssafy.e102.eumgil.data.repository.AuthLogoutResult
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
+import com.ssafy.e102.eumgil.data.repository.BookmarkData
+import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.ReportHistoryData
+import com.ssafy.e102.eumgil.data.repository.ReportHistoryDetailData
+import com.ssafy.e102.eumgil.data.repository.ReportHistorySource
+import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
+import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
+import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.data.repository.UserProfile
 import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
@@ -18,6 +39,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -192,6 +214,70 @@ class MyPageViewModelTest {
         }
 
     @Test
+    fun `withdraw action exposes loading state and emits login navigation event on success`() =
+        runTest {
+            val withdrawalRepository = ControllableAccountWithdrawalRepository()
+            val viewModel =
+                MyPageViewModel(
+                    settingsRepository = FakeSettingsRepository(),
+                    authSessionRepository = FakeAuthSessionRepository(),
+                    authLogoutRepository = FakeAuthLogoutRepository(),
+                    userProfileRepository = FakeUserProfileRepository(),
+                    accountWithdrawalRepository = withdrawalRepository,
+                )
+            val event = async { viewModel.uiEvent.first() }
+            val loadingStates =
+                async {
+                    viewModel.uiState
+                        .map { state -> state.isWithdrawLoading }
+                        .take(3)
+                        .toList()
+                }
+            runCurrent()
+
+            viewModel.onAction(MyPageUiAction.WithdrawClicked)
+            runCurrent()
+
+            assertEquals(1, withdrawalRepository.withdrawCallCount)
+            assertTrue(viewModel.uiState.value.isWithdrawLoading)
+
+            withdrawalRepository.complete(AccountWithdrawalResult.Success(message = "회원탈퇴가 완료되었습니다."))
+            runCurrent()
+
+            assertEquals(
+                listOf(false, true, false),
+                loadingStates.await(),
+            )
+            assertSame(MyPageUiEvent.NavigateToLogin, event.await())
+        }
+
+    @Test
+    fun `withdraw failure keeps user on my page and emits snackbar message`() =
+        runTest {
+            val withdrawalRepository = ControllableAccountWithdrawalRepository()
+            val viewModel =
+                MyPageViewModel(
+                    settingsRepository = FakeSettingsRepository(),
+                    authSessionRepository = FakeAuthSessionRepository(),
+                    authLogoutRepository = FakeAuthLogoutRepository(),
+                    userProfileRepository = FakeUserProfileRepository(),
+                    accountWithdrawalRepository = withdrawalRepository,
+                )
+            val event = async { viewModel.uiEvent.first() }
+
+            viewModel.onAction(MyPageUiAction.WithdrawClicked)
+            runCurrent()
+            withdrawalRepository.complete(AccountWithdrawalResult.Failure(message = "회원탈퇴 처리에 실패했습니다."))
+            runCurrent()
+
+            assertEquals(false, viewModel.uiState.value.isWithdrawLoading)
+            assertEquals(
+                MyPageUiEvent.ShowSnackbar(message = "회원탈퇴 처리에 실패했습니다."),
+                event.await(),
+            )
+        }
+
+    @Test
     fun `profile sync success updates ui state from synchronized local mirror`() =
         runTest {
             val settingsRepository = FakeSettingsRepository()
@@ -279,6 +365,29 @@ class MyPageViewModelTest {
 
             assertEquals(MyPageUserMode.LOW_VISION, viewModel.uiState.value.userMode)
             assertSame(MyPageUiEvent.ShowProfileSyncFailedMessage, event)
+        }
+
+    @Test
+    fun `my page stats are derived from reports bookmarks and recent destinations`() =
+        runTest {
+            val viewModel =
+                MyPageViewModel(
+                    settingsRepository = FakeSettingsRepository(),
+                    authSessionRepository = FakeAuthSessionRepository(),
+                    authLogoutRepository = FakeAuthLogoutRepository(),
+                    userProfileRepository = FakeUserProfileRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(count = 2),
+                    routeBookmarkRepository = FakeRouteBookmarkRepository(count = 3),
+                    reportRepository = FakeReportRepository(count = 4),
+                    searchRepository = FakeSearchRepository(recentDestinationCount = 5),
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(4, viewModel.uiState.value.reportHistoryCount)
+            assertEquals(2, viewModel.uiState.value.placeBookmarkCount)
+            assertEquals(3, viewModel.uiState.value.routeBookmarkCount)
+            assertEquals(5, viewModel.uiState.value.recentNavigationCount)
         }
 }
 
@@ -369,6 +478,26 @@ private class ControllableAuthLogoutRepository : AuthLogoutRepository {
     }
 }
 
+private class ControllableAccountWithdrawalRepository : AccountWithdrawalRepository {
+    var withdrawCallCount: Int = 0
+        private set
+
+    private var continuation: kotlinx.coroutines.CancellableContinuation<AccountWithdrawalResult>? = null
+
+    override suspend fun withdraw(): AccountWithdrawalResult {
+        withdrawCallCount += 1
+        return kotlinx.coroutines.suspendCancellableCoroutine { nextContinuation ->
+            continuation = nextContinuation
+        }
+    }
+
+    fun complete(result: AccountWithdrawalResult) {
+        val currentContinuation = requireNotNull(continuation)
+        continuation = null
+        currentContinuation.resume(result)
+    }
+}
+
 private class FakeUserProfileRepository(
     private val result: UserProfileSyncResult =
         UserProfileSyncResult.Success(
@@ -382,4 +511,119 @@ private class FakeUserProfileRepository(
     private val onSync: (suspend () -> UserProfileSyncResult)? = null,
 ) : UserProfileRepository {
     override suspend fun syncMyProfile(): UserProfileSyncResult = onSync?.invoke() ?: result
+}
+
+private class FakeBookmarkRepository(
+    private val count: Int,
+) : BookmarkRepository {
+    override fun observeBookmarks(): Flow<List<BookmarkData>> =
+        flowOf(
+            List(count) { index ->
+                BookmarkData(
+                    placeId = "place-$index",
+                    placeName = "장소 $index",
+                    address = null,
+                    latitude = 35.0,
+                    longitude = 129.0,
+                    category = null,
+                )
+            },
+        )
+
+    override suspend fun isBookmarked(placeId: String): Boolean = false
+
+    override suspend fun saveBookmark(bookmark: BookmarkData): BookmarkData = bookmark
+
+    override suspend fun deleteBookmark(placeId: String) = Unit
+}
+
+private class FakeRouteBookmarkRepository(
+    private val count: Int,
+) : RouteBookmarkRepository {
+    override fun observeRouteBookmarks(): Flow<List<RouteBookmark>> =
+        flowOf(
+            List(count) { index ->
+                RouteBookmark(
+                    bookmarkId = "route-$index",
+                    routeName = "경로 $index",
+                    startLabel = "출발",
+                    endLabel = "도착",
+                    startPoint = GeoCoordinate(latitude = 35.0, longitude = 129.0),
+                    endPoint = GeoCoordinate(latitude = 35.1, longitude = 129.1),
+                    routeOption = RouteOption.SAFE,
+                    createdAt = index.toLong(),
+                    updatedAt = index.toLong(),
+                )
+            },
+        )
+
+    override suspend fun isBookmarked(draft: RouteBookmarkDraft): Boolean = false
+
+    override suspend fun getRouteBookmarkDetail(bookmarkId: String): RouteBookmarkDetail? = null
+
+    override suspend fun saveRouteBookmark(request: RouteBookmarkSaveRequest): RouteBookmark =
+        error("not used")
+
+    override suspend fun deleteRouteBookmark(bookmarkId: String) = Unit
+}
+
+private class FakeReportRepository(
+    private val count: Int,
+) : ReportRepository {
+    override fun observeReportHistory(): Flow<List<ReportOutboxData>> = flowOf(emptyList())
+
+    override fun observeReportHistoryEntries(): Flow<List<ReportHistoryData>> =
+        flowOf(
+            List(count) { index ->
+                ReportHistoryData(
+                    historyId = "report-$index",
+                    reportCategory = "OTHER_OBSTACLE",
+                    description = null,
+                    address = null,
+                    latitude = 35.0,
+                    longitude = 129.0,
+                    photoUri = null,
+                    imageUrl = null,
+                    source = ReportHistorySource.LocalOutbox,
+                    serverReportId = null,
+                    createdAtMillis = index.toLong(),
+                    updatedAtMillis = index.toLong(),
+                )
+            },
+        )
+
+    override suspend fun getReportHistoryDetail(historyId: String): ReportHistoryDetailData? = null
+
+    override suspend fun getLatestDraft() = null
+
+    override suspend fun saveDraft(draft: com.ssafy.e102.eumgil.data.repository.ReportDraftData) = draft
+
+    override suspend fun deleteDraft(draftId: String) = Unit
+
+    override suspend fun saveOutbox(outbox: ReportOutboxData): ReportOutboxData = outbox
+
+    override suspend fun submitOutboxToServer(outboxId: String): ReportSubmitResult = ReportSubmitResult.Skipped
+}
+
+private class FakeSearchRepository(
+    private val recentDestinationCount: Int,
+) : SearchRepository {
+    override suspend fun search(query: SearchQuery): List<SearchResult> = emptyList()
+
+    override suspend fun getRecentSearches() = emptyList<com.ssafy.e102.eumgil.core.model.RecentSearch>()
+
+    override suspend fun saveRecentSearch(keyword: String) = Unit
+
+    override suspend fun getRecentDestinations(): List<RecentDestination> =
+        List(recentDestinationCount) { index ->
+            RecentDestination(
+                placeId = "recent-$index",
+                name = "최근 목적지 $index",
+                address = null,
+                latitude = 35.0,
+                longitude = 129.0,
+            )
+        }
+
+    override suspend fun saveRecentDestination(destination: RecentDestination) = Unit
 }

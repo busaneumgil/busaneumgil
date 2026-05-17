@@ -145,6 +145,10 @@ class SearchScreenPolicyTest {
             emptyStateSection.contains("SearchCenteredStateMessage("),
         )
         assertTrue(
+            "Empty search results should be centered inside the remaining result area below the controls.",
+            emptyStateSection.contains("SearchResultStateBox {"),
+        )
+        assertTrue(
             "The centered state should include the Busan Eumgil character asset.",
             emptyMessageSection.contains("R.drawable.manual_galmaegi"),
         )
@@ -223,12 +227,13 @@ class SearchScreenPolicyTest {
                 .substringBefore("@Composable\nprivate fun SearchStateCard")
 
         assertTrue(
-            "Empty result state should opt into the dedicated 32px title typography.",
+            "Empty result state should opt into the dedicated compact title typography.",
             emptyStateSection.contains("useEmptyResultTypography = true"),
         )
         assertTrue(
-            "Empty result title should be 32px bold.",
-            centeredStateSection.contains("fontSize = 32.sp") &&
+            "Empty result title should be compact bold text.",
+            centeredStateSection.contains("fontSize = 26.sp") &&
+                centeredStateSection.contains("lineHeight = SearchEmptyResultTitleLineHeight") &&
                 centeredStateSection.contains("fontWeight = FontWeight.Bold"),
         )
         assertTrue(
@@ -236,6 +241,33 @@ class SearchScreenPolicyTest {
             centeredStateSection.contains("fontSize = 16.sp") &&
                 centeredStateSection.contains("fontWeight = FontWeight.Normal") &&
                 centeredStateSection.contains("val descriptionTopPadding = if (useEmptyResultTypography) 16.dp"),
+        )
+    }
+
+    @Test
+    fun `voice input action dismisses keyboard before opening bottom sheet`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val inputFieldSection =
+            source
+                .substringAfter("private fun SearchInputField(")
+                .substringBefore("@OptIn(ExperimentalMaterial3Api::class)")
+
+        assertTrue(
+            "Voice input should clear TextField focus and hide the IME before navigating to the bottom sheet route.",
+            source.contains("import androidx.compose.ui.platform.LocalFocusManager") &&
+                source.contains("import androidx.compose.ui.platform.LocalSoftwareKeyboardController") &&
+                inputFieldSection.contains("focusManager.clearFocus(force = true)") &&
+                inputFieldSection.contains("keyboardController?.hide()") &&
+                inputFieldSection.indexOf("focusManager.clearFocus(force = true)") <
+                inputFieldSection.indexOf("onVoiceInputClick()") &&
+                inputFieldSection.indexOf("keyboardController?.hide()") <
+                inputFieldSection.indexOf("onVoiceInputClick()"),
+        )
+        assertTrue(
+            "The microphone trailing icon should use the keyboard-safe voice input handler.",
+            inputFieldSection.contains("IconButton(onClick = dismissKeyboardBeforeVoiceInput)"),
         )
     }
 }

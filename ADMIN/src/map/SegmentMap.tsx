@@ -1,5 +1,5 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
-import type { BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentFeatureType, SegmentPayload } from "../types";
+import type { AreaBoundaryFeature, BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentFeatureType, SegmentPayload } from "../types";
 import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
 import { deletedEdgeIds, describeCrossWalkProjection, describeSideLineNodeSnap, draftSegmentFeatures, isSameSnappedNode, newNodeRef, resetPolygonDeleteSelection, roadNodeCandidates, segmentEndpointNodeCandidates, segmentsTouchingPolygon, snapToSegmentEndpointNode, type SnappedSegmentEndpoint, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
 import { shouldShowRoadAttributeReference } from "./networkReferenceLayer";
@@ -253,6 +253,7 @@ export function SegmentMap({
     const useHitArea = toolbarMode === "editor";
     const canRenderDetails = detailedSegmentsVisible;
     const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+    overlaysRef.current.push(...createAreaBoundaryOverlay(payload?.areaBoundary, mapRef.current));
     const segmentFeatures = canRenderDetails
       ? allSegmentFeatures.filter(shouldShowRoadSegmentLayer)
       : [];
@@ -1026,6 +1027,51 @@ function createRoutePointOverlay(point: GeoPoint, label: string, type: "start" |
     yAnchor: 1,
     zIndex: 36,
   });
+}
+
+function createAreaBoundaryOverlay(feature: AreaBoundaryFeature | null | undefined, map: KakaoMap): KakaoOverlay[] {
+  if (!window.kakao?.maps || !feature) return [];
+  return areaBoundaryLineCoordinates(feature).map((coordinates) => new window.kakao!.maps.Polyline({
+    map,
+    path: coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng)),
+    strokeWeight: 3,
+    strokeColor: "#0f766e",
+    strokeOpacity: 0.86,
+    strokeStyle: "shortdash",
+    clickable: false,
+    zIndex: 6,
+  }));
+}
+
+function areaBoundaryLineCoordinates(feature: AreaBoundaryFeature): Coord[][] {
+  const coordinates = feature.geometry.coordinates;
+  switch (feature.geometry.type) {
+    case "LineString":
+      return isLineStringCoordinates(coordinates) ? [coordinates] : [];
+    case "MultiLineString":
+      return isMultiLineStringCoordinates(coordinates) ? coordinates : [];
+    case "Polygon":
+      return isMultiLineStringCoordinates(coordinates) ? coordinates : [];
+    case "MultiPolygon":
+      return Array.isArray(coordinates)
+        ? coordinates.flatMap((polygon) => isMultiLineStringCoordinates(polygon) ? polygon : [])
+        : [];
+    default:
+      return [];
+  }
+}
+
+function isLineStringCoordinates(value: unknown): value is Coord[] {
+  return Array.isArray(value)
+    && value.every((coord) =>
+      Array.isArray(coord)
+      && coord.length >= 2
+      && typeof coord[0] === "number"
+      && typeof coord[1] === "number");
+}
+
+function isMultiLineStringCoordinates(value: unknown): value is Coord[][] {
+  return Array.isArray(value) && value.every(isLineStringCoordinates);
 }
 
 function createSegmentFeatureOverlays(feature: SegmentFeature, activeTypes: Set<SegmentFeatureType>): KakaoOverlay[] {

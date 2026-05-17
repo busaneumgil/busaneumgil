@@ -130,7 +130,6 @@ public class AdminRoadNetworkEditService {
 	public void validateEditableRequest(UUID userId, AdminRoadNetworkEditApplyRequest request) {
 		adminService.requireCanEditArea(userId, request.gu(), request.dong(), AdminAreaAssignmentType.ROAD_NETWORK);
 		validateActions(request.edits());
-		validateEditsWithinArea(request.gu(), request.dong(), request.edits());
 	}
 
 	private void validateActions(List<AdminRoadNetworkEditApplyRequest.Edit> edits) {
@@ -140,102 +139,6 @@ public class AdminRoadNetworkEditService {
 				throw invalidRequest("지원하지 않는 편집 action입니다.");
 			}
 		}
-	}
-
-	private void validateEditsWithinArea(
-		String gu,
-		String dong,
-		List<AdminRoadNetworkEditApplyRequest.Edit> edits) {
-		for (AdminRoadNetworkEditApplyRequest.Edit edit : edits) {
-			if ("add_segment".equals(edit.action()) && !lineIntersectsArea(gu, dong, requireLineInput(edit))) {
-				throw invalidRequest("담당 구/동 안의 segment만 추가할 수 있습니다.");
-			}
-			if ("delete_segment".equals(edit.action()) && !edgeIntersectsArea(gu, dong, edit.edgeId())) {
-				throw invalidRequest("담당 구/동 안의 segment만 삭제할 수 있습니다.");
-			}
-			if ("delete_node".equals(edit.action()) && !nodeIntersectsArea(gu, dong, edit.vertexId())) {
-				throw invalidRequest("담당 구/동 안의 node만 삭제할 수 있습니다.");
-			}
-		}
-	}
-
-	private boolean lineIntersectsArea(String gu, String dong, LineInput lineInput) {
-		Boolean exists = namedParameterJdbcTemplate.queryForObject(
-			"""
-				select exists (
-					select 1
-					from admin_areas aa
-					where aa.gu = :gu
-						and (
-							aa.dong = :dong
-							or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
-						)
-						and ST_Intersects(
-							ST_GeomFromText(:wkt, 4326),
-							ST_Buffer(aa.geom::geography, 100)::geometry
-						)
-				)
-				""",
-			new MapSqlParameterSource()
-				.addValue("gu", gu)
-				.addValue("dong", dong)
-				.addValue("wkt", lineInput.toWkt()),
-			Boolean.class);
-		return Boolean.TRUE.equals(exists);
-	}
-
-	private boolean edgeIntersectsArea(String gu, String dong, Long edgeId) {
-		if (edgeId == null) {
-			return false;
-		}
-		Boolean exists = namedParameterJdbcTemplate.queryForObject(
-			"""
-				select exists (
-					select 1
-					from road_segments rs
-					join admin_areas aa
-						on ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 100)::geometry)
-					where rs.edge_id = :edgeId
-						and aa.gu = :gu
-						and (
-							aa.dong = :dong
-							or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
-						)
-				)
-				""",
-			new MapSqlParameterSource()
-				.addValue("edgeId", edgeId)
-				.addValue("gu", gu)
-				.addValue("dong", dong),
-			Boolean.class);
-		return Boolean.TRUE.equals(exists);
-	}
-
-	private boolean nodeIntersectsArea(String gu, String dong, Long vertexId) {
-		if (vertexId == null) {
-			return false;
-		}
-		Boolean exists = namedParameterJdbcTemplate.queryForObject(
-			"""
-				select exists (
-					select 1
-					from road_nodes rn
-					join admin_areas aa
-						on ST_Intersects(rn.geom, ST_Buffer(aa.geom::geography, 100)::geometry)
-					where rn.vertex_id = :vertexId
-						and aa.gu = :gu
-						and (
-							aa.dong = :dong
-							or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
-						)
-				)
-				""",
-			new MapSqlParameterSource()
-				.addValue("vertexId", vertexId)
-				.addValue("gu", gu)
-				.addValue("dong", dong),
-			Boolean.class);
-		return Boolean.TRUE.equals(exists);
 	}
 
 	private void validateExistingEdgeIds(Set<Long> edgeIds) {

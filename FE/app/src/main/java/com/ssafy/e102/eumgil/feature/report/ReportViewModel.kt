@@ -1176,7 +1176,7 @@ private fun ReportDescriptionInput.withValue(description: String): ReportDescrip
 
 private fun List<ReportHistoryData>.toProcessingCounts(): ReportProcessingCounts =
     ReportProcessingCounts(
-        pending = count { it.processingStatus == ReportProcessingStatus.PENDING },
+        pending = count { it.processingStatus == ReportProcessingStatus.PENDING || it.processingStatus == null },
         approved = count { it.processingStatus == ReportProcessingStatus.APPROVED },
     )
 

@@ -124,10 +124,10 @@ fun ReportScreen(
             )
         },
     ) { innerPadding ->
-        // Home과 TypeSelection은 남은 공간을 화면 안에서 배분해야 하므로 verticalScroll 미사용 (weight 사용 가능).
+        // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
         // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.
         // scrollState는 ReportRoute에서 hoist하여 ScrollToFirstError 이벤트로 외부 제어 가능.
-        val isFlexStep = uiState.currentStep == ReportStep.Home || uiState.currentStep == ReportStep.TypeSelection
+        val isFlexStep = uiState.currentStep == ReportStep.TypeSelection
         Column(
             modifier =
                 Modifier
@@ -392,7 +392,6 @@ private fun ReportHomeStep(
         ReportHomeRecentSection(
             reports = uiState.recentReports,
             onReportClick = { historyId -> onAction(ReportUiAction.RecentReportClicked(historyId)) },
-            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -665,10 +664,7 @@ private fun ReportHomeRecentSection(
             color = MaterialTheme.colorScheme.onSurface,
         )
         Surface(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+            modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(EumRadius.large),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
@@ -1058,7 +1054,7 @@ private fun ReportLocationCurrentButton(
                 )
             } else {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_map_current_location),
+                    painter = painterResource(id = R.drawable.ic_report_map_current_location),
                     contentDescription = "현재 위치로 설정",
                     modifier = Modifier.size(28.dp),
                     tint = EumPrimary600,

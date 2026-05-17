@@ -38,6 +38,8 @@ fun ReportRoute(
     onNavigateBack: () -> Unit,
     onNavigateToReportHistory: (String?) -> Unit,
     onNavigateToMap: () -> Unit,
+    startNewRequest: Boolean = false,
+    onStartNewRequestConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -101,6 +103,13 @@ fun ReportRoute(
         // 탭 재진입 시 완료 화면이면 자동으로 새 제보 시작 상태로 초기화 (T10).
         // 작성 중·실패 상태는 보존되어야 하므로 ViewModel에서 분기 처리한다.
         viewModel.onAction(ReportUiAction.TabReentered)
+    }
+
+    LaunchedEffect(startNewRequest, viewModel) {
+        if (startNewRequest) {
+            viewModel.onAction(ReportUiAction.StartNewReportClicked)
+            onStartNewRequestConsumed()
+        }
     }
 
     // 권한 다이얼로그가 dismiss되면 Activity가 ON_RESUME으로 돌아오는 경우가 많다.

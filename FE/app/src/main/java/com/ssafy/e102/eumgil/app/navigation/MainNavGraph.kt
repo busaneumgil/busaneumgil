@@ -47,6 +47,8 @@ import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
 import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
 
+private const val REPORT_START_NEW_REQUEST_KEY = "report_start_new_request"
+
 fun NavGraphBuilder.mainNavGraph(
     navController: NavHostController,
     onOpenVoiceAssistant: (RouteEditingTarget) -> Unit,
@@ -516,7 +518,11 @@ fun NavGraphBuilder.mainNavGraph(
         )
     }
 
-    composable(route = ReportRoute.Report.route) {
+    composable(route = ReportRoute.Report.route) { backStackEntry ->
+        val startNewRequest by
+            backStackEntry.savedStateHandle
+                .getStateFlow(REPORT_START_NEW_REQUEST_KEY, false)
+                .collectAsStateWithLifecycle()
         ReportScreenRoute(
             onNavigateBack = {
                 navController.popBackStack()
@@ -526,6 +532,10 @@ fun NavGraphBuilder.mainNavGraph(
             },
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
+            },
+            startNewRequest = startNewRequest,
+            onStartNewRequestConsumed = {
+                backStackEntry.savedStateHandle[REPORT_START_NEW_REQUEST_KEY] = false
             },
         )
     }
@@ -547,7 +557,7 @@ fun NavGraphBuilder.mainNavGraph(
                 navController.popBackStack()
             },
             onNavigateToReport = {
-                navController.navigateToTopLevel(TopLevelDestination.Report)
+                navController.navigateToReportStartNew()
             },
         )
     }
@@ -696,6 +706,20 @@ fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
             saveState = DefaultTopLevelNavigationPolicy.saveState
         }
     }
+}
+
+private fun NavController.navigateToReportStartNew() {
+    val didPopToReport =
+        popBackStack(
+            route = ReportRoute.Report.route,
+            inclusive = false,
+        )
+    if (!didPopToReport) {
+        navigate(ReportRoute.Report.route) {
+            launchSingleTop = true
+        }
+    }
+    getBackStackEntry(ReportRoute.Report.route).savedStateHandle[REPORT_START_NEW_REQUEST_KEY] = true
 }
 
 internal fun NavController.navigateToTopLevelMapForHomeEntry() {

@@ -404,7 +404,7 @@ export interface AdminRoadSegmentAttributesUpdateRequest {
   signalState?: AccessibilityState | null;
 }
 
-export type AdminRoutingPatchStatus = "SKIPPED" | "APPLIED" | "FAILED";
+export type AdminRoutingPatchStatus = "SKIPPED" | "APPLIED" | "APPLIED_WITH_WARNING" | "FAILED";
 
 export interface AdminRoadSegmentUpdateResponse {
   segment: SegmentFeature["properties"];

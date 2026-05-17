@@ -214,6 +214,30 @@ class AdminMapServiceTest {
 		assertThat(response.routingPatchMessage()).isEqualTo("patched");
 	}
 
+
+	@Test
+	@DisplayName("관리자 segment walk_access 변경은 partial success를 경고 상태로 반환한다")
+	void updateRoadSegmentAttributesReturnsAppliedWithWarning() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingAreaByEdgeId(1L, "강서구", "명지동")).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+		when(graphHopperAdminClient.patchWalkAccess(1L, AccessibilityState.NO))
+			.thenReturn(
+				new GraphHopperPatchResult(
+					GraphHopperPatchStatus.APPLIED_WITH_WARNING,
+					"Patched GraphHopper slot(s): green | failed slot(s): slot=blue edgeId=1 message=500"));
+
+		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
+			adminUserId,
+			1L,
+			"강서구",
+			"명지동",
+			new AdminRoadSegmentAttributesUpdateRequest(AccessibilityState.NO, null, null, null, null, null, null));
+
+		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.NO);
+		assertThat(response.routingPatchStatus()).isEqualTo(AdminRoutingPatchStatus.APPLIED_WITH_WARNING);
+		assertThat(response.routingPatchMessage()).contains("failed slot(s): slot=blue");
+	}
 	@Test
 	@DisplayName("관리자 segment 수정에서 walk_access 요청이 없으면 GraphHopper patch는 생략된다")
 	void updateRoadSegmentAttributesSkipsRoutingPatchWhenWalkAccessNotRequested() {

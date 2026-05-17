@@ -671,6 +671,7 @@ public class AdminMapService {
 		return switch (patchStatus) {
 			case SKIPPED -> AdminRoutingPatchStatus.SKIPPED;
 			case APPLIED -> AdminRoutingPatchStatus.APPLIED;
+			case APPLIED_WITH_WARNING -> AdminRoutingPatchStatus.APPLIED_WITH_WARNING;
 			case FAILED -> AdminRoutingPatchStatus.FAILED;
 		};
 	}

@@ -54,6 +54,26 @@ class GraphHopperAdminClientTest {
 	}
 
 	@Test
+	@DisplayName("GraphHopper hot patch는 일부 slot만 성공하면 경고 상태를 반환한다")
+	void patchWalkAccessReturnsAppliedWithWarningWhenPartialSuccess() {
+		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))
+			.andExpect(method(HttpMethod.PATCH))
+			.andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/edges/123/walk-access"))
+			.andExpect(method(HttpMethod.PATCH))
+			.andRespond(withServerError());
+		server.expect(requestTo("http://graphhopper-blue.test/ieum/admin/edges/123/walk-access"))
+			.andExpect(method(HttpMethod.PATCH))
+			.andRespond(withServerError());
+
+		GraphHopperAdminClient.GraphHopperPatchResult result = client.patchWalkAccess(123L, AccessibilityState.NO);
+
+		assertThat(result.status()).isEqualTo(GraphHopperPatchStatus.APPLIED_WITH_WARNING);
+		assertThat(result.message()).contains("Patched GraphHopper slot(s): green", "slot=blue");
+		server.verify();
+	}
+
+	@Test
 	@DisplayName("GraphHopper hot patch 실패 시 동일 endpoint에 즉시 재시도 후 FAILED를 반환한다")
 	void patchWalkAccessRetriesAndReturnsFailed() {
 		server.expect(requestTo("http://graphhopper-green.test/ieum/admin/edges/123/walk-access"))

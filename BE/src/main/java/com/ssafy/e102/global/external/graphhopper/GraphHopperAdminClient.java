@@ -71,6 +71,14 @@ public class GraphHopperAdminClient {
 				GraphHopperPatchStatus.APPLIED,
 				"Patched GraphHopper slot(s): " + String.join(", ", patchedSlots));
 		}
+		if (!patchedSlots.isEmpty()) {
+			return new GraphHopperPatchResult(
+				GraphHopperPatchStatus.APPLIED_WITH_WARNING,
+				"Patched GraphHopper slot(s): "
+					+ String.join(", ", patchedSlots)
+					+ " | failed slot(s): "
+					+ String.join(" | ", failureMessages));
+		}
 		return new GraphHopperPatchResult(
 			GraphHopperPatchStatus.FAILED,
 			"GraphHopper patch failed: " + String.join(" | ", failureMessages));
@@ -172,6 +180,7 @@ public class GraphHopperAdminClient {
 	public enum GraphHopperPatchStatus {
 		SKIPPED,
 		APPLIED,
+		APPLIED_WITH_WARNING,
 		FAILED
 	}
 

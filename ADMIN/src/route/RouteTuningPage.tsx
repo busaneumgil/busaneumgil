@@ -134,6 +134,8 @@ export function RouteTuningPage({
       );
       if (response.routingPatchStatus === "FAILED") {
         setMessage("저장 완료. 경로 탐색 반영에 실패했습니다. 운영 상태를 확인해 주세요.");
+      } else if (response.routingPatchStatus === "APPLIED_WITH_WARNING") {
+        setMessage("저장 완료. active 경로 반영은 성공했지만 fallback slot 일부 반영에 실패했습니다. 운영 상태를 확인해 주세요.");
       } else if (response.routingPatchStatus === "SKIPPED") {
         setMessage("저장 완료. walk_access 변경이 없어 경로 반영은 생략되었습니다.");
       } else {

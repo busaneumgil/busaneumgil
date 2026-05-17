@@ -872,7 +872,7 @@ def write_osm(nodes, segments, output):
         tag(way, "foot", "yes")
         tag(way, "oneway", "no")
         tag(way, "ieum:edge_id", segment["edge_id"])
-        tag(way, "ieum:db_edge_id", segment["edge_id"])
+        tag(way, "ieum:db_edge_id", segment.get("source_edge_id", segment["edge_id"]))
         tag(way, "ieum:walk_access", normalize_export_value(segment.get("walk_access"), "UNKNOWN"))
         tag(way, "ieum:avg_slope_percent", normalize_export_value(segment.get("avg_slope_percent"), "0.0"))
         tag(way, "ieum:width_meter", normalize_export_value(segment.get("width_meter"), "0.0"))

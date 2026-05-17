@@ -223,6 +223,8 @@ Redis key 계약:
 - active self-heal이 실패해도 previous slot이 정상이면 previous로 failover한 뒤 candidate rebuild를 진행한다.
 - candidate import나 smoke가 실패하면 Redis active slot은 바꾸지 않는다.
 - publish 전 target slot cache를 snapshot하고, target slot 검증 전 publish 단계가 실패하면 snapshot restore 후 Redis previous fallback을 원복한다.
+- GraphHopper hot patch admin endpoint `/ieum/admin/**`는 BE 내부 호출 전용이다. S1 nginx는 `/api/ieum/admin/**`, `api.dev.busaneumgil.com/ieum/admin/**`를 모두 `404`로 차단하고, 외부 LB/ALB에도 동일 정책을 유지한다.
+- 운영 smoke / 배포 checklist에는 `curl -i https://api.dev.busaneumgil.com/ieum/admin/edges/1/walk-access`와 `curl -i https://k14e102.p.ssafy.io/api/ieum/admin/edges/1/walk-access`가 외부에서 차단되는지 확인 절차를 포함한다.
 - target restore 또는 Redis 원복이 실패할 때만 임시 candidate runtime을 previous fallback으로 남겨 active slot 장애 시 fallback을 유지한다.
 - rollback Redis write 후에는 active slot을 다시 읽어 rollback 성공 여부를 검증한다.
 - 전환 후 backend smoke는 기본적으로 `/health/graphhopper`를 호출해 Redis active slot 기준 GraphHopper 연결을 확인하고, 실패하면 active slot을 previous로 되돌린다.

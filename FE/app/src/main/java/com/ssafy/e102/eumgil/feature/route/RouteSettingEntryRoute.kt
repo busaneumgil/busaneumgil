@@ -192,6 +192,9 @@ fun RouteDetailEntryRoute(
         onStartClick = {
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
         },
+        onCurrentLocationClick = {
+            viewModel.onAction(RouteSettingUiAction.CurrentLocationClicked)
+        },
         pendingLowFloorReservation = pendingLowFloorReservation,
         isLowFloorReservationRequesting = isLowFloorReservationRequesting,
         onLowFloorReservationClick = { reservation -> pendingLowFloorReservation = reservation },

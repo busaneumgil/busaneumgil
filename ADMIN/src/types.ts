@@ -416,6 +416,15 @@ export interface AdminRoadSegmentAttributesUpdateRequest {
   surfaceState?: SurfaceState | null;
   stairsState?: AccessibilityState | null;
   signalState?: AccessibilityState | null;
+  applyRoutingImmediately?: boolean | null;
+}
+
+export type AdminRoutingApplyStatus = "SKIPPED" | "APPLIED" | "APPLIED_WITH_WARNING" | "FAILED";
+
+export interface AdminRoadSegmentUpdateResponse {
+  segment: SegmentFeature["properties"];
+  routingApplyStatus: AdminRoutingApplyStatus;
+  routingApplyMessage: string | null;
 }
 
 export type WalkRouteProfile =

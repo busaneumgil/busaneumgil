@@ -178,7 +178,7 @@ url = os.environ["DB_URL"].replace("jdbc:postgresql://", "")
 host_port, db_name = url.split("/", 1)
 host, port = host_port.split(":", 1)
 
-required_tables = ("road_nodes", "road_segments", "segment_features", "source_features")
+required_tables = ("road_nodes", "road_segments", "segment_features", "source_features", "routing_segment_overrides")
 required_columns = {
     "road_nodes": ("vertex_id", "source_node_key", "point"),
     "road_segments": (
@@ -214,6 +214,10 @@ required_columns = {
         "value_number",
         "source_file",
     ),
+    "routing_segment_overrides": (
+        "edge_id",
+        "walk_access",
+    ),
 }
 
 with psycopg2.connect(
@@ -229,7 +233,8 @@ with psycopg2.connect(
             "SELECT to_regclass('public.road_nodes'), "
             "to_regclass('public.road_segments'), "
             "to_regclass('public.segment_features'), "
-            "to_regclass('public.source_features')"
+            "to_regclass('public.source_features'), "
+            "to_regclass('public.routing_segment_overrides')"
         )
         existing = cursor.fetchone()
         missing_tables = [table for table, regclass in zip(required_tables, existing) if regclass is None]

@@ -82,6 +82,37 @@ class RouteSettingOriginSelectionTest {
         }
 
     @Test
+    fun `current location button refreshes route setting gps tracking`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    updateSelectedDestination(testDestination())
+                }
+            val locationManager = FakeCurrentLocationManager()
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = RecordingRouteRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    currentLocationManager = locationManager,
+                    locationPermissionManager = permissionManager,
+                )
+
+            advanceUntilIdle()
+            val permissionRefreshBefore = permissionManager.refreshCallCount
+            val startBefore = locationManager.startCallCount
+            val refreshBefore = locationManager.refreshCallCount
+            viewModel.onAction(RouteSettingUiAction.CurrentLocationClicked)
+
+            assertEquals(permissionRefreshBefore + 1, permissionManager.refreshCallCount)
+            assertEquals(startBefore + 1, locationManager.startCallCount)
+            assertEquals(refreshBefore + 1, locationManager.refreshCallCount)
+        }
+
+    @Test
     fun `missing gps location shows direct selection guidance instead of demo origin copy`() =
         runTest {
             val destinationSelectionRepository =

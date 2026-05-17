@@ -25,7 +25,7 @@ import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditApplyRespons
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditJobResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkBridgePayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
-import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentPropertiesResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentUpdateResponse;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
 import com.ssafy.e102.domain.admin.service.AdminRoutePreviewService;
 import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditJobService;
@@ -120,7 +120,7 @@ public class AdminMapController {
 
 	@Operation(summary = "관리자 보행 segment 속성 수정", description = "선택한 보행 네트워크 segment의 검수 속성을 수정한다.")
 	@PatchMapping("/road-network/segments/{edgeId}/attributes")
-	public ApiResponse<AdminRoadSegmentPropertiesResponse> updateRoadSegmentAttributes(
+	public ApiResponse<AdminRoadSegmentUpdateResponse> updateRoadSegmentAttributes(
 		@Parameter(hidden = true) @AuthenticationPrincipal
 		AuthPrincipal principal,
 		@Parameter(description = "수정할 segment ID") @PathVariable @Positive

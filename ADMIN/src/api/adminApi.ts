@@ -3,6 +3,7 @@ import type {
   AdminPlaceDetailResponse,
   AdminPlaceUpdateRequest,
   AdminRoadSegmentAttributesUpdateRequest,
+  AdminRoadSegmentUpdateResponse,
   AdminRoutePreviewRequest,
   AdminRoutePreviewResponse,
   AdminDashboardSummaryResponse,
@@ -411,7 +412,7 @@ export async function updateAdminRoadSegmentAttributes(
   accessToken: string,
 ) {
   const params = new URLSearchParams({ gu, dong });
-  return requestAdminJson<SegmentPayload["segments"]["features"][number]["properties"]>(
+  return requestAdminJson<AdminRoadSegmentUpdateResponse>(
     `/admin/road-network/segments/${edgeId}/attributes?${params.toString()}`,
     accessToken,
     {

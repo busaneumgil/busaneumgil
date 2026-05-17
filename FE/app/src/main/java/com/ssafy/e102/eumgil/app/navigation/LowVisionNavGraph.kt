@@ -110,6 +110,31 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                     }
                 },
                 onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+                onCategorySearchCompleted = { category ->
+                    navController.navigate(LowVisionRoute.CategoryResult.createRoute(category))
+                },
+                onBookmarkAddCompleted = { placeName ->
+                    // TODO: 북마크 추가 정책 협의 후 구현
+                },
+                onBookmarkDeleteCompleted = { placeName ->
+                    // TODO: 북마크 삭제 정책 협의 후 구현
+                },
+                onNavigateCompleted = { departure, destination ->
+                    // TODO: 현재 GPS 위치 기반 경로 안내 구현
+                    // departure가 빈 문자열이면 현재 GPS 위치 사용
+                    // destination으로 GET /places/search → 좌표 → 경로 안내 화면
+                    navController.popBackStack()
+                },
+                onShowBookmarksCompleted = {
+                    navController.navigate(LowVisionRoute.Bookmark.route)
+                },
+                onShowFavoriteRoutesCompleted = {
+                    navController.navigate(LowVisionRoute.Bookmark.route)
+                },
+                onLogoutCompleted = {
+                    // TODO: LowVisionMyPageViewModel.onLogoutClick()과 동일한 로직 연결
+                    navController.popBackStack()
+                },
             )
         }
 

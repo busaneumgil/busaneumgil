@@ -103,6 +103,18 @@ export interface SegmentFeature {
   };
 }
 
+export interface RoadNodeFeature {
+  type: "Feature";
+  geometry: {
+    type: "Point";
+    coordinates: [number, number];
+  };
+  properties: {
+    vertexId: number | string;
+    sourceNodeKey?: string | null;
+  };
+}
+
 export interface SegmentPayload {
   summary?: {
     segmentCount?: number;
@@ -119,6 +131,10 @@ export interface SegmentPayload {
   segments: {
     type: "FeatureCollection";
     features: SegmentFeature[];
+  };
+  roadNodes?: {
+    type: "FeatureCollection";
+    features: RoadNodeFeature[];
   };
   bridges?: {
     type: "FeatureCollection";
@@ -279,9 +295,27 @@ export type EditAction =
       action: "add_segment";
       segmentType: EditableSegmentType;
       geom: { type: "LineString"; coordinates: Array<[number, number]> };
+      fromNode?: EditNodeRef;
+      toNode?: EditNodeRef;
     }
   | { action: "delete_segment"; edgeId: string | number; reason?: string }
   | { action: "delete_node"; vertexId: string | number; reason?: string };
+
+export type EditNodeRef =
+  | {
+      mode: "existing";
+      vertexId: string | number;
+      sourceNodeKey?: string | null;
+      geom: { type: "Point"; coordinates: [number, number] };
+      snapDistanceMeter: number;
+    }
+  | {
+      mode: "new";
+      tempNodeId: string;
+      sourceNodeKey: string;
+      geom: { type: "Point"; coordinates: [number, number] };
+      snapDistanceMeter: null;
+    };
 
 export interface ManualEditDocument {
   version: "ADMIN-draft-v1";

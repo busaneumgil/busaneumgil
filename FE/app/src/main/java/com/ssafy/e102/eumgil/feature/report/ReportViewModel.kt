@@ -66,7 +66,6 @@ class ReportViewModel(
     private var permissionPendingTimeoutJob: Job? = null
 
     init {
-        loadLatestDraft()
         observeNetworkAvailability()
         observeReportOverview()
     }
@@ -235,7 +234,7 @@ class ReportViewModel(
                         )
                     }
                     if (isCurrentSnapshot) {
-                        emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보 draft를 임시저장했습니다."))
+                        emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보 내용을 저장했습니다."))
                     }
                 }.onFailure {
                     mutableUiState.update { state ->

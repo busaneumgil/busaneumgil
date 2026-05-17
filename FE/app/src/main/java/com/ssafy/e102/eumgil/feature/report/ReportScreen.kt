@@ -32,13 +32,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -165,21 +163,6 @@ fun ReportScreen(
                 ReportStep.Complete ->
                     ReportCompleteStep(uiState = uiState, onAction = onAction)
             }
-        }
-    }
-
-    // 임시저장 draft 안내 — ModalBottomSheet 형태.
-    // Scaffold 바깥에 두는 이유: 시트가 화면 전체에 걸쳐 scrim·sheet 컨텐츠를 그리도록 하기 위함.
-    val canShowDraftSheet =
-        uiState.currentStep == ReportStep.TypeSelection && uiState.hasExistingDraft
-    var draftSheetVisible by remember(canShowDraftSheet) { mutableStateOf(canShowDraftSheet) }
-    if (draftSheetVisible) {
-        val sheetState = rememberModalBottomSheetState()
-        ModalBottomSheet(
-            onDismissRequest = { draftSheetVisible = false },
-            sheetState = sheetState,
-        ) {
-            ReportDraftBanner(onAction = onAction)
         }
     }
 }
@@ -318,43 +301,6 @@ private fun NoRippleReportPrimaryActionButton(
             verticalAlignment = Alignment.CenterVertically,
             content = content,
         )
-    }
-}
-
-@Composable
-private fun ReportDraftBanner(onAction: (ReportUiAction) -> Unit) {
-    // ModalBottomSheet의 컨텐츠. 시트 자체가 surface·radius·elevation·드래그 핸들을 제공하므로
-    // 여기서는 내부 padding과 텍스트·버튼 배치만 담당한다.
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = EumSpacing.medium)
-                .padding(top = EumSpacing.small, bottom = EumSpacing.large),
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-    ) {
-        Text(
-            text = "임시저장된 제보가 있습니다",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            Button(
-                onClick = { onAction(ReportUiAction.DraftResumeClicked) },
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(text = "계속하기")
-            }
-            OutlinedButton(
-                onClick = { onAction(ReportUiAction.DraftDiscardClicked) },
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(text = "취소")
-            }
-        }
     }
 }
 
@@ -951,30 +897,6 @@ private fun ReportLocationStep(
             // "지도에서 위치 선택" 버튼은 inline 지도가 직접 노출되어 사용자가 드래그·줌으로
             // 위치를 조정할 수 있으므로 제거되었다 (Task 2.2).
         }
-        // 옵션 4 — 자동 도로명 영역(카드의 location.address 표시)과 분리된 사용자 보충 입력 영역.
-        // 자동 영역에는 손대지 않고 여기에 건물명·정문/후문 같은 현장 맥락을 직접 보강한다.
-        // forward geocoding(주소→좌표 검색)은 의도적으로 비활성: 좌표는 지도 핀이 truth.
-        OutlinedTextField(
-            value = input.addressText,
-            onValueChange = { onAction(ReportUiAction.AddressTextChanged(it)) },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { focusState: FocusState ->
-                        if (!focusState.isFocused) {
-                            onAction(ReportUiAction.LocationBlurred)
-                        }
-                    },
-            label = { Text(text = "건물명·주변 장소 (선택 입력)") },
-            placeholder = {
-                Text(text = "예: 삼성전기기숙사 후문 앞, 횡단보도 옆 보도블록")
-            },
-            keyboardOptions =
-                KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                ),
-            minLines = 1,
-        )
         Text(
             text = helperText,
             style = MaterialTheme.typography.bodyMedium,
@@ -1285,7 +1207,7 @@ private fun ReportDetailStep(
             input = uiState.photo,
             onAction = onAction,
         )
-        ReportDetailDraftActions(
+        ReportSubmitFailureActions(
             uiState = uiState,
             onAction = onAction,
         )
@@ -1293,38 +1215,25 @@ private fun ReportDetailStep(
 }
 
 @Composable
-private fun ReportDetailDraftActions(
+private fun ReportSubmitFailureActions(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
 ) {
-    val isDraftSaving = uiState.draftSaveState is ReportDraftSaveState.Saving
     val isSubmitRecoverable =
         uiState.screenState is ReportScreenState.Failure ||
             uiState.submitState is ReportSubmitState.Failed ||
             uiState.outboxState is ReportOutboxState.Failed
-    val canSaveDraft = uiState.isDraftSavable
 
-    if (!canSaveDraft && !isSubmitRecoverable) return
+    if (!isSubmitRecoverable) return
 
     Column(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
-        if (isSubmitRecoverable) {
-            ReportSubmitFailureBanner(
-                reason = (uiState.submitState as? ReportSubmitState.Failed)?.reason
-                    ?: (uiState.screenState as? ReportScreenState.Failure)?.reason,
-                onRetryClick = { onAction(ReportUiAction.RetrySubmitClicked) },
-            )
-        }
-        if (canSaveDraft) {
-            OutlinedButton(
-                onClick = { onAction(ReportUiAction.SaveDraftClicked) },
-                enabled = !isDraftSaving,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = if (isDraftSaving) "임시저장 중" else "임시저장")
-            }
-        }
+        ReportSubmitFailureBanner(
+            reason = (uiState.submitState as? ReportSubmitState.Failed)?.reason
+                ?: (uiState.screenState as? ReportScreenState.Failure)?.reason,
+            onRetryClick = { onAction(ReportUiAction.RetrySubmitClicked) },
+        )
     }
 }
 

@@ -1,24 +1,32 @@
 package com.ssafy.e102.eumgil.feature.report
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -28,15 +36,16 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -45,7 +54,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary200
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceInfo
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceSubtle
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextMuted
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextPrimary
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextSecondary
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
 
 internal data class ReportHistoryLayoutSpec(
     val cardCornerRadiusDp: Int,
@@ -57,12 +76,20 @@ internal data class ReportHistoryLayoutSpec(
 
 internal fun reportHistoryLayoutSpec(): ReportHistoryLayoutSpec =
     ReportHistoryLayoutSpec(
-        cardCornerRadiusDp = 12,
-        thumbnailCornerRadiusDp = 12,
-        buttonCornerRadiusDp = 12,
-        buttonMinHeightDp = 48,
-        cardShadowElevationDp = 0,
+        cardCornerRadiusDp = 18,
+        thumbnailCornerRadiusDp = 14,
+        buttonCornerRadiusDp = 14,
+        buttonMinHeightDp = 56,
+        cardShadowElevationDp = 2,
     )
+
+private enum class ReportHistoryFilter(
+    val label: String,
+) {
+    All("전체"),
+    Pending("접수됨"),
+    Approved("반영 완료"),
+}
 
 @Composable
 fun ReportHistoryScreen(
@@ -71,40 +98,148 @@ fun ReportHistoryScreen(
     onAction: (ReportHistoryUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val selectedDetail = uiState.selectedDetail
+    val isDetailMode = selectedDetail != null || uiState.detailLoadingHistoryId != null
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             ReportHistoryTopBar(
-                onBackClick = { onAction(ReportHistoryUiAction.BackClicked) },
+                title = if (isDetailMode) "제보 상세" else "내 제보 내역",
+                onBackClick = {
+                    onAction(
+                        if (isDetailMode) {
+                            ReportHistoryUiAction.DetailBackClicked
+                        } else {
+                            ReportHistoryUiAction.BackClicked
+                        },
+                    )
+                },
             )
         },
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState)
         },
     ) { innerPadding ->
-        LazyColumn(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-        ) {
-            when (uiState.screenState) {
-                ReportHistoryScreenState.LOADING ->
-                    item {
-                        ReportHistoryStateCard(
-                            title = "제보 내역을 불러오는 중입니다",
-                            description = "저장된 제보 목록을 확인하고 있어요.",
-                            isLoading = true,
-                        )
-                    }
+        if (isDetailMode) {
+            ReportHistoryDetailContent(
+                detail = selectedDetail,
+                onBackToList = { onAction(ReportHistoryUiAction.DetailBackClicked) },
+                onReportAgain = { onAction(ReportHistoryUiAction.ReportCtaClicked) },
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+            )
+        } else {
+            ReportHistoryListContent(
+                uiState = uiState,
+                onAction = onAction,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+            )
+        }
+    }
+}
 
-                ReportHistoryScreenState.EMPTY ->
+internal fun shouldShowReportHistoryCreateCta(screenState: ReportHistoryScreenState): Boolean =
+    screenState == ReportHistoryScreenState.CONTENT
+
+@Composable
+private fun ReportHistoryTopBar(
+    title: String,
+    onBackClick: () -> Unit,
+) {
+    EumCenteredTopBar(
+        title = title,
+        onBackClick = onBackClick,
+        backContentDescription = stringResource(id = R.string.my_page_back),
+        titleFontWeight = FontWeight.SemiBold,
+    )
+}
+
+@Composable
+private fun ReportHistoryListContent(
+    uiState: ReportHistoryUiState,
+    onAction: (ReportHistoryUiAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var selectedFilter by remember { mutableStateOf(ReportHistoryFilter.All) }
+    val filteredReports =
+        remember(uiState.reports, selectedFilter) {
+            uiState.reports.filter { report ->
+                when (selectedFilter) {
+                    ReportHistoryFilter.All -> true
+                    ReportHistoryFilter.Pending -> !report.isApproved
+                    ReportHistoryFilter.Approved -> report.isApproved
+                }
+            }
+        }
+
+    LazyColumn(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(horizontal = EumSpacing.medium),
+        contentPadding = PaddingValues(top = EumSpacing.medium, bottom = EumSpacing.large),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        item {
+            ReportHistoryListControls(
+                selectedFilter = selectedFilter,
+                onFilterSelected = { selectedFilter = it },
+            )
+        }
+
+        when (uiState.screenState) {
+            ReportHistoryScreenState.LOADING ->
+                item {
+                    ReportHistoryStateCard(
+                        title = "제보 내역을 불러오는 중입니다",
+                        description = "저장된 제보 목록을 확인하고 있어요.",
+                        isLoading = true,
+                    )
+                }
+
+            ReportHistoryScreenState.EMPTY ->
+                item {
+                    ReportHistoryStateCard(
+                        title = "아직 제보 내역이 없어요",
+                        description = "이동 중 발견한 보행 불편 사항을 제보해 주세요.",
+                        primaryActionLabel = "제보하기",
+                        primaryActionSuppressRipple = true,
+                        onPrimaryActionClick = {
+                            onAction(ReportHistoryUiAction.ReportCtaClicked)
+                        },
+                    )
+                }
+
+            ReportHistoryScreenState.ERROR ->
+                item {
+                    ReportHistoryStateCard(
+                        title = "제보 내역을 불러오지 못했습니다",
+                        description = uiState.errorMessage ?: "잠시 후 다시 시도해 주세요.",
+                        primaryActionLabel = "다시 시도",
+                        onPrimaryActionClick = {
+                            onAction(ReportHistoryUiAction.RetryClicked)
+                        },
+                        secondaryActionLabel = "제보하기",
+                        secondaryActionSuppressRipple = true,
+                        onSecondaryActionClick = {
+                            onAction(ReportHistoryUiAction.ReportCtaClicked)
+                        },
+                        isError = true,
+                    )
+                }
+
+            ReportHistoryScreenState.CONTENT -> {
+                if (filteredReports.isEmpty()) {
                     item {
                         ReportHistoryStateCard(
-                            title = "아직 제보 내역이 없어요",
-                            description = "이동 중 발견한 보행 불편 사항을 제보해 주세요.",
+                            title = "${selectedFilter.label} 제보가 없습니다",
+                            description = "다른 상태를 선택하거나 새 제보를 등록해 주세요.",
                             primaryActionLabel = "제보하기",
                             primaryActionSuppressRipple = true,
                             onPrimaryActionClick = {
@@ -112,61 +247,12 @@ fun ReportHistoryScreen(
                             },
                         )
                     }
-
-                ReportHistoryScreenState.ERROR ->
-                    item {
-                        ReportHistoryStateCard(
-                            title = "제보 내역을 불러오지 못했습니다",
-                            description = uiState.errorMessage ?: "잠시 후 다시 시도해 주세요.",
-                            primaryActionLabel = "다시 시도",
-                            onPrimaryActionClick = {
-                                onAction(ReportHistoryUiAction.RetryClicked)
-                            },
-                            secondaryActionLabel = "제보하기",
-                            secondaryActionSuppressRipple = true,
-                            onSecondaryActionClick = {
-                                onAction(ReportHistoryUiAction.ReportCtaClicked)
-                            },
-                            isError = true,
-                        )
-                    }
-
-                ReportHistoryScreenState.CONTENT -> {
-                    if (shouldShowReportHistoryCreateCta(uiState.screenState)) {
-                        item {
-                            ReportHistoryStateCard(
-                                title = "새 제보 등록",
-                                description = "이동 중 발견한 보행 불편 사항을 추가로 제보할 수 있어요.",
-                                primaryActionLabel = "제보하기",
-                                primaryActionSuppressRipple = true,
-                                onPrimaryActionClick = {
-                                    onAction(ReportHistoryUiAction.ReportCtaClicked)
-                                },
-                            )
-                        }
-                    }
-
-                    uiState.detailLoadingHistoryId?.let {
-                        item {
-                            ReportHistoryStateCard(
-                                title = "제보 상세를 불러오는 중입니다",
-                                description = "선택한 제보의 서버 상세 정보를 확인하고 있어요.",
-                                isLoading = true,
-                            )
-                        }
-                    }
-
-                    uiState.selectedDetail?.let { detail ->
-                        item(key = "detail-${detail.historyId}") {
-                            ReportHistoryDetailCard(detail = detail)
-                        }
-                    }
-
+                } else {
                     items(
-                        items = uiState.reports,
+                        items = filteredReports,
                         key = { report -> report.outboxId },
                     ) { report ->
-                        ReportHistoryCard(
+                        ReportHistoryListCard(
                             report = report,
                             onClick = {
                                 onAction(ReportHistoryUiAction.ReportClicked(report.outboxId))
@@ -179,42 +265,95 @@ fun ReportHistoryScreen(
     }
 }
 
-internal fun shouldShowReportHistoryCreateCta(screenState: ReportHistoryScreenState): Boolean =
-    screenState == ReportHistoryScreenState.CONTENT
-
 @Composable
-private fun ReportHistoryTopBar(onBackClick: () -> Unit) {
-    EumCenteredTopBar(
-        title = "제보 내역",
-        onBackClick = onBackClick,
-        backContentDescription = stringResource(id = R.string.my_page_back),
-        titleFontWeight = FontWeight.Bold,
-    )
+private fun ReportHistoryListControls(
+    selectedFilter: ReportHistoryFilter,
+    onFilterSelected: (ReportHistoryFilter) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "최신순",
+                style = MaterialTheme.typography.titleSmall,
+                color = EumTextMuted,
+            )
+            Spacer(modifier = Modifier.width(EumSpacing.xSmall))
+            Icon(
+                painter = painterResource(id = R.drawable.ic_action_dropdown),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = EumTextMuted,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            ReportHistoryFilter.values().forEach { filter ->
+                ReportHistoryFilterChip(
+                    label = filter.label,
+                    selected = selectedFilter == filter,
+                    onClick = { onFilterSelected(filter) },
+                )
+            }
+        }
+    }
 }
 
 @Composable
-private fun ReportHistoryCard(
+private fun ReportHistoryFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .heightIn(min = 44.dp)
+                .clickable(role = Role.Button, onClick = onClick),
+        shape = RoundedCornerShape(50),
+        color = if (selected) EumPrimary600 else MaterialTheme.colorScheme.surface,
+        border = if (selected) null else BorderStroke(1.dp, EumBorderSubtle),
+        shadowElevation = 0.dp,
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = if (selected) EumWhite else EumTextSecondary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReportHistoryListCard(
     report: ReportHistoryUiModel,
     onClick: () -> Unit,
 ) {
     val spec = reportHistoryLayoutSpec()
     val accessibilityDescription =
-        "제보 내역, ${report.title}, ${report.address}, ${report.submittedAtText}"
+        "제보 내역, ${report.title}, ${report.address}, ${report.submittedAtText}, ${report.statusLabel}"
 
     Surface(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(
-                    role = Role.Button,
-                    onClick = onClick,
-                )
-                .semantics {
-                    contentDescription = accessibilityDescription
-                },
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics { contentDescription = accessibilityDescription },
         shape = RoundedCornerShape(spec.cardCornerRadiusDp.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
         shadowElevation = spec.cardShadowElevationDp.dp,
     ) {
         Row(
@@ -225,144 +364,364 @@ private fun ReportHistoryCard(
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            ReportHistoryIssueIcon(title = report.title)
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     text = report.title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                    color = EumTextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = report.address,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    color = EumTextMuted,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = report.submittedAtText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = report.sourceLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = EumTextMuted,
                 )
             }
-            ReportHistoryThumbnail(photoUri = report.photoUri)
+            ReportHistoryStatusChip(
+                label = report.statusLabel,
+                isApproved = report.isApproved,
+            )
+            Icon(
+                painter = painterResource(id = R.drawable.ic_route_card_chevron),
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+                tint = EumTextMuted,
+            )
         }
     }
 }
 
 @Composable
-private fun ReportHistoryDetailCard(detail: ReportHistoryDetailUiModel) {
-    val spec = reportHistoryLayoutSpec()
+private fun ReportHistoryIssueIcon(
+    title: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.size(64.dp),
+        shape = RoundedCornerShape(reportHistoryLayoutSpec().thumbnailCornerRadiusDp.dp),
+        color = reportIconBackgroundColor(title),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(id = title.toReportIconRes()),
+                contentDescription = null,
+                modifier = Modifier.size(44.dp),
+                tint = Color.Unspecified,
+            )
+        }
+    }
+}
 
+@Composable
+private fun ReportHistoryStatusChip(
+    label: String,
+    isApproved: Boolean,
+) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = if (isApproved) EumPrimary200.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = EumSpacing.small, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = if (isApproved) EumPrimary600 else EumTextSecondary,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun ReportHistoryDetailContent(
+    detail: ReportHistoryDetailUiModel?,
+    onBackToList: () -> Unit,
+    onReportAgain: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(horizontal = EumSpacing.medium),
+        contentPadding = PaddingValues(top = EumSpacing.medium, bottom = EumSpacing.large),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        if (detail == null) {
+            item {
+                ReportHistoryStateCard(
+                    title = "제보 상세를 불러오는 중입니다",
+                    description = "선택한 제보의 상세 정보를 확인하고 있어요.",
+                    isLoading = true,
+                )
+            }
+        } else {
+            item { ReportHistoryDetailSummaryCard(detail = detail) }
+            item { ReportHistoryDetailDescriptionCard(description = detail.description) }
+            item { ReportHistoryProcessingCard(detail = detail) }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                ) {
+                    NoRippleReportHistoryNavigationButton(
+                        onClick = onBackToList,
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .heightIn(min = reportHistoryLayoutSpec().buttonMinHeightDp.dp),
+                        isOutlined = true,
+                    ) {
+                        Text(
+                            text = "목록으로",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    NoRippleReportHistoryNavigationButton(
+                        onClick = onReportAgain,
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .heightIn(min = reportHistoryLayoutSpec().buttonMinHeightDp.dp),
+                    ) {
+                        Text(
+                            text = "비슷한 문제 다시 제보",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportHistoryDetailSummaryCard(detail: ReportHistoryDetailUiModel) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(spec.cardCornerRadiusDp.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
-        shadowElevation = spec.cardShadowElevationDp.dp,
+        shape = RoundedCornerShape(reportHistoryLayoutSpec().cardCornerRadiusDp.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = reportHistoryLayoutSpec().cardShadowElevationDp.dp,
     ) {
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ReportHistoryIssueIcon(title = detail.title, modifier = Modifier.size(72.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Text(
+                            text = detail.title,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = EumTextPrimary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(modifier = Modifier.width(EumSpacing.small))
+                        ReportHistoryStatusChip(
+                            label = detail.statusLabel,
+                            isApproved = detail.isApproved,
+                        )
+                    }
+                    Text(
+                        text = detail.locationText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = EumTextMuted,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = detail.submittedAtText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = EumTextMuted,
+                    )
+                }
+            }
+            HorizontalDivider(color = EumBorderSubtle)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.large),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "접수 번호",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = EumTextMuted,
+                )
+                Text(
+                    text = detail.receiptNumberText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = EumTextPrimary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportHistoryDetailDescriptionCard(description: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(reportHistoryLayoutSpec().cardCornerRadiusDp.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = reportHistoryLayoutSpec().cardShadowElevationDp.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        ) {
+            Text(
+                text = "제보 내용",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = EumTextPrimary,
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyLarge,
+                color = EumTextPrimary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReportHistoryProcessingCard(detail: ReportHistoryDetailUiModel) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(reportHistoryLayoutSpec().cardCornerRadiusDp.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = reportHistoryLayoutSpec().cardShadowElevationDp.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        ) {
+            Text(
+                text = "처리 현황",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = EumTextPrimary,
+            )
+            ReportHistoryTimelineStep(
+                index = 1,
+                title = "접수됨",
+                description = "관리자가 내용을 확인하고 있어요",
+                active = true,
+            )
+            ReportHistoryTimelineDivider()
+            ReportHistoryTimelineStep(
+                index = 2,
+                title = "반영 완료",
+                description = "검토 후 지도 반영 결과를 안내해드려요",
+                active = detail.isApproved,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReportHistoryTimelineStep(
+    index: Int,
+    title: String,
+    description: String,
+    active: Boolean,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(if (active) EumPrimary600 else MaterialTheme.colorScheme.surface),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!active) {
+                Box(
+                    modifier =
+                        Modifier
+                            .matchParentSize()
+                            .clip(CircleShape)
+                            .background(Color.Transparent)
+                            .semantics {},
+                )
+            }
+            Surface(
+                modifier = Modifier.matchParentSize(),
+                shape = CircleShape,
+                color = if (active) EumPrimary600 else MaterialTheme.colorScheme.surface,
+                border = if (active) null else BorderStroke(2.dp, EumBorderSubtle),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = index.toString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (active) EumWhite else EumTextMuted,
+                    )
+                }
+            }
+        }
+        Column(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
         ) {
             Text(
-                text = detail.title,
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                color = if (active) EumPrimary600 else EumTextPrimary,
             )
             Text(
-                text = detail.description,
+                text = description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = detail.locationText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = "${detail.submittedAtText} · ${detail.imageCountText} · ${detail.sourceLabel}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
+                color = EumTextMuted,
             )
         }
     }
 }
 
-/**
- * 마이페이지 제보 내역 카드의 썸네일.
- *
- * - `photoUri`가 있으면 Coil `SubcomposeAsyncImage`로 실제 이미지 렌더링
- * - 로딩 중·실패·null인 경우에는 기존 fallback (아이콘 + tinted 배경) 유지
- *   → mock URI(`content://mock/...`) 같은 깨지는 URI도 graceful하게 처리됨
- */
 @Composable
-private fun ReportHistoryThumbnail(photoUri: String?) {
-    val spec = reportHistoryLayoutSpec()
-    val hasPhotoSource = !photoUri.isNullOrBlank()
-    val context = LocalContext.current
-
-    Surface(
-        modifier = Modifier.size(width = 88.dp, height = 76.dp),
-        shape = RoundedCornerShape(spec.thumbnailCornerRadiusDp.dp),
-        color =
-            if (hasPhotoSource) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-            },
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        if (hasPhotoSource) {
-            SubcomposeAsyncImage(
-                model =
-                    ImageRequest.Builder(context)
-                        .data(photoUri)
-                        .crossfade(true)
-                        .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-                loading = { ReportHistoryThumbnailFallback(tinted = true) },
-                error = { ReportHistoryThumbnailFallback(tinted = false) },
-            )
-        } else {
-            ReportHistoryThumbnailFallback(tinted = false)
-        }
-    }
-}
-
-@Composable
-private fun ReportHistoryThumbnailFallback(tinted: Boolean) {
+private fun ReportHistoryTimelineDivider() {
     Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(id = R.drawable.ic_mypage_report_history),
-            contentDescription = null,
-            modifier = Modifier.size(28.dp),
-            tint =
-                if (tinted) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-        )
-    }
+        modifier =
+            Modifier
+                .padding(start = 20.dp)
+                .width(1.dp)
+                .height(32.dp)
+                .background(EumBorderSubtle),
+    )
 }
 
 @Composable
@@ -392,7 +751,7 @@ private fun ReportHistoryStateCard(
                     if (isError) {
                         MaterialTheme.colorScheme.error.copy(alpha = 0.36f)
                     } else {
-                        MaterialTheme.colorScheme.outlineVariant
+                        EumBorderSubtle
                     },
             ),
         shadowElevation = spec.cardShadowElevationDp.dp,
@@ -408,6 +767,7 @@ private fun ReportHistoryStateCard(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -436,8 +796,8 @@ private fun ReportHistoryStateCard(
                         ) {
                             Text(
                                 text = primaryActionLabel,
-                                modifier = Modifier.padding(vertical = EumSpacing.xSmall),
                                 style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
                             )
                         }
                     } else {
@@ -457,11 +817,7 @@ private fun ReportHistoryStateCard(
                                     disabledElevation = 0.dp,
                                 ),
                         ) {
-                            Text(
-                                text = primaryActionLabel,
-                                modifier = Modifier.padding(vertical = EumSpacing.xSmall),
-                                style = MaterialTheme.typography.titleSmall,
-                            )
+                            Text(text = primaryActionLabel)
                         }
                     }
                     if (secondaryActionLabel != null && onSecondaryActionClick != null) {
@@ -477,8 +833,8 @@ private fun ReportHistoryStateCard(
                             ) {
                                 Text(
                                     text = secondaryActionLabel,
-                                    modifier = Modifier.padding(vertical = EumSpacing.xSmall),
                                     style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
                                 )
                             }
                         } else {
@@ -490,11 +846,7 @@ private fun ReportHistoryStateCard(
                                         .heightIn(min = spec.buttonMinHeightDp.dp),
                                 shape = RoundedCornerShape(spec.buttonCornerRadiusDp.dp),
                             ) {
-                                Text(
-                                    text = secondaryActionLabel,
-                                    modifier = Modifier.padding(vertical = EumSpacing.xSmall),
-                                    style = MaterialTheme.typography.titleSmall,
-                                )
+                                Text(text = secondaryActionLabel)
                             }
                         }
                     }
@@ -510,7 +862,7 @@ private fun NoRippleReportHistoryNavigationButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isOutlined: Boolean = false,
-    shape: RoundedCornerShape = RoundedCornerShape(12.dp),
+    shape: RoundedCornerShape = RoundedCornerShape(reportHistoryLayoutSpec().buttonCornerRadiusDp.dp),
     content: @Composable RowScope.() -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -518,19 +870,19 @@ private fun NoRippleReportHistoryNavigationButton(
         when {
             !enabled && isOutlined -> MaterialTheme.colorScheme.surface
             !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-            isOutlined -> MaterialTheme.colorScheme.surface
-            else -> MaterialTheme.colorScheme.primary
+            isOutlined -> EumSurfaceSubtle
+            else -> EumPrimary600
         }
     val contentColor =
         when {
-            !enabled && isOutlined -> MaterialTheme.colorScheme.primary.copy(alpha = 0.56f)
+            !enabled && isOutlined -> EumPrimary600.copy(alpha = 0.56f)
             !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-            isOutlined -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.onPrimary
+            isOutlined -> EumTextPrimary
+            else -> EumWhite
         }
     val border =
         if (isOutlined) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f))
+            BorderStroke(1.dp, EumBorderSubtle)
         } else {
             null
         }
@@ -560,3 +912,22 @@ private fun NoRippleReportHistoryNavigationButton(
         )
     }
 }
+
+@DrawableRes
+private fun String.toReportIconRes(): Int =
+    when (this) {
+        "계단·단차 있음" -> R.drawable.ic_report_stairs
+        "점자블록 문제" -> R.drawable.ic_report_tactile_damage
+        "인도 없음" -> R.drawable.ic_report_sidewalk
+        "경사로 문제" -> R.drawable.ic_report_ramp
+        "인도폭 문제" -> R.drawable.ic_report_roadway
+        else -> R.drawable.ic_report_other
+    }
+
+@Composable
+private fun reportIconBackgroundColor(title: String): Color =
+    if (title == "경사로 문제" || title == "기타 장애물") {
+        Color(0xFFFFF4E5)
+    } else {
+        EumSurfaceInfo
+    }

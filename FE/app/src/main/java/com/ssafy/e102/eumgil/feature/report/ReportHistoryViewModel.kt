@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ssafy.e102.eumgil.data.repository.ReportHistoryData
 import com.ssafy.e102.eumgil.data.repository.ReportHistoryDetailData
 import com.ssafy.e102.eumgil.data.repository.ReportHistorySource
+import com.ssafy.e102.eumgil.data.repository.ReportProcessingStatus
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -48,6 +49,13 @@ class ReportHistoryViewModel(
                 emitUiEvent(ReportHistoryUiEvent.NavigateToReport)
             ReportHistoryUiAction.RetryClicked ->
                 observeReportHistory()
+            ReportHistoryUiAction.DetailBackClicked ->
+                mutableUiState.update { state ->
+                    state.copy(
+                        selectedDetail = null,
+                        detailLoadingHistoryId = null,
+                    )
+                }
         }
     }
 
@@ -169,6 +177,8 @@ private fun ReportHistoryData.toReportHistoryUiModel(): ReportHistoryUiModel =
         submittedAtText = updatedAtMillis.formatSubmittedAt(),
         photoUri = photoUri?.takeIf { it.isNotBlank() } ?: imageUrl?.takeIf { it.isNotBlank() },
         sourceLabel = source.toSourceLabel(),
+        statusLabel = processingStatus.toStatusLabel(),
+        isApproved = processingStatus == ReportProcessingStatus.APPROVED,
         updatedAtMillis = updatedAtMillis,
     )
 
@@ -186,6 +196,9 @@ private fun ReportHistoryDetailData.toReportHistoryDetailUiModel(): ReportHistor
                 "첨부 사진 ${imageRefs.size}장"
             },
         sourceLabel = source.toSourceLabel(),
+        receiptNumberText = serverReportId?.let { "RP-$it" } ?: historyId,
+        statusLabel = processingStatus.toStatusLabel(),
+        isApproved = processingStatus == ReportProcessingStatus.APPROVED,
     )
 
 private fun ReportHistoryData.toCoordinateText(): String =
@@ -200,6 +213,13 @@ private fun ReportHistorySource.toSourceLabel(): String =
     when (this) {
         ReportHistorySource.Server -> "서버 이력"
         ReportHistorySource.LocalOutbox -> "로컬 저장"
+    }
+
+private fun ReportProcessingStatus?.toStatusLabel(): String =
+    when (this) {
+        ReportProcessingStatus.APPROVED -> "반영 완료"
+        ReportProcessingStatus.REJECTED -> "처리 종료"
+        ReportProcessingStatus.PENDING, null -> "접수됨"
     }
 
 private fun String.toReportHistoryTitle(): String =
@@ -218,4 +238,4 @@ private fun String.toReportHistoryTitle(): String =
     }
 
 private fun Long.formatSubmittedAt(): String =
-    SimpleDateFormat("yyyy.MM.dd (E) HH:mm", Locale.KOREAN).format(Date(this))
+    SimpleDateFormat("yyyy.MM.dd", Locale.KOREAN).format(Date(this))

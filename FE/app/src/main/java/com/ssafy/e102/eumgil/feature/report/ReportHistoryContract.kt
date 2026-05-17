@@ -15,6 +15,8 @@ data class ReportHistoryUiModel(
     val submittedAtText: String,
     val photoUri: String?,
     val sourceLabel: String,
+    val statusLabel: String,
+    val isApproved: Boolean,
     val updatedAtMillis: Long,
 )
 
@@ -26,6 +28,9 @@ data class ReportHistoryDetailUiModel(
     val submittedAtText: String,
     val imageCountText: String,
     val sourceLabel: String,
+    val receiptNumberText: String,
+    val statusLabel: String,
+    val isApproved: Boolean,
 )
 
 enum class ReportHistoryScreenState {
@@ -41,6 +46,8 @@ sealed interface ReportHistoryUiAction {
     data object ReportCtaClicked : ReportHistoryUiAction
 
     data object RetryClicked : ReportHistoryUiAction
+
+    data object DetailBackClicked : ReportHistoryUiAction
 
     data class ReportClicked(
         val outboxId: String,

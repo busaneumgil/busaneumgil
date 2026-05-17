@@ -172,6 +172,91 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `search result click action previews result in map preview mode`() {
+        val result = testSearchResult()
+
+        assertEquals(
+            SearchUiAction.SearchResultPreviewClicked(result = result),
+            resolveSearchResultClickAction(
+                selectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
+                result = result,
+            ),
+        )
+    }
+
+    @Test
+    fun `search result click action applies result directly in route selection mode`() {
+        val result = testSearchResult()
+
+        assertEquals(
+            SearchUiAction.SearchResultClicked(result = result),
+            resolveSearchResultClickAction(
+                selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                result = result,
+            ),
+        )
+    }
+
+    @Test
+    fun `route endpoint quick actions appear only in apply to route mode`() {
+        assertEquals(false, shouldShowRouteEndpointQuickActions(SearchSelectionMode.PREVIEW_ON_MAP))
+        assertEquals(true, shouldShowRouteEndpointQuickActions(SearchSelectionMode.APPLY_TO_ROUTE))
+    }
+
+    @Test
+    fun `route endpoint quick action copy follows editing target`() {
+        assertEquals(
+            RouteEndpointQuickActionCopy(
+                currentLocationActionRes = R.string.search_screen_current_location_origin_action,
+                currentLocationContentDescriptionRes = R.string.search_screen_current_location_origin_a11y,
+                mapPickerActionRes = R.string.search_screen_map_picker_origin_action,
+                mapPickerContentDescriptionRes = R.string.search_screen_map_picker_origin_a11y,
+            ),
+            resolveRouteEndpointQuickActionCopy(RouteEditingTarget.ORIGIN),
+        )
+        assertEquals(
+            RouteEndpointQuickActionCopy(
+                currentLocationActionRes = R.string.search_screen_current_location_destination_action,
+                currentLocationContentDescriptionRes = R.string.search_screen_current_location_destination_a11y,
+                mapPickerActionRes = R.string.search_screen_map_picker_destination_action,
+                mapPickerContentDescriptionRes = R.string.search_screen_map_picker_destination_a11y,
+            ),
+            resolveRouteEndpointQuickActionCopy(RouteEditingTarget.DESTINATION),
+        )
+    }
+
+    @Test
+    fun `current location quick action status resolves persistent screen copy`() {
+        assertEquals(
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_resolving_status,
+                showProgress = true,
+            ),
+            resolveSearchCurrentLocationStatusContent(
+                status = SearchCurrentLocationQuickActionStatus.Resolving,
+                editingTarget = RouteEditingTarget.ORIGIN,
+            ),
+        )
+        assertEquals(
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_permission_denied_status,
+                isError = true,
+            ),
+            resolveSearchCurrentLocationStatusContent(
+                status = SearchCurrentLocationQuickActionStatus.PermissionDenied,
+                editingTarget = RouteEditingTarget.DESTINATION,
+            ),
+        )
+        assertEquals(
+            null,
+            resolveSearchCurrentLocationStatusContent(
+                status = SearchCurrentLocationQuickActionStatus.Idle,
+                editingTarget = RouteEditingTarget.DESTINATION,
+            ),
+        )
+    }
+
+    @Test
     fun `search result distance uses meter label below one kilometer`() {
         assertEquals(
             SearchResultDistanceUiState(
@@ -365,3 +450,15 @@ class SearchScreenTest {
         assertEquals(emptyList<Int>(), uiState.labelResIds)
     }
 }
+
+private fun testSearchResult(): SearchResult =
+    SearchResult(
+        placeId = "10",
+        serverPlaceId = "10",
+        providerPlaceId = "123456789",
+        title = "Busan Tower",
+        subtitle = "1 Yongdusan-gil, Busan",
+        latitude = 35.1000,
+        longitude = 129.0320,
+        matched = true,
+    )

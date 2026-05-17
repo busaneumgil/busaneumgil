@@ -41,6 +41,7 @@ import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
 import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
 import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputRoute
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
@@ -63,6 +64,11 @@ fun NavGraphBuilder.mainNavGraph(
                     MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID,
                 )
                 .collectAsStateWithLifecycle()
+        val routeEndpointMapPickerTargetName by
+            backStackEntry.savedStateHandle
+                .getStateFlow<String?>(MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY, null)
+                .collectAsStateWithLifecycle()
+        val routeEndpointMapPickerTarget = routeEndpointMapPickerTargetName.toRouteEditingTargetOrNull()
         MapRoute(
             viewModelStoreOwner = backStackEntry,
             onNavigateToSavedRoutes = {
@@ -71,8 +77,8 @@ fun NavGraphBuilder.mainNavGraph(
             onNavigateToMyPage = {
                 navController.navigateToTopLevel(TopLevelDestination.MyPage)
             },
-            onNavigateToRouteSetting = {
-                navController.navigateToRouteSettingPermissionGate()
+            onNavigateToRouteSetting = { locationPermissionPrechecked ->
+                navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked)
             },
             onNavigateToSearch = { editingTarget ->
                 navController.navigate(SearchRoute.Entry.createRoute(editingTarget))
@@ -81,6 +87,10 @@ fun NavGraphBuilder.mainNavGraph(
                 navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
                     launchSingleTop = true
                 }
+            },
+            routeEndpointMapPickerTarget = routeEndpointMapPickerTarget,
+            onRouteEndpointMapPickerTargetConsumed = {
+                backStackEntry.savedStateHandle.consumeRouteEndpointMapPickerTarget()
             },
             shouldResetForHomeEntry = shouldResetForHomeEntry,
             onHomeReentryResetConsumed = {
@@ -155,12 +165,21 @@ fun NavGraphBuilder.mainNavGraph(
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(SearchRoute.Entry.ARG_SELECTION_MODE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
     ) { backStackEntry ->
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.Entry.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val initialSelectionMode =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.Entry.ARG_SELECTION_MODE)
+                .toSearchSelectionModeOrDefault()
         val preserveEntryStateOnReentry =
             backStackEntry.savedStateHandle.get<Boolean>(SEARCH_PRESERVE_ENTRY_STATE_KEY) == true
         backStackEntry.savedStateHandle.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, false)
@@ -168,14 +187,14 @@ fun NavGraphBuilder.mainNavGraph(
             onNavigateBack = {
                 navController.popBackStack()
             },
-            onNavigateToResults = { query, editingTarget ->
-                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget))
+            onNavigateToResults = { query, editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget, selectionMode))
             },
             onNavigateToVoiceInput = {
                 onOpenVoiceAssistant(initialEditingTarget)
             },
-            onNavigateToRouteSetting = {
-                navController.navigateToRouteSettingPermissionGate {
+            onNavigateToRouteSetting = { locationPermissionPrechecked ->
+                navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -190,6 +209,9 @@ fun NavGraphBuilder.mainNavGraph(
                     navController.navigateToTopLevel(TopLevelDestination.Map)
                 }
             },
+            onNavigateToRouteEndpointMapPicker = { editingTarget ->
+                navController.navigateToRouteEndpointMapPicker(editingTarget)
+            },
             onNavigateToRouteBriefing = {
                 navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
@@ -198,6 +220,7 @@ fun NavGraphBuilder.mainNavGraph(
                 }
             },
             initialEditingTarget = initialEditingTarget,
+            initialSelectionMode = initialSelectionMode,
             preserveEntryStateOnReentry = preserveEntryStateOnReentry,
         )
     }
@@ -214,12 +237,21 @@ fun NavGraphBuilder.mainNavGraph(
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(SearchRoute.Results.ARG_SELECTION_MODE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
     ) { backStackEntry ->
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.Results.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val initialSelectionMode =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.Results.ARG_SELECTION_MODE)
+                .toSearchSelectionModeOrDefault()
         SearchResultsRoute(
             initialQuery = backStackEntry.arguments?.getString(SearchRoute.Results.ARG_QUERY).orEmpty(),
             onNavigateBack = {
@@ -228,16 +260,16 @@ fun NavGraphBuilder.mainNavGraph(
                     ?.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, true)
                 navController.popBackStack()
             },
-            onNavigateToResults = { query, editingTarget ->
-                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+            onNavigateToResults = { query, editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget, selectionMode)) {
                     launchSingleTop = true
                 }
             },
             onNavigateToVoiceInput = {
                 onOpenVoiceAssistant(initialEditingTarget)
             },
-            onNavigateToRouteSetting = {
-                navController.navigateToRouteSettingPermissionGate {
+            onNavigateToRouteSetting = { locationPermissionPrechecked ->
+                navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -252,6 +284,9 @@ fun NavGraphBuilder.mainNavGraph(
                     navController.navigateToTopLevel(TopLevelDestination.Map)
                 }
             },
+            onNavigateToRouteEndpointMapPicker = { editingTarget ->
+                navController.navigateToRouteEndpointMapPicker(editingTarget)
+            },
             onNavigateToRouteBriefing = {
                 navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
@@ -260,6 +295,7 @@ fun NavGraphBuilder.mainNavGraph(
                 }
             },
             initialEditingTarget = initialEditingTarget,
+            initialSelectionMode = initialSelectionMode,
         )
     }
 
@@ -272,12 +308,21 @@ fun NavGraphBuilder.mainNavGraph(
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(SearchRoute.VoiceInput.ARG_SELECTION_MODE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
     ) { backStackEntry ->
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.VoiceInput.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val initialSelectionMode =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.VoiceInput.ARG_SELECTION_MODE)
+                .toSearchSelectionModeOrDefault()
         val context = LocalContext.current
         val micPermissionLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
@@ -298,8 +343,8 @@ fun NavGraphBuilder.mainNavGraph(
                     ?.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, true)
                 navController.popBackStack()
             },
-            onNavigateToResults = { query, editingTarget ->
-                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+            onNavigateToResults = { query, editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget, selectionMode)) {
                     launchSingleTop = true
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = false
@@ -307,6 +352,7 @@ fun NavGraphBuilder.mainNavGraph(
                 }
             },
             initialEditingTarget = initialEditingTarget,
+            initialSelectionMode = initialSelectionMode,
         )
     }
 
@@ -411,8 +457,8 @@ fun NavGraphBuilder.mainNavGraph(
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
             },
-            onNavigateToSearch = { editingTarget ->
-                navController.navigate(SearchRoute.Entry.createRoute(editingTarget)) {
+            onNavigateToSearch = { editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Entry.createRoute(editingTarget, selectionMode)) {
                     launchSingleTop = true
                 }
             },
@@ -659,6 +705,7 @@ private const val MAP_HOME_REENTRY_RESET_KEY: String = "mapHomeReentryReset"
 private const val MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY: String = "mapFacilityDetailDismissRequestId"
 private const val MAP_FACILITY_DETAIL_DISMISS_CONSUMED_ID_KEY: String = "mapFacilityDetailDismissConsumedId"
 internal const val MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID: Long = 0L
+private const val MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY: String = "mapRouteEndpointPickerTarget"
 internal const val MAP_VOICE_SEARCH_VISIBLE_KEY: String = "mapVoiceSearchVisible"
 
 internal data class TopLevelNavigationPolicy(
@@ -696,6 +743,18 @@ internal fun NavController.navigateToTopLevelMapForHomeEntry() {
     getBackStackEntry(TopLevelRoute.Map.route).savedStateHandle.requestMapHomeReentryReset()
 }
 
+private fun NavController.navigateToRouteEndpointMapPicker(editingTarget: RouteEditingTarget) {
+    val didReturnToMap =
+        popBackStack(
+            route = TopLevelRoute.Map.route,
+            inclusive = false,
+        )
+    if (!didReturnToMap) {
+        navigateToTopLevel(TopLevelDestination.Map)
+    }
+    getBackStackEntry(TopLevelRoute.Map.route).savedStateHandle.requestRouteEndpointMapPicker(editingTarget)
+}
+
 private fun NavController.navigateToRouteSettingPermissionGate(
     autoStartNavigation: Boolean = false,
     initialRouteOption: RouteOption? = null,
@@ -708,6 +767,21 @@ private fun NavController.navigateToRouteSettingPermissionGate(
         ),
         builder,
     )
+}
+
+private fun NavController.navigateToRouteSettingAfterSearch(
+    locationPermissionPrechecked: Boolean,
+    builder: NavOptionsBuilder.() -> Unit = {},
+) {
+    if (locationPermissionPrechecked) {
+        navigate(
+            RouteSettingRoute.Setting.createRoute(locationPermissionPrechecked = true),
+            builder,
+        )
+        return
+    }
+
+    navigateToRouteSettingPermissionGate(builder = builder)
 }
 
 private fun NavController.navigateToRouteSettingFromPermissionGate(
@@ -752,6 +826,14 @@ internal fun NavHostController.navigateToArrivalHome(selectedPrimaryUserType: St
 
 internal fun SavedStateHandle.requestMapHomeReentryReset() {
     set(MAP_HOME_REENTRY_RESET_KEY, true)
+}
+
+internal fun SavedStateHandle.requestRouteEndpointMapPicker(editingTarget: RouteEditingTarget) {
+    set(MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY, editingTarget.name)
+}
+
+internal fun SavedStateHandle.consumeRouteEndpointMapPickerTarget() {
+    set<String?>(MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY, null)
 }
 
 internal fun SavedStateHandle.consumeMapHomeReentryReset(): Boolean {
@@ -801,6 +883,15 @@ private fun String?.toRouteEditingTargetOrDefault(): RouteEditingTarget =
     this
         ?.let { value -> runCatching { RouteEditingTarget.valueOf(value) }.getOrNull() }
         ?: RouteEditingTarget.DESTINATION
+
+private fun String?.toRouteEditingTargetOrNull(): RouteEditingTarget? =
+    this
+        ?.let { value -> runCatching { RouteEditingTarget.valueOf(value) }.getOrNull() }
+
+private fun String?.toSearchSelectionModeOrDefault(): SearchSelectionMode =
+    this
+        ?.let { value -> runCatching { SearchSelectionMode.valueOf(value) }.getOrNull() }
+        ?: SearchSelectionMode.PREVIEW_ON_MAP
 
 @androidx.compose.runtime.Composable
 internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {

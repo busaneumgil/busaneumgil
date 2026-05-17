@@ -15,16 +15,16 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 sealed interface MapKwsEvent {
-    data object NavigateToVoiceInput : MapKwsEvent
+    data object OpenVoiceAssistant : MapKwsEvent
 }
 
 /**
  * 이동약자(Map) 화면 웨이크워드 감지 ViewModel.
  *
  * 화면 진입 시 KWS를 초기화하고 "HEY LINK" 웨이크워드를 청취한다.
- * [resumeSpotting]: ON_RESUME 시 KWS 재시작 (VoiceInput 사용 후 복귀 포함)
+ * [resumeSpotting]: ON_RESUME 시 KWS 재시작 (전역 음성 어시스턴트 사용 후 복귀 포함)
  * [pauseSpotting]: ON_PAUSE 시 KWS 일시정지 (마이크 충돌 방지)
- * 웨이크워드 감지 시 [MapKwsEvent.NavigateToVoiceInput] 이벤트를 발행한다.
+ * 웨이크워드 감지 시 [MapKwsEvent.OpenVoiceAssistant] 이벤트를 발행한다.
  */
 class MapKwsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -52,9 +52,9 @@ class MapKwsViewModel(application: Application) : AndroidViewModel(application) 
     private fun startSpotting() {
         kwsJob = viewModelScope.launch(Dispatchers.IO) {
             kwsManager?.startSpotting()?.collect {
-                Log.d(TAG, "웨이크워드 감지 → VoiceInput 이동")
+                Log.d(TAG, "웨이크워드 감지 → 전역 음성 어시스턴트 열기")
                 kwsManager?.stop()
-                _uiEvent.send(MapKwsEvent.NavigateToVoiceInput)
+                _uiEvent.send(MapKwsEvent.OpenVoiceAssistant)
             }
         }
     }

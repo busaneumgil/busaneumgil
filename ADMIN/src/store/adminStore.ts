@@ -4,6 +4,18 @@ import type { AdminPage, AdminRole, EditAction } from "../types";
 const draftStoragePrefix = "busan-eumgil-ADMIN:draft-edits:";
 const defaultGu = "강서구";
 const defaultDong = "전체";
+const adminPages: AdminPage[] = [
+  "home",
+  "network",
+  "routeTuning",
+  "routeStats",
+  "bottleneckMonitoring",
+  "facilities",
+  "hazards",
+  "notices",
+  "users",
+  "logs",
+];
 
 function areaAssignmentId(gu: string, dong: string) {
   return `area:${gu}:${dong}`;
@@ -33,6 +45,15 @@ function storeDraftEdits(assignmentId: string, edits: EditAction[]) {
   window.localStorage.setItem(draftStorageKey(assignmentId), JSON.stringify(edits));
 }
 
+export function adminPageFromSearch(search: string): AdminPage {
+  const params = new URLSearchParams(search);
+  const page = params.get("page");
+  if (page && adminPages.includes(page as AdminPage)) {
+    return page as AdminPage;
+  }
+  return "home";
+}
+
 interface AdminState {
   role: AdminRole;
   page: AdminPage;
@@ -49,10 +70,11 @@ interface AdminState {
 }
 
 const initialAssignmentId = areaAssignmentId(defaultGu, defaultDong);
+const initialPage = typeof window === "undefined" ? "home" : adminPageFromSearch(window.location.search);
 
 export const useAdminStore = create<AdminState>((set) => ({
   role: "ADMIN",
-  page: "home",
+  page: initialPage,
   selectedAssignmentId: initialAssignmentId,
   selectedGu: defaultGu,
   selectedDong: defaultDong,

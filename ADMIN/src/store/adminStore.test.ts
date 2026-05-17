@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useAdminStore } from "./adminStore";
+import { adminPageFromSearch, useAdminStore } from "./adminStore";
 import type { AdminPage } from "../types";
 
 describe("adminStore role model", () => {
@@ -15,12 +15,22 @@ describe("adminStore role model", () => {
     expect(useAdminStore.getState().page).toBe("home");
   });
 
+  it("accepts a deep-linked admin page from the query string", () => {
+    expect(adminPageFromSearch("?page=routeStats")).toBe("routeStats");
+    expect(adminPageFromSearch("?page=bottleneckMonitoring")).toBe("bottleneckMonitoring");
+  });
+
+  it("falls back to home for unknown deep-link targets", () => {
+    expect(adminPageFromSearch("?page=does-not-exist")).toBe("home");
+    expect(adminPageFromSearch("?page=movementPatternAnalysis")).toBe("home");
+    expect(adminPageFromSearch("")).toBe("home");
+  });
+
   it("models second MVP workspaces as task tabs", () => {
     const pages: AdminPage[] = [
       "home",
       "routeStats",
       "bottleneckMonitoring",
-      "movementPatternAnalysis",
       "routeTuning",
       "network",
       "users",
@@ -34,7 +44,6 @@ describe("adminStore role model", () => {
       "home",
       "routeStats",
       "bottleneckMonitoring",
-      "movementPatternAnalysis",
       "routeTuning",
       "network",
       "users",

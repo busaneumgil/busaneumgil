@@ -54,15 +54,20 @@ class DefaultRouteGeometryParser : RouteGeometryParser {
             return RouteGeometryParseResult(status = RouteGeometryParseStatus.INVALID_COORDINATE)
         }
 
-        val coordinates = parseCoordinates(coordinatePayload)
-            ?: return RouteGeometryParseResult(status = RouteGeometryParseStatus.INVALID_COORDINATE)
-
         return when {
-            geometryType.equals(LINESTRING_TYPE, ignoreCase = true) ->
+            geometryType.equals(LINESTRING_TYPE, ignoreCase = true) -> {
+                val coordinates =
+                    parseCoordinates(coordinatePayload)
+                        ?: return RouteGeometryParseResult(status = RouteGeometryParseStatus.INVALID_COORDINATE)
                 coordinates.toLinestringParseResult()
+            }
 
-            geometryType.equals(POINT_TYPE, ignoreCase = true) ->
+            geometryType.equals(POINT_TYPE, ignoreCase = true) -> {
+                val coordinates =
+                    parseCoordinates(coordinatePayload)
+                        ?: return RouteGeometryParseResult(status = RouteGeometryParseStatus.INVALID_COORDINATE)
                 coordinates.toPointParseResult()
+            }
 
             else -> RouteGeometryParseResult(status = RouteGeometryParseStatus.UNSUPPORTED_GEOMETRY)
         }

@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import type { AreaBoundaryFeature, BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentFeatureType, SegmentPayload } from "../types";
 import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
-import { deletedEdgeIds, draftSegmentFeatures, isSameSnappedNode, newNodeRef, resetPolygonDeleteSelection, roadNodeCandidates, segmentEndpointNodeCandidates, segmentsTouchingPolygon, snapToSegmentEndpointNode, type SnappedSegmentEndpoint, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
+import { deletedEdgeIds, describeCrossWalkProjection, describeSideLineNodeSnap, draftSegmentFeatures, isSameSnappedNode, newNodeRef, resetPolygonDeleteSelection, roadNodeCandidates, segmentEndpointNodeCandidates, segmentsTouchingPolygon, snapToSegmentEndpointNode, type SnappedSegmentEndpoint, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
 import { shouldShowRoadAttributeReference } from "./networkReferenceLayer";
 import { roadAttributeStrokeColor, roadAttributeStrokeStyle, roadAttributeStrokeWeight } from "./roadAttributeStyle";
 import { roadviewUnavailableMessage, shouldOpenRoadviewForMode } from "./roadviewMode";
@@ -839,7 +839,7 @@ export function SegmentMap({
       setSnapMessage(null);
       return endpoint;
     }
-    setSnapMessage(`SIDE_LINE 끝점을 node #${endpoint.nodeId}에 ${(endpoint.distanceMeter ?? 0).toFixed(1)}m 보정했습니다.`);
+    setSnapMessage(describeSideLineNodeSnap(String(endpoint.nodeId), endpoint.distanceMeter ?? 0));
     return endpoint;
   }
 
@@ -854,7 +854,7 @@ export function SegmentMap({
       setSnapMessage(null);
       return coord;
     }
-    setSnapMessage(`CROSS_WALK 끝점을 기존 선 위로 ${nearest.distanceM.toFixed(1)}m 보정했습니다.`);
+    setSnapMessage(describeCrossWalkProjection(nearest.distanceM));
     return nearest.coord;
   }
 

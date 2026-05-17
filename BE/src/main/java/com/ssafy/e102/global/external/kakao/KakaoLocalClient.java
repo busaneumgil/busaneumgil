@@ -52,6 +52,9 @@ public class KakaoLocalClient {
 		if (request.radius() != null && request.lat() != null && request.lng() != null) {
 			uriBuilder.queryParam("radius", request.radius());
 		}
+		if (StringUtils.hasText(request.rect())) {
+			uriBuilder.queryParam("rect", request.rect());
+		}
 		if (StringUtils.hasText(request.sort())) {
 			uriBuilder.queryParam("sort", request.sort());
 		}

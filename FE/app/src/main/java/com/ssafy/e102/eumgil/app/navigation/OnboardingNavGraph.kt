@@ -324,7 +324,7 @@ internal fun resolveOnboardingTermsCompletedRoute(selectedPrimaryUserType: Strin
 
 internal fun resolveTutorialOnboardingCompletedRoute(): String = TopLevelRoute.Map.route
 
-internal fun resolveTutorialGuideCompletedRoute(): String = MyPageSubRoute.AppInfo.route
+internal fun resolveTutorialGuideCompletedRoute(): String = TopLevelRoute.MyPage.route
 
 internal fun resolveProfileEditCompletedRoute(selectedPrimaryUserType: String?): String =
     if (selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue) {
@@ -417,19 +417,25 @@ private fun NavHostController.navigateToLoginAfterAuthenticationFailure() {
     }
 }
 
+internal data class ExternalDetailIntentSpec(
+    val action: String,
+    val dataString: String,
+    val flags: Int,
+)
+
 internal fun createTermsGuideDetailIntent(step: TermsGuideStep): Intent? =
-    resolveTermsGuideDetailUrl(step)?.let { url ->
-        Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
+    resolveTermsGuideDetailIntentSpec(step)?.toIntent()
+
+internal fun resolveTermsGuideDetailIntentSpec(step: TermsGuideStep): ExternalDetailIntentSpec? =
+    resolveTermsGuideDetailUrl(step)?.toExternalDetailIntentSpec()
 
 internal fun resolveTermsGuideDetailUrl(step: TermsGuideStep): String? = step.detailUrl
 
 internal fun createLocationTermsDetailIntent(item: LocationTermsItem): Intent? =
-    resolveLocationTermsDetailUrl(item)?.let { url ->
-        Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
+    resolveLocationTermsDetailIntentSpec(item)?.toIntent()
+
+internal fun resolveLocationTermsDetailIntentSpec(item: LocationTermsItem): ExternalDetailIntentSpec? =
+    resolveLocationTermsDetailUrl(item)?.toExternalDetailIntentSpec()
 
 internal fun resolveLocationTermsDetailUrl(item: LocationTermsItem): String? =
     when (item) {
@@ -439,6 +445,17 @@ internal fun resolveLocationTermsDetailUrl(item: LocationTermsItem): String? =
         LocationTermsItem.PRIVACY_POLICY_CONFIRMATION -> PERSONAL_LOCATION_INFO_TERMS_URL
         LocationTermsItem.OVER_FOURTEEN -> null
     }
+
+private fun String.toExternalDetailIntentSpec(): ExternalDetailIntentSpec =
+    ExternalDetailIntentSpec(
+        action = Intent.ACTION_VIEW,
+        dataString = this,
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK,
+    )
+
+private fun ExternalDetailIntentSpec.toIntent(): Intent =
+    Intent(action, Uri.parse(dataString))
+        .addFlags(flags)
 
 private const val SERVICE_AND_LOCATION_TERMS_URL =
     "https://www.notion.so/ryuwon-project/350a58d49be680ab9931f226486dac58?source=copy_link"

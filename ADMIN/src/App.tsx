@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import adminLogoUrl from "./assets/app_logo.png";
+import { BottleneckMonitoringPage } from "./bottleneck/BottleneckMonitoringPage";
+import { bottleneckMonitoringMockResponse, composeBottleneckMonitoringData } from "./bottleneck/bottleneckMonitoringContract";
 import {
   createAdminRoadNetworkEditJob,
   fetchAdminAreaAssignments,
@@ -35,7 +37,9 @@ import { facilityCategoryColor, facilityCategoryLabel, facilityCategoryOrder } f
 import { SegmentMap, type RoadviewDockState } from "./map/SegmentMap";
 import type { BottleneckHotspot, BottleneckRouteSegment } from "./map/adminBottleneckMap";
 import { HazardReportsPage } from "./report/HazardReportsPage";
+import { RouteStatsPage } from "./route/RouteStatsPage";
 import { RouteTuningPage } from "./route/RouteTuningPage";
+import { routeStatsMockResponse } from "./route/routeStatsContract";
 import { useAdminStore } from "./store/adminStore";
 import type {
   AccessibilityFeatureType,
@@ -331,7 +335,6 @@ type DashboardIconName =
   | "user"
   | "clock"
   | "mobile"
-  | "layers"
   | "chevron";
 
 type AdminNavSectionId = "statistics" | "review" | "management";
@@ -347,7 +350,7 @@ const adminNavItems: AdminNavItem[] = [
     id: "statistics",
     label: "통계",
     icon: "chart",
-    pages: ["routeStats", "bottleneckMonitoring", "movementPatternAnalysis"],
+    pages: ["routeStats", "bottleneckMonitoring"],
   },
   {
     type: "section",
@@ -372,7 +375,6 @@ const adminNavIcons: Record<AdminPage, DashboardIconName> = {
   routeTuning: "route",
   routeStats: "chart",
   bottleneckMonitoring: "warning",
-  movementPatternAnalysis: "layers",
   facilities: "content",
   hazards: "warning",
   notices: "report",
@@ -409,10 +411,6 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   },
   bottleneckMonitoring: {
     label: "병목구간 통계",
-    description: "",
-  },
-  movementPatternAnalysis: {
-    label: "이동 패턴 분석",
     description: "",
   },
   facilities: {
@@ -475,6 +473,7 @@ function AdminApp() {
   const [auditLogActorUserId, setAuditLogActorUserId] = useState("");
   const completedRoadEditJobIdRef = useRef<number | null>(null);
   const submittedRoadEditAssignmentIdRef = useRef<string | null>(null);
+  const workspaceRef = useRef<HTMLElement | null>(null);
   const {
     page,
     selectedAssignmentId,
@@ -489,9 +488,21 @@ function AdminApp() {
   } = useAdminStore();
 
   const hasToken = Boolean(accessToken);
-  const isAdminAuthenticated = hasToken && adminPrincipal?.role === "ADMIN";
-  const currentAdmin = adminPrincipal;
-  const usesRealAdminApi = isAdminAuthenticated;
+  const previewPage = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("preview")
+    : null;
+  const fullShellPreviewEnabled = typeof window !== "undefined"
+    && import.meta.env.DEV
+    && (previewPage === "routeStats" || previewPage === "bottleneckMonitoring");
+  const currentAdmin = adminPrincipal ?? (fullShellPreviewEnabled
+    ? {
+        userId: "7e7e00a4-bf81-4a82-918c-7a5e062dc325",
+        role: "ADMIN",
+        permissions: ["ADMIN_PREVIEW"],
+      }
+    : null);
+  const isAdminAuthenticated = (hasToken && adminPrincipal?.role === "ADMIN") || Boolean(fullShellPreviewEnabled);
+  const usesRealAdminApi = hasToken && adminPrincipal?.role === "ADMIN";
   const showsAreaSelector = page === "network" || page === "facilities" || page === "routeTuning";
   const selectedAssignmentType: AssignmentType = page === "facilities" ? "FACILITY" : "ROAD_NETWORK";
   const selectedScopeDong = allDongScope;
@@ -519,6 +530,20 @@ function AdminApp() {
     });
   }, [page, selectedGu, selectedScopeDong]);
 
+  useEffect(() => {
+    workspaceRef.current?.scrollTo?.({ top: 0, left: 0, behavior: "auto" });
+    if (typeof window !== "undefined") {
+      const scrollRoot = document.scrollingElement;
+      if (scrollRoot) {
+        scrollRoot.scrollTop = 0;
+        scrollRoot.scrollLeft = 0;
+      }
+      if (typeof window.scrollTo === "function") {
+        window.scrollTo(0, 0);
+      }
+    }
+  }, [page]);
+
   const areasQuery = useQuery({
     queryKey: ["admin-areas", accessToken],
     queryFn: () => fetchAdminAreas(accessToken),
@@ -545,6 +570,14 @@ function AdminApp() {
     queryKey: ["admin-dashboard-bottlenecks", accessToken],
     queryFn: () => fetchAdminDashboardBottlenecks({ accessToken, limit: 12 }),
     enabled: page === "home" && usesRealAdminApi,
+    retry: false,
+    refetchInterval: 60_000,
+  });
+
+  const bottleneckMonitoringQuery = useQuery({
+    queryKey: ["admin-bottleneck-monitoring", accessToken],
+    queryFn: () => fetchAdminDashboardBottlenecks({ accessToken, limit: 20 }),
+    enabled: page === "bottleneckMonitoring" && usesRealAdminApi,
     retry: false,
     refetchInterval: 60_000,
   });
@@ -890,6 +923,7 @@ function AdminApp() {
       </aside>
 
       <main
+        ref={workspaceRef}
         className={`workspace ${
           page === "facilities"
             ? "workspace-facilities"
@@ -1009,9 +1043,7 @@ function AdminApp() {
           />
         )}
 
-        {page === "routeStats" && <EmptyAdminPage />}
-
-        {page === "movementPatternAnalysis" && <EmptyAdminPage />}
+        {page === "routeStats" && <RouteStatsPage data={routeStatsMockResponse} />}
 
         {page === "users" && (
           <UserManagementPage
@@ -1153,7 +1185,15 @@ function AdminApp() {
           </div>
         )}
 
-        {page === "bottleneckMonitoring" && <EmptyAdminPage />}
+        {page === "bottleneckMonitoring" && (
+          <BottleneckMonitoringPage
+            data={usesRealAdminApi
+              ? composeBottleneckMonitoringData(bottleneckMonitoringQuery.data)
+              : bottleneckMonitoringMockResponse}
+            loading={usesRealAdminApi && bottleneckMonitoringQuery.isLoading}
+            error={bottleneckMonitoringQuery.error}
+          />
+        )}
 
         {page === "notices" && <EmptyAdminPage />}
 
@@ -2012,13 +2052,6 @@ function DashboardIcon({ name, className = "" }: { name: DashboardIconName; clas
       <>
         <rect x="7.5" y="3.5" width="9" height="17" rx="2" />
         <path d="M11 17.5h2" />
-      </>
-    ),
-    layers: (
-      <>
-        <path d="m12 3 8 4-8 4-8-4 8-4Z" />
-        <path d="m4 12 8 4 8-4" />
-        <path d="m4 16 8 4 8-4" />
       </>
     ),
     chevron: <path d="m9 6 6 6-6 6" />,

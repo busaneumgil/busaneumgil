@@ -188,7 +188,12 @@ class PlacesRepositoryTest {
                         },
                     localDataSource = localDataSource,
                     mockDataSource = PlacesMockDataSource(),
-                    sourcePolicy = PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
                 )
 
             assertEquals(remotePlaces, repository.getPlaces(query))
@@ -485,7 +490,12 @@ class PlacesRepositoryTest {
                         },
                     localDataSource = localDataSource,
                     mockDataSource = PlacesMockDataSource(),
-                    sourcePolicy = PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),
+                    sourcePolicy =
+                        PlacesTestRepositorySourcePolicy(
+                            RepositoryReadPlan(
+                                sources = listOf(RepositorySource.REMOTE, RepositorySource.LOCAL),
+                            ),
+                        ),
                 )
 
             assertEquals(remoteDetail, repository.getPlaceDetail("88"))
@@ -543,7 +553,14 @@ class PlacesRepositoryTest {
                 }
             val repository =
                 DefaultPlacesRepository(
-                    remoteDataSource = PlacesRemoteDataSource(baseUrl = "https://example.com"),
+                    remoteDataSource =
+                        object : PlacesRemoteDataSource(
+                            requestExecutor = { _, _, _ -> error("unused") },
+                        ) {
+                            override suspend fun getPlaceDetail(placeId: String): PlaceDetail? {
+                                throw IllegalStateException("remote place detail failed")
+                            }
+                        },
                     localDataSource = localDataSource,
                     mockDataSource = PlacesMockDataSource(),
                     sourcePolicy = PlacesTestRepositorySourcePolicy(RepositoryReadPlan.remoteLocalMock()),

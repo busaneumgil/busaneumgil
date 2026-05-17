@@ -15,12 +15,12 @@ class MapShortcutFilterRowConfigurationTest {
                 .readText()
 
         assertTrue(
-            "Top shortcut toilet chip should use the compact wheelchair drawable derived from the onboarding source.",
-            source.contains("MapShortcutFilterKey.TOILET -> R.drawable.ic_user_wheelchair_compact"),
+            "Top shortcut toilet chip should use the provided accessibility tag drawable.",
+            source.contains("MapShortcutFilterKey.TOILET -> R.drawable.ic_accessibility_tag_accessible_toilet"),
         )
         assertTrue(
-            "Compact wheelchair icon resource should exist for the map shortcut chip.",
-            File("src/main/res/drawable/ic_user_wheelchair_compact.png").exists(),
+            "Accessibility toilet icon resource should exist for the map shortcut chip.",
+            File("src/main/res/drawable/ic_accessibility_tag_accessible_toilet.png").exists(),
         )
     }
 
@@ -31,23 +31,23 @@ class MapShortcutFilterRowConfigurationTest {
                 .readText()
 
         assertTrue(
-            "Top shortcut elevator chip should use the provided elevator drawable resource.",
-            source.contains("MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_place_elevator"),
+            "Top shortcut elevator chip should use the provided accessibility tag drawable resource.",
+            source.contains("MapShortcutFilterKey.ELEVATOR -> R.drawable.ic_accessibility_tag_elevator"),
         )
         assertTrue(
             "Provided elevator icon resource should exist.",
-            File("src/main/res/drawable/ic_place_elevator.png").exists(),
+            File("src/main/res/drawable/ic_accessibility_tag_elevator.png").exists(),
         )
     }
 
     @Test
-    fun `map shortcut filter row enlarges accessibility heavy icons`() {
-        assertEquals(20, shortcutFilterIconSizeDp(MapShortcutFilterKey.ELEVATOR))
+    fun `map shortcut filter row uses icon sizes tuned to asset weights`() {
+        assertEquals(18, shortcutFilterIconSizeDp(MapShortcutFilterKey.ELEVATOR))
         assertEquals(20, shortcutFilterIconSizeDp(MapShortcutFilterKey.TOURIST_SPOT))
         assertEquals(20, shortcutFilterIconSizeDp(MapShortcutFilterKey.ACCOMMODATION))
         assertEquals(20, shortcutFilterIconSizeDp(MapShortcutFilterKey.WELFARE))
         assertEquals(20, shortcutFilterIconSizeDp(MapShortcutFilterKey.PUBLIC_OFFICE))
-        assertEquals(16, shortcutFilterIconSizeDp(MapShortcutFilterKey.TOILET))
+        assertEquals(19, shortcutFilterIconSizeDp(MapShortcutFilterKey.TOILET))
         assertEquals(16, shortcutFilterIconSizeDp(MapShortcutFilterKey.FOOD_CAFE))
     }
 
@@ -86,12 +86,12 @@ class MapShortcutFilterRowConfigurationTest {
                 .readText()
 
         assertTrue(
-            "Top shortcut charging station chip should use the provided charging station drawable resource.",
-            source.contains("MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_place_charging_station"),
+            "Top shortcut charging station chip should use the provided accessibility tag drawable resource.",
+            source.contains("MapShortcutFilterKey.CHARGING_STATION -> R.drawable.ic_accessibility_tag_charging_station"),
         )
         assertTrue(
             "Provided charging station icon resource should exist.",
-            File("src/main/res/drawable/ic_place_charging_station.png").exists(),
+            File("src/main/res/drawable/ic_accessibility_tag_charging_station.png").exists(),
         )
     }
 
@@ -183,12 +183,12 @@ class MapShortcutFilterRowConfigurationTest {
                 .readText()
 
         assertTrue(
-            "Top shortcut accommodation chip should use the dedicated accommodation drawable resource.",
-            source.contains("MapShortcutFilterKey.ACCOMMODATION -> R.drawable.ic_place_accommodation"),
+            "Top shortcut accommodation chip should use the provided accessible room drawable resource.",
+            source.contains("MapShortcutFilterKey.ACCOMMODATION -> R.drawable.ic_accessibility_tag_accessible_room"),
         )
         assertTrue(
-            "Dedicated accommodation place icon resource should exist.",
-            File("src/main/res/drawable/ic_place_accommodation.png").exists(),
+            "Accessible room icon resource should exist.",
+            File("src/main/res/drawable/ic_accessibility_tag_accessible_room.png").exists(),
         )
     }
 
@@ -204,7 +204,7 @@ class MapShortcutFilterRowConfigurationTest {
         )
         assertTrue(
             "Dedicated healthcare place icon resource should exist.",
-            File("src/main/res/drawable/ic_place_healthcare.png").exists(),
+            File("src/main/res/drawable/ic_place_healthcare.xml").exists(),
         )
     }
 

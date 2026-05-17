@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { AdminBottleneckKakaoMap } from "../map/AdminBottleneckKakaoMap";
+import type { AdminRouteStatsResponse } from "../types";
 import type { RouteStatsDistributionMetric, RouteStatsResponse } from "./routeStatsContract";
 
 const integerFormatter = new Intl.NumberFormat("ko-KR");
@@ -12,7 +13,26 @@ const decimalFormatter = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 1,
 });
 
-export function RouteStatsPage({ data }: { data: RouteStatsResponse }) {
+type RouteStatsPageData = RouteStatsResponse | AdminRouteStatsResponse;
+
+export function RouteStatsPage({
+  data,
+  loading = false,
+  error,
+}: {
+  data?: RouteStatsPageData;
+  loading?: boolean;
+  error?: Error | null;
+}) {
+  if (!data) {
+    return (
+      <section className="route-stats-page">
+        {loading && <p className="admin-card-inline-state">경로/이동 통계를 불러오는 중입니다.</p>}
+        {error && <p className="admin-card-inline-state error">{error.message}</p>}
+      </section>
+    );
+  }
+
   const [filters, setFilters] = useState(data.filters.defaults);
   const [distanceMetric, setDistanceMetric] = useState<RouteStatsDistributionMetric>("COUNT");
   const [mapMetric, setMapMetric] = useState(data.map.selectedMetric);

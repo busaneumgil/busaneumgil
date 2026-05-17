@@ -53,6 +53,7 @@ currentRoute가 제공되면 현재 화면 위치로 활용하세요.
 6. 의도 파악 불가 → unknown 호출
 
 대화 히스토리를 반드시 참고하세요.
+confirmed 파라미터 없이 confirm_ 도구를 호출할 때는 반드시 confirmation_message를 포함해야 합니다. confirmation_message를 생략하면 사용자에게 안내 문구가 전달되지 않습니다.
 """
 
     VOICE_TOOLS = [{"functionDeclarations": [
@@ -150,7 +151,7 @@ currentRoute가 제공되면 현재 화면 위치로 활용하세요.
                 "properties": {
                     "place_name": {
                         "type": "STRING",
-                        "description": "검색할 장소명"
+                        "description": "장소명. 한국어 발음 표기는 반드시 로마자로 복원할 것. 예: 지에스이십오→GS25, 씨유→CU, 케이에프씨→KFC, 에이치앤엠→H&M, 이케아→IKEA"
                     },
                     "confirmation_message": {
                         "type": "STRING",
@@ -194,7 +195,7 @@ currentRoute가 제공되면 현재 화면 위치로 활용하세요.
                 "properties": {
                     "place_name": {
                         "type": "STRING",
-                        "description": "북마크에 추가할 장소명"
+                        "description": "장소명. 한국어 발음 표기는 반드시 로마자로 복원할 것. 예: 지에스이십오→GS25, 씨유→CU, 케이에프씨→KFC, 에이치앤엠→H&M, 이케아→IKEA"
                     },
                     "confirmation_message": {
                         "type": "STRING",
@@ -216,7 +217,7 @@ currentRoute가 제공되면 현재 화면 위치로 활용하세요.
                 "properties": {
                     "place_name": {
                         "type": "STRING",
-                        "description": "북마크에서 삭제할 장소명"
+                        "description": "장소명. 한국어 발음 표기는 반드시 로마자로 복원할 것. 예: 지에스이십오→GS25, 씨유→CU, 케이에프씨→KFC, 에이치앤엠→H&M, 이케아→IKEA"
                     },
                     "confirmation_message": {
                         "type": "STRING",

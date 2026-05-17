@@ -36,6 +36,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -87,7 +89,6 @@ data class RecentDestinationRowState(
 @Composable
 fun RecentDestinationBottomSheetShell(
     state: RecentDestinationBottomSheetState,
-    onViewAllClick: () -> Unit,
     onPreviewClick: (String) -> Unit,
     onRouteClick: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -97,18 +98,36 @@ fun RecentDestinationBottomSheetShell(
     val dismissThresholdMinPx = with(density) { 72.dp.toPx() }
     val handleInteractionSource = remember { MutableInteractionSource() }
     val restoreHandleInteractionSource = remember { MutableInteractionSource() }
+    val listScrollState = rememberScrollState()
+    var isExpanded by remember(state.items) { mutableStateOf(false) }
     var isDismissedByUser by remember(state.items) { mutableStateOf(false) }
-    var sheetHeightPx by remember(state.items, state.isVisible) { mutableIntStateOf(0) }
-    var sheetOffsetPx by remember(state.items, state.isVisible) { mutableFloatStateOf(0f) }
-    var isDragging by remember(state.items, state.isVisible) { mutableStateOf(false) }
+    var sheetHeightPx by remember(state.items, state.isVisible, isExpanded) { mutableIntStateOf(0) }
+    var sheetOffsetPx by remember(state.items, state.isVisible, isExpanded) { mutableFloatStateOf(0f) }
+    var isDragging by remember(state.items, state.isVisible, isExpanded) { mutableStateOf(false) }
     val isSheetVisible = state.isVisible && !isDismissedByUser
     val isRestoreHandleVisible = state.isVisible && isDismissedByUser
     val restoreHandleDescription = stringResource(id = R.string.map_recent_destination_sheet_restore)
+    val canExpand = state.items.size > RecentDestinationCollapsedItemCount
+    val displayedItems =
+        if (isExpanded && canExpand) {
+            state.items.take(RecentDestinationExpandedItemLimit)
+        } else {
+            state.items.take(RecentDestinationCollapsedItemCount)
+        }
 
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
     ) {
-        val sheetMaxHeight = maxHeight * 0.58f
+        val sheetMaxHeight =
+            maxHeight *
+                if (isExpanded && canExpand) {
+                    RecentDestinationExpandedSheetMaxHeightFraction
+                } else {
+                    RecentDestinationCollapsedSheetMaxHeightFraction
+                }
+        val listMaxHeight =
+            (sheetMaxHeight - RecentDestinationExpandedListReservedHeight)
+                .coerceAtLeast(RecentDestinationExpandedListMinHeight)
         val maxSheetOffsetPx = sheetHeightPx.toFloat().coerceAtLeast(0f)
         val dismissThresholdPx = (sheetHeightPx * 0.35f).coerceAtLeast(dismissThresholdMinPx)
         val animatedSheetOffsetPx by animateFloatAsState(
@@ -144,6 +163,16 @@ fun RecentDestinationBottomSheetShell(
             } else {
                 sheetOffsetPx = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
             }
+        }
+
+        LaunchedEffect(canExpand) {
+            if (!canExpand) {
+                isExpanded = false
+            }
+        }
+
+        LaunchedEffect(isExpanded, state.items) {
+            listScrollState.scrollTo(0)
         }
 
         AnimatedVisibility(
@@ -208,35 +237,76 @@ fun RecentDestinationBottomSheetShell(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-                    RecentDestinationViewAllAction(onClick = onViewAllClick) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                    if (canExpand) {
+                        RecentDestinationSheetToggleAction(
+                            onClick = {
+                                isExpanded = !isExpanded
+                                sheetOffsetPx = 0f
+                                isDragging = false
+                            },
                         ) {
-                            Text(
-                                text = "전체보기",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.secondary,
-                            )
-                            Text(
-                                text = ">",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.secondary,
-                            )
+                            if (isExpanded) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = stringResource(id = R.string.map_recent_destination_collapse),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                    )
+                                    Text(
+                                        text = "^",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                    )
+                                }
+                            } else {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = stringResource(id = R.string.map_recent_destination_expand),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                    )
+                                    Text(
+                                        text = ">",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
 
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier =
+                        if (isExpanded && canExpand) {
+                            Modifier
+                                .heightIn(max = listMaxHeight)
+                                .verticalScroll(listScrollState)
+                        } else {
+                            Modifier
+                        },
+                    verticalArrangement =
+                        Arrangement.spacedBy(
+                            if (isExpanded && canExpand) {
+                                12.dp
+                            } else {
+                                16.dp
+                            },
+                        ),
                 ) {
-                    state.items.forEachIndexed { index, item ->
+                    displayedItems.forEachIndexed { index, item ->
                         RecentDestinationRow(
                             state = item,
                             onPreviewClick = { onPreviewClick(item.placeId) },
                             onRouteClick = { onRouteClick(item.placeId) },
                         )
-                        if (index != state.items.lastIndex) {
+                        if (index != displayedItems.lastIndex) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
                         }
                     }
@@ -410,7 +480,7 @@ private fun RecentDestinationRow(
 }
 
 @Composable
-private fun RecentDestinationViewAllAction(
+private fun RecentDestinationSheetToggleAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
@@ -557,3 +627,9 @@ private fun recentDestinationTagIconSizeDp(
     }
 
 private val RecentDestinationRestoreHandleHeight = 32.dp
+private const val RecentDestinationCollapsedItemCount = 3
+private const val RecentDestinationExpandedItemLimit = 10
+private const val RecentDestinationCollapsedSheetMaxHeightFraction = 0.58f
+private const val RecentDestinationExpandedSheetMaxHeightFraction = 0.65f
+private val RecentDestinationExpandedListReservedHeight = 88.dp
+private val RecentDestinationExpandedListMinHeight = 240.dp

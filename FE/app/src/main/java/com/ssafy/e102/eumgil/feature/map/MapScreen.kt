@@ -208,7 +208,6 @@ fun MapScreen(
                                     uiState.routeEndpointMapPickerState == null &&
                                     uiState.isVoiceSearchVisible.not(),
                         ),
-                    onViewAllClick = onNavigateToSavedRoutes,
                     onPreviewClick = { placeId ->
                         onAction(MapUiAction.RecentDestinationPreviewClicked(placeId))
                     },

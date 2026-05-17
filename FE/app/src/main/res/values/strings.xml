@@ -286,6 +286,8 @@
     <string name="map_route_selection_destination_empty">미선택</string>
     <string name="map_route_selection_status_a11y">출발 %1$s. 도착 %2$s.</string>
     <string name="map_recent_destination_sheet_restore">최근 목적지 다시 펼치기</string>
+    <string name="map_recent_destination_expand">전체보기</string>
+    <string name="map_recent_destination_collapse">접기</string>
     <string name="map_facility_detail_sheet_toggle">장소 상세 접기/펼치기</string>
     <string name="map_facility_detail_close">장소 선택 닫기</string>
     <string name="map_facility_detail_action_supporting">실제 route setting 연결은 다음 스레드에서 마무리하고, 추가 CTA 슬롯도 이 영역에 확장합니다.</string>

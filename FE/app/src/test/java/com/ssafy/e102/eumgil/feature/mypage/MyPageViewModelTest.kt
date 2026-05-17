@@ -578,6 +578,7 @@ private class FakeReportRepository(
                 ReportHistoryData(
                     historyId = "report-$index",
                     reportCategory = "OTHER_OBSTACLE",
+                    processingStatus = null,
                     description = null,
                     address = null,
                     latitude = 35.0,

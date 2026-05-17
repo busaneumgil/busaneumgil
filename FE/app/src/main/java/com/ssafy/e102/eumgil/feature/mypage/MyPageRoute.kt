@@ -28,7 +28,6 @@ import kotlinx.coroutines.launch
 fun MyPageRoute(
     onNavigateToUserTypePrimary: () -> Unit,
     onNavigateToLogin: () -> Unit,
-    onNavigateToReportHistory: () -> Unit,
     onNavigateToGuide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -87,7 +86,6 @@ fun MyPageRoute(
             when (event) {
                 MyPageUiEvent.NavigateToUserTypePrimary -> onNavigateToUserTypePrimary()
                 MyPageUiEvent.NavigateToLogin -> onNavigateToLogin()
-                MyPageUiEvent.NavigateToReportHistory -> onNavigateToReportHistory()
                 MyPageUiEvent.NavigateToGuide -> onNavigateToGuide()
                 MyPageUiEvent.OpenPrivacyPolicy -> context.startActivity(createPrivacyPolicyIntent())
                 MyPageUiEvent.OpenServiceTerms -> context.startActivity(createServiceTermsIntent())

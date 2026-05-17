@@ -14,7 +14,7 @@ class GeneralModeDirectFontWeightUsageTest {
             "src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt",
             "src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt",
             "src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt",
-            "src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageReportHistoryScreen.kt",
+            "src/main/java/com/ssafy/e102/eumgil/feature/report/ReportHistoryScreen.kt",
             "src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewport.kt",
             "src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt",
             "src/main/java/com/ssafy/e102/eumgil/core/designsystem/component/place/PlaceListCard.kt",

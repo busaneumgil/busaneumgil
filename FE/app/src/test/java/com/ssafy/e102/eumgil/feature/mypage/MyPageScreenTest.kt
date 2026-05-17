@@ -67,7 +67,6 @@ class MyPageScreenTest {
 
     @Test
     fun `main menu rows suppress ripple only for entries that open another screen`() {
-        assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.REPORT_HISTORY))
         assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.APP_HELP))
         assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.PRIVACY_POLICY))
         assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.SERVICE_TERMS))
@@ -91,14 +90,14 @@ class MyPageScreenTest {
     }
 
     @Test
-    fun `my page report history menu uses dedicated icon resource`() {
+    fun `my page report history menu is owned by report tab`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
                 .readText()
 
-        assertTrue(
-            "My page report history should use its own dedicated drawable resource instead of reusing a generic report asset.",
-            source.contains("iconRes = R.drawable.ic_mypage_report_history"),
+        assertFalse(
+            "My page should not expose report history as a menu row because report tab owns that flow.",
+            source.contains("MyPageMenuItem.REPORT_HISTORY"),
         )
     }
 
@@ -121,8 +120,7 @@ class MyPageScreenTest {
         )
         assertTrue(
             "The regular policy/report menu rows and footer actions should be visible above the bottom tab.",
-            source.contains("MyPageMenuItem.REPORT_HISTORY") &&
-                source.contains("MyPageMenuItem.PRIVACY_POLICY") &&
+            source.contains("MyPageMenuItem.PRIVACY_POLICY") &&
                 source.contains("MyPageMenuItem.SERVICE_TERMS") &&
                 source.contains("MyPageFooter("),
         )

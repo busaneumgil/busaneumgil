@@ -79,13 +79,15 @@ fun LowVisionSearchRoute(
             when (event) {
                 SearchUiEvent.NavigateBack -> onNavigateBack()
                 is SearchUiEvent.NavigateToResults -> Unit
-                SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
+                is SearchUiEvent.NavigateToRouteSetting -> onNavigateToRouteSetting()
                 SearchUiEvent.NavigateToRouteBriefing -> onNavigateToRouteBriefing()
                 SearchUiEvent.NavigateToMapPreview -> Unit
+                is SearchUiEvent.NavigateToRouteEndpointMapPicker -> Unit
                 SearchUiEvent.NavigateToLowVisionBookmark -> onNavigateToBookmark()
                 SearchUiEvent.NavigateToVoiceInput -> Unit
                 SearchUiEvent.StartVoiceCapture -> Unit
                 SearchUiEvent.StopVoiceCapture -> Unit
+                SearchUiEvent.RequestLocationPermission -> Unit
             }
         }
     }

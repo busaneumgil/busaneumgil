@@ -74,6 +74,14 @@ export function twoPointAddDraft(segmentType: AddSegmentType, points: Coord[], e
   };
 }
 
+export function describeSideLineNodeSnap(nodeId: string, distanceMeter: number): string {
+  return `SIDE_LINE 끝점을 node #${nodeId}에 ${formatAdjustmentDistance(distanceMeter)} 보정했습니다. 저장 시 보정 좌표로 반영됩니다.`;
+}
+
+export function describeCrossWalkProjection(distanceMeter: number): string {
+  return `CROSS_WALK 끝점을 기존 선 위로 ${formatAdjustmentDistance(distanceMeter)} 보정했습니다. 저장 시 보정 좌표로 반영됩니다.`;
+}
+
 export function roadNodeCandidates(nodes: RoadNodeFeature[]): SegmentEndpointNodeCandidate[] {
   return nodes.map((node) => ({
     nodeId: String(node.properties.vertexId),
@@ -280,4 +288,8 @@ function distanceMeter(a: Coord, b: Coord) {
   const dx = (a[0] - b[0]) * metersPerDegreeLng;
   const dy = (a[1] - b[1]) * metersPerDegreeLat;
   return Math.hypot(dx, dy);
+}
+
+function formatAdjustmentDistance(distanceMeter: number): string {
+  return `${distanceMeter.toFixed(1)}m`;
 }

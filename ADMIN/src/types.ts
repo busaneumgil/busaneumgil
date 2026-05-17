@@ -33,7 +33,6 @@ export type AdminPage =
   | "routeTuning"
   | "routeStats"
   | "bottleneckMonitoring"
-  | "movementPatternAnalysis"
   | "facilities"
   | "hazards"
   | "notices"

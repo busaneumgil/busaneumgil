@@ -342,6 +342,7 @@ export interface ManualEditDocument {
 
 export interface RoadNetworkEditApplyResponse {
   addedSegments: number;
+  skippedSegments?: number;
   deletedSegments: number;
   createdNodes: number;
   snappedNodes: number;

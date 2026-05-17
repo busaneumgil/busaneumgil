@@ -116,18 +116,18 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("관리자 보행 네트워크는 구 경계와 교차하는 DB segment를 GeoJSON으로 변환한다")
+	@DisplayName("관리자 보행 네트워크는 선택 동 경계와 교차하는 DB segment를 GeoJSON으로 변환한다")
 	void getRoadNetwork() {
 		RoadSegment roadSegment = roadSegment(1L);
-		when(roadSegmentRepository.findAllIntersectingGu("강서구"))
+		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동"))
 			.thenReturn(List.of(roadSegment));
-		when(roadSegmentRepository.countIntersectingGu("강서구")).thenReturn(1L);
+		when(roadSegmentRepository.countIntersectingArea("강서구", "명지동")).thenReturn(1L);
 		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());
 		when(roadNodeRepository.findAllById(any())).thenReturn(List.of(
 			roadNode(10L, 129.0, 35.0),
 			roadNode(20L, 129.1, 35.1)));
 
-		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "전체", 10);
+		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "명지동", 10);
 
 		assertThat(response.summary().segmentCount()).isEqualTo(1);
 		assertThat(response.segments().features()).hasSize(1);
@@ -152,12 +152,12 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("관리자 편의시설은 구가 있으면 구 경계 주변 places를 조회한다")
+	@DisplayName("관리자 편의시설은 구/동이 있으면 선택 동 주변 places를 조회한다")
 	void getFacilitiesByArea() throws Exception {
 		Place place = place();
-		when(placeRepository.findAllIntersectingGu("강서구", 10)).thenReturn(List.of(place));
+		when(placeRepository.findAllIntersectingArea("강서구", "명지동", 10)).thenReturn(List.of(place));
 
-		AdminFacilityPayloadResponse response = adminMapService.getFacilities("강서구", "전체", 10);
+		AdminFacilityPayloadResponse response = adminMapService.getFacilities("강서구", "명지동", 10);
 
 		assertThat(response.summary().facilityCount()).isEqualTo(1);
 		assertThat(response.facilities().features()).hasSize(1);

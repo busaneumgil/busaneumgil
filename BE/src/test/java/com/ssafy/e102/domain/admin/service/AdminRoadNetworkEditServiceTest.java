@@ -42,21 +42,71 @@ class AdminRoadNetworkEditServiceTest {
 	}
 
 	@Test
+	@DisplayName("새 add endpoint들은 1m 반경 cluster 단위로 같은 node를 생성한다")
+	void resolveAddSegmentNodesClustersNearbyCreatedEndpoints() {
+		ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+
+		ReflectionTestUtils.invokeMethod(adminRoadNetworkEditService, "resolveAddSegmentNodes");
+
+		verify(jdbcTemplate, times(6)).execute(sqlCaptor.capture());
+		assertThat(sqlCaptor.getAllValues().get(3))
+			.contains("admin_edit_created_point_assignments")
+			.contains("ST_ClusterDBSCAN")
+			.contains("eps := 1.0")
+			.contains("admin_edit_unresolved_points");
+	}
+
+	@Test
 	@DisplayName("bulk insert SQL은 resolved node 좌표로 저장 geometry endpoint를 다시 맞춘다")
 	void insertBulkRoadSegmentsSynchronizesResolvedNodeCoordinatesIntoGeometry() {
 		ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
 
 		ReflectionTestUtils.invokeMethod(adminRoadNetworkEditService, "insertBulkRoadSegments");
 
-		verify(jdbcTemplate, times(2)).execute(sqlCaptor.capture());
+		verify(jdbcTemplate, times(3)).execute(sqlCaptor.capture());
 		List<String> sqlStatements = sqlCaptor.getAllValues();
-		String insertSql = sqlStatements.get(1);
+		String insertSql = sqlStatements.get(2);
 
 		assertThat(insertSql)
 			.contains("join road_nodes from_node")
 			.contains("join road_nodes to_node")
 			.contains("ST_SetPoint")
 			.contains("ST_NPoints(raw_geom) - 1");
+	}
+
+	@Test
+	@DisplayName("bulk insert SQL은 최종 양끝 node가 같아진 add edit만 skip 처리한다")
+	void insertBulkRoadSegmentsSkipsOnlySameNodeAdds() {
+		ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+
+		ReflectionTestUtils.invokeMethod(adminRoadNetworkEditService, "insertBulkRoadSegments");
+
+		verify(jdbcTemplate, times(3)).execute(sqlCaptor.capture());
+		List<String> sqlStatements = sqlCaptor.getAllValues();
+
+		assertThat(sqlStatements.get(1))
+			.contains("admin_edit_skipped_add_segments");
+		assertThat(sqlStatements.get(2))
+			.contains("all_resolved_segments")
+			.contains("where from_node_id = to_node_id")
+			.contains("where from_node_id <> to_node_id");
+	}
+
+	@Test
+	@DisplayName("add endpoint split SQL은 CROSS_WALK와 SIDE_LINE 모두 기존 SIDE_LINE 중간 보정을 적용한다")
+	void splitExistingSegmentsForProjectedAddEndpointsSupportsSideLine() {
+		ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+		when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(0L);
+
+		ReflectionTestUtils.invokeMethod(adminRoadNetworkEditService, "splitExistingSegmentsForProjectedAddEndpoints");
+
+		verify(jdbcTemplate, times(2)).execute(sqlCaptor.capture());
+		assertThat(sqlCaptor.getAllValues().get(0))
+			.contains("admin_edit_add_split_points")
+			.contains("s.segment_type in ('CROSS_WALK', 'SIDE_LINE')")
+			.contains("projection_distance_meter")
+			.contains("ST_ClosestPoint")
+			.contains("ST_LineLocatePoint");
 	}
 
 	@Test

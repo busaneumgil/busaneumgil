@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import type { AreaBoundaryFeature, BridgeFeature, BridgePayload, EditableSegmentType, EditAction, GeoPoint, ReferenceLayerKey, ReferencePointFeature, ReferencePointPayload, RoadAttributeFeature, RoadAttributePayload, SegmentFeature, SegmentFeatureType, SegmentPayload } from "../types";
 import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
-import { deletedEdgeIds, describeCrossWalkProjection, describeSideLineNodeSnap, draftSegmentFeatures, isSameSnappedNode, newNodeRef, resetPolygonDeleteSelection, roadNodeCandidates, segmentEndpointNodeCandidates, segmentsTouchingPolygon, snapToSegmentEndpointNode, type SnappedSegmentEndpoint, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
+import { deletedEdgeIds, describeCrossWalkProjection, describeSideLineNodeSnap, draftEndpointNodeCandidates, draftSegmentFeatures, newNodeRef, resetPolygonDeleteSelection, roadNodeCandidates, segmentEndpointNodeCandidates, segmentsTouchingPolygon, snapToSegmentEndpointNode, type SnappedSegmentEndpoint, twoPointAddDraft, visibleSegmentFeatures } from "./draftSegments";
 import { shouldShowRoadAttributeReference } from "./networkReferenceLayer";
 import { roadAttributeStrokeColor, roadAttributeStrokeStyle, roadAttributeStrokeWeight } from "./roadAttributeStyle";
 import { roadviewUnavailableMessage, shouldOpenRoadviewForMode } from "./roadviewMode";
@@ -399,15 +399,6 @@ export function SegmentMap({
       addPointsRef.current = addEndpointSnapsRef.current.map((item) => item.coord);
       redrawAddPreview();
       setPendingAddCount(addPointsRef.current.length);
-      if (isSameSnappedNode(addEndpointSnapsRef.current[0], addEndpointSnapsRef.current[1])) {
-        const first = addEndpointSnapsRef.current[0];
-        addEndpointSnapsRef.current = first ? [first] : [];
-        addPointsRef.current = addEndpointSnapsRef.current.map((item) => item.coord);
-        redrawAddPreview();
-        setPendingAddCount(addPointsRef.current.length);
-        setSnapMessage("시작점과 끝점이 같은 node에 붙습니다. 다른 끝점을 선택하세요.");
-        return;
-      }
       const result = twoPointAddDraft(addTypeRef.current, addPointsRef.current, addEndpointSnapsRef.current);
       if (result.rejectedReason) {
         addPointsRef.current = result.remainingPoints;
@@ -831,9 +822,13 @@ export function SegmentMap({
       return { coord: snappedCoord, snapped: false, nodeRef: newNodeRef(snappedCoord) };
     }
     const explicitNodeCandidates = roadNodeCandidates(payload?.roadNodes?.features ?? []);
+    const draftNodeCandidates = draftEndpointNodeCandidates(draftEditsRef.current);
     const candidates = explicitNodeCandidates.length
-      ? explicitNodeCandidates
-      : segmentEndpointNodeCandidates(visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current));
+      ? [...explicitNodeCandidates, ...draftNodeCandidates]
+      : [
+          ...segmentEndpointNodeCandidates(visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current)),
+          ...draftNodeCandidates,
+        ];
     const endpoint = snapToSegmentEndpointNode(coord, candidates);
     if (!endpoint.snapped) {
       setSnapMessage(null);
@@ -1278,7 +1273,7 @@ function createBridgeOverlay(feature: BridgeFeature, map: KakaoMap): KakaoOverla
   const marker = new window.kakao.maps.Circle({
     map,
     center: new window.kakao.maps.LatLng(markerPoint[1], markerPoint[0]),
-    radius: 4,
+    radius: 4 / 3,
     strokeWeight: 2,
     strokeColor: "#ffffff",
     strokeOpacity: 1,

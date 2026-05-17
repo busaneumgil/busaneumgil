@@ -18,7 +18,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
@@ -27,12 +31,18 @@ private val MapBottomSheetTopPadding = EumSpacing.small
 private val MapBottomSheetHandleBottomSpacing = EumSpacing.small
 internal val MapBottomSheetHandleHeight = 16.dp
 
+enum class MapBottomSheetEdgeTreatment {
+    Floating,
+    AttachedToBottomBar,
+}
+
 @Composable
 fun MapBottomSheetSurface(
     modifier: Modifier = Modifier,
     showHandle: Boolean = true,
     handleModifier: Modifier = Modifier,
     containerColor: Color = Color.Unspecified,
+    edgeTreatment: MapBottomSheetEdgeTreatment = MapBottomSheetEdgeTreatment.Floating,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val resolvedContainerColor =
@@ -41,17 +51,38 @@ fun MapBottomSheetSurface(
         } else {
             containerColor
         }
+    val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+    val isAttachedToBottomBar = edgeTreatment == MapBottomSheetEdgeTreatment.AttachedToBottomBar
 
     Surface(
-        modifier = modifier,
+        modifier =
+            if (isAttachedToBottomBar) {
+                modifier.attachedBottomBarBorder(
+                    color = borderColor,
+                    strokeWidth = 1.dp,
+                    topCornerRadius = EumRadius.large,
+                )
+            } else {
+                modifier
+            },
         shape =
             RoundedCornerShape(
                 topStart = EumRadius.large,
                 topEnd = EumRadius.large,
             ),
         color = resolvedContainerColor,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)),
-        shadowElevation = 12.dp,
+        border =
+            if (isAttachedToBottomBar) {
+                null
+            } else {
+                BorderStroke(1.dp, borderColor)
+            },
+        shadowElevation =
+            if (isAttachedToBottomBar) {
+                0.dp
+            } else {
+                12.dp
+            },
     ) {
         Column(
             modifier =
@@ -86,3 +117,31 @@ fun MapBottomSheetSurface(
         }
     }
 }
+
+private fun Modifier.attachedBottomBarBorder(
+    color: Color,
+    strokeWidth: Dp,
+    topCornerRadius: Dp,
+): Modifier =
+    drawWithContent {
+        drawContent()
+
+        val strokePx = strokeWidth.toPx()
+        val halfStroke = strokePx / 2f
+        val radiusPx = topCornerRadius.toPx().coerceAtMost(size.width / 2f)
+        val path =
+            Path().apply {
+                moveTo(halfStroke, size.height)
+                lineTo(halfStroke, radiusPx)
+                quadraticBezierTo(halfStroke, halfStroke, radiusPx, halfStroke)
+                lineTo(size.width - radiusPx, halfStroke)
+                quadraticBezierTo(size.width - halfStroke, halfStroke, size.width - halfStroke, radiusPx)
+                lineTo(size.width - halfStroke, size.height)
+            }
+
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(width = strokePx),
+        )
+    }

@@ -196,6 +196,7 @@ fun RecentDestinationBottomSheetShell(
                             },
                         ),
                 containerColor = MaterialTheme.colorScheme.surface,
+                edgeTreatment = MapBottomSheetEdgeTreatment.AttachedToBottomBar,
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

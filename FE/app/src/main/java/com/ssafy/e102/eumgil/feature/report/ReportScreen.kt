@@ -188,8 +188,8 @@ private fun ReportTopBar(
 
 internal fun reportTopBarShowsBackButton(step: ReportStep): Boolean =
     when (step) {
-        ReportStep.LocationConfirm, ReportStep.DetailInput -> true
-        ReportStep.Home, ReportStep.TypeSelection, ReportStep.Complete -> false
+        ReportStep.TypeSelection, ReportStep.LocationConfirm, ReportStep.DetailInput -> true
+        ReportStep.Home, ReportStep.Complete -> false
     }
 
 @Composable
@@ -199,21 +199,29 @@ private fun ReportBottomBar(
 ) {
     when (uiState.currentStep) {
         ReportStep.Home -> Unit
-        ReportStep.TypeSelection -> Unit
-        ReportStep.LocationConfirm ->
+        ReportStep.TypeSelection ->
             ReportPrimaryActionBar(
                 label = "다음",
-                enabled = uiState.isLocationStepConfirmable,
+                enabled = uiState.reportType.value != null,
                 onClick = { onAction(ReportUiAction.NextStepClicked) },
                 suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
             )
+        ReportStep.LocationConfirm ->
+            ReportStepActionBar(
+                primaryLabel = "이 위치로 다음",
+                enabled = uiState.isLocationStepConfirmable,
+                onPrimaryClick = { onAction(ReportUiAction.NextStepClicked) },
+                secondaryLabel = "이전",
+                onSecondaryClick = { onAction(ReportUiAction.BackClicked) },
+            )
         ReportStep.DetailInput -> {
             val submitting = uiState.submitState is ReportSubmitState.Submitting
-            ReportPrimaryActionBar(
-                label = if (submitting) "제출 중" else "제보 접수하기",
+            ReportStepActionBar(
+                primaryLabel = if (submitting) "제출 중" else "제보 접수하기",
                 enabled = uiState.isSubmitEnabled,
-                onClick = { onAction(ReportUiAction.SubmitClicked) },
-                suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
+                onPrimaryClick = { onAction(ReportUiAction.SubmitClicked) },
+                secondaryLabel = "이전",
+                onSecondaryClick = { onAction(ReportUiAction.BackClicked) },
             )
         }
         ReportStep.Complete -> Unit
@@ -257,6 +265,51 @@ private fun ReportPrimaryActionBar(
                 contentPadding = PaddingValues(vertical = EumSpacing.small),
             ) {
                 Text(text = label)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportStepActionBar(
+    primaryLabel: String,
+    enabled: Boolean,
+    onPrimaryClick: () -> Unit,
+    secondaryLabel: String,
+    onSecondaryClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shadowElevation = 8.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(EumSpacing.medium),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(
+                onClick = onSecondaryClick,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = 52.dp),
+                shape = RoundedCornerShape(EumRadius.small),
+            ) {
+                Text(text = secondaryLabel)
+            }
+            Button(
+                onClick = onPrimaryClick,
+                enabled = enabled,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = 52.dp),
+                shape = RoundedCornerShape(EumRadius.small),
+            ) {
+                Text(text = primaryLabel)
             }
         }
     }
@@ -681,6 +734,7 @@ private fun ReportTypeStep(
         )
         Spacer(modifier = Modifier.height(EumSpacing.xSmall))
         ReportTypeGrid(
+            selectedType = input.value,
             onTypeSelected = { type -> onAction(ReportUiAction.ReportTypeSelected(type)) },
             modifier = Modifier.weight(1f).fillMaxWidth(),
         )
@@ -718,6 +772,7 @@ private fun ReportStepProgress(
 
 @Composable
 private fun ReportTypeGrid(
+    selectedType: ReportType?,
     onTypeSelected: (ReportType) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -740,7 +795,7 @@ private fun ReportTypeGrid(
                 rowItems.forEach { type ->
                     ReportTypeCard(
                         type = type,
-                        selected = false,
+                        selected = selectedType == type,
                         onClick = { onTypeSelected(type) },
                         modifier =
                             Modifier
@@ -1184,6 +1239,7 @@ private fun ReportDetailStep(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
 ) {
+    val reportType = uiState.reportType.value
     Column(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
@@ -1199,6 +1255,14 @@ private fun ReportDetailStep(
             style = MaterialTheme.typography.bodyLarge,
             color = EumTextMuted,
         )
+        if (reportType != null) {
+            ReportSelectedProblemCard(
+                type = reportType,
+                locationText =
+                    uiState.location.value?.address
+                        ?: uiState.location.addressText.ifBlank { "부산광역시 강서구" },
+            )
+        }
         ReportDescriptionSection(
             input = uiState.description,
             onAction = onAction,
@@ -1211,6 +1275,55 @@ private fun ReportDetailStep(
             uiState = uiState,
             onAction = onAction,
         )
+    }
+}
+
+@Composable
+private fun ReportSelectedProblemCard(
+    type: ReportType,
+    locationText: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, EumBorderSubtle),
+        shadowElevation = 2.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(EumSpacing.medium),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(id = type.iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(56.dp),
+                tint = Color.Unspecified,
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            ) {
+                Text(
+                    text = type.label,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = locationText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = EumTextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
@@ -1477,14 +1590,12 @@ private fun ReportPhotoSection(
     onAction: (ReportUiAction) -> Unit,
 ) {
     val isError = input.error != null
-    val helperText =
-        reportPhotoErrorText(input.error)
-            ?: "사진은 선택 사항입니다. 최대 ${ReportFormLimits.PHOTO_MAX_COUNT}장까지 첨부할 수 있어요."
+    val errorText = reportPhotoErrorText(input.error)
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(EumRadius.medium),
+        shape = RoundedCornerShape(EumRadius.large),
         border =
             BorderStroke(
                 width = 1.dp,
@@ -1501,38 +1612,64 @@ private fun ReportPhotoSection(
             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            enabled = input.canAddMore,
+                            role = Role.Button,
+                            onClick = { onAction(ReportUiAction.PhotoAddClicked) },
+                        )
+                        .semantics {
+                            contentDescription = "사진 추가"
+                        },
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             ) {
-                Text(
-                    text = "사진 첨부 (선택)",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_permission_camera),
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp),
+                    tint = MaterialTheme.colorScheme.primary,
                 )
-                Text(
-                    text = "${input.count}/${ReportFormLimits.PHOTO_MAX_COUNT}장",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
+                ) {
+                    Text(
+                        text = "사진 추가 (선택)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "현장 사진을 첨부하면\n더 정확한 확인이 가능해요.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = EumTextMuted,
+                    )
+                }
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_route_card_chevron),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = EumTextMuted,
                 )
             }
-            ReportPhotoGrid(
-                photos = input.values,
-                canAddMore = input.canAddMore,
-                onAddClick = { onAction(ReportUiAction.PhotoAddClicked) },
-                onRemoveClick = { index -> onAction(ReportUiAction.PhotoRemovedAt(index)) },
-            )
-            Text(
-                text = helperText,
-                style = MaterialTheme.typography.bodyMedium,
-                color =
-                    if (isError) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-            )
+            if (input.values.isNotEmpty()) {
+                ReportPhotoGrid(
+                    photos = input.values,
+                    canAddMore = input.canAddMore,
+                    onAddClick = { onAction(ReportUiAction.PhotoAddClicked) },
+                    onRemoveClick = { index -> onAction(ReportUiAction.PhotoRemovedAt(index)) },
+                )
+            }
+            if (errorText != null) {
+                Text(
+                    text = errorText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }
@@ -1810,17 +1947,9 @@ internal fun reportStepTitle(
     step: ReportStep,
     selectedType: ReportType? = null,
 ): String {
-    val typeLabelOverride =
-        selectedType
-            ?.takeIf { step == ReportStep.LocationConfirm || step == ReportStep.DetailInput }
-            ?.label
-    if (typeLabelOverride != null) return typeLabelOverride
-
     return when (step) {
         ReportStep.Home -> "제보"
-        ReportStep.TypeSelection -> "제보"
-        ReportStep.LocationConfirm -> "위치 확인"
-        ReportStep.DetailInput -> "상세 정보 입력"
+        ReportStep.TypeSelection, ReportStep.LocationConfirm, ReportStep.DetailInput -> "제보하기"
         ReportStep.Complete -> "제보 완료"
     }
 }

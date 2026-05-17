@@ -306,10 +306,10 @@ class ReportViewModel(
     private fun applyReportType(type: ReportType) {
         mutableUiState.update { state ->
             val nextStep =
-                if (state.currentStep == ReportStep.Home || state.currentStep == ReportStep.TypeSelection) {
-                    ReportStep.LocationConfirm
-                } else {
-                    state.currentStep
+                when (state.currentStep) {
+                    ReportStep.Home -> ReportStep.LocationConfirm
+                    ReportStep.TypeSelection -> ReportStep.TypeSelection
+                    else -> state.currentStep
                 }
             state.copy(
                 screenState = ReportScreenState.Editing,

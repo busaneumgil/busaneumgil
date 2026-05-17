@@ -518,13 +518,6 @@ private fun MainMenuCard(
             )
             MyPageMenuDivider()
             MyPageMenuRow(
-                menuItem = MyPageMenuItem.REPORT_HISTORY,
-                titleRes = R.string.my_page_menu_report_history,
-                iconRes = R.drawable.ic_mypage_report_history,
-                onClick = onMenuClick,
-            )
-            MyPageMenuDivider()
-            MyPageMenuRow(
                 menuItem = MyPageMenuItem.PRIVACY_POLICY,
                 titleRes = R.string.my_page_app_info_privacy_policy,
                 iconRes = R.drawable.ic_terms_privacy,
@@ -838,8 +831,7 @@ private fun CircleChevron() {
 }
 
 internal fun shouldSuppressMyPageMenuRipple(menuItem: MyPageMenuItem): Boolean =
-    menuItem == MyPageMenuItem.REPORT_HISTORY ||
-        menuItem == MyPageMenuItem.APP_HELP ||
+    menuItem == MyPageMenuItem.APP_HELP ||
         menuItem == MyPageMenuItem.PRIVACY_POLICY ||
         menuItem == MyPageMenuItem.SERVICE_TERMS
 

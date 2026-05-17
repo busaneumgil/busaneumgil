@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.ssafy.e102.domain.admin.repository.AdminAreaAssignmentRepository;
 import com.ssafy.e102.domain.auth.service.AuthSessionService;
 import com.ssafy.e102.domain.bookmark.repository.FavoriteRouteRepository;
 import com.ssafy.e102.domain.place.repository.BookmarkRepository;
@@ -58,6 +59,9 @@ class UserServiceProfileTest {
 	@Mock
 	private HazardReportRepository hazardReportRepository;
 
+	@Mock
+	private AdminAreaAssignmentRepository adminAreaAssignmentRepository;
+
 	private UserService userService;
 
 	@BeforeEach
@@ -71,7 +75,8 @@ class UserServiceProfileTest {
 			bookmarkRepository,
 			favoriteRouteRepository,
 			hazardReportImageRepository,
-			hazardReportRepository);
+			hazardReportRepository,
+			adminAreaAssignmentRepository);
 	}
 
 	@Test

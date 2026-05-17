@@ -11,16 +11,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -41,8 +36,10 @@ private const val REPORT_PHOTO_PICKER_LOG_TAG = "ReportPhotoPicker"
 @Composable
 fun ReportRoute(
     onNavigateBack: () -> Unit,
-    onNavigateToReportHistory: () -> Unit,
+    onNavigateToReportHistory: (String?) -> Unit,
     onNavigateToMap: () -> Unit,
+    startNewRequest: Boolean = false,
+    onStartNewRequestConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -83,10 +80,6 @@ fun ReportRoute(
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // ViewModel이 `ShowDraftDiscardDialog`를 emit하면 pendingType이 채워지고 AlertDialog가 노출된다.
-    // 사용자가 어느 한 선택지를 누르거나 다이얼로그 바깥을 탭하면 다시 null로 초기화한다.
-    var draftConflictPendingType: ReportType? by remember { mutableStateOf(null) }
-
     // ─── Photo Picker (Task 3.2) ──────────────────────────────────────────
     // PickMultipleVisualMedia를 ReportFormLimits.PHOTO_MAX_COUNT 만큼 받도록 등록.
     // 사용자가 이미 첨부한 사진 수까지 합쳐 cap을 초과할 가능성이 있으므로 결과 콜백에서 한 번 더 잘라낸다.
@@ -112,6 +105,13 @@ fun ReportRoute(
         viewModel.onAction(ReportUiAction.TabReentered)
     }
 
+    LaunchedEffect(startNewRequest, viewModel) {
+        if (startNewRequest) {
+            viewModel.onAction(ReportUiAction.StartNewReportClicked)
+            onStartNewRequestConsumed()
+        }
+    }
+
     // 권한 다이얼로그가 dismiss되면 Activity가 ON_RESUME으로 돌아오는 경우가 많다.
     // ViewModel이 pending 중인 위치 요청을 가지고 있다면 새 권한 상태로 흐름을 종료시키기 위해
     // ON_RESUME마다 RefreshLocationPermission을 한 번씩 dispatch한다 (idempotent — pending 없으면 no-op).
@@ -132,7 +132,7 @@ fun ReportRoute(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 ReportUiEvent.NavigateBack -> onNavigateBack()
-                ReportUiEvent.NavigateToReportHistory -> onNavigateToReportHistory()
+                is ReportUiEvent.NavigateToReportHistory -> onNavigateToReportHistory(event.historyId)
                 ReportUiEvent.NavigateToMap -> onNavigateToMap()
                 is ReportUiEvent.AnnounceForAccessibility -> {
                     // View.announceForAccessibility는 API 33+에서 deprecated이지만
@@ -141,9 +141,7 @@ fun ReportRoute(
                     view.announceForAccessibility(event.message)
                 }
                 ReportUiEvent.ScrollToFirstError -> scrollState.animateScrollTo(0)
-                is ReportUiEvent.ShowDraftDiscardDialog -> {
-                    draftConflictPendingType = event.pendingType
-                }
+                is ReportUiEvent.ShowDraftDiscardDialog -> Unit
                 ReportUiEvent.RequestLocationPermission -> {
                     // Activity가 살아있어야 launcher 사용 가능. Manager가 이미 Granted/Unavailable
                     // 상태이면 자체적으로 no-op으로 처리하므로 안전.
@@ -156,25 +154,6 @@ fun ReportRoute(
                 }
             }
         }
-    }
-
-    val pendingType = draftConflictPendingType
-    if (pendingType != null) {
-        ReportDraftConflictDialog(
-            onDiscardAndStartNew = {
-                viewModel.onAction(ReportUiAction.DiscardDraftAndStartNew(pendingType))
-                draftConflictPendingType = null
-            },
-            onResume = {
-                viewModel.onAction(ReportUiAction.ResumeDraftFromDialog)
-                draftConflictPendingType = null
-            },
-            onDismiss = {
-                // 다이얼로그 바깥 탭 / 시스템 back: 아무 변경 없이 닫는다.
-                // 사용자는 BottomSheet나 type 카드 재선택으로 다시 의사결정할 수 있다.
-                draftConflictPendingType = null
-            },
-        )
     }
 
     ReportScreen(
@@ -230,33 +209,6 @@ private fun handlePhotoPickerResult(
             ),
         )
     }
-}
-
-@Composable
-private fun ReportDraftConflictDialog(
-    onDiscardAndStartNew: () -> Unit,
-    onResume: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = "기존 작성 내용") },
-        text = {
-            Text(
-                text = "기존에 작성하던 내용이 있습니다. 삭제하고 새로 작성하시겠습니까?",
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onDiscardAndStartNew) {
-                Text(text = "삭제하고 새로 작성")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onResume) {
-                Text(text = "이어서 작성")
-            }
-        },
-    )
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =

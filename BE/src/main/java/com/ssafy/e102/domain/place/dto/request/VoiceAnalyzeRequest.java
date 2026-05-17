@@ -13,5 +13,6 @@ public record VoiceAnalyzeRequest(
 	String text,
 	@NotNull
 	VoiceAnalysisMode mode,
-	List<@Valid VoiceAnalyzeHistoryRequest> history) {
+	List<@Valid VoiceAnalyzeHistoryRequest> history,
+	String currentRoute) {
 }

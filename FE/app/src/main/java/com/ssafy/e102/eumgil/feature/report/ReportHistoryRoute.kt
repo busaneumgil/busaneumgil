@@ -1,4 +1,4 @@
-package com.ssafy.e102.eumgil.feature.mypage
+package com.ssafy.e102.eumgil.feature.report
 
 import android.content.Context
 import android.content.ContextWrapper
@@ -16,7 +16,8 @@ import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import kotlinx.coroutines.flow.collect
 
 @Composable
-fun MyPageReportHistoryRoute(
+fun ReportHistoryRoute(
+    initialHistoryId: String? = null,
     onNavigateBack: () -> Unit,
     onNavigateToReport: () -> Unit,
     modifier: Modifier = Modifier,
@@ -29,27 +30,33 @@ fun MyPageReportHistoryRoute(
     val activity = remember(context) { context.findComponentActivity() }
     val viewModelFactory =
         remember(appContainer) {
-            MyPageReportHistoryViewModel.provideFactory(reportRepository = appContainer.reportRepository)
+            ReportHistoryViewModel.provideFactory(reportRepository = appContainer.reportRepository)
         }
     val viewModel =
         remember(activity, viewModelFactory) {
-            val owner = checkNotNull(activity) { "MyPageReportHistoryRoute requires a ComponentActivity host." }
-            ViewModelProvider(owner, viewModelFactory)[MyPageReportHistoryViewModel::class.java]
+            val owner = checkNotNull(activity) { "ReportHistoryRoute requires a ComponentActivity host." }
+            ViewModelProvider(owner, viewModelFactory)[ReportHistoryViewModel::class.java]
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    LaunchedEffect(initialHistoryId, viewModel) {
+        initialHistoryId
+            ?.takeIf(String::isNotBlank)
+            ?.let { historyId -> viewModel.onAction(ReportHistoryUiAction.ReportClicked(historyId)) }
+    }
+
     LaunchedEffect(viewModel, onNavigateBack, onNavigateToReport, snackbarHostState) {
         viewModel.uiEvent.collect { event ->
             when (event) {
-                MyPageReportHistoryUiEvent.NavigateBack -> onNavigateBack()
-                MyPageReportHistoryUiEvent.NavigateToReport -> onNavigateToReport()
-                is MyPageReportHistoryUiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
+                ReportHistoryUiEvent.NavigateBack -> onNavigateBack()
+                ReportHistoryUiEvent.NavigateToReport -> onNavigateToReport()
+                is ReportHistoryUiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
             }
         }
     }
 
-    MyPageReportHistoryScreen(
+    ReportHistoryScreen(
         uiState = uiState,
         snackbarHostState = snackbarHostState,
         onAction = viewModel::onAction,

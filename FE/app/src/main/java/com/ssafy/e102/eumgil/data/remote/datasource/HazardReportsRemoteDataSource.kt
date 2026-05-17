@@ -140,6 +140,7 @@ open class HazardReportsRemoteDataSource private constructor(
         HazardReportListItemDto(
             reportId = requireLong("reportId"),
             reportType = requireString("reportType"),
+            status = requireString("status"),
             reportPoint = requireReportPointDto("reportPoint"),
             createdAt = requireString("createdAt"),
             representativeImageUrl = optNullableString("representativeImageUrl"),
@@ -151,6 +152,7 @@ open class HazardReportsRemoteDataSource private constructor(
         HazardReportDetailDto(
             reportId = requireLong("reportId"),
             reportType = requireString("reportType"),
+            status = requireString("status"),
             description = optNullableString("description"),
             reportPoint = requireReportPointDto("reportPoint"),
             createdAt = requireString("createdAt"),

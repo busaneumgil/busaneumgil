@@ -10,7 +10,11 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.data.repository.ReportDraftData
 import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
+import com.ssafy.e102.eumgil.data.repository.ReportHistoryData
+import com.ssafy.e102.eumgil.data.repository.ReportHistorySource
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
+import com.ssafy.e102.eumgil.data.repository.ReportProcessingCounts
+import com.ssafy.e102.eumgil.data.repository.ReportProcessingStatus
 import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
@@ -38,6 +42,22 @@ import org.junit.Test
 class ReportViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
+
+    @Test
+    fun `processing counts are exposed in report ui state`() =
+        runTest {
+            val viewModel =
+                createReportViewModel(
+                    repository =
+                        FakeReportRepository(
+                            processingCounts = ReportProcessingCounts(pending = 3, approved = 2),
+                        ),
+                )
+            advanceUntilIdle()
+
+            assertEquals(3, viewModel.uiState.value.processingCounts.pending)
+            assertEquals(2, viewModel.uiState.value.processingCounts.approved)
+        }
 
     @Test
     fun `save draft stores partial input and exposes saved state`() =
@@ -485,7 +505,7 @@ class ReportViewModelTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
 
-            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+            assertEquals(ReportStep.Home, viewModel.uiState.value.currentStep)
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.STAIRS_STEP))
             advanceUntilIdle()
@@ -547,7 +567,7 @@ class ReportViewModelTest {
         }
 
     @Test
-    fun `back click on type selection emits NavigateBack`() =
+    fun `back click on home emits NavigateBack`() =
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
@@ -558,7 +578,7 @@ class ReportViewModelTest {
             advanceUntilIdle()
 
             assertEquals(ReportUiEvent.NavigateBack, event.await())
-            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+            assertEquals(ReportStep.Home, viewModel.uiState.value.currentStep)
         }
 
     @Test
@@ -616,8 +636,25 @@ class ReportViewModelTest {
             viewModel.onAction(ReportUiAction.ReportHistoryClicked)
             advanceUntilIdle()
 
-            assertEquals(ReportUiEvent.NavigateToReportHistory, event.await())
+            assertEquals(ReportUiEvent.NavigateToReportHistory(), event.await())
             assertEquals(ReportUiState(), viewModel.uiState.value)
+        }
+
+    @Test
+    fun `recent report click navigates to report history detail`() =
+        runTest {
+            val viewModel = createReportViewModel(FakeReportRepository())
+            val event =
+                backgroundScope.async(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.first { emittedEvent ->
+                        emittedEvent is ReportUiEvent.NavigateToReportHistory
+                    } as ReportUiEvent.NavigateToReportHistory
+                }
+
+            viewModel.onAction(ReportUiAction.RecentReportClicked("history-1"))
+            advanceUntilIdle()
+
+            assertEquals("history-1", event.await().historyId)
         }
 
     @Test
@@ -787,7 +824,7 @@ class ReportViewModelTest {
         }
 
     @Test
-    fun `description max length 300 marks error when exceeded`() =
+    fun `description max length 300 hard limits extra input`() =
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
@@ -796,8 +833,9 @@ class ReportViewModelTest {
             viewModel.onAction(ReportUiAction.DescriptionChanged(longText))
             advanceUntilIdle()
 
-            val descError = viewModel.uiState.value.description.error
-            assertEquals(ReportDescriptionError.TooLong, descError)
+            val description = viewModel.uiState.value.description
+            assertEquals(ReportFormLimits.DESCRIPTION_MAX_LENGTH, description.value.length)
+            assertNull(description.error)
         }
 
     @Test
@@ -978,7 +1016,7 @@ class ReportViewModelTest {
         }
 
     @Test
-    fun `tab reentered after complete resets form to type selection`() =
+    fun `tab reentered after complete resets form to report home`() =
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
@@ -1004,7 +1042,7 @@ class ReportViewModelTest {
             advanceUntilIdle()
 
             val resetState = viewModel.uiState.value
-            assertEquals(ReportStep.TypeSelection, resetState.currentStep)
+            assertEquals(ReportStep.Home, resetState.currentStep)
             assertEquals(null, resetState.reportType.value)
             assertTrue(resetState.screenState is ReportScreenState.Editing)
         }
@@ -1060,7 +1098,7 @@ class ReportViewModelTest {
             advanceUntilIdle()
 
             val preservedState = viewModel.uiState.value
-            assertEquals(ReportStep.TypeSelection, preservedState.currentStep)
+            assertEquals(ReportStep.Home, preservedState.currentStep)
             assertTrue(preservedState.screenState is ReportScreenState.Editing)
             assertTrue(preservedState.hasExistingDraft)
             assertEquals("draft-1", preservedState.draftId)
@@ -1134,7 +1172,7 @@ class ReportViewModelTest {
 
             assertEquals(ReportUiEvent.NavigateToMap, backToMapEvent.await())
             val resetState = viewModel.uiState.value
-            assertEquals(ReportStep.TypeSelection, resetState.currentStep)
+            assertEquals(ReportStep.Home, resetState.currentStep)
             assertEquals(null, resetState.reportType.value)
         }
 
@@ -1177,7 +1215,7 @@ class ReportViewModelTest {
             // 다이얼로그가 뜨는 동안에는 아직 reportType이 적용되지 않아야 한다.
             val midState = viewModel.uiState.value
             assertNull(midState.reportType.value)
-            assertEquals(ReportStep.TypeSelection, midState.currentStep)
+            assertEquals(ReportStep.Home, midState.currentStep)
             assertNull(repository.deletedDraftId)
         }
 
@@ -1264,7 +1302,7 @@ class ReportViewModelTest {
             advanceUntilIdle()
 
             // 현재 STAIRS_STEP인 상태에서 같은 STAIRS_STEP을 다시 누르면 다이얼로그 없이 idempotent.
-            // (TypeSelection 단계라면 다음 단계로 진행만 한다.)
+            // TypeSelection 화면의 단계 전환은 별도 다음 CTA가 담당한다.
             viewModel.onAction(ReportUiAction.BackClicked)
             advanceUntilIdle()
             // 이제 TypeSelection으로 복귀
@@ -1275,7 +1313,7 @@ class ReportViewModelTest {
 
             val state = viewModel.uiState.value
             assertEquals(ReportType.STAIRS_STEP, state.reportType.value)
-            assertEquals(ReportStep.LocationConfirm, state.currentStep)
+            assertEquals(ReportStep.TypeSelection, state.currentStep)
         }
 
     @Test
@@ -1560,6 +1598,7 @@ private class FakeReportRepository(
     private var latestDraft: ReportDraftData? = null,
     private val failOutbox: Boolean = false,
     private val failDeleteDraft: Boolean = false,
+    private val processingCounts: ReportProcessingCounts = ReportProcessingCounts(),
     private val submitResultFactory: (String) -> ReportSubmitResult = { _ ->
         ReportSubmitResult.Skipped
     },
@@ -1574,6 +1613,18 @@ private class FakeReportRepository(
         private set
 
     override fun observeReportHistory(): Flow<List<ReportOutboxData>> = flowOf(emptyList())
+
+    override fun observeReportHistoryEntries(): Flow<List<ReportHistoryData>> =
+        flowOf(
+            buildList {
+                repeat(processingCounts.pending) { index ->
+                    add(fakeHistoryData("pending-$index", ReportProcessingStatus.PENDING))
+                }
+                repeat(processingCounts.approved) { index ->
+                    add(fakeHistoryData("approved-$index", ReportProcessingStatus.APPROVED))
+                }
+            },
+        )
 
     override suspend fun getLatestDraft(): ReportDraftData? = latestDraft
 
@@ -1607,6 +1658,26 @@ private class FakeReportRepository(
         return submitResultFactory(outboxId)
     }
 }
+
+private fun fakeHistoryData(
+    historyId: String,
+    status: ReportProcessingStatus,
+): ReportHistoryData =
+    ReportHistoryData(
+        historyId = historyId,
+        reportCategory = ReportType.BRAILLE_BLOCK.apiValue,
+        processingStatus = status,
+        description = null,
+        address = "부산광역시 강서구 명지국제8로 10",
+        latitude = 35.1,
+        longitude = 128.9,
+        photoUri = null,
+        imageUrl = null,
+        source = ReportHistorySource.Server,
+        serverReportId = null,
+        createdAtMillis = 1_700_000_000_000L,
+        updatedAtMillis = 1_700_000_000_000L,
+    )
 
 // ─── Test helpers ─────────────────────────────────────────────────────────
 //

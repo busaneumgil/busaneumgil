@@ -433,6 +433,37 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `search preview reflects existing bookmark state from local repository`() =
+        runTest {
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(bookmarkedPlaceIds = mutableSetOf("preview-1")),
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-1",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            destinationPreviewRepository.requestPreview(destination = destination)
+            advanceUntilIdle()
+
+            val sheetState = viewModel.uiState.value.facilityDetailSheetState
+            assertTrue(sheetState.isBookmarked)
+            assertTrue(requireNotNull(sheetState.mapTapDetail).isBookmarked)
+        }
+
+    @Test
     fun `search preview keeps preview camera when map route restarts with current location available`() =
         runTest {
             val initialLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)

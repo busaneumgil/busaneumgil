@@ -30,6 +30,8 @@ public interface AdminAreaAssignmentRepository extends JpaRepository<AdminAreaAs
 		String dong,
 		AdminAreaAssignmentType assignmentType);
 
+	List<AdminAreaAssignment> findAllByAssignee_UserId(UUID assigneeUserId);
+
 	@Query("""
 		select count(assignment)
 		from AdminAreaAssignment assignment

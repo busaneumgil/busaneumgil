@@ -1028,10 +1028,44 @@ class MapViewModel(
         )
         renderSelectedFacilityState()
         renderUiState()
+        loadDestinationPreviewBookmarkState(
+            previewRequest = previewRequest,
+            requestId = requestId,
+        )
         hydrateDestinationPreviewDetail(
             previewRequest = previewRequest,
             requestId = requestId,
         )
+    }
+
+    private fun loadDestinationPreviewBookmarkState(
+        previewRequest: DestinationPreviewRequest,
+        requestId: Long,
+    ) {
+        val initialBookmarkKey = selectedMapTapDetail?.bookmarkCacheKey() ?: return
+
+        viewModelScope.launch {
+            runCatching { bookmarkRepository.isBookmarked(initialBookmarkKey) }
+                .onSuccess { isBookmarked ->
+                    if (requestId != mapTapDetailRequestId) return@onSuccess
+                    if (selectedDestinationPreview?.requestId != previewRequest.requestId) return@onSuccess
+                    val currentDetail = selectedMapTapDetail ?: return@onSuccess
+                    if (currentDetail.bookmarkCacheKey() != initialBookmarkKey) return@onSuccess
+
+                    val nextBookmarked =
+                        isBookmarked ||
+                            currentDetail.isBookmarked ||
+                            selectedFacilityBookmarkState.isBookmarked
+                    selectedMapTapDetail = currentDetail.copy(isBookmarked = nextBookmarked)
+                    selectedFacilityBookmarkState =
+                        selectedFacilityBookmarkState.copy(
+                            facilityId = initialBookmarkKey,
+                            isBookmarked = nextBookmarked,
+                            errorMessage = null,
+                        )
+                    renderSelectedFacilityState()
+                }
+        }
     }
 
     private fun hydrateDestinationPreviewDetail(
@@ -1050,12 +1084,18 @@ class MapViewModel(
                     if (selectedDestinationPreview?.requestId != previewRequest.requestId) return@onSuccess
                     if (placeDetail == null) return@onSuccess
 
+                    val nextBookmarked =
+                        placeDetail.isBookmarked ||
+                            selectedMapTapDetail?.isBookmarked == true ||
+                            selectedFacilityBookmarkState.isBookmarked
                     selectedMapTapDetail =
-                        selectedMapTapDetail?.mergeInternalPreviewDetail(placeDetail)
+                        selectedMapTapDetail
+                            ?.mergeInternalPreviewDetail(placeDetail)
+                            ?.copy(isBookmarked = nextBookmarked)
                     selectedFacilityBookmarkState =
                         selectedFacilityBookmarkState.copy(
                             facilityId = selectedMapTapDetail?.bookmarkCacheKey(),
-                            isBookmarked = placeDetail.isBookmarked,
+                            isBookmarked = nextBookmarked,
                         )
                     renderSelectedFacilityState()
                 }

@@ -44,6 +44,7 @@ def print_turn(turn_num, text, result, verdict, fail_reason=""):
     print(f"  departure          : {result.departure}")
     print(f"  destination        : {result.destination}")
     print(f"  report_type        : {result.report_type}")
+    print(f"  bookmark_action    : {result.bookmark_action}")
     print(f"  confirmed          : {result.confirmed}")
     print(f"  confirmation_msg   : {result.confirmation_message}")
     print(f"  판정               : {label}")
@@ -94,7 +95,7 @@ def run_flows():
         fail_reasons = []
 
         r1 = call("제보할게요", "mobility", history)
-        ok1 = r1.intent == "ASK"
+        ok1 = r1.intent == "ASK" and r1.confirmation_message is not None
         if not ok1:
             fail_reasons.append(f"1턴: intent={r1.intent}")
             flow_ok = False
@@ -250,13 +251,45 @@ def run_flows():
     print("---\n")
 
     # ──────────────────────────────────────────────────────────────
+    # 흐름 10: 이동약자 - 북마크 추가
+    # ──────────────────────────────────────────────────────────────
+    print("=== 흐름 10: 이동약자 - 북마크 추가 ===\n")
+    try:
+        r = call("부산역 북마크 추가해줘", "mobility")
+        ok = r.intent == "BOOKMARK_ADD" and r.place_name is not None and r.bookmark_action == "add"
+        fail_reason = "" if ok else f"intent={r.intent}, place_name={r.place_name}, bookmark_action={r.bookmark_action}"
+        print_turn(1, "부산역 북마크 추가해줘", r, ok, fail_reason)
+        print(f"\n흐름 판정: {'PASS' if ok else 'FAIL'}")
+        results.append((10, ok, fail_reason))
+    except Exception as e:
+        print(f"  오류: {e}")
+        results.append((10, False, str(e)))
+    print("---\n")
+
+    # ──────────────────────────────────────────────────────────────
+    # 흐름 11: 이동약자 - 북마크 삭제
+    # ──────────────────────────────────────────────────────────────
+    print("=== 흐름 11: 이동약자 - 북마크 삭제 ===\n")
+    try:
+        r = call("부산역 북마크 삭제해줘", "mobility")
+        ok = r.intent == "BOOKMARK_DELETE" and r.place_name is not None and r.bookmark_action == "delete"
+        fail_reason = "" if ok else f"intent={r.intent}, place_name={r.place_name}, bookmark_action={r.bookmark_action}"
+        print_turn(1, "부산역 북마크 삭제해줘", r, ok, fail_reason)
+        print(f"\n흐름 판정: {'PASS' if ok else 'FAIL'}")
+        results.append((11, ok, fail_reason))
+    except Exception as e:
+        print(f"  오류: {e}")
+        results.append((11, False, str(e)))
+    print("---\n")
+
+    # ──────────────────────────────────────────────────────────────
     # 전체 결과 요약
     # ──────────────────────────────────────────────────────────────
     passed = sum(1 for _, ok, _ in results if ok)
     failed = [(num, reason) for num, ok, reason in results if not ok]
 
     print("=== 전체 결과 요약 ===")
-    print(f"통과: {passed}/9")
+    print(f"통과: {passed}/11")
     if failed:
         print("실패 흐름:")
         for num, reason in failed:

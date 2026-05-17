@@ -34,6 +34,15 @@ class GeminiProvider(BaseProvider):
 
 이동약자 모드에서는 사용자 확인 과정이 없습니다.
 confirmed 파라미터는 절대 사용하지 마세요.
+ask_ 계열 도구를 호출할 때는 반드시 confirmation_message를 포함해야 합니다.
+사용자가 다음에 무엇을 말해야 하는지 안내하는 문구를 생성하세요.
+예시:
+- ask_place_name → '어떤 장소를 찾으시나요?'
+- ask_category → '음식·카페, 관광지, 숙박, 의료·보건, 복지·돌봄, 공공기관, 기타 중 말씀해 주세요'
+- ask_departure → '출발지를 말씀해 주세요'
+- ask_destination → '도착지를 말씀해 주세요'
+- ask_bookmark_target → '어떤 장소를 북마크에 추가할까요?' 또는 '어떤 장소를 북마크에서 삭제할까요?'
+- ask_report_type → '어떤 문제인가요? 계단·단차, 점자블록, 인도 없음, 경사로, 인도폭, 기타 중 말씀해 주세요'
 대화 히스토리가 있으면 이전 맥락을 참고하세요.
 currentRoute가 제공되면 현재 화면 위치로 활용하세요.
 """
@@ -510,6 +519,7 @@ confirmed 파라미터 없이 confirm_ 도구를 호출할 때는 반드시 conf
                 facility_type=None,
                 report_type=parsed.get("report_type"),
                 description=parsed.get("description"),
+                bookmark_action=parsed.get("bookmark_action"),
                 confirmed=parsed.get("confirmed"),
                 confirmation_message=parsed.get("confirmation_message"),
                 llm_latency_ms=latency_ms,

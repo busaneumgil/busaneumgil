@@ -41,6 +41,7 @@ def print_turn(turn_num, text, http_status, resp_body, verdict, fail_reason=""):
     print(f"  confirmed          : {data.get('confirmed')}")
     print(f"  confirmationMsg    : {data.get('confirmationMessage')}")
     print(f"  reportType         : {data.get('reportType')}")
+    print(f"  bookmarkAction     : {data.get('bookmarkAction')}")
     print(f"  판정               : {label}")
 
 
@@ -111,7 +112,7 @@ def run_flows():
         resp1 = call_api("제보할게요", "MOBILITY_IMPAIRED", history)
         body1 = resp1.json()
         data1 = body1.get("data") or {}
-        ok1 = data1.get("intent") == "ASK"
+        ok1 = data1.get("intent") == "ASK" and data1.get("confirmationMessage") is not None
         if not ok1:
             fail_reasons.append(f"1턴: intent={data1.get('intent')}")
             flow_ok = False
@@ -347,13 +348,59 @@ def run_flows():
     print("---\n")
 
     # ──────────────────────────────────────────────────────────────
+    # 흐름 13: 이동약자 - 북마크 추가
+    # ──────────────────────────────────────────────────────────────
+    print("=== 흐름 13: 이동약자 - 북마크 추가 ===\n")
+    try:
+        resp = call_api("부산역 북마크 추가해줘", "MOBILITY_IMPAIRED")
+        body = resp.json()
+        data = body.get("data") or {}
+        ok = (
+            resp.status_code == 200
+            and data.get("intent") == "BOOKMARK_ADD"
+            and data.get("placeName") is not None
+            and data.get("bookmarkAction") == "add"
+        )
+        fail_reason = "" if ok else f"intent={data.get('intent')}, placeName={data.get('placeName')}, bookmarkAction={data.get('bookmarkAction')}"
+        print_turn(1, "부산역 북마크 추가해줘", resp.status_code, body, ok, fail_reason)
+        print(f"\n흐름 판정: {'PASS' if ok else 'FAIL'}")
+        results.append((13, ok, fail_reason))
+    except Exception as e:
+        print(f"  오류: {e}")
+        results.append((13, False, str(e)))
+    print("---\n")
+
+    # ──────────────────────────────────────────────────────────────
+    # 흐름 14: 이동약자 - 북마크 삭제
+    # ──────────────────────────────────────────────────────────────
+    print("=== 흐름 14: 이동약자 - 북마크 삭제 ===\n")
+    try:
+        resp = call_api("부산역 북마크 삭제해줘", "MOBILITY_IMPAIRED")
+        body = resp.json()
+        data = body.get("data") or {}
+        ok = (
+            resp.status_code == 200
+            and data.get("intent") == "BOOKMARK_DELETE"
+            and data.get("placeName") is not None
+            and data.get("bookmarkAction") == "delete"
+        )
+        fail_reason = "" if ok else f"intent={data.get('intent')}, placeName={data.get('placeName')}, bookmarkAction={data.get('bookmarkAction')}"
+        print_turn(1, "부산역 북마크 삭제해줘", resp.status_code, body, ok, fail_reason)
+        print(f"\n흐름 판정: {'PASS' if ok else 'FAIL'}")
+        results.append((14, ok, fail_reason))
+    except Exception as e:
+        print(f"  오류: {e}")
+        results.append((14, False, str(e)))
+    print("---\n")
+
+    # ──────────────────────────────────────────────────────────────
     # 전체 결과 요약
     # ──────────────────────────────────────────────────────────────
     passed = sum(1 for _, ok, _ in results if ok)
     failed = [(num, reason) for num, ok, reason in results if not ok]
 
     print("=== 전체 결과 요약 ===")
-    print(f"통과: {passed}/12")
+    print(f"통과: {passed}/14")
     if failed:
         print("실패 흐름:")
         for num, reason in failed:

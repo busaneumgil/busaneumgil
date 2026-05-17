@@ -144,7 +144,7 @@ def voice_analyze():
 
         # ── 응답 필드 처리 ─────────────────────────────────
         confirmed_val = result.confirmed if mode == "LOW_VISION" else None
-        confirmation_msg = result.confirmation_message if mode == "LOW_VISION" else None
+        confirmation_msg = result.confirmation_message
 
         logger.info(
             "event=voice_analyze_completed request_id=%s mode=%s intent=%s confirmed=%s latency_ms=%s",

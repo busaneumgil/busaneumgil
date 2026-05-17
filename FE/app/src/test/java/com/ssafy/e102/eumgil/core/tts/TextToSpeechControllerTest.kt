@@ -25,11 +25,12 @@ class TextToSpeechControllerTest {
     }
 
     @Test
-    fun `navigation tts uses navigation guidance speech attributes`() {
+    fun `navigation tts uses media speech attributes for playback capture`() {
         val config = defaultTextToSpeechAudioConfig()
 
-        assertEquals(EXPECTED_NAVIGATION_GUIDANCE_USAGE, config.usage)
+        assertEquals(EXPECTED_MEDIA_USAGE, config.usage)
         assertEquals(EXPECTED_SPEECH_CONTENT_TYPE, config.contentType)
+        assertEquals(EXPECTED_ALLOW_CAPTURE_BY_ALL, config.capturePolicy)
     }
 
     @Test
@@ -40,6 +41,7 @@ class TextToSpeechControllerTest {
     }
 }
 
-private const val EXPECTED_NAVIGATION_GUIDANCE_USAGE = 12
+private const val EXPECTED_MEDIA_USAGE = 1
 private const val EXPECTED_SPEECH_CONTENT_TYPE = 1
+private const val EXPECTED_ALLOW_CAPTURE_BY_ALL = 1
 private const val EXPECTED_TRANSIENT_MAY_DUCK_FOCUS_GAIN = 3

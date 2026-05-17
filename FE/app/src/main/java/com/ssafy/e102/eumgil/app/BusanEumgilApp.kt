@@ -19,6 +19,7 @@ class BusanEumgilApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        configureAppAudioPlaybackCapturePolicy(this)
         registerActivityLifecycleCallbacks(ForegroundActivityProvider)
         if (BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank()) {
             KakaoMapSdk.init(this, BuildConfig.KAKAO_NATIVE_APP_KEY)

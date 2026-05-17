@@ -1,5 +1,9 @@
 package com.ssafy.e102.eumgil.feature.lowvision
 
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +30,13 @@ fun LowVisionVoiceInputRoute(
     onCancelRecording: () -> Unit,
     onRecordingCompleted: (String) -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
+    onCategorySearchCompleted: (String) -> Unit = {},
+    onBookmarkAddCompleted: (String) -> Unit = {},
+    onBookmarkDeleteCompleted: (String) -> Unit = {},
+    onNavigateCompleted: (String, String) -> Unit = { _, _ -> },
+    onShowBookmarksCompleted: () -> Unit = {},
+    onShowFavoriteRoutesCompleted: () -> Unit = {},
+    onLogoutCompleted: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -36,6 +47,18 @@ fun LowVisionVoiceInputRoute(
     }
     val ttsState by ttsController.state.collectAsStateWithLifecycle()
     val voiceInputPrompt = stringResource(R.string.voice_input_prompt)
+
+    val playBeep: () -> Unit = remember {
+        {
+            try {
+                val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+                toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
+                Handler(Looper.getMainLooper()).postDelayed({ toneGen.release() }, 300)
+            } catch (e: Exception) {
+                // 비프음 실패해도 녹음 계속 진행
+            }
+        }
+    }
 
     // -1: 아직 speak()를 한 번도 호출하지 않은 상태.
     // completedUtteranceCount >= 0 조건을 함께 쓰면 앱 진입 시 spurious 트리거 방지.
@@ -55,7 +78,9 @@ fun LowVisionVoiceInputRoute(
         if (lastCompletedCount.intValue >= 0 &&
             ttsState.completedUtteranceCount > lastCompletedCount.intValue
         ) {
-            delay(300) // TTS 잔향 + AEC 안정화 대기
+            delay(200)    // TTS 잔향 대기
+            playBeep()    // 비프음 (녹음 시작 신호)
+            delay(300)    // AEC 안정화 대기
             viewModel.beginRecording()
         }
         lastCompletedCount.intValue = ttsState.completedUtteranceCount
@@ -72,6 +97,17 @@ fun LowVisionVoiceInputRoute(
                     lastCompletedCount.intValue = ttsState.completedUtteranceCount
                     ttsController.speak(voiceInputPrompt)
                 }
+                is LowVisionVoiceInputEvent.CategorySearchCompleted ->
+                    onCategorySearchCompleted(event.category)
+                is LowVisionVoiceInputEvent.BookmarkAddCompleted ->
+                    onBookmarkAddCompleted(event.placeName)
+                is LowVisionVoiceInputEvent.BookmarkDeleteCompleted ->
+                    onBookmarkDeleteCompleted(event.placeName)
+                is LowVisionVoiceInputEvent.NavigateCompleted ->
+                    onNavigateCompleted(event.departure, event.destination)
+                LowVisionVoiceInputEvent.ShowBookmarksCompleted -> onShowBookmarksCompleted()
+                LowVisionVoiceInputEvent.ShowFavoriteRoutesCompleted -> onShowFavoriteRoutesCompleted()
+                LowVisionVoiceInputEvent.LogoutCompleted -> onLogoutCompleted()
             }
         }
     }

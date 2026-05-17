@@ -84,7 +84,8 @@ class AdminDashboardServiceTest {
 		when(hazardReportRepository.countByStatus(ReportStatus.PENDING)).thenReturn(8L);
 		when(hazardReportRepository.countByStatus(ReportStatus.APPROVED)).thenReturn(12L);
 		when(hazardReportRepository.countByStatus(ReportStatus.REJECTED)).thenReturn(10L);
-		when(hazardReportRepository.countByReportType()).thenReturn(List.of(new ReportTypeCount(ReportType.STAIRS_STEP, 5)));
+		when(hazardReportRepository.countByReportType())
+			.thenReturn(List.of(new ReportTypeCount(ReportType.STAIRS_STEP, 5)));
 		when(hazardReportRepository.findRecentForDashboard(PageRequest.of(0, 3))).thenReturn(List.of());
 		when(roadSegmentRepository.count()).thenReturn(500L);
 		when(placeRepository.count()).thenReturn(120L);
@@ -94,8 +95,9 @@ class AdminDashboardServiceTest {
 		when(adminAreaAssignmentRepository.countByAssignmentType(AdminAreaAssignmentType.FACILITY)).thenReturn(6L);
 		when(adminAreaAssignmentRepository.countByAssignmentTypeAndStatus(
 			AdminAreaAssignmentType.FACILITY, AdminAreaWorkStatus.COMPLETED)).thenReturn(3L);
-		when(adminAuditLogService.getLogs(null, 5)).thenReturn(new com.ssafy.e102.domain.admin.dto.response.AdminAuditLogListResponse(
-			List.of(), 5, null, false));
+		when(adminAuditLogService.getLogs(null, 5))
+			.thenReturn(new com.ssafy.e102.domain.admin.dto.response.AdminAuditLogListResponse(
+				List.of(), 5, null, false));
 
 		AdminDashboardService service = new AdminDashboardService(
 			userRepository,
@@ -171,7 +173,8 @@ class AdminDashboardServiceTest {
 		}
 	}
 
-	private record ReportTypeCount(ReportType reportType, long count) implements HazardReportRepository.ReportTypeCount {
+	private record ReportTypeCount(ReportType reportType,
+		long count) implements HazardReportRepository.ReportTypeCount {
 		@Override
 		public ReportType getReportType() {
 			return reportType;

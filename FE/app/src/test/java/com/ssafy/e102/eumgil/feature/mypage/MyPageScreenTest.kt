@@ -101,18 +101,75 @@ class MyPageScreenTest {
     }
 
     @Test
-    fun `my page main menu exposes duribal call button before the regular menu rows`() {
+    fun `my page main menu exposes duribal call button`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
                 .readText()
+        val mainMenuSection =
+            source
+                .substringAfter("private fun MainMenuSection(")
+                .substringBefore("@Composable\nprivate fun MyPageMenuRow")
 
         assertTrue(
-            "My page should surface the duribal call CTA at the top of the main menu section.",
-            source.contains("DuribalCallButton(onClick = onDuribalCallClick)"),
+            "My page should expose the duribal CTA again.",
+            source.contains("DuribalCallButton(") ||
+                source.contains("ic_mypage_duribal_call") ||
+                source.contains("my_page_duribal_call_button") ||
+                mainMenuSection.contains("onDuribalCallClick"),
         )
         assertTrue(
-            "The duribal CTA should use the provided dedicated icon resource.",
-            source.contains("R.drawable.ic_mypage_duribal_call"),
+            "The regular menu rows should remain in the main menu after removing the duribal CTA.",
+            mainMenuSection.contains("MyPageMenuRow("),
+        )
+        assertTrue(
+            "The restored duribal CTA should sit below the main menu and directly above logout.",
+            source.indexOf("MainMenuSection(") <
+                source.indexOf("DuribalCallButton(onClick = onDuribalCallClick)") &&
+                source.indexOf("DuribalCallButton(onClick = onDuribalCallClick)") <
+                source.indexOf("MyPageUiAction.LogoutClicked"),
+        )
+    }
+
+    @Test
+    fun `duribal call button centers icon and label as a single group`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+        val buttonSection =
+            source
+                .substringAfter("private fun DuribalCallButton(")
+                .substringBefore("@Composable\nprivate fun MyPageMenuRow")
+
+        assertTrue(
+            "Duribal call CTA should wrap its icon and label in a single row so the combined content stays centered inside the full-width button.",
+            buttonSection.contains(
+                "Row(\n            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),\n            verticalAlignment = Alignment.CenterVertically,\n        )",
+            ),
+        )
+        assertFalse(
+            "Duribal call CTA should not rely on text-only start padding because the icon and label are centered together as one group.",
+            buttonSection.contains("modifier = Modifier.padding(start = EumSpacing.small)"),
+        )
+    }
+
+    @Test
+    fun `my page route owns duribal call confirmation flow`() {
+        val myPageSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+        val routeSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageRoute.kt")
+                .readText()
+
+        assertTrue(
+            "MyPageScreen should render the duribal confirmation dialog for the restored CTA.",
+            myPageSource.contains("isDuribalConfirmDialogVisible") ||
+                myPageSource.contains("EumDuribalCallConfirmDialog("),
+        )
+        assertTrue(
+            "MyPageRoute should create the duribal dial intent after confirmation.",
+            routeSource.contains("createDuribalDialIntent") ||
+                routeSource.contains("onDuribalCallClick"),
         )
     }
 
@@ -126,21 +183,35 @@ class MyPageScreenTest {
                 .readText()
 
         assertTrue(
-            "MyPageScreen should render the duribal confirmation dialog when the route marks it visible.",
-            myPageSource.contains("if (isDuribalConfirmDialogVisible)"),
+            "MyPageScreen should render the duribal confirmation dialog instead of dialing immediately from the button tap.",
+            myPageSource.contains("isDuribalConfirmDialogVisible") &&
+                myPageSource.contains("EumDuribalCallConfirmDialog("),
         )
         assertTrue(
-            "MyPageScreen should reuse the shared duribal confirmation dialog component.",
-            myPageSource.contains("EumDuribalCallConfirmDialog(") &&
-                myPageSource.contains("EumDuribalCallConfirmDismissStyle.SecondaryButton"),
+            "Duribal confirmation dialog should expose explicit yes and no actions for the restored CTA flow.",
+            dialogSource.contains("onConfirm") &&
+                dialogSource.contains("onDismiss") &&
+                dialogSource.contains("confirmButtonText") &&
+                dialogSource.contains("dismissButtonText"),
+        )
+    }
+
+    @Test
+    fun `duribal confirm dialog follows app custom dialog shell`() {
+        val dialogSource =
+            File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/component/dialog/EumDuribalCallConfirmDialog.kt")
+                .readText()
+
+        assertFalse(
+            "Duribal dialog should not use the platform AlertDialog shell because it looks inconsistent with app dialogs.",
+            dialogSource.contains("AlertDialog("),
         )
         assertTrue(
-            "The shared dialog should expose a positive confirmation action.",
-            dialogSource.contains("my_page_duribal_call_dialog_confirm"),
-        )
-        assertTrue(
-            "The shared dialog should expose a negative dismiss action.",
-            dialogSource.contains("my_page_duribal_call_dialog_dismiss"),
+            "Duribal dialog should use the same custom dialog pattern as the app confirmation dialogs.",
+            dialogSource.contains("Dialog(") &&
+                dialogSource.contains("Surface(") &&
+                dialogSource.contains(".fillMaxWidth()") &&
+                dialogSource.contains("ButtonDefaults.buttonElevation("),
         )
     }
 }

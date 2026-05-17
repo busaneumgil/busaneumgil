@@ -1103,20 +1103,24 @@ private fun NavigationBottomBar(
                             .height(NavigationBottomBarButtonHeight)
                             .align(Alignment.Center),
                 ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_control_stop),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onError,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(EumSpacing.xSmall))
-                    Text(
-                        text = uiState.exitCta.label,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_control_stop),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onError,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = uiState.exitCta.label,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
@@ -1197,15 +1201,11 @@ private fun NavigationExitConfirmDialog(
                                         .fillMaxWidth()
                                         .height(policy.primaryButtonHeight),
                             ) {
-                                NavigationExitDialogStopIcon(
-                                    tint = MaterialTheme.colorScheme.onError,
-                                    modifier = Modifier.size(NavigationExitDialogConfirmIconSize),
-                                )
-                                Spacer(modifier = Modifier.width(EumSpacing.xSmall))
                                 Text(
                                     text = stringResource(id = R.string.navigation_exit_confirm_dialog_confirm),
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.Center,
                                 )
                             }
                             Button(
@@ -1243,21 +1243,6 @@ private fun NavigationExitConfirmDialog(
                 }
             }
     }
-}
-
-private val NavigationExitDialogConfirmIconSize = 18.dp
-
-@Composable
-private fun NavigationExitDialogStopIcon(
-    tint: Color,
-    modifier: Modifier = Modifier,
-) {
-    Icon(
-        painter = painterResource(id = R.drawable.ic_control_stop),
-        contentDescription = null,
-        tint = tint,
-        modifier = modifier,
-    )
 }
 
 private fun DrawScope.drawNavigationMapGrid(outline: Color) {

@@ -546,7 +546,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `search preview CTA honors origin editing target`() =
+    fun `search preview origin CTA navigates to route setting without destination`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
@@ -584,11 +584,11 @@ class MapViewModelTest {
 
             assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
             assertNull(destinationSelectionRepository.selectedDestination.value)
-            assertNull(event)
+            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
         }
 
     @Test
-    fun `search preview destination CTA preserves existing origin`() =
+    fun `search preview destination CTA clears existing origin for current location default`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
@@ -626,8 +626,14 @@ class MapViewModelTest {
             viewModel.onAction(MapUiAction.FacilitySetRouteEndpointClicked(RouteEditingTarget.DESTINATION))
             advanceUntilIdle()
 
-            assertEquals(origin, destinationSelectionRepository.selectedOrigin.value)
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertNull(destinationSelectionRepository.selectedOrigin.value)
             assertEquals(destination, destinationSelectionRepository.selectedDestination.value)
+            assertEquals(MapUiEvent.NavigateToRouteSetting, event)
         }
 
     @Test
@@ -1872,6 +1878,61 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `voice search click clears existing facility detail and opens voice sheet`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            val markerId = viewModel.uiState.value.markerOverlayState.markers.first().markerId
+
+            viewModel.onAction(MapUiAction.MarkerTapped(markerId))
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+
+            viewModel.onAction(MapUiAction.VoiceSearchClicked)
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.selectedMarkerId)
+            assertEquals(null, viewModel.uiState.value.facilityDetailSheetState.detail)
+            assertEquals(false, viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertTrue(viewModel.uiState.value.isVoiceSearchVisible)
+        }
+
+    @Test
+    fun `voice search dismiss hides the voice sheet state`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.VoiceSearchClicked)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.isVoiceSearchVisible)
+
+            viewModel.onAction(MapUiAction.VoiceSearchDismissed)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isVoiceSearchVisible)
+        }
+
+    @Test
     fun `route entry action stores selected facility destination and emits navigation event`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -2049,6 +2110,44 @@ class MapViewModelTest {
                 listOf("bookmark-place-1"),
                 viewModel.uiState.value.recentDestinations.map { item -> item.placeId },
             )
+        }
+
+    @Test
+    fun `recent destination preview click centers camera and opens detail sheet`() =
+        runTest {
+            val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    searchRepository =
+                        FakeSearchRepository(
+                            recentDestinations =
+                                listOf(
+                                    recentDestination(placeId = "recent-place-1", searchedAtMillis = 2_000L),
+                                ),
+                        ),
+                )
+
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.RecentDestinationPreviewClicked(placeId = "recent-place-1"))
+            advanceUntilIdle()
+
+            assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertNull(destinationPreviewRepository.pendingPreview.value)
+            assertEquals(MapCameraSource.SEARCH_RESULT, viewModel.uiState.value.cameraTarget.source)
+            assertEquals(35.1796, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
+            assertEquals(129.0756, viewModel.uiState.value.cameraTarget.center.longitude, 0.0)
+            assertEquals("recent-place-1", viewModel.uiState.value.facilityDetailSheetState.destinationPreview?.destination?.placeId)
+            assertEquals("Recent Destination recent-place-1", viewModel.uiState.value.facilityDetailSheetState.mapTapDetail?.name)
+            assertEquals(listOf("accessible-parking"), viewModel.uiState.value.facilityDetailSheetState.mapTapDetail?.accessibilityTags)
         }
 
     @Test

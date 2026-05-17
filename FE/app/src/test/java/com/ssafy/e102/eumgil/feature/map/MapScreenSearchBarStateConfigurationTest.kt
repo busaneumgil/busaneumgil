@@ -38,4 +38,20 @@ class MapScreenSearchBarStateConfigurationTest {
             functionSource.contains("selectedDestination.address"),
         )
     }
+
+    @Test
+    fun `map voice search hides overlapping home bottom sheets`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt")
+                .readText()
+
+        assertTrue(
+            "Map home should suppress the recent-destination sheet while the voice-search sheet is visible.",
+            source.contains("uiState.isVoiceSearchVisible.not()"),
+        )
+        assertTrue(
+            "Map top search bar should pass the shared voice-search accessibility copy into the dedicated mic button.",
+            source.contains("voiceInputAccessibilityLabel = stringResource(id = R.string.search_screen_voice_input)"),
+        )
+    }
 }

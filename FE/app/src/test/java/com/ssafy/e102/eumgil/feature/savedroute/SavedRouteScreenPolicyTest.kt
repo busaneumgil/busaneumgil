@@ -59,12 +59,67 @@ class SavedRouteScreenPolicyTest {
             savedPlaceSection.contains("verticalAlignment = Alignment.CenterVertically"),
         )
         assertTrue(
-            "Saved-place category icon should also declare its own vertical centering inside the row.",
-            savedPlaceSection.contains(".align(Alignment.CenterVertically)"),
+            "Saved-place category icon should sit inside the target-style icon tile instead of floating as a bare row icon.",
+            savedPlaceSection.contains("SavedPlaceCategoryIconTile(") &&
+                savedPlaceSection.contains("SavedBookmarkPlaceIconTileSize"),
         )
         assertTrue(
             "Saved-place category icon token should stay noticeably larger than the previous compact size.",
             source.contains("private val SavedBookmarkCategoryIconSize = 40.dp"),
+        )
+    }
+
+    @Test
+    fun `saved place rows omit accessibility chips and section divider`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val savedPlaceSection =
+            source
+                .substringAfter("private fun SavedPlaceListItem(")
+                .substringBefore("@Composable\nprivate fun SavedRouteBookmarkListItem")
+
+        assertFalse(
+            "Saved-place cards should not render accessibility label chips in the compact bookmark list.",
+            savedPlaceSection.contains("SavedRouteTagChip(") ||
+                savedPlaceSection.contains("accessibilityFeatures"),
+        )
+        assertFalse(
+            "Saved-place cards should not render the old section divider between content and actions.",
+            savedPlaceSection.contains("HorizontalDivider") ||
+                savedPlaceSection.contains("Divider("),
+        )
+    }
+
+    @Test
+    fun `saved bookmark cards follow the target visual hierarchy`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val savedPlaceSection =
+            source
+                .substringAfter("private fun SavedPlaceListItem(")
+                .substringBefore("@Composable\nprivate fun SavedRouteBookmarkListItem")
+        val routeBookmarkSection =
+            source
+                .substringAfter("private fun SavedRouteBookmarkListItem(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkEditBottomBar")
+
+        assertTrue(
+            "Saved bookmark cards should use the larger target corner and elevation instead of flat outlined rows.",
+            source.contains("private val SavedBookmarkCardCornerRadius = 24.dp") &&
+                source.contains("private val SavedBookmarkCardElevation = 6.dp") &&
+                savedPlaceSection.contains("shadowElevation = cardElevation") &&
+                routeBookmarkSection.contains("shadowElevation = cardElevation"),
+        )
+        assertTrue(
+            "Normal place and route cards should expose the guide CTA as a prominent full-width filled button.",
+            savedPlaceSection.contains(".fillMaxWidth()") &&
+                savedPlaceSection.contains("SavedBookmarkPrimaryCtaHeight") &&
+                savedPlaceSection.contains("isOutlined = false") &&
+                routeBookmarkSection.contains(".fillMaxWidth()") &&
+                routeBookmarkSection.contains("SavedBookmarkPrimaryCtaHeight") &&
+                routeBookmarkSection.contains("isOutlined = false"),
         )
     }
 
@@ -80,7 +135,7 @@ class SavedRouteScreenPolicyTest {
         val routeBookmarkSection =
             source
                 .substringAfter("private fun SavedRouteBookmarkListItem(")
-                .substringBefore("private fun SavedBookmarkSelectionButton(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkEditBottomBar")
         val routeWaypointInfoSection =
             source
                 .substringAfter("private fun SavedRouteWaypointInfoRow(")
@@ -182,6 +237,10 @@ class SavedRouteScreenPolicyTest {
             source
                 .substringAfter("private fun SavedRouteBookmarkContent(")
                 .substringBefore("@Composable\nprivate fun SavedBookmarkStateCard")
+        val routeEmptySection =
+            routeContentSection
+                .substringAfter("SavedBookmarkContentState.EMPTY ->")
+                .substringBefore("SavedBookmarkContentState.ERROR ->")
 
         assertTrue(
             "Saved route tab empty/error CTA should use route-setting wording.",
@@ -190,6 +249,18 @@ class SavedRouteScreenPolicyTest {
         assertTrue(
             "Saved route tab empty/error CTA should navigate to route setting, not map exploration.",
             routeContentSection.contains("SavedRouteUiAction.RouteSettingClicked"),
+        )
+        assertFalse(
+            "Saved route empty state should not show transport or route-option label chips.",
+            routeEmptySection.contains("saved_route_transport_mode_walk") ||
+                routeEmptySection.contains("saved_route_route_option_safe_compact") ||
+                routeEmptySection.contains("saved_route_route_option_fast_compact"),
+        )
+        assertFalse(
+            "Saved route empty state should not show a recent guidance history action.",
+            routeEmptySection.contains("최근 길안내") ||
+                routeEmptySection.contains("recent", ignoreCase = true) ||
+                routeEmptySection.contains("history", ignoreCase = true),
         )
     }
 
@@ -201,19 +272,29 @@ class SavedRouteScreenPolicyTest {
         val routeBookmarkSection =
             source
                 .substringAfter("private fun SavedRouteBookmarkListItem(")
-                .substringBefore("private fun SavedBookmarkSelectionButton(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkEditBottomBar")
         val pathDecorationSection =
             source
                 .substringAfter("private fun SavedRoutePathDecoration(")
-                .substringBefore("@Composable\nprivate fun SavedRouteTagChip")
+                .substringBefore("@Composable\nprivate fun SavedRouteMetaRow")
+        val routeWaypointInfoSection =
+            source
+                .substringAfter("private fun SavedRouteWaypointInfoRow(")
+                .substringBefore("@Composable\nprivate fun routeOptionCompactLabel")
 
         assertTrue(
-            "Saved-route cards should render a dedicated origin label row.",
+            "Saved-route cards should render a dedicated origin label beside its value.",
             routeBookmarkSection.contains("R.string.route_setting_origin_label"),
         )
         assertTrue(
-            "Saved-route cards should render a dedicated destination label row.",
+            "Saved-route cards should render a dedicated destination label beside its value.",
             routeBookmarkSection.contains("R.string.route_setting_destination_label"),
+        )
+        assertTrue(
+            "Saved-route waypoint rows should place the label and waypoint text on the same horizontal line.",
+            routeWaypointInfoSection.contains("Row(") &&
+                routeWaypointInfoSection.contains("verticalAlignment = Alignment.CenterVertically") &&
+                routeWaypointInfoSection.contains("modifier = Modifier.weight(1f)"),
         )
         assertFalse(
             "Saved-route cards should remove the large route-name headline once the labeled origin and destination rows are shown.",
@@ -235,6 +316,12 @@ class SavedRouteScreenPolicyTest {
             "Saved-route card body should align route content to the top so the destination row does not drift downward.",
             routeBookmarkSection.contains("verticalAlignment = Alignment.Top"),
         )
+        assertTrue(
+            "Saved-route destination row should have a small explicit gap while the left dots align with row centers.",
+            routeBookmarkSection.contains("SavedBookmarkRouteWaypointGap") &&
+                source.contains("private val SavedBookmarkRouteWaypointGap = 8.dp") &&
+                source.contains("private val SavedBookmarkRoutePathVerticalPadding = 7.dp"),
+        )
         assertFalse(
             "Saved-route cards should not keep the old raw one-line summary once labeled rows are shown.",
             routeBookmarkSection.contains("R.string.saved_route_route_summary"),
@@ -242,18 +329,20 @@ class SavedRouteScreenPolicyTest {
     }
 
     @Test
-    fun `saved route cards omit distance and duration meta labels`() {
+    fun `saved route cards show distance but omit duration meta labels`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
                 .readText()
         val routeBookmarkSection =
             source
                 .substringAfter("private fun SavedRouteBookmarkListItem(")
-                .substringBefore("private fun SavedBookmarkSelectionButton(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkEditBottomBar")
 
-        assertFalse(
-            "Saved-route cards should not render a distance meta line once detail handles that information.",
-            routeBookmarkSection.contains("savedRouteMetaLabel(routeBookmark)"),
+        assertTrue(
+            "Saved-route cards should surface saved distance in the transport meta row.",
+            routeBookmarkSection.contains("bookmarkDistanceLabel(routeBookmark.distanceMeters)") &&
+                routeBookmarkSection.contains("SavedRouteMetaRow(") &&
+                source.contains("saved_route_distance_kilometers"),
         )
         assertFalse(
             "Saved-route cards should not render duration labels such as 약 18분 in the compact bookmark row.",
@@ -261,10 +350,15 @@ class SavedRouteScreenPolicyTest {
                 routeBookmarkSection.contains("saved_route_meta_duration"),
         )
         assertTrue(
-            "Saved-route cards should only attach compact safe or fast route labels next to the transport mode.",
+            "Saved-route cards should only attach compact safe or fast route labels in the meta text.",
             routeBookmarkSection.contains("routeOptionCompactLabel(") &&
                 source.contains("saved_route_route_option_safe_compact") &&
                 source.contains("saved_route_route_option_fast_compact"),
+        )
+        assertTrue(
+            "Saved-route cards should normalize Korean route labels to compact safe or fast chips only.",
+            source.contains("\"안전\", \"안전한 길\"") &&
+                source.contains("\"빠른\", \"빠른 길\", \"최단거리\""),
         )
     }
 
@@ -280,7 +374,7 @@ class SavedRouteScreenPolicyTest {
         val routeBookmarkSection =
             source
                 .substringAfter("private fun SavedRouteBookmarkListItem(")
-                .substringBefore("private fun SavedBookmarkSelectionButton(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkEditBottomBar")
 
         assertTrue(
             "Saved-route list should dispatch a dedicated route-card tap action instead of reusing only the start button action.",
@@ -293,6 +387,80 @@ class SavedRouteScreenPolicyTest {
         assertTrue(
             "Saved-route card body should suppress ripple when tapping through to route detail, matching the other saved navigation transitions.",
             routeBookmarkSection.contains("indication = null"),
+        )
+    }
+
+    @Test
+    fun `saved route edit mode uses red pending deletion state instead of checkboxes`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val topBarSection =
+            source
+                .substringAfter("private fun SavedRouteTopBar(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkTabRow")
+
+        assertTrue(
+            "Edit mode should close from a back icon on the top-left instead of a Done text action.",
+            topBarSection.contains("Alignment.CenterStart") &&
+                topBarSection.contains("R.drawable.ic_action_back") &&
+                !topBarSection.contains("R.string.saved_route_done"),
+        )
+        assertFalse(
+            "Bookmark edit cards should not render checkbox controls.",
+            source.contains("Role.Checkbox") ||
+                source.contains("SavedBookmarkSelectionButton("),
+        )
+        assertTrue(
+            "Selected edit items should show a flat red-tint pending deletion visual state with a subtle red border and no gray elevation.",
+            !source.contains("SavedBookmarkPendingDeleteBadge(") &&
+                !source.contains("R.string.saved_route_pending_delete") &&
+                source.contains("MaterialTheme.colorScheme.error.copy(alpha = 0.28f)") &&
+                source.contains("SavedBookmarkPendingDeleteContainerColor") &&
+                source.contains("if (isPendingRemoval) {\n            0.dp"),
+        )
+        assertFalse(
+            "Edit delete CTA should not reserve system navigation padding inside the top-level tab shell.",
+            source.contains(".navigationBarsPadding()"),
+        )
+    }
+
+    @Test
+    fun `saved route meta row places option text beside transport mode and excludes secondary options`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val routeBookmarkSection =
+            source
+                .substringAfter("private fun SavedRouteBookmarkListItem(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkEditBottomBar")
+        val routeMetaRowSection =
+            source
+                .substringAfter("private fun SavedRouteMetaRow(")
+                .substringBefore("@Composable\nprivate fun SavedRouteWaypointInfoRow")
+        val routeOptionSection =
+            source
+                .substringAfter("private fun routeOptionCompactLabel(")
+                .substringBefore("@Composable\nprivate fun transportModeLabel")
+
+        assertTrue(
+            "Saved-route option text should render in the same meta row as the transport mode.",
+            routeBookmarkSection.indexOf("transportModeLabel = transportModeLabel(routeBookmark.transportMode)") <
+                routeBookmarkSection.indexOf("routeOptionLabel = routeOptionLabel") &&
+                routeBookmarkSection.indexOf("routeOptionLabel = routeOptionLabel") <
+                routeBookmarkSection.indexOf("if (!isEditMode)"),
+        )
+        assertTrue(
+            "Saved-route meta should read like plain text instead of separate button-like chips.",
+            routeMetaRowSection.contains("joinToString(separator = \" · \")") &&
+                routeMetaRowSection.contains("R.drawable.ic_route_walk") &&
+                !routeBookmarkSection.contains("SavedRouteTagChip("),
+        )
+        assertTrue(
+            "Only safe and fast route labels should be shown; min-walk and similar labels should be suppressed.",
+            routeOptionSection.contains("\"MIN_WALK\"") &&
+                routeOptionSection.contains("\"무단차 우선\"") &&
+                routeOptionSection.contains("-> null"),
         )
     }
 }

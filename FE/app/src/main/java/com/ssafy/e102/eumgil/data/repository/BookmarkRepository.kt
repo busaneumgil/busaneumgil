@@ -1,6 +1,8 @@
 package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
+import com.ssafy.e102.eumgil.core.model.PlaceDestination
+import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.entity.BookmarkEntity
 import com.ssafy.e102.eumgil.data.remote.datasource.BookmarksRemoteDataSource
@@ -73,7 +75,9 @@ class DefaultBookmarkRepository(
     }
 
     override suspend fun saveBookmark(bookmark: BookmarkData): BookmarkData {
-        val accountScopeKey = getCurrentAccountScopeKey() ?: return bookmark
+        val accountScopeKey =
+            getCurrentAccountScopeKey()
+                ?: throw BookmarkSaveException("로그인 후에만 북마크를 저장할 수 있습니다.")
         val serverResponse = trySaveOnServer(bookmark)
         val resolvedBookmark = bookmark.withServerResponse(serverResponse)
         cacheBookmark(accountScopeKey, resolvedBookmark)
@@ -93,10 +97,16 @@ class DefaultBookmarkRepository(
         }
     }
 
-    private suspend fun trySaveOnServer(bookmark: BookmarkData): CreateBookmarkResponseDto? {
-        val datasource = bookmarksRemoteDataSource ?: return null
-        val token = resolveAccessToken() ?: return null
-        val request = bookmark.toCreateBookmarkRequestDto() ?: return null
+    private suspend fun trySaveOnServer(bookmark: BookmarkData): CreateBookmarkResponseDto {
+        val datasource =
+            bookmarksRemoteDataSource
+                ?: throw BookmarkSaveException("북마크 서버 저장을 지원하지 않는 환경입니다.")
+        val token =
+            resolveAccessToken()
+                ?: throw BookmarkSaveException("로그인 세션이 없어 북마크를 서버에 저장할 수 없습니다.")
+        val request =
+            bookmark.toCreateBookmarkRequestDto()
+                ?: throw BookmarkSaveException("서버에 저장할 수 없는 북마크 데이터입니다.")
 
         return datasource.createBookmark(accessToken = token, request = request)
     }
@@ -215,7 +225,8 @@ class DefaultBookmarkRepository(
         authSessionRepository?.getAccountScopeKey() ?: DEFAULT_TEST_ACCOUNT_SCOPE_KEY
 
     private suspend fun resolveAccessToken(): String? =
-        authSessionRepository?.getCurrentAuthSession()?.accessToken ?: accessTokenProvider()
+        authSessionRepository?.getCurrentAuthSession()?.accessToken?.takeIf(String::isNotBlank)
+            ?: accessTokenProvider()?.takeIf(String::isNotBlank)
 
     private companion object {
         private const val DEFAULT_PAGE_SIZE = 50
@@ -248,6 +259,7 @@ fun FacilityDetailSeed.toBookmarkData(): BookmarkData =
         latitude = coordinate.latitude,
         longitude = coordinate.longitude,
         category = category.name,
+        serverPlaceId = facilityId.toLongOrNull(),
     )
 
 private fun BookmarkData.toBookmarkEntity(
@@ -315,9 +327,7 @@ private fun BookmarkData.toCreateBookmarkRequestDto(): CreateBookmarkRequestDto?
     )
 }
 
-private fun BookmarkData.withServerResponse(response: CreateBookmarkResponseDto?): BookmarkData {
-    if (response == null) return this
-
+private fun BookmarkData.withServerResponse(response: CreateBookmarkResponseDto): BookmarkData {
     val resolvedServerPlaceId = response.placeId ?: serverPlaceId
 
     return copy(
@@ -334,3 +344,45 @@ private fun BookmarkListItemDto.localCachePlaceId(): String =
             ?.takeIf { it.isNotBlank() }
             ?.let { externalPlaceId -> "provider:${provider.orEmpty().trim().lowercase(Locale.US)}:$externalPlaceId" }
         ?: bookmarkTargetId
+
+fun PlaceDestination.canSaveServerBookmark(): Boolean = toBookmarkDataOrNull() != null
+
+fun PlaceDestination.toBookmarkDataOrNull(): BookmarkData? =
+    BookmarkData(
+        placeId = placeId,
+        placeName = name,
+        address = address?.takeIf(String::isNotBlank),
+        latitude = latitude,
+        longitude = longitude,
+        category = category?.name,
+        serverPlaceId = serverPlaceId,
+        provider = provider?.takeIf(String::isNotBlank),
+        providerPlaceId = providerPlaceId?.takeIf(String::isNotBlank),
+        providerCategory = providerCategory?.takeIf(String::isNotBlank) ?: category?.name,
+    ).takeIf(BookmarkData::canCreateServerSaveRequest)
+
+fun RouteWaypoint.toBookmarkDataOrNull(
+    fallbackPlaceId: String,
+    fallbackPlaceName: String = "목적지",
+): BookmarkData? =
+    BookmarkData(
+        placeId = placeId?.takeIf(String::isNotBlank) ?: fallbackPlaceId,
+        placeName = name.orEmpty().ifBlank { fallbackPlaceName },
+        address = address?.takeIf(String::isNotBlank),
+        latitude = coordinate.latitude,
+        longitude = coordinate.longitude,
+        category = category?.name,
+        serverPlaceId = serverPlaceId,
+        provider = provider?.takeIf(String::isNotBlank),
+        providerPlaceId = providerPlaceId?.takeIf(String::isNotBlank),
+        providerCategory = providerCategory?.takeIf(String::isNotBlank) ?: category?.name,
+    ).takeIf(BookmarkData::canCreateServerSaveRequest)
+
+fun BookmarkData.canCreateServerSaveRequest(): Boolean =
+    serverPlaceId != null ||
+        placeId.toLongOrNull() != null ||
+        !provider.isNullOrBlank()
+
+class BookmarkSaveException(
+    message: String,
+) : IllegalStateException(message)

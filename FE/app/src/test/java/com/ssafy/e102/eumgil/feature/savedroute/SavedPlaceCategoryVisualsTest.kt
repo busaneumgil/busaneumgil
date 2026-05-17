@@ -19,8 +19,8 @@ class SavedPlaceCategoryVisualsTest {
         assertEquals(R.drawable.ic_route_tactile_blocks, savedPlaceCategoryIconRes("BRAILLE_BLOCK"))
         assertEquals(R.drawable.ic_place_restaurant, savedPlaceCategoryIconRes("RESTAURANT"))
         assertEquals(R.drawable.ic_place_tourist_spot, savedPlaceCategoryIconRes("TOURIST_ATTRACTION"))
-        assertEquals(R.drawable.ic_place_other, savedPlaceCategoryIconRes("OTHER"))
-        assertEquals(R.drawable.ic_place_other, savedPlaceCategoryIconRes(null))
-        assertEquals(R.drawable.ic_place_other, savedPlaceCategoryIconRes("UNEXPECTED"))
+        assertEquals(R.drawable.ic_map_selected_pin_blue, savedPlaceCategoryIconRes("OTHER"))
+        assertEquals(R.drawable.ic_map_selected_pin_blue, savedPlaceCategoryIconRes(null))
+        assertEquals(R.drawable.ic_map_selected_pin_blue, savedPlaceCategoryIconRes("UNEXPECTED"))
     }
 }

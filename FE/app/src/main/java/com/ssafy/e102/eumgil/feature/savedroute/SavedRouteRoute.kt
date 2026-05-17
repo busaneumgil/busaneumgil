@@ -34,6 +34,7 @@ fun SavedRouteRoute(
                 bookmarkRepository = appContainer.bookmarkRepository,
                 routeBookmarkRepository = appContainer.routeBookmarkRepository,
                 destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                destinationPreviewRepository = appContainer.destinationPreviewRepository,
                 searchRepository = appContainer.searchRepository,
                 currentLocationManager = appContainer.currentLocationManager,
             )

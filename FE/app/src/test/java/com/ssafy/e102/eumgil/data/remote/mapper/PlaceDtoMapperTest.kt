@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.data.remote.mapper
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureType
+import com.ssafy.e102.eumgil.core.model.PlaceMarkerKind
 import com.ssafy.e102.eumgil.data.remote.dto.MapPlaceDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceAccessibilityFeatureDto
 import com.ssafy.e102.eumgil.data.remote.dto.PlaceDetailDto
@@ -55,6 +56,7 @@ class PlaceDtoMapperTest {
 
         assertEquals(1, summaries.size)
         assertEquals(PlaceCategory.WELFARE, summaries.first().category)
+        assertEquals(PlaceMarkerKind.DEFAULT, summaries.first().markerKind)
         assertEquals(
             listOf(
                 PlaceFeatureType.GUIDANCE_FACILITY,
@@ -67,6 +69,43 @@ class PlaceDtoMapperTest {
         assertEquals(
             listOf("guidance-facility", "accessible-room", "accessible-toilet"),
             summaries.first().accessibilityTags,
+        )
+    }
+
+    @Test
+    fun `toPlaceSummaries keeps explicit marker kind from marker response`() {
+        val summaries =
+            PlaceDtoMapper.toPlaceSummaries(
+                PlacesBrowseDto(
+                    places =
+                        listOf(
+                            PlaceSummaryDto(
+                                placeId = 90L,
+                                name = "Bus stop",
+                                category = "ETC",
+                                markerKind = "BUS_STOP",
+                                address = "90 Transit-ro, Busan",
+                                point = PlacePointDto(lat = 35.1801, lng = 129.0722),
+                                accessibilityFeatures = emptyList(),
+                                isBookmarked = false,
+                            ),
+                            PlaceSummaryDto(
+                                placeId = 91L,
+                                name = "Subway station",
+                                category = "ETC",
+                                markerKind = "SUBWAY_STATION",
+                                address = "91 Transit-ro, Busan",
+                                point = PlacePointDto(lat = 35.1802, lng = 129.0723),
+                                accessibilityFeatures = emptyList(),
+                                isBookmarked = false,
+                            ),
+                        ),
+                ),
+            )
+
+        assertEquals(
+            listOf(PlaceMarkerKind.BUS_STOP, PlaceMarkerKind.SUBWAY_STATION),
+            summaries.map { summary -> summary.markerKind },
         )
     }
 

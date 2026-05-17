@@ -493,8 +493,7 @@ class RouteSettingViewModel(
 
         val walkSearchData =
             runCatching {
-                fetchSearchData(
-                    mode = RouteTravelMode.WALK,
+                fetchWalkSearchDataWithNoRouteRecovery(
                     originResolution = originResolution,
                     destinationResolution = destinationResolution,
                 )
@@ -633,6 +632,7 @@ class RouteSettingViewModel(
             return
         }
         cancelStagedTransitEnhancement()
+        val loadId = beginRouteLoad()
 
         viewModelScope.launch {
             val originResolution =
@@ -642,6 +642,25 @@ class RouteSettingViewModel(
                 )
             val destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value)
             val selectedOption = selectedOptionForMode(mode, requestedOption)
+            val reusableSearchData =
+                reusableSearchDataForMode(
+                    mode = mode,
+                    originResolution = originResolution,
+                    destinationResolution = destinationResolution,
+                )
+            if (reusableSearchData != null) {
+                mutableUiState.value =
+                    buildUiState(
+                        searchData = reusableSearchData,
+                        originResolution = originResolution,
+                        destinationResolution = destinationResolution,
+                        selectedTravelMode = mode,
+                        requestedOption = selectedOption,
+                        ctaAcknowledged = false,
+                    )
+                rememberSuccessfulAutomaticOrigin(originResolution)
+                return@launch
+            }
 
             mutableUiState.update { state ->
                 state.copy(
@@ -672,13 +691,25 @@ class RouteSettingViewModel(
                 )
             }
 
-            runCatching {
-                fetchSearchData(
-                    mode = mode,
-                    originResolution = originResolution,
-                    destinationResolution = destinationResolution,
-                )
-            }.onSuccess { searchData ->
+            val searchResult =
+                runCatching {
+                    if (mode == RouteTravelMode.WALK) {
+                        fetchWalkSearchDataWithNoRouteRecovery(
+                            originResolution = originResolution,
+                            destinationResolution = destinationResolution,
+                        )
+                    } else {
+                        fetchSearchData(
+                            mode = mode,
+                            originResolution = originResolution,
+                            destinationResolution = destinationResolution,
+                        )
+                    }
+            }
+            searchResult.onSuccess { searchData ->
+                if (!isActiveRouteLoad(loadId)) {
+                    return@launch
+                }
                 mutableUiState.value =
                     buildUiState(
                         searchData = searchData,
@@ -691,6 +722,9 @@ class RouteSettingViewModel(
                 rememberSuccessfulAutomaticOrigin(originResolution)
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
+                if (!isActiveRouteLoad(loadId)) {
+                    return@launch
+                }
                 applyModeLoadFailure(
                     mode = mode,
                     selectedOption = selectedOption,
@@ -1033,6 +1067,49 @@ class RouteSettingViewModel(
             }
         latestSearchDataByMode = latestSearchDataByMode + (mode to searchData)
         return searchData
+    }
+
+    private suspend fun fetchWalkSearchDataWithNoRouteRecovery(
+        originResolution: RouteOriginResolution,
+        destinationResolution: RouteDestinationResolution,
+    ): RouteSearchData =
+        runCatching {
+            fetchSearchData(
+                mode = RouteTravelMode.WALK,
+                originResolution = originResolution,
+                destinationResolution = destinationResolution,
+            )
+        }.recoverCatching { throwable ->
+            if (!throwable.isNoRouteFailure()) {
+                throw throwable
+            }
+            val query =
+                buildQuery(
+                    originResolution = originResolution,
+                    destinationResolution = destinationResolution,
+                    mode = RouteTravelMode.WALK,
+                )
+            routeRepository.getFreshRouteSearchData(query).also { searchData ->
+                latestSearchDataByMode = latestSearchDataByMode + (RouteTravelMode.WALK to searchData)
+            }
+        }.getOrThrow()
+
+    private fun reusableSearchDataForMode(
+        mode: RouteTravelMode,
+        originResolution: RouteOriginResolution,
+        destinationResolution: RouteDestinationResolution,
+    ): RouteSearchData? {
+        val searchData = latestSearchDataByMode[mode] ?: return null
+        if (searchData.routes.isEmpty()) {
+            return null
+        }
+        val query =
+            buildQuery(
+                originResolution = originResolution,
+                destinationResolution = destinationResolution,
+                mode = mode,
+            )
+        return searchData.takeIf { it.query == query }
     }
 
     private fun determineDefaultTravelMode(walkSearchData: RouteSearchData): RouteTravelMode {
@@ -2925,7 +3002,7 @@ private const val DEFAULT_ORIGIN_LABEL = "현재 위치"
 private const val DEFAULT_ORIGIN_SUPPORTING_TEXT = "실시간 위치 연동 전까지 데모 좌표를 출발지로 사용합니다."
 private const val CURRENT_LOCATION_ORIGIN_SUPPORTING_TEXT = "GPS 현재 위치를 출발지로 사용 중입니다."
 private const val DEFAULT_DESTINATION_ADDRESS_FALLBACK = "주소 정보 없음"
-private const val EMPTY_DESTINATION_LABEL = "도착지를 선택해 주세요"
+private const val EMPTY_DESTINATION_LABEL = "도착지를 선택해주세요"
 private const val EMPTY_DESTINATION_SUPPORTING_TEXT = "검색 또는 지도에서 도착지를 설정할 수 있어요."
 private const val DEFAULT_ROUTE_LOAD_ERROR_MESSAGE = "전체 경로를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
 private const val DEFAULT_GUIDANCE_MESSAGE = "선택한 경로를 따라 이동합니다."

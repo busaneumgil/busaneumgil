@@ -436,6 +436,20 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `navigation briefing text does not duplicate segment distance`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            assertEquals("300m 후 직진", viewModel.uiState.value.tts.briefingText)
+        }
+
+    @Test
     fun `walk to transit leg triggers transit refresh near boarding stop`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
@@ -1092,6 +1106,9 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, bookmarkRepository.savedBookmarks.size)
+            assertEquals(42L, bookmarkRepository.savedBookmarks.single().serverPlaceId)
+            assertEquals("KAKAO", bookmarkRepository.savedBookmarks.single().provider)
+            assertEquals("kakao-destination-42", bookmarkRepository.savedBookmarks.single().providerPlaceId)
             assertEquals(listOf("walk-route-1"), routeRepository.endRouteCalls)
             assertEquals(
                 listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToSavedRoute),
@@ -1100,7 +1117,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `saving destination bookmark failure keeps navigation active and suppresses bookmark navigation`() =
+    fun `saving destination bookmark failure keeps navigation active and shows toast`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val bookmarkRepository = FakeBookmarkRepository(failSave = true)
@@ -1113,6 +1130,7 @@ class NavigationViewModelTest {
                 )
             viewModel.bindNavigationRequest(testWalkNavigationRequest())
             advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
 
             viewModel.onAction(NavigationUiAction.SaveBookmarkClicked)
             advanceUntilIdle()
@@ -1120,6 +1138,46 @@ class NavigationViewModelTest {
             assertTrue(locationManager.isUpdating)
             assertTrue(bookmarkRepository.savedBookmarks.isEmpty())
             assertTrue(routeRepository.endRouteCalls.isEmpty())
+            assertEquals(
+                listOf(NavigationUiEvent.ShowToast("북마크를 저장하지 못했습니다. 다시 시도해 주세요.")),
+                eventsDeferred.await(),
+            )
+        }
+
+    @Test
+    fun `saving destination bookmark without server metadata shows unavailable toast and keeps navigation active`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val bookmarkRepository = FakeBookmarkRepository()
+            val routeRepository = FakeRouteRepository(endSessionId = "ended-session")
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    bookmarkRepository = bookmarkRepository,
+                    routeRepository = routeRepository,
+                )
+            viewModel.bindNavigationRequest(
+                testWalkNavigationRequest().copy(
+                    destination =
+                        RouteWaypoint(
+                            name = "목적지",
+                            coordinate = WALK_END_POINT,
+                        ),
+                ),
+            )
+            advanceUntilIdle()
+            val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+
+            viewModel.onAction(NavigationUiAction.SaveBookmarkClicked)
+            advanceUntilIdle()
+
+            assertTrue(locationManager.isUpdating)
+            assertTrue(bookmarkRepository.savedBookmarks.isEmpty())
+            assertTrue(routeRepository.endRouteCalls.isEmpty())
+            assertEquals(
+                listOf(NavigationUiEvent.ShowToast("서버에 저장할 수 있는 목적지에서만 북마크를 저장할 수 있습니다.")),
+                eventsDeferred.await(),
+            )
         }
 
     @Test
@@ -1169,6 +1227,104 @@ class NavigationViewModelTest {
                 listOf(NavigationUiEvent.StopBriefing, NavigationUiEvent.NavigateToArrival),
                 eventsDeferred.await(),
             )
+        }
+
+    @Test
+    fun `navigation entry keeps initial briefing pending until tts becomes ready`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+            val briefingText = viewModel.uiState.value.stepCard.heroTitle
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            advanceUntilIdle()
+
+            assertFalse(eventDeferred.isCompleted)
+
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+
+            assertEquals(listOf(NavigationUiEvent.SpeakBriefing(briefingText)), eventDeferred.await())
+        }
+
+    @Test
+    fun `initial briefing auto play does not repeat for duplicate ready updates`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+            assertEquals(1, eventDeferred.await().size)
+
+            val duplicateDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
+            advanceUntilIdle()
+
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+
+            assertFalse(duplicateDeferred.isCompleted)
+            duplicateDeferred.cancel()
+        }
+
+    @Test
+    fun `voice guidance toggle on preserves pending briefing until tts becomes ready`() =
+        runTest {
+            val viewModel = createViewModel()
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            val briefingText = viewModel.uiState.value.tts.briefingText
+            val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(4).toList() }
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            viewModel.onAction(NavigationUiAction.VoiceGuidanceToggled(enabled = false))
+            viewModel.onAction(NavigationUiAction.VoiceGuidanceToggled(enabled = true))
+            advanceUntilIdle()
+
+            assertFalse(eventDeferred.isCompleted)
+
+            viewModel.updateTextToSpeechState(
+                isEnabled = true,
+                canSpeak = true,
+                status = NavigationTtsStatus.Ready,
+            )
+            advanceUntilIdle()
+
+            val events = eventDeferred.await()
+            assertEquals(4, events.size)
+            assertTrue(events.contains(NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = false)))
+            assertTrue(events.contains(NavigationUiEvent.StopBriefing))
+            assertTrue(events.contains(NavigationUiEvent.SetVoiceGuidanceEnabled(enabled = true)))
+            assertEquals(NavigationUiEvent.SpeakBriefing(briefingText), events.last())
         }
 
     @Test
@@ -1563,6 +1719,10 @@ private fun testWalkNavigationRequest(): RouteNavigationRequest =
             RouteWaypoint(
                 name = "목적지",
                 placeId = "destination-place",
+                serverPlaceId = 42L,
+                provider = "KAKAO",
+                providerPlaceId = "kakao-destination-42",
+                providerCategory = "ELEVATOR",
                 coordinate = WALK_END_POINT,
             ),
         selectedRoute =

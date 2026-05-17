@@ -41,6 +41,7 @@ internal object MapPlaceBrowseDataMapper {
             coordinate = GeoCoordinate(latitude = latitude, longitude = longitude),
             category = actualCategory,
             filterCategories = (setOf(actualCategory) + featureCategories).distinct().toSet(),
+            markerKind = markerKind,
             accessibilityTags = features.toAccessibilityTags(),
         )
     }

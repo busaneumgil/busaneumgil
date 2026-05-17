@@ -7,5 +7,9 @@ public record AdminRoadNetworkSummaryResponse(
 	@Schema(description = "전체 segment 개수", example = "100")
 	long segmentCount,
 	@Schema(description = "응답에 포함된 segment 개수", example = "100")
-	int visibleSegmentCount) {
+	int visibleSegmentCount,
+	@Schema(description = "응답에 포함된 node 개수", example = "120")
+	int nodeCount,
+	@Schema(description = "응답에 포함된 node 개수", example = "120")
+	int visibleNodeCount) {
 }

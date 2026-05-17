@@ -16,7 +16,8 @@ class SavedRouteScreenBookmarkIconPolicyTest {
 
         assertTrue(
             "Saved-place cards should resolve a place-category icon from the bookmark category.",
-            savedPlaceSection.contains("savedPlaceCategoryIconRes(place.category)"),
+            savedPlaceSection.contains("SavedPlaceCategoryIconTile(category = place.category)") &&
+                savedPlaceSection.contains("savedBookmarkPlaceCategoryIconRes(category)"),
         )
         assertTrue(
             "Saved-place cards should render the category icon before the category/name text stack.",

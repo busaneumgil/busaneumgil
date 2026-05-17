@@ -103,7 +103,16 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             ?.getStateFlow(MAP_FACILITY_DETAIL_VISIBLE_KEY, false)
             ?.collectAsStateWithLifecycle()
             ?: remember { mutableStateOf(false) }
-    val showTopLevelBar = currentTopLevelRoute != null && !isMapFacilityDetailVisible
+    val isMapVoiceSearchVisible by
+        currentBackStackEntry
+            ?.savedStateHandle
+            ?.getStateFlow(MAP_VOICE_SEARCH_VISIBLE_KEY, false)
+            ?.collectAsStateWithLifecycle()
+            ?: remember { mutableStateOf(false) }
+    val showTopLevelBar =
+        currentTopLevelRoute != null &&
+            !isMapFacilityDetailVisible &&
+            !isMapVoiceSearchVisible
 
     val selectedPrimaryUserType = initSettings.selectedPrimaryUserType
 
@@ -122,6 +131,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     if (selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue) {
         MobilityKwsEffect(
             navController = navController,
+            shouldPauseForMapVoiceInput = isMapVoiceSearchVisible,
             onNavigateToVoiceInput = {
                 navController.navigate(SearchRoute.VoiceInput.createRoute()) {
                     launchSingleTop = true
@@ -216,20 +226,32 @@ private fun appExitTransition(): ExitTransition = ExitTransition.None
 private const val APP_NAV_HOST_LOG_TAG = "AppNavHost"
 internal const val MAP_FACILITY_DETAIL_VISIBLE_KEY: String = "mapFacilityDetailVisible"
 
+internal fun shouldPauseMapKws(
+    currentRoute: String?,
+    shouldPauseForMapVoiceInput: Boolean,
+): Boolean = currentRoute == SearchRoute.VoiceInput.route || shouldPauseForMapVoiceInput
+
 @Composable
 private fun MobilityKwsEffect(
     navController: NavController,
+    shouldPauseForMapVoiceInput: Boolean,
     onNavigateToVoiceInput: () -> Unit,
 ) {
     val kwsViewModel: MapKwsViewModel = viewModel()
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnNavigateToVoiceInput by rememberUpdatedState(onNavigateToVoiceInput)
+    val currentShouldPauseForMapVoiceInput by rememberUpdatedState(shouldPauseForMapVoiceInput)
 
-    // 앱 백그라운드 전환 시 마이크 해제 / 복귀 시 재시작
     DisposableEffect(lifecycleOwner, kwsViewModel) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> kwsViewModel.resumeSpotting()
+                Lifecycle.Event.ON_RESUME ->
+                    if (currentShouldPauseForMapVoiceInput) {
+                        kwsViewModel.pauseSpotting()
+                    } else {
+                        kwsViewModel.resumeSpotting()
+                    }
+
                 Lifecycle.Event.ON_PAUSE -> kwsViewModel.pauseSpotting()
                 else -> Unit
             }
@@ -238,14 +260,30 @@ private fun MobilityKwsEffect(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // VoiceInput 바텀시트 닫힐 때 KWS 재시작
-    // (Activity ON_RESUME은 같은 앱 내 화면 전환 시 발생하지 않으므로 별도 처리)
-    LaunchedEffect(navController) {
+    LaunchedEffect(navController, kwsViewModel, shouldPauseForMapVoiceInput) {
+        if (
+            shouldPauseMapKws(
+                currentRoute = navController.currentBackStackEntry?.destination?.route,
+                shouldPauseForMapVoiceInput = shouldPauseForMapVoiceInput,
+            )
+        ) {
+            kwsViewModel.pauseSpotting()
+        } else {
+            kwsViewModel.resumeSpotting()
+        }
+    }
+
+    LaunchedEffect(navController, shouldPauseForMapVoiceInput) {
         navController.currentBackStackEntryFlow.collect { entry ->
-            if (entry.destination.route != SearchRoute.VoiceInput.route) {
-                kwsViewModel.resumeSpotting()
-            } else {
+            if (
+                shouldPauseMapKws(
+                    currentRoute = entry.destination.route,
+                    shouldPauseForMapVoiceInput = shouldPauseForMapVoiceInput,
+                )
+            ) {
                 kwsViewModel.pauseSpotting()
+            } else {
+                kwsViewModel.resumeSpotting()
             }
         }
     }

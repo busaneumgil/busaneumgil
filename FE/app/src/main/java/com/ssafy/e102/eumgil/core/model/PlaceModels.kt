@@ -16,6 +16,12 @@ enum class PlaceCategory {
     OTHER,
 }
 
+enum class PlaceMarkerKind {
+    DEFAULT,
+    BUS_STOP,
+    SUBWAY_STATION,
+}
+
 enum class PlaceFeatureType {
     ACCESSIBLE_ENTRANCE,
     ELEVATOR,
@@ -47,6 +53,7 @@ data class PlaceSummary(
     val latitude: Double,
     val longitude: Double,
     val category: PlaceCategory,
+    val markerKind: PlaceMarkerKind = PlaceMarkerKind.DEFAULT,
     val features: List<PlaceFeatureAvailability> = emptyList(),
     val isBookmarked: Boolean = false,
     val accessibilityTags: List<String> = emptyList(),

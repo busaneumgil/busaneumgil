@@ -89,6 +89,7 @@ class RouteSettingViewModelTest {
             assertEquals("place-1", uiState.destination.placeId)
             assertEquals(PlaceCategory.RESTAURANT, uiState.destination.category)
             assertEquals("ID place-1 | Category RESTAURANT", uiState.destination.metadataLabel)
+            assertEquals("현재 위치 확인 중", uiState.origin.name)
             assertEquals(RouteOriginState.CURRENT_LOCATION_LOADING, uiState.originState)
             assertEquals("카페 온도", uiState.destination.name)
             assertFalse(uiState.isUsingFallbackDestination)
@@ -145,6 +146,40 @@ class RouteSettingViewModelTest {
             assertEquals("안내 시작", uiState.cta.label)
             assertEquals("선택한 경로로 길 안내를 시작할 수 있습니다.", uiState.cta.supportingText)
             assertTrue(uiState.isStartEnabled)
+            assertEquals(
+                listOf("엘리베이터 있음", "공사 구간 주의", "신호등 횡단보도"),
+                uiState.selectedRoute?.detailAccessibilityChips?.map(RouteDetailChipUiState::label),
+            )
+            assertEquals(
+                listOf("연석 단차 주의"),
+                uiState.selectedRoute?.detailHighlights?.map(RouteDetailHighlightUiState::title),
+            )
+            assertEquals(
+                listOf(
+                    "출발",
+                    "150m 직진 이동",
+                    "엘리베이터 이용",
+                    "공사 구간 진입",
+                    "신호 횡단보도 건너기",
+                    "단차 구간 주의",
+                    "450m 직진 이동",
+                    "목적지 도착",
+                ),
+                uiState.selectedRoute?.detailSteps?.map(RouteDetailStepUiState::title),
+            )
+            assertEquals(
+                listOf(
+                    RouteDetailStepKind.START,
+                    RouteDetailStepKind.STRAIGHT,
+                    RouteDetailStepKind.ELEVATOR,
+                    RouteDetailStepKind.CONSTRUCTION,
+                    RouteDetailStepKind.CROSSWALK,
+                    RouteDetailStepKind.CURB_GAP,
+                    RouteDetailStepKind.STRAIGHT,
+                    RouteDetailStepKind.ARRIVAL,
+                ),
+                uiState.selectedRoute?.detailSteps?.map(RouteDetailStepUiState::kind),
+            )
             val detailChipKinds = uiState.selectedRoute?.detailAccessibilityChips?.map(RouteDetailChipUiState::kind).orEmpty()
             assertTrue(
                 detailChipKinds.containsAll(
@@ -156,20 +191,10 @@ class RouteSettingViewModelTest {
                 ),
             )
             assertTrue(uiState.selectedRoute?.detailHighlights.orEmpty().all { highlight -> highlight.tone == RouteDetailTone.WARNING })
-            val detailStepKinds = uiState.selectedRoute?.detailSteps?.map(RouteDetailStepUiState::kind).orEmpty()
-            assertEquals(RouteDetailStepKind.START, detailStepKinds.first())
-            assertEquals(RouteDetailStepKind.ARRIVAL, detailStepKinds.last())
-            assertTrue(
-                detailStepKinds.containsAll(
-                    listOf(
-                        RouteDetailStepKind.STRAIGHT,
-                        RouteDetailStepKind.ELEVATOR,
-                        RouteDetailStepKind.CONSTRUCTION,
-                        RouteDetailStepKind.CROSSWALK,
-                    ),
-                ),
+            assertEquals(
+                listOf("150 m", "90 m", "62 m", "128 m", "100 m", "450 m"),
+                uiState.selectedRoute?.detailSteps?.drop(1)?.dropLast(1)?.mapNotNull(RouteDetailStepUiState::metaLabel),
             )
-            assertTrue(uiState.selectedRoute?.detailSteps?.drop(1)?.dropLast(1)?.mapNotNull(RouteDetailStepUiState::metaLabel).orEmpty().isNotEmpty())
             assertEquals(null, uiState.selectedRoute?.detailFallbackMessage)
         }
 
@@ -280,7 +305,7 @@ class RouteSettingViewModelTest {
 
             assertTrue(uiState.isUsingFallbackDestination)
             assertEquals(RouteDestinationHandoffState.INVALID_COORDINATE, uiState.destinationHandoffState)
-            assertFalse(uiState.destinationFallbackMessage.isNullOrBlank())
+            assertEquals("목적지 정보를 다시 확인한 뒤 경로를 보여드릴게요.", uiState.destinationFallbackMessage)
             assertEquals("부산역", uiState.destination.name)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
             assertEquals(RoutePreviewMapStatus.INVALID_DESTINATION, uiState.routePreviewMap.status)
@@ -327,8 +352,13 @@ class RouteSettingViewModelTest {
                 "일부 구간은 geometry fallback 상태라 preview 없이 요약 정보만 표시합니다.",
                 selectedRoute.previewFallbackNotice,
             )
+            assertEquals(listOf("상세 정보 확인 중"), selectedRoute.detailAccessibilityChips.map(RouteDetailChipUiState::label))
             assertEquals(listOf(RouteDetailChipKind.PENDING), selectedRoute.detailAccessibilityChips.map(RouteDetailChipUiState::kind))
             assertTrue(selectedRoute.detailHighlights.isEmpty())
+            assertEquals(
+                listOf("출발", "세부 경로 확인 중", "목적지 도착"),
+                selectedRoute.detailSteps.map(RouteDetailStepUiState::title),
+            )
             assertEquals(
                 listOf(RouteDetailStepKind.START, RouteDetailStepKind.FALLBACK, RouteDetailStepKind.ARRIVAL),
                 selectedRoute.detailSteps.map(RouteDetailStepUiState::kind),
@@ -444,8 +474,8 @@ class RouteSettingViewModelTest {
                 )
 
             advanceUntilIdle()
-            val initialFailureCount = routeRepository.walkSearchCount
-            assertTrue(initialFailureCount >= 1)
+            val initialWalkSearchCount = routeRepository.walkSearchCount
+            assertTrue(initialWalkSearchCount >= 1)
             assertEquals(DEFAULT_TEST_ORIGIN_COORDINATE, routeRepository.lastWalkQuery?.origin?.coordinate)
             assertTrue(viewModel.uiState.value.loadErrorMessage?.isNotBlank() == true)
 
@@ -737,6 +767,22 @@ class RouteSettingViewModelTest {
             assertEquals("Shortest Route", uiState.selectedRoute?.title)
             assertEquals(RouteRiskLevel.MEDIUM, uiState.selectedRoute?.riskLevel)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)
+            assertEquals(
+                listOf("신호등 횡단보도"),
+                uiState.selectedRoute?.detailAccessibilityChips?.map(RouteDetailChipUiState::label),
+            )
+            assertEquals(
+                listOf("연석 단차 주의"),
+                uiState.selectedRoute?.detailHighlights?.map(RouteDetailHighlightUiState::title),
+            )
+            assertEquals(
+                listOf(RouteDetailStepKind.CROSSWALK, RouteDetailStepKind.CURB_GAP),
+                uiState.selectedRoute?.detailSteps?.drop(1)?.dropLast(1)?.map(RouteDetailStepUiState::kind),
+            )
+            assertEquals(
+                listOf(RouteDetailTone.WARNING, RouteDetailTone.WARNING),
+                uiState.selectedRoute?.detailSteps?.drop(1)?.dropLast(1)?.map(RouteDetailStepUiState::tone),
+            )
             val detailChips = uiState.selectedRoute?.detailAccessibilityChips.orEmpty()
             val detailSteps = uiState.selectedRoute?.detailSteps?.drop(1)?.dropLast(1).orEmpty()
             assertTrue(detailChips.any { chip -> chip.kind == RouteDetailChipKind.SIGNAL_CROSSWALK })
@@ -844,6 +890,7 @@ class RouteSettingViewModelTest {
             val initialState = viewModel.uiState.value
             val initialOrigin = initialState.origin
             val initialDestination = initialState.destination
+            val initialPreviewPoints = initialState.routePreviewMap.polyline
 
             viewModel.onAction(RouteSettingUiAction.WaypointsSwapClicked)
             advanceUntilIdle()
@@ -856,6 +903,9 @@ class RouteSettingViewModelTest {
             assertEquals(initialOrigin.coordinate, swappedState.destination.coordinate)
             assertEquals(initialDestination.coordinate, swappedState.routePreviewMap.originCoordinate)
             assertEquals(initialOrigin.coordinate, swappedState.routePreviewMap.destinationCoordinate)
+            assertEquals(swappedState.routePreviewMap.originCoordinate, swappedState.routePreviewMap.polyline.firstOrNull())
+            assertEquals(swappedState.routePreviewMap.destinationCoordinate, swappedState.routePreviewMap.polyline.lastOrNull())
+            assertEquals(swappedState.destination, swappedState.selectedRoute?.destination)
             assertEquals(initialDestination.coordinate, swappedState.routePreviewMap.polyline.first())
             assertEquals(initialOrigin.coordinate, swappedState.routePreviewMap.polyline.last())
             assertEquals(swappedState.destination.placeId, swappedState.selectedRoute?.destination?.placeId)
@@ -872,6 +922,8 @@ class RouteSettingViewModelTest {
             assertEquals(initialOrigin.name, restoredState.origin.name)
             assertEquals(initialOrigin.coordinate, restoredState.origin.coordinate)
             assertEquals(initialDestination, restoredState.destination)
+            assertEquals(restoredState.routePreviewMap.originCoordinate, restoredState.routePreviewMap.polyline.firstOrNull())
+            assertEquals(restoredState.routePreviewMap.destinationCoordinate, restoredState.routePreviewMap.polyline.lastOrNull())
             assertEquals(initialOrigin.coordinate, restoredState.routePreviewMap.polyline.first())
             assertEquals(initialDestination.coordinate, restoredState.routePreviewMap.polyline.last())
         }
@@ -1527,14 +1579,14 @@ class RouteSettingViewModelTest {
             saveGate.complete(Unit)
             advanceUntilIdle()
 
-            val savedDestination = searchRepository.savedRecentDestinations.single()
-            assertEquals(destination.placeId, savedDestination.placeId)
-            assertEquals(destination.name, savedDestination.name)
-            assertEquals(destination.address, savedDestination.address)
-            assertEquals(destination.latitude, savedDestination.latitude, 0.0)
-            assertEquals(destination.longitude, savedDestination.longitude, 0.0)
-            assertEquals(destination.category, savedDestination.category)
-            assertTrue(savedDestination.searchedAtMillis > 0L)
+            val savedRecentDestination = searchRepository.savedRecentDestinations.single()
+            assertEquals(destination.placeId, savedRecentDestination.placeId)
+            assertEquals(destination.name, savedRecentDestination.name)
+            assertEquals(destination.address, savedRecentDestination.address)
+            assertEquals(destination.latitude, savedRecentDestination.latitude, 0.0)
+            assertEquals(destination.longitude, savedRecentDestination.longitude, 0.0)
+            assertEquals(destination.category, savedRecentDestination.category)
+            assertTrue(savedRecentDestination.searchedAtMillis > 0L)
             assertTrue(uiEvent.await() is RouteSettingUiEvent.StartNavigationRequested)
         }
 

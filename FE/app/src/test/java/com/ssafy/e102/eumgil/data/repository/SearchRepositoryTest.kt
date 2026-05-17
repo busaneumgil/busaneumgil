@@ -7,6 +7,7 @@ import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
+import com.ssafy.e102.eumgil.core.model.SearchPage
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.SearchVoiceAnalysis
@@ -216,7 +217,7 @@ class SearchRepositoryTest {
                             getRequestExecutor = { _, _, _ -> error("unused") },
                             postRequestExecutor = { _, _, _ -> error("unused") },
                         ) {
-                            override suspend fun search(query: SearchQuery): List<SearchResult> {
+                            override suspend fun searchPage(query: SearchQuery): SearchPage {
                                 throw IllegalStateException("remote search failed")
                             }
                         },
@@ -266,7 +267,7 @@ class SearchRepositoryTest {
                             getRequestExecutor = { _, _, _ -> error("unused") },
                             postRequestExecutor = { _, _, _ -> error("unused") },
                         ) {
-                            override suspend fun search(query: SearchQuery): List<SearchResult> {
+                            override suspend fun searchPage(query: SearchQuery): SearchPage {
                                 requestCount += 1
                                 return when (requestCount) {
                                     1 ->
@@ -281,7 +282,7 @@ class SearchRepositoryTest {
                                             "refreshed-access-token",
                                             authSessionRepository.getAuthGateState().authSession?.accessToken,
                                         )
-                                        remoteResults
+                                        SearchPage(results = remoteResults)
                                     }
 
                                     else -> error("Unexpected search retry count: $requestCount")
@@ -421,7 +422,7 @@ class SearchRepositoryTest {
                             getRequestExecutor = { _, _, _ -> error("unused") },
                             postRequestExecutor = { _, _, _ -> error("unused") },
                         ) {
-                            override suspend fun search(query: SearchQuery): List<SearchResult> {
+                            override suspend fun searchPage(query: SearchQuery): SearchPage {
                                 throw SearchApiException(
                                     httpStatusCode = 401,
                                     status = "AUTH_401",
@@ -470,7 +471,7 @@ class SearchRepositoryTest {
                             getRequestExecutor = { _, _, _ -> error("unused") },
                             postRequestExecutor = { _, _, _ -> error("unused") },
                         ) {
-                            override suspend fun search(query: SearchQuery): List<SearchResult> {
+                            override suspend fun searchPage(query: SearchQuery): SearchPage {
                                 throw SearchApiException(
                                     httpStatusCode = 401,
                                     status = "AUTH_401",

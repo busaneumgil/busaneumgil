@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
+import com.ssafy.e102.eumgil.feature.voiceassistant.VoiceAssistantAction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -20,6 +21,39 @@ class AppNavHostRoutingTest {
             ),
             TopLevelDestination.entries.map { destination -> destination.route.route },
         )
+    }
+
+    @Test
+    fun `voice assistant actions resolve to app navigation requests`() {
+        assertEquals(
+            VoiceAssistantNavigationRequest.TopLevel(TopLevelDestination.Report),
+            VoiceAssistantAction.OpenReport().toNavigationRequest(),
+        )
+        assertEquals(
+            VoiceAssistantNavigationRequest.TopLevel(TopLevelDestination.SavedRoute),
+            VoiceAssistantAction.OpenSavedRoutes().toNavigationRequest(),
+        )
+        assertEquals(
+            VoiceAssistantNavigationRequest.TopLevel(TopLevelDestination.MyPage),
+            VoiceAssistantAction.OpenMyPage().toNavigationRequest(),
+        )
+        assertEquals(
+            VoiceAssistantNavigationRequest.MapHomeEntry,
+            VoiceAssistantAction.OpenMap().toNavigationRequest(),
+        )
+        assertEquals(
+            VoiceAssistantNavigationRequest.Route(
+                SearchRoute.Results.createRoute(
+                    query = "부산역",
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                ),
+            ),
+            VoiceAssistantAction.SearchPlace(
+                query = "부산역",
+                editingTarget = RouteEditingTarget.ORIGIN,
+            ).toNavigationRequest(),
+        )
+        assertNull(VoiceAssistantAction.UnknownCommand(rawCommand = "unknown").toNavigationRequest())
     }
 
     @Test

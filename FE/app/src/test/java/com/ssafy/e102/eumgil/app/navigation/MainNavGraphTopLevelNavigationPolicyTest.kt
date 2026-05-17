@@ -38,6 +38,34 @@ class MainNavGraphTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun `map facility detail dismiss request uses incrementing one shot ids`() {
+        val savedStateHandle = SavedStateHandle()
+
+        val firstRequestId = savedStateHandle.requestMapFacilityDetailDismiss()
+
+        assertTrue(firstRequestId > 0L)
+        assertTrue(savedStateHandle.consumeMapFacilityDetailDismissRequest(firstRequestId))
+        assertFalse(savedStateHandle.consumeMapFacilityDetailDismissRequest(firstRequestId))
+
+        val secondRequestId = savedStateHandle.requestMapFacilityDetailDismiss()
+
+        assertTrue(secondRequestId > firstRequestId)
+        assertTrue(savedStateHandle.consumeMapFacilityDetailDismissRequest(secondRequestId))
+        assertFalse(savedStateHandle.consumeMapFacilityDetailDismissRequest(secondRequestId))
+    }
+
+    @Test
+    fun `map facility detail dismiss request ignores stale ids after newer request`() {
+        val savedStateHandle = SavedStateHandle()
+
+        val firstRequestId = savedStateHandle.requestMapFacilityDetailDismiss()
+        val secondRequestId = savedStateHandle.requestMapFacilityDetailDismiss()
+
+        assertFalse(savedStateHandle.consumeMapFacilityDetailDismissRequest(firstRequestId))
+        assertTrue(savedStateHandle.consumeMapFacilityDetailDismissRequest(secondRequestId))
+    }
+
+    @Test
     fun `map home reentry helper pops the existing map entry before fallback navigate`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
@@ -89,6 +117,54 @@ class MainNavGraphTopLevelNavigationPolicyTest {
         assertTrue(
             "Route detail top-bar X should invoke the map-home callback directly instead of falling back through the route flow back stack.",
             routeDetailEntry.contains("onCloseClick = onNavigateToMap"),
+        )
+    }
+
+    @Test
+    fun `search mic actions open global voice assistant instead of navigating to search voice route`() {
+        val mainNavGraphSource =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
+                .readText()
+        val appNavHostSource =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/AppNavHost.kt")
+                .readText()
+        val entryDestination =
+            mainNavGraphSource
+                .substringAfter("SearchEntryRoute(")
+                .substringBefore("onNavigateToRouteSetting = {")
+        val resultsDestination =
+            mainNavGraphSource
+                .substringAfter("SearchResultsRoute(")
+                .substringBefore("onNavigateToRouteSetting = {")
+
+        assertTrue(
+            "Main graph should expose a global voice assistant opener with the active search editing target.",
+            mainNavGraphSource.contains("onOpenVoiceAssistant: (RouteEditingTarget) -> Unit"),
+        )
+        assertTrue(
+            "Search entry mic should request the global voice assistant for the current editing target.",
+            entryDestination.contains("onOpenVoiceAssistant(initialEditingTarget)"),
+        )
+        assertFalse(
+            "Search entry mic should no longer navigate to the legacy search voice route.",
+            entryDestination.contains("SearchRoute.VoiceInput.createRoute"),
+        )
+        assertTrue(
+            "Search results mic should request the global voice assistant for the current editing target.",
+            resultsDestination.contains("onOpenVoiceAssistant(initialEditingTarget)"),
+        )
+        assertFalse(
+            "Search results mic should no longer navigate to the legacy search voice route.",
+            resultsDestination.contains("SearchRoute.VoiceInput.createRoute"),
+        )
+        assertTrue(
+            "The legacy search voice route should remain registered for compatibility.",
+            mainNavGraphSource.contains("route = SearchRoute.VoiceInput.route"),
+        )
+        assertTrue(
+            "AppNavHost should preserve the search editing target in the global voice assistant context.",
+            appNavHostSource.contains("onOpenVoiceAssistant = { editingTarget ->") &&
+                appNavHostSource.contains("currentVoiceAssistantSourceContext.copy(editingTarget = editingTarget)"),
         )
     }
 

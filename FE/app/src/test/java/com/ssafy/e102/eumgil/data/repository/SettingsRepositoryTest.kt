@@ -83,7 +83,7 @@ class SettingsRepositoryTest {
         val file = File(temporaryFolder.newFolder(), "init_settings.preferences_pb")
         val dataStore =
             PreferenceDataStoreFactory.create(
-                scope = this,
+                scope = backgroundScope,
                 produceFile = { file },
             )
 

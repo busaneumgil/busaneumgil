@@ -1715,9 +1715,14 @@ textarea::placeholder {
 }
 
 .editor-layout {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 420px;
   min-height: 0;
+}
+
+.editor-layout.detail-panel-collapsed {
+  grid-template-columns: minmax(0, 1fr) 0;
 }
 
 .workspace-map-page .editor-layout {
@@ -2365,6 +2370,42 @@ textarea::placeholder {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.editor-layout.detail-panel-collapsed .detail-panel {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border-left: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.detail-panel-toggle {
+  position: absolute;
+  z-index: 35;
+  top: 14px;
+  right: 432px;
+  width: 32px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px 0 0 8px;
+  background: rgb(255 255 255 / 0.96);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 800;
+  box-shadow: var(--shadow-map-overlay);
+  cursor: pointer;
+}
+
+.detail-panel-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.editor-layout.detail-panel-collapsed .detail-panel-toggle {
+  right: 12px;
+  border-radius: 8px;
 }
 
 .panel-section {

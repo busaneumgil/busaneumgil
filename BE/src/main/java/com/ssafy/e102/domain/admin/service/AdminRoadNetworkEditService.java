@@ -25,6 +25,7 @@ import com.ssafy.e102.global.exception.CommonErrorCode;
 public class AdminRoadNetworkEditService {
 
 	private static final double SNAP_DISTANCE_METER = 1.0;
+	private static final double SIDE_LINE_PROJECTION_DISTANCE_METER = 1.0;
 	private static final double CROSS_WALK_PROJECTION_DISTANCE_METER = 1.5;
 	private static final double SEGMENT_ENDPOINT_VALIDATION_TOLERANCE_METER = 0.01;
 	private static final double SOURCE_FEATURE_BBOX_EXPAND_DEGREE = 0.0005;
@@ -90,6 +91,8 @@ public class AdminRoadNetworkEditService {
 				lineInput = projectCrossWalkLineInput(lineInput);
 				requestedFromNodeId = null;
 				requestedToNodeId = null;
+			} else if (segmentType == SegmentType.SIDE_LINE) {
+				lineInput = projectSideLineInput(lineInput, requestedFromNodeId, requestedToNodeId);
 			}
 			addSegmentInputs.add(new AddSegmentInput(
 				addSegmentInputs.size() + 1,
@@ -104,6 +107,7 @@ public class AdminRoadNetworkEditService {
 		int removedOrphanNodes = removeOrphanNodes(orphanCleanupCandidateNodeIds);
 		AdminRoadNetworkEditApplyResponse response = new AdminRoadNetworkEditApplyResponse(
 			addedEdgeIds.size(),
+			counters.skippedSegments,
 			deletedEdgeIds.size(),
 			counters.createdNodes,
 			counters.snappedNodes,
@@ -121,7 +125,9 @@ public class AdminRoadNetworkEditService {
 			request.gu() + "/" + request.dong(),
 			request.gu(),
 			request.dong(),
-			"보행 네트워크 편집 반영 add=" + response.addedSegments() + ", delete=" + response.deletedSegments(),
+			"보행 네트워크 편집 반영 add=" + response.addedSegments()
+				+ ", skip=" + response.skippedSegments()
+				+ ", delete=" + response.deletedSegments(),
 			request,
 			response);
 		return response;
@@ -275,7 +281,7 @@ public class AdminRoadNetworkEditService {
 				})
 				.toList());
 		resolveAddSegmentNodes();
-		splitExistingSegmentsForCrossWalkEndpoints();
+		splitExistingSegmentsForProjectedAddEndpoints();
 		createdNodeIds.addAll(queryLongs("select vertex_id from admin_edit_created_points order by vertex_id"));
 		snappedNodeIds
 			.addAll(queryLongs("select vertex_id from admin_edit_snapped_points order by edit_seq, endpoint"));
@@ -286,14 +292,16 @@ public class AdminRoadNetworkEditService {
 		insertBulkRoadSegments();
 		validateNewSegmentEndpointAlignment();
 		addedEdgeIds.addAll(queryLongs("select edge_id from admin_edit_new_segments order by edge_id"));
-		validateAddedSegments(inputs, addedEdgeIds);
+		int skippedSegments = countSkippedAddSegments();
+		counters.skippedSegments += skippedSegments;
+		validateAddedSegments(inputs, addedEdgeIds, skippedSegments);
 		counters.createdSegmentFeatures += insertSegmentFeaturesForSplitSegments();
 		counters.createdSegmentFeatures += insertSegmentFeaturesForNewSegments();
 		counters.updatedSegmentAttributes += updateSegmentAttributesForNewSegments();
 	}
 
-	private void validateAddedSegments(List<AddSegmentInput> inputs, List<Long> addedEdgeIds) {
-		if (inputs.size() != addedEdgeIds.size()) {
+	private void validateAddedSegments(List<AddSegmentInput> inputs, List<Long> addedEdgeIds, int skippedSegments) {
+		if (inputs.size() != addedEdgeIds.size() + skippedSegments) {
 			throw invalidRequest("추가할 segment의 양 끝점이 같은 node로 연결되어 추가할 수 없습니다.");
 		}
 	}
@@ -408,22 +416,68 @@ public class AdminRoadNetworkEditService {
 				""".formatted(SNAP_DISTANCE_METER));
 		jdbcTemplate.execute(
 			"""
-				create temp table admin_edit_created_points on commit drop as
+				create temp table admin_edit_unresolved_points on commit drop as
 				select
-					nextval('road_nodes_vertex_id_seq') as vertex_id,
-					lng,
-					lat
-				from (
-					select distinct p.lng, p.lat
-					from admin_edit_points p
-					where not exists (
-						select 1
-						from admin_edit_snapped_points sp
-						where sp.edit_seq = p.edit_seq
-							and sp.endpoint = p.endpoint
-					)
-					order by p.lng, p.lat
-				) points
+					p.edit_seq,
+					p.endpoint,
+					p.lng,
+					p.lat,
+					ST_SetSRID(ST_MakePoint(p.lng, p.lat), 4326) as geom
+				from admin_edit_points p
+				where not exists (
+					select 1
+					from admin_edit_snapped_points sp
+					where sp.edit_seq = p.edit_seq
+						and sp.endpoint = p.endpoint
+				)
+				""");
+		jdbcTemplate.execute(
+			"""
+				create temp table admin_edit_created_point_assignments on commit drop as
+				with clustered as (
+					select
+						edit_seq,
+						endpoint,
+						lng,
+						lat,
+						ST_ClusterDBSCAN(
+							ST_Transform(geom, 5179),
+							eps := %s,
+							minpoints := 1
+						) over () as cluster_id
+					from admin_edit_unresolved_points
+				),
+				representatives as (
+					select distinct on (cluster_id)
+						cluster_id,
+						lng,
+						lat
+					from clustered
+					order by cluster_id, edit_seq, endpoint
+				),
+				created_points as (
+					select
+						cluster_id,
+						nextval('road_nodes_vertex_id_seq') as vertex_id,
+						lng,
+						lat
+					from representatives
+				)
+				select
+					c.edit_seq,
+					c.endpoint,
+					cp.vertex_id,
+					cp.lng,
+					cp.lat
+				from clustered c
+				join created_points cp
+					on cp.cluster_id = c.cluster_id
+				""".formatted(SNAP_DISTANCE_METER));
+		jdbcTemplate.execute(
+			"""
+				create temp table admin_edit_created_points on commit drop as
+				select distinct vertex_id, lng, lat
+				from admin_edit_created_point_assignments
 				""");
 		jdbcTemplate.update(
 			"""
@@ -440,36 +494,31 @@ public class AdminRoadNetworkEditService {
 				select edit_seq, endpoint, vertex_id, lng, lat
 				from admin_edit_snapped_points
 				union all
-				select p.edit_seq, p.endpoint, cp.vertex_id, p.lng, p.lat
-				from admin_edit_points p
-				join admin_edit_created_points cp
-					on cp.lng = p.lng
-					and cp.lat = p.lat
-				where not exists (
-					select 1
-					from admin_edit_snapped_points sp
-					where sp.edit_seq = p.edit_seq
-						and sp.endpoint = p.endpoint
-				)
+				select edit_seq, endpoint, vertex_id, lng, lat
+				from admin_edit_created_point_assignments
 				""");
 	}
 
-	private void splitExistingSegmentsForCrossWalkEndpoints() {
+	private void splitExistingSegmentsForProjectedAddEndpoints() {
 		jdbcTemplate.execute(
 			"""
-				create temp table admin_edit_crosswalk_split_points on commit drop as
-				with crosswalk_created_points as (
+				create temp table admin_edit_add_split_points on commit drop as
+				with projected_created_points as (
 					select
 						rp.edit_seq,
 						rp.endpoint,
 						rp.vertex_id,
-						ST_SetSRID(ST_MakePoint(rp.lng, rp.lat), 4326) as point_geom
+						ST_SetSRID(ST_MakePoint(rp.lng, rp.lat), 4326) as point_geom,
+						case
+							when s.segment_type = 'CROSS_WALK' then %s
+							else %s
+						end as projection_distance_meter
 					from admin_edit_resolved_points rp
 					join admin_edit_created_points cp
 						on cp.vertex_id = rp.vertex_id
 					join admin_edit_add_segments s
 						on s.edit_seq = rp.edit_seq
-					where s.segment_type = 'CROSS_WALK'
+					where s.segment_type in ('CROSS_WALK', 'SIDE_LINE')
 				),
 				nearest_segments as (
 					select distinct on (cp.edit_seq, cp.endpoint)
@@ -480,13 +529,13 @@ public class AdminRoadNetworkEditService {
 						ST_ClosestPoint(rs.geom, cp.point_geom) as split_geom,
 						ST_LineLocatePoint(rs.geom, ST_ClosestPoint(rs.geom, cp.point_geom)) as split_fraction,
 						ST_Distance(rs.geom::geography, cp.point_geom::geography) as distance_meter
-					from crosswalk_created_points cp
+					from projected_created_points cp
 					join road_segments rs
 						on rs.segment_type = 'SIDE_LINE'
 						and ST_DWithin(
 							rs.geom::geography,
 							cp.point_geom::geography,
-							%s
+							cp.projection_distance_meter
 						)
 					order by cp.edit_seq, cp.endpoint, distance_meter, rs.edge_id
 				),
@@ -495,8 +544,11 @@ public class AdminRoadNetworkEditService {
 					from nearest_segments ns
 					join road_segments rs
 						on rs.edge_id = ns.edge_id
-					where ST_Length(ST_LineSubstring(rs.geom, 0, ns.split_fraction)::geography) > %s
-						and ST_Length(ST_LineSubstring(rs.geom, ns.split_fraction, 1)::geography) > %s
+					join projected_created_points cp
+						on cp.edit_seq = ns.edit_seq
+						and cp.endpoint = ns.endpoint
+					where ST_Length(ST_LineSubstring(rs.geom, 0, ns.split_fraction)::geography) > cp.projection_distance_meter
+						and ST_Length(ST_LineSubstring(rs.geom, ns.split_fraction, 1)::geography) > cp.projection_distance_meter
 					)
 					select distinct on (edge_id, round(split_fraction::numeric, 6))
 						edge_id,
@@ -505,12 +557,12 @@ public class AdminRoadNetworkEditService {
 						split_fraction
 					from filtered
 					order by edge_id, round(split_fraction::numeric, 6), distance_meter, vertex_id
-					""".formatted(
-				CROSS_WALK_PROJECTION_DISTANCE_METER,
-				CROSS_WALK_PROJECTION_DISTANCE_METER,
-				CROSS_WALK_PROJECTION_DISTANCE_METER));
+					"""
+				.formatted(
+					CROSS_WALK_PROJECTION_DISTANCE_METER,
+					SIDE_LINE_PROJECTION_DISTANCE_METER));
 		Long splitPointCount = jdbcTemplate.queryForObject(
-			"select count(*) from admin_edit_crosswalk_split_points",
+			"select count(*) from admin_edit_add_split_points",
 			Long.class);
 		jdbcTemplate.execute(
 			"""
@@ -559,7 +611,7 @@ public class AdminRoadNetworkEditService {
 					from road_segments rs
 					where exists (
 						select 1
-						from admin_edit_crosswalk_split_points sp
+						from admin_edit_add_split_points sp
 						where sp.edge_id = rs.edge_id
 					)
 				),
@@ -571,7 +623,7 @@ public class AdminRoadNetworkEditService {
 					from target_edges
 					union all
 					select edge_id, split_fraction, vertex_id
-					from admin_edit_crosswalk_split_points
+					from admin_edit_add_split_points
 					union all
 					select
 						edge_id,
@@ -730,7 +782,14 @@ public class AdminRoadNetworkEditService {
 				""");
 		jdbcTemplate.execute(
 			"""
-				with resolved_segments as (
+				create temp table admin_edit_skipped_add_segments (
+					edit_seq integer primary key,
+					reason varchar(80) not null
+				) on commit drop
+				""");
+		jdbcTemplate.execute(
+			"""
+				with all_resolved_segments as (
 					select
 						s.edit_seq,
 						s.segment_type,
@@ -744,7 +803,18 @@ public class AdminRoadNetworkEditService {
 					join admin_edit_resolved_points to_point
 						on to_point.edit_seq = s.edit_seq
 						and to_point.endpoint = 'TO'
-					where from_point.vertex_id <> to_point.vertex_id
+				),
+				skipped as (
+					insert into admin_edit_skipped_add_segments (edit_seq, reason)
+					select edit_seq, 'SAME_NODE_ENDPOINT'
+					from all_resolved_segments
+					where from_node_id = to_node_id
+					returning edit_seq
+				),
+				resolved_segments as (
+					select *
+					from all_resolved_segments
+					where from_node_id <> to_node_id
 				),
 				synchronized_segments as (
 					select
@@ -828,6 +898,13 @@ public class AdminRoadNetworkEditService {
 		if (mismatchCount != null && mismatchCount > 0) {
 			throw internalError("추가한 segment endpoint와 road node 좌표가 일치하지 않습니다.");
 		}
+	}
+
+	private int countSkippedAddSegments() {
+		Long skippedCount = jdbcTemplate.queryForObject(
+			"select count(*) from admin_edit_skipped_add_segments",
+			Long.class);
+		return skippedCount == null ? 0 : skippedCount.intValue();
 	}
 
 	private int insertSegmentFeaturesForNewSegments() {
@@ -1034,7 +1111,31 @@ public class AdminRoadNetworkEditService {
 		return lineInput.withEndpoints(first, last);
 	}
 
+	private LineInput projectSideLineInput(
+		LineInput lineInput,
+		Long requestedFromNodeId,
+		Long requestedToNodeId) {
+		CoordinateInput first = requestedFromNodeId == null
+			? projectSideLineEndpoint(lineInput.first())
+			: lineInput.first();
+		CoordinateInput last = requestedToNodeId == null
+			? projectSideLineEndpoint(lineInput.last())
+			: lineInput.last();
+		if (first.equals(lineInput.first()) && last.equals(lineInput.last())) {
+			return lineInput;
+		}
+		return lineInput.withEndpoints(first, last);
+	}
+
 	private CoordinateInput projectCrossWalkEndpoint(CoordinateInput coordinate) {
+		return projectEndpointToSideLine(coordinate, CROSS_WALK_PROJECTION_DISTANCE_METER);
+	}
+
+	private CoordinateInput projectSideLineEndpoint(CoordinateInput coordinate) {
+		return projectEndpointToSideLine(coordinate, SIDE_LINE_PROJECTION_DISTANCE_METER);
+	}
+
+	private CoordinateInput projectEndpointToSideLine(CoordinateInput coordinate, double thresholdMeter) {
 		if (hasNearbyRoadNode(coordinate)) {
 			return coordinate;
 		}
@@ -1064,7 +1165,7 @@ public class AdminRoadNetworkEditService {
 			new MapSqlParameterSource()
 				.addValue("lng", coordinate.lng())
 				.addValue("lat", coordinate.lat())
-				.addValue("thresholdMeter", CROSS_WALK_PROJECTION_DISTANCE_METER),
+				.addValue("thresholdMeter", thresholdMeter),
 			(resultSet, rowNumber) -> new CoordinateInput(
 				resultSet.getDouble("lng"),
 				resultSet.getDouble("lat")));
@@ -1149,6 +1250,7 @@ public class AdminRoadNetworkEditService {
 	private static class ApplyCounters {
 		private int createdNodes;
 		private int snappedNodes;
+		private int skippedSegments;
 		private int createdSegmentFeatures;
 		private int updatedSegmentAttributes;
 	}

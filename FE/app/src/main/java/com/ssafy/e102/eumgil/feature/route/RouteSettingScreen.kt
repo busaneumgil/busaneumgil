@@ -153,6 +153,7 @@ fun RouteSettingScreen(
     modifier: Modifier = Modifier,
 ) {
     val showsRouteLoadingScreen = uiState.shouldShowRouteLoadingScreen()
+    val showsRouteUnsupportedAreaScreen = uiState.shouldShowRouteUnsupportedAreaScreen()
     val showsRouteFailureScreen = uiState.shouldShowRouteFailureScreen()
     val ctaSupportingText =
         if (uiState.cta.isEnabled) {
@@ -205,6 +206,17 @@ fun RouteSettingScreen(
                     RouteLoadingScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
+                } else if (showsRouteUnsupportedAreaScreen) {
+                    RouteUnsupportedAreaScreen(
+                        onSelectPlaceClick = {
+                            onAction(
+                                RouteSettingUiAction.WaypointClicked(
+                                    uiState.unsupportedArea?.editingTarget ?: RouteEditingTarget.DESTINATION,
+                                ),
+                            )
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 } else if (showsRouteFailureScreen) {
                     RouteFailureScreen(
                         uiState = uiState,
@@ -238,7 +250,7 @@ fun RouteSettingScreen(
                         },
                     )
                 }
-                if (!showsRouteLoadingScreen && !showsRouteFailureScreen) {
+                if (!showsRouteLoadingScreen && !showsRouteUnsupportedAreaScreen && !showsRouteFailureScreen) {
                     RouteSettingBottomBar(
                         buttonLabel = uiState.cta.label,
                         enabled = uiState.isStartEnabled,
@@ -3185,12 +3197,17 @@ private fun RouteWalkPreviewBadgeRow(
 private fun RouteSettingUiState.shouldShowRouteSheet(): Boolean =
     selectedTravelMode == RouteTravelMode.TRANSIT &&
         !shouldShowRouteLoadingScreen() &&
+        !shouldShowRouteUnsupportedAreaScreen() &&
         !shouldShowRouteFailureScreen()
 
 private fun RouteSettingUiState.shouldShowRouteLoadingScreen(): Boolean =
     isLoading && optionCards.isEmpty()
 
+private fun RouteSettingUiState.shouldShowRouteUnsupportedAreaScreen(): Boolean =
+    unsupportedArea != null
+
 private fun RouteSettingUiState.shouldShowRouteFailureScreen(): Boolean =
+    unsupportedArea == null &&
     selectedRoute == null &&
         (
             routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE ||
@@ -3361,6 +3378,67 @@ private fun RouteLoadingScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+        }
+    }
+}
+
+@Composable
+private fun RouteUnsupportedAreaScreen(
+    onSelectPlaceClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_status_warning),
+                contentDescription = null,
+                modifier = Modifier.size(72.dp),
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
+            Text(
+                text = stringResource(id = R.string.route_setting_unsupported_area_title),
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.small))
+            Text(
+                text = stringResource(id = R.string.route_setting_unsupported_area_description),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
+            Button(
+                onClick = onSelectPlaceClick,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = RouteSettingBottomBarButtonHeight),
+                shape = RoundedCornerShape(RouteStandardCardCornerRadius),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+            ) {
+                Text(
+                    text = stringResource(id = R.string.route_setting_unsupported_area_action),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
     }
 }

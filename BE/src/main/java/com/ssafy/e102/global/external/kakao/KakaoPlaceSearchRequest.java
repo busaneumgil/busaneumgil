@@ -5,6 +5,7 @@ public record KakaoPlaceSearchRequest(
 	Double lat,
 	Double lng,
 	Integer radius,
+	String rect,
 	int page,
 	int size,
 	String sort) {
@@ -15,7 +16,18 @@ public record KakaoPlaceSearchRequest(
 		Double lng,
 		Integer radius,
 		int page,
+		int size,
+		String sort) {
+		this(keyword, lat, lng, radius, null, page, size, sort);
+	}
+
+	public KakaoPlaceSearchRequest(
+		String keyword,
+		Double lat,
+		Double lng,
+		Integer radius,
+		int page,
 		int size) {
-		this(keyword, lat, lng, radius, page, size, null);
+		this(keyword, lat, lng, radius, null, page, size, null);
 	}
 }

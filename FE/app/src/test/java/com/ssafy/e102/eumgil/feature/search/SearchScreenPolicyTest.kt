@@ -7,6 +7,48 @@ import org.junit.Test
 
 class SearchScreenPolicyTest {
     @Test
+    fun `apply to route search exposes route endpoint quick actions`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+
+        assertTrue(
+            "Apply-to-route search should show quick actions only in route assignment mode.",
+            source.contains("shouldShowRouteEndpointQuickActions(uiState.selectionMode)") &&
+                source.contains("RouteEndpointQuickActionSection("),
+        )
+        assertTrue(
+            "Route endpoint quick actions should dispatch dedicated current-location and map-picker actions.",
+            source.contains("SearchUiAction.CurrentLocationClicked") &&
+                source.contains("SearchUiAction.MapPickerClicked"),
+        )
+        val quickActionSection =
+            source
+                .substringAfter("private fun RouteEndpointQuickActionSection(")
+                .substringBefore("@Composable\nprivate fun RouteEndpointCurrentLocationButton")
+        assertTrue(
+            "Route endpoint quick actions should place current-location and map-picker buttons on one row.",
+            quickActionSection.contains("Row(") &&
+                quickActionSection.contains("horizontalArrangement = Arrangement.spacedBy(EumSpacing.small)") &&
+                quickActionSection.contains("modifier = Modifier.weight(1f)"),
+        )
+        assertTrue(
+            "Route endpoint quick actions should use target-specific visible labels and accessibility copy.",
+            source.contains("R.string.search_screen_current_location_origin_action") &&
+                source.contains("R.string.search_screen_current_location_destination_action") &&
+                source.contains("R.string.search_screen_map_picker_origin_action") &&
+                source.contains("R.string.search_screen_map_picker_destination_action") &&
+                source.contains("R.string.search_screen_map_picker_origin_a11y") &&
+                source.contains("R.string.search_screen_map_picker_destination_a11y"),
+        )
+        assertTrue(
+            "Current-location failures should remain visible on the screen instead of being only transient feedback.",
+            source.contains("currentLocationQuickActionState") &&
+                source.contains("resolveSearchCurrentLocationStatusContent("),
+        )
+    }
+
+    @Test
     fun `search screen suppresses ripple on row taps that navigate away from the current view`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
@@ -103,6 +145,10 @@ class SearchScreenPolicyTest {
             emptyStateSection.contains("SearchCenteredStateMessage("),
         )
         assertTrue(
+            "Empty search results should be centered inside the remaining result area below the controls.",
+            emptyStateSection.contains("SearchResultStateBox {"),
+        )
+        assertTrue(
             "The centered state should include the Busan Eumgil character asset.",
             emptyMessageSection.contains("R.drawable.manual_galmaegi"),
         )
@@ -181,12 +227,13 @@ class SearchScreenPolicyTest {
                 .substringBefore("@Composable\nprivate fun SearchStateCard")
 
         assertTrue(
-            "Empty result state should opt into the dedicated 32px title typography.",
+            "Empty result state should opt into the dedicated compact title typography.",
             emptyStateSection.contains("useEmptyResultTypography = true"),
         )
         assertTrue(
-            "Empty result title should be 32px bold.",
-            centeredStateSection.contains("fontSize = 32.sp") &&
+            "Empty result title should be compact bold text.",
+            centeredStateSection.contains("fontSize = 26.sp") &&
+                centeredStateSection.contains("lineHeight = SearchEmptyResultTitleLineHeight") &&
                 centeredStateSection.contains("fontWeight = FontWeight.Bold"),
         )
         assertTrue(
@@ -194,6 +241,33 @@ class SearchScreenPolicyTest {
             centeredStateSection.contains("fontSize = 16.sp") &&
                 centeredStateSection.contains("fontWeight = FontWeight.Normal") &&
                 centeredStateSection.contains("val descriptionTopPadding = if (useEmptyResultTypography) 16.dp"),
+        )
+    }
+
+    @Test
+    fun `voice input action dismisses keyboard before opening bottom sheet`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val inputFieldSection =
+            source
+                .substringAfter("private fun SearchInputField(")
+                .substringBefore("@OptIn(ExperimentalMaterial3Api::class)")
+
+        assertTrue(
+            "Voice input should clear TextField focus and hide the IME before navigating to the bottom sheet route.",
+            source.contains("import androidx.compose.ui.platform.LocalFocusManager") &&
+                source.contains("import androidx.compose.ui.platform.LocalSoftwareKeyboardController") &&
+                inputFieldSection.contains("focusManager.clearFocus(force = true)") &&
+                inputFieldSection.contains("keyboardController?.hide()") &&
+                inputFieldSection.indexOf("focusManager.clearFocus(force = true)") <
+                inputFieldSection.indexOf("onVoiceInputClick()") &&
+                inputFieldSection.indexOf("keyboardController?.hide()") <
+                inputFieldSection.indexOf("onVoiceInputClick()"),
+        )
+        assertTrue(
+            "The microphone trailing icon should use the keyboard-safe voice input handler.",
+            inputFieldSection.contains("IconButton(onClick = dismissKeyboardBeforeVoiceInput)"),
         )
     }
 }

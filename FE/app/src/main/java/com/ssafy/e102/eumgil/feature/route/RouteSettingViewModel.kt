@@ -36,12 +36,14 @@ import com.ssafy.e102.eumgil.core.model.toRouteWaypointOrNull
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.data.repository.RouteSelectionState
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSessionData
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteFailureKind
 import com.ssafy.e102.eumgil.feature.navigation.haversineDistanceMeters
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -84,6 +86,7 @@ class RouteSettingViewModel(
     private var detailNavigationRequest: RouteNavigationRequest? = null
     private var isManualTransitRefreshInFlight: Boolean = false
     private var isManualRouteRefreshInFlight: Boolean = false
+    private var suppressNextSilentOriginClearReload: Boolean = false
 
     init {
         currentLocationManager.refreshLatestLocation()
@@ -126,6 +129,10 @@ class RouteSettingViewModel(
             destinationSelectionRepository.selectionState.collectLatest { state ->
                 val previousState = lastObservedSelectionState
                 lastObservedSelectionState = state
+                if (shouldSuppressSilentOriginClearReload(previousState = previousState, state = state)) {
+                    suppressNextSilentOriginClearReload = false
+                    return@collectLatest
+                }
                 if (
                     previousState.selectedOrigin == state.selectedOrigin &&
                     previousState.selectedDestination == state.selectedDestination
@@ -174,8 +181,11 @@ class RouteSettingViewModel(
 
     private fun observeSelectionRequests() {
         viewModelScope.launch {
-            // This ViewModel is activity-scoped, so same-place reselection needs an explicit request flow.
-            destinationSelectionRepository.selectionRequests.collectLatest {
+            // StateFlow covers endpoint changes; explicit requests cover same-place reselection.
+            destinationSelectionRepository.selectionRequests.collectLatest { request ->
+                if (request.changedEndpoints) {
+                    return@collectLatest
+                }
                 requestRouteReload(
                     resetSelectedOption = true,
                     force = true,
@@ -221,7 +231,7 @@ class RouteSettingViewModel(
 
                 when (permissionState) {
                     is LocationPermissionState.Granted ->
-                        startCurrentLocationTracking(forceReload = latestLocationSnapshot == null)
+                        startCurrentLocationTracking(forceReload = false)
 
                     LocationPermissionState.Denied -> currentLocationManager.stopLocationUpdates()
                     is LocationPermissionState.Unavailable -> currentLocationManager.stopLocationUpdates()
@@ -245,19 +255,17 @@ class RouteSettingViewModel(
         permissionManager.refreshPermissionState()
         when (permissionManager.permissionState.value) {
             is LocationPermissionState.Granted ->
-                startCurrentLocationTracking(forceReload = latestLocationSnapshot == null)
+                startCurrentLocationTracking(forceReload = false)
 
             LocationPermissionState.Denied -> {
                 currentLocationManager.stopLocationUpdates()
                 if (requestPermissionIfNeeded) {
                     emitUiEvent(RouteSettingUiEvent.RequestLocationPermission)
                 }
-                reloadAutomaticOriginIfMissing()
             }
 
             is LocationPermissionState.Unavailable -> {
                 currentLocationManager.stopLocationUpdates()
-                reloadAutomaticOriginIfMissing()
             }
         }
     }
@@ -282,6 +290,15 @@ class RouteSettingViewModel(
 
     private fun shouldUseAutomaticOrigin(): Boolean =
         destinationSelectionRepository.selectedOrigin.value == null
+
+    private fun shouldSuppressSilentOriginClearReload(
+        previousState: RouteSelectionState,
+        state: RouteSelectionState,
+    ): Boolean =
+        suppressNextSilentOriginClearReload &&
+            previousState.selectedOrigin != null &&
+            state.selectedOrigin == null &&
+            previousState.selectedDestination == state.selectedDestination
 
     private fun requestRouteReload(
         resetSelectedOption: Boolean,
@@ -354,6 +371,21 @@ class RouteSettingViewModel(
             lastCompletedRouteReloadSignature = signature
             return
         }
+        val unsupportedArea = resolveUnsupportedAreaState(
+            originResolution = originResolution,
+            destinationResolution = destinationResolution,
+        )
+        if (unsupportedArea != null) {
+            applyUnsupportedAreaRouteShell(
+                originResolution = originResolution,
+                destinationResolution = destinationResolution,
+                selectedTravelMode = DEFAULT_TRAVEL_MODE,
+                selectedOption = selectedOptionForMode(DEFAULT_TRAVEL_MODE),
+                unsupportedArea = unsupportedArea,
+            )
+            lastCompletedRouteReloadSignature = signature
+            return
+        }
         loadRouteShell(
             loadId = loadId,
             originResolution = originResolution,
@@ -404,9 +436,10 @@ class RouteSettingViewModel(
                         selectedRoute = null,
                         ctaAcknowledged = false,
                         destinationHandoffState = RouteDestinationHandoffState.EMPTY,
-                    ),
+                ),
                 ctaAcknowledged = false,
                 showsDuribalCallAction = false,
+                unsupportedArea = null,
             )
         }
         rememberSuccessfulAutomaticOrigin(originResolution)
@@ -436,16 +469,60 @@ class RouteSettingViewModel(
                         status = RoutePreviewMapStatus.NO_DESTINATION,
                         originCoordinate = state.origin.coordinate ?: DEFAULT_ORIGIN.coordinate,
                         fallbackMessage = ROUTE_PREVIEW_MAP_NO_DESTINATION_MESSAGE,
-                    ),
+                ),
                 sourceLabel = null,
                 cta =
                     buildCtaUiState(
                         selectedRoute = null,
                         ctaAcknowledged = false,
                         destinationHandoffState = RouteDestinationHandoffState.EMPTY,
-                    ),
+                ),
                 ctaAcknowledged = false,
                 showsDuribalCallAction = false,
+                unsupportedArea = null,
+            )
+        }
+    }
+
+    private fun applyUnsupportedAreaRouteShell(
+        originResolution: RouteOriginResolution,
+        destinationResolution: RouteDestinationResolution,
+        selectedTravelMode: RouteTravelMode,
+        selectedOption: RouteOption,
+        unsupportedArea: RouteUnsupportedAreaUiState,
+    ) {
+        latestSearchDataByMode = emptyMap()
+        isStartNavigationInFlight = false
+        mutableUiState.update { state ->
+            state.copy(
+                isLoading = false,
+                loadErrorMessage = null,
+                loadNoticeMessage = null,
+                loadDebugMessage = buildUnsupportedAreaDebugMessage(selectedTravelMode, unsupportedArea),
+                originState = originResolution.originState,
+                originStatus = originResolution.originStatus,
+                origin = originResolution.originUiState,
+                destination = destinationResolution.destinationUiState,
+                destinationHandoffState = destinationResolution.handoffState,
+                destinationFallbackMessage = destinationResolution.fallbackMessage,
+                isUsingFallbackDestination = destinationResolution.isUsingFallbackDestination,
+                selectedTravelMode = selectedTravelMode,
+                pendingTravelMode = null,
+                selectedOption = selectedOption,
+                optionCards = emptyList(),
+                selectedRoute = null,
+                routePreviewMap =
+                    RoutePreviewMapUiState(
+                        status = RoutePreviewMapStatus.ERROR,
+                        originCoordinate = originResolution.routeOrigin.coordinate,
+                        destinationCoordinate = destinationResolution.routeDestination.coordinate,
+                        fallbackMessage = ROUTE_UNSUPPORTED_AREA_MESSAGE,
+                    ),
+                sourceLabel = null,
+                cta = errorCtaUiState(),
+                ctaAcknowledged = false,
+                showsDuribalCallAction = false,
+                unsupportedArea = unsupportedArea,
             )
         }
     }
@@ -489,6 +566,8 @@ class RouteSettingViewModel(
                 sourceLabel = null,
                 cta = loadingCtaUiState(),
                 ctaAcknowledged = false,
+                showsDuribalCallAction = false,
+                unsupportedArea = null,
             )
         }
 
@@ -643,6 +722,21 @@ class RouteSettingViewModel(
                 )
             val destinationResolution = resolveDestination(destinationSelectionRepository.selectedDestination.value)
             val selectedOption = selectedOptionForMode(mode, requestedOption)
+            val unsupportedArea =
+                resolveUnsupportedAreaState(
+                    originResolution = originResolution,
+                    destinationResolution = destinationResolution,
+                )
+            if (unsupportedArea != null) {
+                applyUnsupportedAreaRouteShell(
+                    originResolution = originResolution,
+                    destinationResolution = destinationResolution,
+                    selectedTravelMode = mode,
+                    selectedOption = selectedOption,
+                    unsupportedArea = unsupportedArea,
+                )
+                return@launch
+            }
             val reusableSearchData =
                 reusableSearchDataForMode(
                     mode = mode,
@@ -689,6 +783,8 @@ class RouteSettingViewModel(
                     sourceLabel = null,
                     cta = loadingCtaUiState(),
                     ctaAcknowledged = false,
+                    showsDuribalCallAction = false,
+                    unsupportedArea = null,
                 )
             }
 
@@ -856,7 +952,12 @@ class RouteSettingViewModel(
 
     private fun openWaypointSearch(editingTarget: RouteEditingTarget) {
         destinationSelectionRepository.setEditingTarget(editingTarget)
-        emitUiEvent(RouteSettingUiEvent.NavigateToSearch(editingTarget))
+        emitUiEvent(
+            RouteSettingUiEvent.NavigateToSearch(
+                editingTarget = editingTarget,
+                selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+            ),
+        )
     }
 
     private fun originPlaceId(): String =
@@ -939,6 +1040,7 @@ class RouteSettingViewModel(
                     )
                 }
                 persistRecentDestination(selectedDestination)
+                suppressNextSilentOriginClearReload = destinationSelectionRepository.selectedOrigin.value != null
                 destinationSelectionRepository.clearSelectedOriginSilently()
 
                 emitUiEvent(
@@ -1173,6 +1275,7 @@ class RouteSettingViewModel(
                 cta = errorCtaUiState(),
                 ctaAcknowledged = false,
                 showsDuribalCallAction = isNoRouteFailure,
+                unsupportedArea = null,
             )
         }
     }
@@ -1331,6 +1434,46 @@ class RouteSettingViewModel(
         }
     }
 
+    private fun resolveUnsupportedAreaState(
+        originResolution: RouteOriginResolution,
+        destinationResolution: RouteDestinationResolution,
+    ): RouteUnsupportedAreaUiState? {
+        if (destinationResolution.handoffState != RouteDestinationHandoffState.DIRECT) {
+            return null
+        }
+        val unsupportedOrigin =
+            originResolution.originState != RouteOriginState.CURRENT_LOCATION_LOADING &&
+                originResolution.routeOrigin.isKnownOutsideSupportedArea()
+        val unsupportedDestination = destinationResolution.routeDestination.isKnownOutsideSupportedArea()
+        return when {
+            unsupportedOrigin -> RouteUnsupportedAreaUiState(editingTarget = RouteEditingTarget.ORIGIN)
+            unsupportedDestination -> RouteUnsupportedAreaUiState(editingTarget = RouteEditingTarget.DESTINATION)
+            else -> null
+        }
+    }
+
+    private fun RouteWaypoint.isKnownOutsideSupportedArea(): Boolean {
+        val address = address?.trim()?.takeIf(String::isNotBlank) ?: return false
+        return !address.isSupportedGangseoAddress()
+    }
+
+    private fun String.isSupportedGangseoAddress(): Boolean =
+        startsWith(SUPPORTED_GANGSEO_ADDRESS_PREFIX_SHORT) ||
+            startsWith(SUPPORTED_GANGSEO_ADDRESS_PREFIX_FULL)
+
+    private fun buildUnsupportedAreaDebugMessage(
+        mode: RouteTravelMode,
+        unsupportedArea: RouteUnsupportedAreaUiState,
+    ): String =
+        listOf(
+            "mode=${mode.name}",
+            "path=${mode.routeSearchPath()}",
+            "result=failure",
+            "layer=CLIENT",
+            "validation=UNSUPPORTED_AREA",
+            "target=${unsupportedArea.editingTarget.name}",
+        ).joinToString(separator = "\n")
+
     private fun rememberSuccessfulAutomaticOrigin(originResolution: RouteOriginResolution) {
         lastSuccessfulAutoOrigin =
             if (destinationSelectionRepository.selectedOrigin.value == null) {
@@ -1462,6 +1605,8 @@ class RouteSettingViewModel(
                     destinationHandoffState = destinationResolution.handoffState,
                 ),
             ctaAcknowledged = ctaAcknowledged,
+            showsDuribalCallAction = false,
+            unsupportedArea = null,
         )
     }
 
@@ -1500,6 +1645,8 @@ class RouteSettingViewModel(
             sourceLabel = null,
             cta = loadingCtaUiState(),
             ctaAcknowledged = false,
+            showsDuribalCallAction = false,
+            unsupportedArea = null,
         )
 
     private fun originLocationUiState(
@@ -1902,6 +2049,7 @@ class RouteSettingViewModel(
     private fun RouteCandidate.routeBadges(includeSafePriority: Boolean): List<RouteOptionBadge> {
         val aggregateFlags = aggregateSafetyFlags()
         val backendBadges = badges.mapNotNull(RouteBadge::toRouteOptionBadge)
+        val hasSafetyFlagData = segments.any { segment -> segment.safetyFlags != RouteSegmentSafetyFlags() }
 
         return buildList {
             if (includeSafePriority && routeOption == RouteOption.SAFE) {
@@ -1909,7 +2057,7 @@ class RouteSettingViewModel(
             }
             if (backendBadges.isNotEmpty()) {
                 addAll(backendBadges)
-            } else {
+            } else if (hasSafetyFlagData) {
                 if (!aggregateFlags.hasStairs && !aggregateFlags.hasCurbGap) {
                     add(RouteOptionBadge.STEP_FREE)
                 }
@@ -2192,7 +2340,7 @@ private fun RouteLocationUiState.toPlaceDestinationOrNull(fallbackPlaceId: Strin
         address = supportingText,
         latitude = resolvedCoordinate.latitude,
         longitude = resolvedCoordinate.longitude,
-        category = category ?: PlaceCategory.OTHER,
+        category = category,
     )
 }
 
@@ -3047,6 +3195,7 @@ private const val ROUTE_PREVIEW_MAP_NO_DESTINATION_MESSAGE = "Destination is req
 private const val ROUTE_PREVIEW_MAP_INVALID_DESTINATION_MESSAGE = "Destination coordinate is invalid."
 private const val ROUTE_PREVIEW_MAP_NO_ROUTE_MESSAGE = "No selected route is available for the preview map."
 private const val ROUTE_PREVIEW_MAP_POLYLINE_UNAVAILABLE_MESSAGE = "Selected route preview polyline needs at least two points."
+private const val ROUTE_UNSUPPORTED_AREA_MESSAGE = "Route search is currently limited to Busan Gangseo-gu."
 private const val ROUTE_DETAIL_FALLBACK_MESSAGE = "세부 이동 정보는 준비 중입니다. 요약 정보와 주의 구간을 먼저 확인하세요."
 private const val DETAIL_CHIP_STEP_FREE = "단차 없음"
 private const val DETAIL_CHIP_ELEVATOR = "엘리베이터 있음"
@@ -3132,6 +3281,8 @@ private const val ROUTE_SAME_ENDPOINT_ERROR_MESSAGE = "출발지와 도착지를
 private const val ROUTE_NO_ROUTE_ERROR_MESSAGE = "탐색 가능한 경로가 없어요. 출발지나 도착지를 다시 선택해 주세요."
 private const val ROUTE_TIMEOUT_ERROR_MESSAGE = "경로 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요."
 private const val ROUTE_NETWORK_ERROR_MESSAGE = "네트워크 연결 상태를 확인한 뒤 다시 시도해 주세요."
+private const val SUPPORTED_GANGSEO_ADDRESS_PREFIX_SHORT = "부산 강서구"
+private const val SUPPORTED_GANGSEO_ADDRESS_PREFIX_FULL = "부산광역시 강서구"
 private const val TRANSIT_LOADING_NOTICE_MESSAGE = "대중교통 경로를 불러오고 있어요."
 private const val SECONDS_PER_MINUTE = 60
 private const val ROUTE_SEARCH_EXPIRED_SELECT_ATTEMPT_COUNT = 2

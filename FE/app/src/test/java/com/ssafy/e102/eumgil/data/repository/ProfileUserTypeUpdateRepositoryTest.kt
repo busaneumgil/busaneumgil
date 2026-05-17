@@ -179,7 +179,10 @@ class ProfileUserTypeUpdateRepositoryTest {
             val repository =
                 ServerProfileUserTypeUpdateRepository(
                     userTypeRemoteDataSource = remoteDataSource,
-                    authRemoteDataSource = FakeProfileAuthRemoteDataSource(),
+                    authRemoteDataSource =
+                        FakeProfileAuthRemoteDataSource(
+                            reissueThrowable = IllegalStateException("reissue failed"),
+                        ),
                     authSessionRepository = authSessionRepository,
                     settingsRepository = settingsRepository,
                 )
@@ -311,12 +314,14 @@ private class FakeProfileAuthRemoteDataSource(
             accessToken = "unused-access-token",
             refreshToken = "unused-refresh-token",
         ),
+    private val reissueThrowable: Throwable? = null,
 ) : AuthRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "https://example.com")) {
     var latestRefreshToken: String? = null
         private set
 
     override suspend fun reissue(refreshToken: String): ReissueResponseDto {
         latestRefreshToken = refreshToken
+        reissueThrowable?.let { throw it }
         return reissueResponse
     }
 }

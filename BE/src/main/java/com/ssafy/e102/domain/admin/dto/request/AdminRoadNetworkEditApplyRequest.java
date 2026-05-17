@@ -21,7 +21,7 @@ public record AdminRoadNetworkEditApplyRequest(
 	public record Edit(
 		String action,
 		SegmentType segmentType,
-		Geometry geom,
+		LineGeometry geom,
 		NodeRef fromNode,
 		NodeRef toNode,
 		Long edgeId,
@@ -29,9 +29,14 @@ public record AdminRoadNetworkEditApplyRequest(
 		String reason) {
 	}
 
-	public record Geometry(
+	public record LineGeometry(
 		String type,
 		List<List<Double>> coordinates) {
+	}
+
+	public record PointGeometry(
+		String type,
+		List<Double> coordinates) {
 	}
 
 	public record NodeRef(
@@ -39,7 +44,7 @@ public record AdminRoadNetworkEditApplyRequest(
 		Long vertexId,
 		String tempNodeId,
 		String sourceNodeKey,
-		Geometry geom,
+		PointGeometry geom,
 		BigDecimal snapDistanceMeter) {
 	}
 }

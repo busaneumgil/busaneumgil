@@ -19,7 +19,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.external.createDuribalDialIntent as createDuribalDialIntentCore
+import com.ssafy.e102.eumgil.data.repository.provideAccountWithdrawalRepository
 import kotlinx.coroutines.launch
 
 @Composable
@@ -27,7 +29,7 @@ fun MyPageRoute(
     onNavigateToUserTypePrimary: () -> Unit,
     onNavigateToLogin: () -> Unit,
     onNavigateToReportHistory: () -> Unit,
-    onNavigateToAppInfo: () -> Unit,
+    onNavigateToGuide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -36,13 +38,29 @@ fun MyPageRoute(
             (context.applicationContext as BusanEumgilApp).appContainer
         }
     val activity = remember(context) { context.findComponentActivity() }
-    val viewModelFactory =
+    val accountWithdrawalRepository =
         remember(appContainer) {
+            provideAccountWithdrawalRepository(
+                baseUrl = AppEnvironment.baseUrl,
+                authSessionRepository = appContainer.authSessionRepository,
+                initSettingsRepository = appContainer.settingsRepository,
+                bookmarkDao = appContainer.localDatabase.bookmarkDao(),
+                favoriteRouteDao = appContainer.localDatabase.favoriteRouteDao(),
+                isMockMode = AppEnvironment.isMockMode,
+            )
+        }
+    val viewModelFactory =
+        remember(appContainer, accountWithdrawalRepository) {
             MyPageViewModel.provideFactory(
                 settingsRepository = appContainer.settingsRepository,
                 authSessionRepository = appContainer.authSessionRepository,
                 authLogoutRepository = appContainer.authLogoutRepository,
                 userProfileRepository = appContainer.userProfileRepository,
+                bookmarkRepository = appContainer.bookmarkRepository,
+                routeBookmarkRepository = appContainer.routeBookmarkRepository,
+                reportRepository = appContainer.reportRepository,
+                searchRepository = appContainer.searchRepository,
+                accountWithdrawalRepository = accountWithdrawalRepository,
             )
         }
     val viewModel =
@@ -55,6 +73,7 @@ fun MyPageRoute(
     val preparingMessage = stringResource(id = R.string.my_page_preparing_message)
     val coroutineScope = rememberCoroutineScope()
     var isDuribalConfirmDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var isWithdrawConfirmDialogVisible by rememberSaveable { mutableStateOf(false) }
 
     fun showSnackbar(message: String) {
         coroutineScope.launch {
@@ -69,7 +88,9 @@ fun MyPageRoute(
                 MyPageUiEvent.NavigateToUserTypePrimary -> onNavigateToUserTypePrimary()
                 MyPageUiEvent.NavigateToLogin -> onNavigateToLogin()
                 MyPageUiEvent.NavigateToReportHistory -> onNavigateToReportHistory()
-                MyPageUiEvent.NavigateToAppInfo -> onNavigateToAppInfo()
+                MyPageUiEvent.NavigateToGuide -> onNavigateToGuide()
+                MyPageUiEvent.OpenPrivacyPolicy -> context.startActivity(createPrivacyPolicyIntent())
+                MyPageUiEvent.OpenServiceTerms -> context.startActivity(createServiceTermsIntent())
                 MyPageUiEvent.ShowPreparingMessage -> showSnackbar(preparingMessage)
                 MyPageUiEvent.ShowProfileSyncFailedMessage ->
                     showSnackbar(
@@ -84,11 +105,18 @@ fun MyPageRoute(
         uiState = uiState,
         onAction = viewModel::onAction,
         isDuribalConfirmDialogVisible = isDuribalConfirmDialogVisible,
+        isWithdrawConfirmDialogVisible = isWithdrawConfirmDialogVisible,
         onDuribalCallClick = { isDuribalConfirmDialogVisible = true },
         onDuribalConfirmDismiss = { isDuribalConfirmDialogVisible = false },
         onDuribalConfirm = {
             isDuribalConfirmDialogVisible = false
             context.startActivity(createDuribalDialIntentCore())
+        },
+        onWithdrawClick = { isWithdrawConfirmDialogVisible = true },
+        onWithdrawConfirmDismiss = { isWithdrawConfirmDialogVisible = false },
+        onWithdrawConfirm = {
+            isWithdrawConfirmDialogVisible = false
+            viewModel.onAction(MyPageUiAction.WithdrawClicked)
         },
         snackbarHostState = snackbarHostState,
         modifier = modifier,

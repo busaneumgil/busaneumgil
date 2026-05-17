@@ -115,8 +115,10 @@ class ArrivalScreenConfigurationTest {
         )
         assertTrue(
             "Arrival evaluation stars should grow to a larger touch target and icon size so the rating action reads more prominently in the sheet.",
-            source.contains("modifier = Modifier.size(72.dp)") &&
-                source.contains("modifier = Modifier.size(54.dp)"),
+            source.contains("private val ArrivalRatingButtonSize = 64.dp") &&
+                source.contains("private val ArrivalRatingIconSize = 56.dp") &&
+                source.contains("modifier = Modifier.size(ArrivalRatingButtonSize)") &&
+                source.contains("modifier = Modifier.size(ArrivalRatingIconSize)"),
         )
     }
 

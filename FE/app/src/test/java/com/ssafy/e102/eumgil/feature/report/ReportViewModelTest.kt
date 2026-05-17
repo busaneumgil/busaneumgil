@@ -15,6 +15,7 @@ import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitFailureReason
 import com.ssafy.e102.eumgil.data.repository.ReportSubmitResult
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -192,7 +194,8 @@ class ReportViewModelTest {
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
-            val event = async { viewModel.uiEvent.first() }
+            val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            advanceUntilIdle()
 
             viewModel.onAction(ReportUiAction.SubmitClicked)
             advanceUntilIdle()
@@ -214,7 +217,7 @@ class ReportViewModelTest {
                     latestDraft =
                         ReportDraftData(
                             draftId = "draft-1",
-                            reportCategory = null,
+                            reportCategory = ReportType.BRAILLE_BLOCK.apiValue,
                             description = "",
                             address = null,
                             latitude = null,
@@ -226,6 +229,8 @@ class ReportViewModelTest {
                         ),
                 )
             val viewModel = createReportViewModel(repository)
+            advanceUntilIdle()
+            viewModel.onAction(ReportUiAction.DraftResumeClicked)
             advanceUntilIdle()
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.BRAILLE_BLOCK))
@@ -270,7 +275,7 @@ class ReportViewModelTest {
                     latestDraft =
                         ReportDraftData(
                             draftId = "draft-1",
-                            reportCategory = null,
+                            reportCategory = ReportType.OTHER_OBSTACLE.apiValue,
                             description = "",
                             address = null,
                             latitude = null,
@@ -283,6 +288,8 @@ class ReportViewModelTest {
                     failDeleteDraft = true,
                 )
             val viewModel = createReportViewModel(repository)
+            advanceUntilIdle()
+            viewModel.onAction(ReportUiAction.DraftResumeClicked)
             advanceUntilIdle()
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
@@ -544,7 +551,8 @@ class ReportViewModelTest {
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
-            val event = async { viewModel.uiEvent.first() }
+            val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            advanceUntilIdle()
 
             viewModel.onAction(ReportUiAction.BackClicked)
             advanceUntilIdle()
@@ -1103,8 +1111,6 @@ class ReportViewModelTest {
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
-            val uiEvent = async { viewModel.uiEvent.first() }
-
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             viewModel.onAction(
                 ReportUiAction.LocationSelected(
@@ -1120,8 +1126,8 @@ class ReportViewModelTest {
             viewModel.onAction(ReportUiAction.SubmitClicked)
             advanceUntilIdle()
 
-            uiEvent.await() // drain submit completion event(s)
-            val backToMapEvent = async { viewModel.uiEvent.first() }
+            val backToMapEvent = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            advanceUntilIdle()
 
             viewModel.onAction(ReportUiAction.BackToMapClicked)
             advanceUntilIdle()
@@ -1155,7 +1161,8 @@ class ReportViewModelTest {
                 )
             val viewModel = createReportViewModel(repository)
             advanceUntilIdle()
-            val event = async { viewModel.uiEvent.first() }
+            val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            advanceUntilIdle()
 
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.BRAILLE_BLOCK))
             advanceUntilIdle()
@@ -1216,7 +1223,8 @@ class ReportViewModelTest {
 
             // resume 후 reportType.value가 채워져 있어도 draft가 DB에 남아있으므로,
             // 다른 type 클릭은 잠재적 데이터 손실 → 다이얼로그 노출.
-            val event = async { viewModel.uiEvent.first() }
+            val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            advanceUntilIdle()
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.SIDEWALK_WIDTH))
             advanceUntilIdle()
 
@@ -1297,9 +1305,11 @@ class ReportViewModelTest {
             assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
 
             // 다른 type 클릭 → 다이얼로그 emit 검증
-            val event = async {
-                viewModel.uiEvent.first { it is ReportUiEvent.ShowDraftDiscardDialog }
-            }
+            val event =
+                backgroundScope.async(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.first { it is ReportUiEvent.ShowDraftDiscardDialog }
+                }
+            advanceUntilIdle()
             viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
             advanceUntilIdle()
 
@@ -1422,16 +1432,19 @@ class ReportViewModelTest {
                 createReportViewModel(
                     repository = FakeReportRepository(),
                     locationPermissionManager = permissionManager,
-                )
-            val event = async { viewModel.uiEvent.first() }
+            )
+            val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+            runCurrent()
 
             viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(ReportUiEvent.RequestLocationPermission, event.await())
             val state = viewModel.uiState.value
             assertTrue(state.location.isResolvingCurrentLocation)
             assertNull(state.location.value)
+            viewModel.onAction(ReportUiAction.RefreshLocationPermission)
+            advanceUntilIdle()
         }
 
     @Test
@@ -1446,7 +1459,7 @@ class ReportViewModelTest {
                 )
 
             viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
-            advanceUntilIdle()
+            runCurrent()
 
             // 사용자가 권한 다이얼로그에서 거부 후 Activity가 ON_RESUME으로 돌아옴.
             // permissionState는 여전히 Denied. RefreshLocationPermission 한 번 들어옴.
@@ -1480,7 +1493,7 @@ class ReportViewModelTest {
 
             // 1) 사용자가 버튼 탭 → 권한 요청 emit, resolving=true
             viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
-            advanceUntilIdle()
+            runCurrent()
             assertTrue(viewModel.uiState.value.location.isResolvingCurrentLocation)
 
             // 2) 사용자가 허용 후 Activity ON_RESUME → permissionState=Granted, RefreshLocationPermission dispatch
@@ -1533,11 +1546,13 @@ class ReportViewModelTest {
             viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
             viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
             viewModel.onAction(ReportUiAction.CurrentLocationResetClicked)
-            advanceUntilIdle()
+            runCurrent()
 
             // 첫 클릭만 처리되어야 함. refresh가 3회가 아닌 1회 호출.
             assertEquals(1, permissionManager.refreshCallCount)
             assertTrue(viewModel.uiState.value.location.isResolvingCurrentLocation)
+            viewModel.onAction(ReportUiAction.RefreshLocationPermission)
+            advanceUntilIdle()
         }
 }
 

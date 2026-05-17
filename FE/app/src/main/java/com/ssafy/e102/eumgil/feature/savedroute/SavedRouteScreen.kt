@@ -167,14 +167,10 @@ private fun SavedBookmarkSectionHeader(
 ) {
     val isSortMenuExpanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val title =
-        when {
-            isEditMode && selectedTab == SavedBookmarkTab.PLACE ->
-                stringResource(id = R.string.saved_route_selected_place_count_label)
-            isEditMode && selectedTab == SavedBookmarkTab.ROUTE ->
-                stringResource(id = R.string.saved_route_selected_route_count_label)
-            selectedTab == SavedBookmarkTab.PLACE ->
+        when (selectedTab) {
+            SavedBookmarkTab.PLACE ->
                 stringResource(id = R.string.saved_route_place_count_label)
-            else ->
+            SavedBookmarkTab.ROUTE ->
                 stringResource(id = R.string.saved_route_route_count_label)
         }
     val count =

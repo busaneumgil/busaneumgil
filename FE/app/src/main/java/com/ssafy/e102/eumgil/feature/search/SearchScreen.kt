@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -23,12 +24,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -50,10 +51,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -105,6 +109,90 @@ internal fun shouldAutoRequestNextSearchPage(
         isLoadingNextPage.not() &&
         totalItemsCount > 0 &&
         lastVisibleItemIndex >= totalItemsCount - SEARCH_NEXT_PAGE_PREFETCH_ITEM_THRESHOLD
+
+internal fun resolveSearchResultClickAction(
+    selectionMode: SearchSelectionMode,
+    result: SearchResult,
+): SearchUiAction =
+    when (selectionMode) {
+        SearchSelectionMode.PREVIEW_ON_MAP -> SearchUiAction.SearchResultPreviewClicked(result = result)
+        SearchSelectionMode.APPLY_TO_ROUTE -> SearchUiAction.SearchResultClicked(result = result)
+    }
+
+internal fun shouldShowRouteEndpointQuickActions(selectionMode: SearchSelectionMode): Boolean =
+    selectionMode == SearchSelectionMode.APPLY_TO_ROUTE
+
+internal data class RouteEndpointQuickActionCopy(
+    @StringRes val currentLocationActionRes: Int,
+    @StringRes val currentLocationContentDescriptionRes: Int,
+    @StringRes val mapPickerActionRes: Int,
+    @StringRes val mapPickerContentDescriptionRes: Int,
+)
+
+internal fun resolveRouteEndpointQuickActionCopy(editingTarget: RouteEditingTarget): RouteEndpointQuickActionCopy =
+    when (editingTarget) {
+        RouteEditingTarget.ORIGIN ->
+            RouteEndpointQuickActionCopy(
+                currentLocationActionRes = R.string.search_screen_current_location_origin_action,
+                currentLocationContentDescriptionRes = R.string.search_screen_current_location_origin_a11y,
+                mapPickerActionRes = R.string.search_screen_map_picker_origin_action,
+                mapPickerContentDescriptionRes = R.string.search_screen_map_picker_origin_a11y,
+            )
+
+        RouteEditingTarget.DESTINATION ->
+            RouteEndpointQuickActionCopy(
+                currentLocationActionRes = R.string.search_screen_current_location_destination_action,
+                currentLocationContentDescriptionRes = R.string.search_screen_current_location_destination_a11y,
+                mapPickerActionRes = R.string.search_screen_map_picker_destination_action,
+                mapPickerContentDescriptionRes = R.string.search_screen_map_picker_destination_a11y,
+            )
+    }
+
+internal data class SearchCurrentLocationStatusContent(
+    @StringRes val messageRes: Int,
+    val isError: Boolean = false,
+    val showProgress: Boolean = false,
+)
+
+internal fun resolveSearchCurrentLocationStatusContent(
+    status: SearchCurrentLocationQuickActionStatus,
+    editingTarget: RouteEditingTarget,
+): SearchCurrentLocationStatusContent? =
+    when (status) {
+        SearchCurrentLocationQuickActionStatus.Idle -> null
+        SearchCurrentLocationQuickActionStatus.Resolving ->
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_resolving_status,
+                showProgress = true,
+            )
+
+        SearchCurrentLocationQuickActionStatus.Applied ->
+            SearchCurrentLocationStatusContent(
+                messageRes =
+                    when (editingTarget) {
+                        RouteEditingTarget.ORIGIN -> R.string.search_screen_current_location_origin_applied_status
+                        RouteEditingTarget.DESTINATION -> R.string.search_screen_current_location_destination_applied_status
+                    },
+            )
+
+        SearchCurrentLocationQuickActionStatus.PermissionDenied ->
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_permission_denied_status,
+                isError = true,
+            )
+
+        SearchCurrentLocationQuickActionStatus.LocationUnavailable ->
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_unavailable_status,
+                isError = true,
+            )
+
+        SearchCurrentLocationQuickActionStatus.LocationAccessUnavailable ->
+            SearchCurrentLocationStatusContent(
+                messageRes = R.string.search_screen_current_location_access_unavailable_status,
+                isError = true,
+            )
+    }
 
 internal data class SearchResultDistanceUiState(
     @StringRes val labelResId: Int,
@@ -345,24 +433,20 @@ private fun SearchContentBody(
         return
     }
 
-    Column(
-        modifier =
-            modifier
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-    ) {
-        when (destination) {
-            SearchScreenDestination.Entry ->
-                SearchEntryContent(
-                    uiState = uiState,
-                    copy = copy,
-                    onAction = onAction,
-                )
+    when (destination) {
+        SearchScreenDestination.Entry ->
+            SearchEntryContent(
+                uiState = uiState,
+                copy = copy,
+                onAction = onAction,
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+            )
 
-            SearchScreenDestination.Results,
-            SearchScreenDestination.VoiceInput -> Unit
-        }
+        SearchScreenDestination.Results,
+        SearchScreenDestination.VoiceInput -> Unit
     }
 }
 
@@ -371,27 +455,45 @@ private fun SearchEntryContent(
     uiState: SearchUiState,
     copy: SearchCopyUiState,
     onAction: (SearchUiAction) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Text(
-        text = stringResource(id = copy.entryHeadlineRes),
-        style = MaterialTheme.typography.headlineSmall,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    SearchInputField(
-        query = uiState.query,
-        queryPlaceholderRes = copy.queryPlaceholderRes,
-        showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
-        onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
-        onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
-        onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
-        onSearch = { onAction(SearchUiAction.SearchSubmitted) },
-    )
-    RecentVisitSection(
-        recentSearches = uiState.recentSearches,
-        onAction = onAction,
-    )
-    if (shouldShowDestinationPromoBanner(uiState.editingTarget)) {
-        DestinationPromoBanner()
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+    ) {
+        Text(
+            text = stringResource(id = copy.entryHeadlineRes),
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        SearchInputField(
+            query = uiState.query,
+            queryPlaceholderRes = copy.queryPlaceholderRes,
+            showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
+            onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
+            onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
+            onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
+            onSearch = { onAction(SearchUiAction.SearchSubmitted) },
+        )
+        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode)) {
+            RouteEndpointQuickActionSection(
+                editingTarget = uiState.editingTarget,
+                currentLocationState = uiState.currentLocationQuickActionState,
+                onCurrentLocationClick = { onAction(SearchUiAction.CurrentLocationClicked) },
+                onMapPickerClick = { onAction(SearchUiAction.MapPickerClicked) },
+            )
+        }
+        RecentVisitSection(
+            recentSearches = uiState.recentSearches,
+            onAction = onAction,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+        )
+        if (shouldShowDestinationPromoBanner(uiState.editingTarget)) {
+            DestinationPromoBanner()
+        }
     }
 }
 
@@ -423,86 +525,107 @@ private fun SearchResultsContent(
             .collect { onAction(SearchUiAction.LoadNextPageClicked) }
     }
 
-    LazyColumn(
-        state = listState,
+    Column(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
-        item(key = "search-input") {
-            SearchInputField(
-                query = uiState.query,
-                queryPlaceholderRes = copy.queryPlaceholderRes,
-                showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
-                onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
-                onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
-                onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
-                onSearch = { onAction(SearchUiAction.SearchSubmitted) },
+        SearchInputField(
+            query = uiState.query,
+            queryPlaceholderRes = copy.queryPlaceholderRes,
+            showEmptyQueryError = uiState.resultState is SearchResultUiState.EmptyQuery,
+            onQueryChanged = { onAction(SearchUiAction.QueryChanged(query = it)) },
+            onVoiceInputClick = { onAction(SearchUiAction.VoiceInputClicked) },
+            onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
+            onSearch = { onAction(SearchUiAction.SearchSubmitted) },
+        )
+        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode)) {
+            RouteEndpointQuickActionSection(
+                editingTarget = uiState.editingTarget,
+                currentLocationState = uiState.currentLocationQuickActionState,
+                onCurrentLocationClick = { onAction(SearchUiAction.CurrentLocationClicked) },
+                onMapPickerClick = { onAction(SearchUiAction.MapPickerClicked) },
             )
         }
-        item(key = "search-sort") {
-            SearchSortControl(
-                selectedSortOption = uiState.sortOption,
-                onSortOptionSelected = { sortOption ->
-                    onAction(SearchUiAction.SortOptionSelected(sortOption = sortOption))
-                },
-            )
-        }
+        SearchSortControl(
+            selectedSortOption = uiState.sortOption,
+            onSortOptionSelected = { sortOption ->
+                onAction(SearchUiAction.SortOptionSelected(sortOption = sortOption))
+            },
+        )
 
         when (val resultState = uiState.resultState) {
             SearchResultUiState.Initial ->
-                item(key = "initial-state") {
-                    SearchStateCard(
+                SearchResultStateBox {
+                    SearchCenteredStateMessage(
                         title = stringResource(id = copy.initialTitleRes),
                         description = stringResource(id = copy.initialDescriptionRes),
+                        showIllustration = false,
                     )
                 }
 
-            SearchResultUiState.EmptyQuery,
-            is SearchResultUiState.Typing,
-            -> Unit
+            SearchResultUiState.EmptyQuery ->
+                SearchResultStateBox {
+                    SearchCenteredStateMessage(
+                        title = stringResource(id = copy.initialTitleRes),
+                        description = stringResource(id = copy.initialDescriptionRes),
+                        showIllustration = false,
+                    )
+                }
+
+            is SearchResultUiState.Typing -> Unit
 
             is SearchResultUiState.Loading ->
-                item(key = "loading-state") {
+                SearchResultStateBox {
                     SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_loading_title, resultState.query),
                         description = stringResource(id = R.string.search_screen_loading_description),
                         showIllustration = false,
                         showLoadingIndicator = true,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = EumSpacing.small),
                     )
                 }
 
             is SearchResultUiState.Success -> {
-                item(key = "result-summary") {
-                    Text(
-                        text = stringResource(id = copy.resultSummaryRes, resultState.results.size),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                items(
-                    items = resultState.results,
-                ) { result ->
-                    SearchResultItem(
-                        copy = copy,
-                        result = result,
-                        onClick = {
-                            onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
-                        },
-                    )
-                }
-                if (resultState.isLoadingNextPage) {
-                    item(key = "next-page-loading") {
-                        SearchNextPageLoadingIndicator()
+                LazyColumn(
+                    state = listState,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                ) {
+                    item(key = "result-summary") {
+                        Text(
+                            text = stringResource(id = copy.resultSummaryRes, resultState.results.size),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    items(
+                        items = resultState.results,
+                    ) { result ->
+                        SearchResultItem(
+                            copy = copy,
+                            result = result,
+                            onClick = {
+                                onAction(
+                                    resolveSearchResultClickAction(
+                                        selectionMode = uiState.selectionMode,
+                                        result = result,
+                                    ),
+                                )
+                            },
+                        )
+                    }
+                    if (resultState.isLoadingNextPage) {
+                        item(key = "next-page-loading") {
+                            SearchNextPageLoadingIndicator()
+                        }
                     }
                 }
             }
 
             is SearchResultUiState.Empty ->
-                item(key = "empty-state") {
+                SearchResultStateBox {
                     SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_empty_result_title),
                         description = stringResource(id = copy.emptyResultDescriptionRes),
@@ -511,13 +634,26 @@ private fun SearchResultsContent(
                 }
 
             is SearchResultUiState.Error ->
-                item(key = "error-state") {
+                SearchResultStateBox {
                     SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_error_title),
                         description = stringResource(id = R.string.search_screen_error_description),
                     )
                 }
         }
+    }
+}
+
+@Composable
+private fun ColumnScope.SearchResultStateBox(content: @Composable () -> Unit) {
+    Box(
+        modifier =
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
     }
 }
 
@@ -532,6 +668,13 @@ private fun SearchInputField(
     onSearch: () -> Unit,
 ) {
     val trailingAction = resolveSearchTrailingAction(query = query)
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val dismissKeyboardBeforeVoiceInput = {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+        onVoiceInputClick()
+    }
 
     OutlinedTextField(
         value = query,
@@ -548,7 +691,7 @@ private fun SearchInputField(
         trailingIcon = {
             when (trailingAction) {
                 SearchTrailingAction.VoiceInput ->
-                    IconButton(onClick = onVoiceInputClick) {
+                    IconButton(onClick = dismissKeyboardBeforeVoiceInput) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_search_voice_mic),
                             contentDescription = stringResource(id = R.string.search_screen_voice_input),
@@ -592,6 +735,179 @@ private fun SearchInputField(
                 null
             },
     )
+}
+
+@Composable
+private fun RouteEndpointQuickActionSection(
+    editingTarget: RouteEditingTarget,
+    currentLocationState: SearchCurrentLocationQuickActionUiState,
+    onCurrentLocationClick: () -> Unit,
+    onMapPickerClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val copy = resolveRouteEndpointQuickActionCopy(editingTarget)
+    val statusContent =
+        resolveSearchCurrentLocationStatusContent(
+            status = currentLocationState.status,
+            editingTarget = editingTarget,
+        )
+    val isResolving = currentLocationState.status == SearchCurrentLocationQuickActionStatus.Resolving
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+        ) {
+            RouteEndpointCurrentLocationButton(
+                labelRes = copy.currentLocationActionRes,
+                contentDescriptionRes = copy.currentLocationContentDescriptionRes,
+                enabled = isResolving.not(),
+                onClick = onCurrentLocationClick,
+                modifier = Modifier.weight(1f),
+            )
+            RouteEndpointMapPickerButton(
+                labelRes = copy.mapPickerActionRes,
+                contentDescriptionRes = copy.mapPickerContentDescriptionRes,
+                onClick = onMapPickerClick,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (statusContent != null) {
+            RouteEndpointCurrentLocationStatus(content = statusContent)
+        }
+    }
+}
+
+@Composable
+private fun RouteEndpointCurrentLocationButton(
+    @StringRes labelRes: Int,
+    @StringRes contentDescriptionRes: Int,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val currentLocationContentDescription = stringResource(id = contentDescriptionRes)
+
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = currentLocationContentDescription
+                },
+        shape = RoundedCornerShape(EumRadius.medium),
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_map_current_location),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = stringResource(id = labelRes),
+            modifier = Modifier.padding(start = EumSpacing.xSmall),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun RouteEndpointMapPickerButton(
+    @StringRes labelRes: Int,
+    @StringRes contentDescriptionRes: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val mapPickerContentDescription = stringResource(id = contentDescriptionRes)
+
+    OutlinedButton(
+        onClick = onClick,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = mapPickerContentDescription
+                },
+        shape = RoundedCornerShape(EumRadius.medium),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)),
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_map_selected_pin_blue),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = stringResource(id = labelRes),
+            modifier = Modifier.padding(start = EumSpacing.xSmall),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun RouteEndpointCurrentLocationStatus(
+    content: SearchCurrentLocationStatusContent,
+    modifier: Modifier = Modifier,
+) {
+    val contentColor =
+        when {
+            content.isError -> MaterialTheme.colorScheme.error
+            content.showProgress -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    val containerColor =
+        when {
+            content.isError -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.28f)
+            else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f)
+        }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = containerColor,
+        border = BorderStroke(1.dp, contentColor.copy(alpha = 0.12f)),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (content.showProgress) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = contentColor,
+                )
+            } else {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_map_current_location),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = contentColor,
+                )
+            }
+            Text(
+                text = stringResource(id = content.messageRes),
+                style = MaterialTheme.typography.bodyMedium,
+                color = contentColor,
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -789,23 +1105,24 @@ private fun SearchResultSection(
     copy: SearchCopyUiState,
     resultState: SearchResultUiState,
     onAction: (SearchUiAction) -> Unit,
+    selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
         when (resultState) {
             SearchResultUiState.Initial ->
-                SearchStateCard(
+                SearchCenteredStateMessage(
                     title = stringResource(id = copy.initialTitleRes),
                     description = stringResource(id = copy.initialDescriptionRes),
+                    showIllustration = false,
                 )
 
             SearchResultUiState.EmptyQuery ->
-                SearchStateCard(
-                    title = stringResource(id = R.string.search_screen_empty_query_title),
-                    description = stringResource(id = R.string.search_screen_empty_query_description),
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.52f),
-                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.26f),
+                SearchCenteredStateMessage(
+                    title = stringResource(id = copy.initialTitleRes),
+                    description = stringResource(id = copy.initialDescriptionRes),
+                    showIllustration = false,
                 )
 
             is SearchResultUiState.Typing -> Unit
@@ -833,7 +1150,12 @@ private fun SearchResultSection(
                         copy = copy,
                         result = result,
                         onClick = {
-                            onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
+                            onAction(
+                                resolveSearchResultClickAction(
+                                    selectionMode = selectionMode,
+                                    result = result,
+                                ),
+                            )
                         },
                     )
                 }
@@ -965,8 +1287,10 @@ private fun SearchNextPageLoadingIndicator() {
 private fun RecentVisitSection(
     recentSearches: List<RecentSearch>,
     onAction: (SearchUiAction) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
         Row(
@@ -1000,10 +1324,20 @@ private fun RecentVisitSection(
         }
 
         if (recentSearches.isEmpty()) {
-            SearchStateCard(
-                title = stringResource(id = R.string.search_screen_recent_section_title),
-                description = stringResource(id = R.string.search_screen_recent_empty),
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(id = R.string.search_screen_recent_empty),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    textAlign = TextAlign.Center,
+                )
+            }
         } else {
             recentSearches.forEach { recentSearch ->
                 RecentVisitItem(
@@ -1322,7 +1656,7 @@ private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0
 
 private val SearchVoiceInputBottomSheetWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 private val SearchStateTitleLineHeight = 34.sp
-private val SearchEmptyResultTitleLineHeight = 40.sp
+private val SearchEmptyResultTitleLineHeight = 34.sp
 
 @Composable
 private fun SearchCenteredStateMessage(
@@ -1337,7 +1671,7 @@ private fun SearchCenteredStateMessage(
     val titleStyle =
         if (useEmptyResultTypography) {
             MaterialTheme.typography.headlineSmall.copy(
-                fontSize = 32.sp,
+                fontSize = 26.sp,
                 lineHeight = SearchEmptyResultTitleLineHeight,
                 fontWeight = FontWeight.Bold,
             )

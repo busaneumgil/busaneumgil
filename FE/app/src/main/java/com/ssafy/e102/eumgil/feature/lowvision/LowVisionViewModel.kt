@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 sealed interface LowVisionEvent {
-    /** 웨이크워드("HEY LINK") 감지 → VoiceInput 화면으로 이동. */
+    /** 웨이크워드("HEY LINK") 감지 → 저시력 음성 입력 화면 열기. */
     data object NavigateToVoiceInput : LowVisionEvent
 }
 
@@ -55,8 +55,8 @@ class LowVisionViewModel(application: Application) : AndroidViewModel(applicatio
     private fun startSpotting() {
         kwsJob = viewModelScope.launch(Dispatchers.IO) {
             kwsManager?.startSpotting()?.collect {
-                Log.d(TAG, "웨이크워드 감지 → VoiceInput 이동")
-                // VoiceInput이 마이크를 점유할 수 있도록 KWS 녹음 즉시 중단
+                Log.d(TAG, "웨이크워드 감지 → 저시력 음성 입력 화면 열기")
+                // 저시력 음성 입력 화면이 마이크를 점유할 수 있도록 KWS 녹음 즉시 중단
                 kwsManager?.stop()
                 _uiEvent.send(LowVisionEvent.NavigateToVoiceInput)
             }
@@ -67,7 +67,7 @@ class LowVisionViewModel(application: Application) : AndroidViewModel(applicatio
      * 탭 화면으로 복귀 시 KWS를 재시작한다.
      *
      * [LowVisionKwsNavEffect]의 LaunchedEffect에서 탭 화면 진입 시마다 호출되어,
-     * VoiceInput 사용 후 돌아왔을 때 웨이크워드 감지가 자동으로 재개된다.
+     * 저시력 음성 입력 화면 사용 후 돌아왔을 때 웨이크워드 감지가 자동으로 재개된다.
      *
      * - KWS가 이미 실행 중이면 아무 작업도 하지 않는다.
      * - [kwsManager]가 null이면 권한 허용 이후 진입한 경우를 포함해 초기화 후 재시작을 시도한다.

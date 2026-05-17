@@ -21,6 +21,7 @@ data class NavigationUiState(
     val stepCard: NavigationStepCardUiState = navigationLoadingStepCardUiState(),
     val exitCta: NavigationCtaUiState = navigationLoadingCtaUiState(),
     val isExitConfirmDialogVisible: Boolean = false,
+    val locationRecenterRequestId: Long = 0L,
     val tts: NavigationTtsUiState = NavigationTtsUiState(),
 ) {
     val isExitEnabled: Boolean
@@ -78,6 +79,8 @@ data class NavigationMapOverlayUiState(
     val focusCoordinate: GeoCoordinate? = null,
     val routeSegments: List<NavigationMapSegmentUiState> = emptyList(),
     val mapFocusMode: NavigationMapFocusMode = NavigationMapFocusMode.ACTIVE,
+    val trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING,
+    val headingDegrees: Double? = null,
     val shouldAnimateCameraTransition: Boolean = true,
 ) {
     val shouldUsePlaceholder: Boolean
@@ -156,6 +159,12 @@ enum class NavigationMapFocusMode {
     FOCUSED,
 }
 
+enum class NavigationTrackingMode {
+    IDLE,
+    FOLLOW,
+    FOLLOW_WITH_HEADING,
+}
+
 data class NavigationStepCardUiState(
     val sectionLabel: String = "다음 안내",
     val statusLabel: String = "준비 중",
@@ -209,6 +218,10 @@ sealed interface NavigationUiAction {
     data object BackClicked : NavigationUiAction
 
     data object RouteDetailClicked : NavigationUiAction
+
+    data object CurrentLocationClicked : NavigationUiAction
+
+    data object MapCameraMovedByUser : NavigationUiAction
 
     data object ExitNavigationClicked : NavigationUiAction
 

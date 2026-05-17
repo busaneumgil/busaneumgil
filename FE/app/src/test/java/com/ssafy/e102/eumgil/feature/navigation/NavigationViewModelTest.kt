@@ -144,7 +144,7 @@ class NavigationViewModelTest {
             assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.railItems.firstOrNull()?.index)
             assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
             assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
-            assertEquals("300m 후 직진 이동입니다", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals(expectedSpeechText(viewModel.uiState.value.stepCard), viewModel.uiState.value.tts.briefingText)
             assertEquals("목적지까지 약 15분", viewModel.uiState.value.stepCard.heroDescription)
         }
 
@@ -342,7 +342,7 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(2, spokenBriefings.size)
-            assertTrue(spokenBriefings.last().contains("곧"))
+            assertEquals(expectedSpeechText(viewModel.uiState.value.stepCard), spokenBriefings.last())
 
             locationManager.emitLocation(WALK_VERY_NEAR_TURN_POINT.toLocationSnapshot(recordedAtEpochMillis = 5_500L))
             advanceUntilIdle()
@@ -373,7 +373,7 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, spokenBriefings.size)
-            assertTrue(spokenBriefings.single().contains("곧"))
+            assertEquals(expectedSpeechText(viewModel.uiState.value.stepCard), spokenBriefings.single())
             collector.cancel()
         }
 
@@ -436,6 +436,31 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `side rail replay speaks focused guidance card copy only`() =
+        runTest {
+            val viewModel = createViewModel()
+            val events = mutableListOf<NavigationUiEvent>()
+            val collector =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.collect { event ->
+                        events += event
+                    }
+                }
+
+            viewModel.bindNavigationRequest(testTransitNavigationRequest())
+            viewModel.enableReadyTts()
+            viewModel.onAction(NavigationUiAction.SegmentTapped(index = 1))
+            advanceUntilIdle()
+
+            val speechText = events.filterIsInstance<NavigationUiEvent.SpeakBriefing>().last().text
+            assertEquals(
+                expectedSpeechText(checkNotNull(viewModel.uiState.value.focusedSegmentCard)),
+                speechText,
+            )
+            collector.cancel()
+        }
+
+    @Test
     fun `navigation briefing text does not duplicate segment distance`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
@@ -446,7 +471,7 @@ class NavigationViewModelTest {
             locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
             advanceUntilIdle()
 
-            assertEquals("300m 후 직진", viewModel.uiState.value.tts.briefingText)
+            assertEquals(expectedSpeechText(viewModel.uiState.value.stepCard), viewModel.uiState.value.tts.briefingText)
         }
 
     @Test
@@ -688,7 +713,7 @@ class NavigationViewModelTest {
             assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
             assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
             assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
-            assertEquals("300m 후 직진 이동입니다", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals(expectedSpeechText(viewModel.uiState.value.stepCard), viewModel.uiState.value.tts.briefingText)
         }
 
     @Test
@@ -1239,7 +1264,7 @@ class NavigationViewModelTest {
             locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
             locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
             advanceUntilIdle()
-            val briefingText = viewModel.uiState.value.stepCard.heroTitle
+            val briefingText = expectedSpeechText(viewModel.uiState.value.stepCard)
             val eventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
             advanceUntilIdle()
 
@@ -1572,6 +1597,22 @@ private fun NavigationViewModel.enableReadyTts() {
         status = NavigationTtsStatus.Ready,
     )
 }
+
+private fun expectedSpeechText(stepCard: NavigationStepCardUiState): String =
+    listOf(
+        stepCard.heroTitle.trim(),
+        stepCard.heroDescription.trim(),
+    ).filter(String::isNotEmpty)
+        .distinct()
+        .joinToString(separator = " ")
+
+private fun expectedSpeechText(focusedCard: NavigationFocusedSegmentCardUiState): String =
+    listOf(
+        focusedCard.heroTitle.trim(),
+        focusedCard.heroDescription.trim(),
+    ).filter(String::isNotEmpty)
+        .distinct()
+        .joinToString(separator = " ")
 
 private fun GeoCoordinate.toLocationSnapshot(recordedAtEpochMillis: Long): LocationSnapshot =
     LocationSnapshot(

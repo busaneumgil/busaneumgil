@@ -44,20 +44,29 @@ fun NavigationRoute(
     val currentLocationManager = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.currentLocationManager
     }
+    val currentHeadingManager = remember(appContext) {
+        (appContext as BusanEumgilApp).appContainer.currentHeadingManager
+    }
+    val locationPermissionManager = remember(appContext) {
+        (appContext as BusanEumgilApp).appContainer.locationPermissionManager
+    }
     val bookmarkRepository = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.bookmarkRepository
     }
     val routeRepository = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.routeRepository
     }
-    val viewModelFactory = remember(currentLocationManager, bookmarkRepository, routeRepository) {
-        NavigationViewModel.provideFactory(
-            currentLocationManager = currentLocationManager,
-            bookmarkRepository = bookmarkRepository,
-            routeRepository = routeRepository,
-            isLowVisionMode = useLowVisionUi,
-        )
-    }
+    val viewModelFactory =
+        remember(currentLocationManager, currentHeadingManager, locationPermissionManager, bookmarkRepository, routeRepository) {
+            NavigationViewModel.provideFactory(
+                currentLocationManager = currentLocationManager,
+                currentHeadingManager = currentHeadingManager,
+                locationPermissionManager = locationPermissionManager,
+                bookmarkRepository = bookmarkRepository,
+                routeRepository = routeRepository,
+                isLowVisionMode = useLowVisionUi,
+            )
+        }
     val viewModel =
         remember(activity, viewModelFactory) {
             val owner = checkNotNull(activity) { "NavigationRoute requires a ComponentActivity host." }

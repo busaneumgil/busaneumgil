@@ -1,9 +1,11 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
-import type { AccessibilityFeatureType, AdminPlaceDetailResponse, FacilityFeature, FacilityPayload, PlaceCategory } from "../types";
+import type { AccessibilityFeatureType, AdminPlaceDetailResponse, AreaBoundaryFeature, FacilityFeature, FacilityPayload, PlaceCategory } from "../types";
 import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay, type KakaoRoadview, type KakaoRoadviewClient } from "./kakaoLoader";
 import { facilityCategoryColor, facilityCategoryLabel, facilityCategoryOrder } from "./facilityStyle";
 import { roadviewUnavailableMessage } from "./roadviewMode";
 import type { RoadviewDockState } from "./SegmentMap";
+
+type Coord = [number, number];
 
 interface FacilityMapProps {
   payload?: FacilityPayload;
@@ -104,6 +106,7 @@ export function FacilityMap({
     tooltipRef.current?.setMap(null);
     tooltipRef.current = null;
 
+    overlaysRef.current.push(...createAreaBoundaryOverlay(payload?.areaBoundary, mapRef.current));
     const features = payload?.facilities.features ?? [];
     features.forEach((feature) => {
       const overlay = createFacilityOverlay(feature, mapRef.current!, {
@@ -418,6 +421,51 @@ function createFacilityOverlay(
     zIndex: 10,
   });
   return overlay;
+}
+
+function createAreaBoundaryOverlay(feature: AreaBoundaryFeature | null | undefined, map: KakaoMap): KakaoOverlay[] {
+  if (!window.kakao?.maps || !feature) return [];
+  return areaBoundaryLineCoordinates(feature).map((coordinates) => new window.kakao!.maps.Polyline({
+    map,
+    path: coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng)),
+    strokeWeight: 3,
+    strokeColor: "#0f766e",
+    strokeOpacity: 0.86,
+    strokeStyle: "shortdash",
+    clickable: false,
+    zIndex: 6,
+  }));
+}
+
+function areaBoundaryLineCoordinates(feature: AreaBoundaryFeature): Coord[][] {
+  const coordinates = feature.geometry.coordinates;
+  switch (feature.geometry.type) {
+    case "LineString":
+      return isLineStringCoordinates(coordinates) ? [coordinates] : [];
+    case "MultiLineString":
+      return isMultiLineStringCoordinates(coordinates) ? coordinates : [];
+    case "Polygon":
+      return isMultiLineStringCoordinates(coordinates) ? coordinates : [];
+    case "MultiPolygon":
+      return Array.isArray(coordinates)
+        ? coordinates.flatMap((polygon) => isMultiLineStringCoordinates(polygon) ? polygon : [])
+        : [];
+    default:
+      return [];
+  }
+}
+
+function isLineStringCoordinates(value: unknown): value is Coord[] {
+  return Array.isArray(value)
+    && value.every((coord) =>
+      Array.isArray(coord)
+      && coord.length >= 2
+      && typeof coord[0] === "number"
+      && typeof coord[1] === "number");
+}
+
+function isMultiLineStringCoordinates(value: unknown): value is Coord[][] {
+  return Array.isArray(value) && value.every(isLineStringCoordinates);
 }
 
 function LegendItem({ color, label, active = true, onClick }: { color: string; label: string; active?: boolean; onClick?: () => void }) {

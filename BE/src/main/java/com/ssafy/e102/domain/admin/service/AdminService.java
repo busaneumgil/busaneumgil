@@ -39,6 +39,8 @@ import com.ssafy.e102.global.exception.CommonErrorCode;
 @Transactional(readOnly = true)
 public class AdminService {
 
+	public static final String ALL_DONG = "전체";
+
 	private static final List<String> ADMIN_PERMISSIONS = List.of(
 		"ADMIN_MAP_READ",
 		"ADMIN_USER_READ",
@@ -101,42 +103,41 @@ public class AdminService {
 				Function.identity()));
 
 		List<AdminAreaAssignmentResponse> assignments = findSelectableAreas()
-			.entrySet()
+			.keySet()
 			.stream()
-			.flatMap(entry -> entry.getValue()
-				.stream()
-				.flatMap(dong -> Arrays.stream(AdminAreaAssignmentType.values())
-					.map(assignmentType -> {
-						AdminAreaAssignment assignment = assignmentsByArea
-							.get(areaKey(entry.getKey(), dong, assignmentType));
-						if (assignment != null) {
-							return AdminAreaAssignmentResponse.from(assignment);
-						}
-						return new AdminAreaAssignmentResponse(
-							null,
-							entry.getKey(),
-							dong,
-							assignmentType,
-							null,
-							null,
-							AdminAreaWorkStatus.NOT_STARTED,
-							null);
-					})))
+			.flatMap(gu -> Arrays.stream(AdminAreaAssignmentType.values())
+				.map(assignmentType -> {
+					AdminAreaAssignment assignment = assignmentsByArea
+						.get(areaKey(gu, ALL_DONG, assignmentType));
+					if (assignment != null) {
+						return AdminAreaAssignmentResponse.from(assignment);
+					}
+					return new AdminAreaAssignmentResponse(
+						null,
+						gu,
+						ALL_DONG,
+						assignmentType,
+						null,
+						null,
+						AdminAreaWorkStatus.NOT_STARTED,
+						null);
+				}))
 			.toList();
 		return new AdminAreaAssignmentListResponse(assignments);
 	}
 
 	@Transactional
 	public AdminAreaAssignmentResponse upsertAreaAssignment(AdminAreaAssignmentUpsertRequest request) {
-		validateArea(request.gu(), request.dong());
+		validateGu(request.gu());
+		String dong = ALL_DONG;
 		User assignee = request.assigneeUserId() == null ? null : requireAdminUser(request.assigneeUserId());
 		AdminAreaAssignment assignment = adminAreaAssignmentRepository
-			.findByGuAndDongAndAssignmentType(request.gu(), request.dong(), request.assignmentType())
+			.findByGuAndDongAndAssignmentType(request.gu(), dong, request.assignmentType())
 			.orElse(null);
 		if (assignment == null) {
 			assignment = adminAreaAssignmentRepository.save(AdminAreaAssignment.create(
 				request.gu(),
-				request.dong(),
+				dong,
 				request.assignmentType(),
 				null,
 				AdminAreaWorkStatus.NOT_STARTED));
@@ -153,7 +154,7 @@ public class AdminService {
 		Long assignmentId,
 		AdminAreaAssignmentStatusUpdateRequest request) {
 		AdminAreaAssignment assignment = adminAreaAssignmentRepository.findById(assignmentId)
-			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "담당 구/동을 찾을 수 없습니다."));
+			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "담당 구를 찾을 수 없습니다."));
 		assignment.changeStatus(request.status());
 		return AdminAreaAssignmentResponse.from(assignment);
 	}
@@ -169,8 +170,8 @@ public class AdminService {
 	}
 
 	public void requireCanEditArea(UUID userId, String gu, String dong, AdminAreaAssignmentType assignmentType) {
-		if (gu == null || gu.isBlank() || dong == null || dong.isBlank()) {
-			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "수정할 구/동은 필수입니다.");
+		if (gu == null || gu.isBlank()) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "수정할 구는 필수입니다.");
 		}
 		if (assignmentType == null) {
 			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "담당 유형은 필수입니다.");
@@ -178,9 +179,9 @@ public class AdminService {
 		if (!adminAreaAssignmentRepository.existsByAssignee_UserIdAndGuAndDongAndAssignmentType(
 			userId,
 			gu,
-			dong,
+			ALL_DONG,
 			assignmentType)) {
-			throw new BusinessException(CommonErrorCode.FORBIDDEN, "담당 구/동만 수정할 수 있습니다.");
+			throw new BusinessException(CommonErrorCode.FORBIDDEN, "담당 구만 수정할 수 있습니다.");
 		}
 	}
 
@@ -197,9 +198,9 @@ public class AdminService {
 		return user;
 	}
 
-	private void validateArea(String gu, String dong) {
-		if (!adminAreaRepository.existsArea(gu, dong)) {
-			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "존재하지 않는 구/동입니다.");
+	private void validateGu(String gu) {
+		if (!adminAreaRepository.existsGu(gu)) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "존재하지 않는 구입니다.");
 		}
 	}
 

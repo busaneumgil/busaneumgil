@@ -62,6 +62,7 @@ import type {
 } from "./types";
 
 const placeCategories: PlaceCategory[] = [...facilityCategoryOrder];
+const allDongScope = "전체";
 
 const accessibilityFeatureTypes: AccessibilityFeatureType[] = [
   "accessibleEntrance",
@@ -428,7 +429,7 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   },
   users: {
     label: "사용자 관리",
-    description: "관리자 권한과 구·동 담당자, 작업 상태를 관리합니다.",
+    description: "관리자 권한과 구 단위 담당자, 작업 상태를 관리합니다.",
   },
   logs: {
     label: "로그",
@@ -478,7 +479,6 @@ function AdminApp() {
     page,
     selectedAssignmentId,
     selectedGu,
-    selectedDong,
     draftEdits,
     setPage,
     setSelectedArea,
@@ -494,6 +494,8 @@ function AdminApp() {
   const usesRealAdminApi = isAdminAuthenticated;
   const showsAreaSelector = page === "network" || page === "facilities" || page === "routeTuning";
   const selectedAssignmentType: AssignmentType = page === "facilities" ? "FACILITY" : "ROAD_NETWORK";
+  const selectedScopeDong = allDongScope;
+  const selectedAssignmentScopeLabel = `${selectedGu} ${selectedScopeDong}`;
 
   useEffect(() => {
     function handleAccessTokenRefreshed(event: Event) {
@@ -515,7 +517,7 @@ function AdminApp() {
             ? "편의시설 점을 클릭하면 근처 Roadview를 엽니다."
             : "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.",
     });
-  }, [page, selectedGu, selectedDong]);
+  }, [page, selectedGu, selectedScopeDong]);
 
   const areasQuery = useQuery({
     queryKey: ["admin-areas", accessToken],
@@ -581,22 +583,22 @@ function AdminApp() {
   const auditLogs = auditLogsQuery.data?.pages.flatMap((logPage) => logPage.logs) ?? [];
 
   const payloadQuery = useQuery({
-    queryKey: ["admin-road-network", selectedGu, selectedDong, accessToken],
-    queryFn: () => fetchAdminRoadNetworkPayload({ gu: selectedGu, dong: selectedDong, accessToken }),
+    queryKey: ["admin-road-network", selectedGu, selectedScopeDong, accessToken],
+    queryFn: () => fetchAdminRoadNetworkPayload({ gu: selectedGu, dong: selectedScopeDong, accessToken }),
     enabled: (page === "network" || page === "routeTuning") && usesRealAdminApi,
     retry: false,
   });
 
   const bridgeQuery = useQuery({
-    queryKey: ["admin-road-network-bridges", selectedGu, selectedDong, accessToken],
-    queryFn: () => fetchAdminRoadNetworkBridges({ gu: selectedGu, dong: selectedDong, accessToken }),
-    enabled: page === "network" && Boolean(selectedGu && selectedDong) && isAdminAuthenticated,
+    queryKey: ["admin-road-network-bridges", selectedGu, selectedScopeDong, accessToken],
+    queryFn: () => fetchAdminRoadNetworkBridges({ gu: selectedGu, dong: selectedScopeDong, accessToken }),
+    enabled: page === "network" && Boolean(selectedGu) && isAdminAuthenticated,
     retry: false,
   });
 
   const facilityQuery = useQuery({
-    queryKey: ["admin-facilities", selectedGu, selectedDong, accessToken],
-    queryFn: () => fetchAdminFacilityPayload({ gu: selectedGu, dong: selectedDong, accessToken }),
+    queryKey: ["admin-facilities", selectedGu, selectedScopeDong, accessToken],
+    queryFn: () => fetchAdminFacilityPayload({ gu: selectedGu, dong: selectedScopeDong, accessToken }),
     enabled: page === "facilities" && usesRealAdminApi,
     retry: false,
   });
@@ -633,9 +635,9 @@ function AdminApp() {
       submittedRoadEditAssignmentIdRef.current = selectedAssignmentId;
       return createAdminRoadNetworkEditJob({
         version: "ADMIN-draft-v1",
-        assignmentId: `${selectedGu}:${selectedDong}`,
+        assignmentId: `${selectedGu}:${selectedScopeDong}`,
         gu: selectedGu,
-        dong: selectedDong,
+        dong: selectedScopeDong,
         role: currentAdmin?.role ?? "ADMIN",
         createdAt: new Date().toISOString(),
         edits: draftEdits,
@@ -674,7 +676,7 @@ function AdminApp() {
 
   const updatePlaceMutation = useMutation({
     mutationFn: ({ placeId, request }: { placeId: number; request: AdminPlaceUpdateRequest }) =>
-      updateAdminPlace(placeId, selectedGu, selectedDong, request, accessToken),
+      updateAdminPlace(placeId, selectedGu, selectedScopeDong, request, accessToken),
     onSuccess: (place) => {
       queryClient.setQueryData(["admin-place", place.placeId, accessToken], place);
       queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
@@ -683,7 +685,7 @@ function AdminApp() {
 
   const updatePlaceFeaturesMutation = useMutation({
     mutationFn: ({ placeId, features }: { placeId: number; features: PlaceAccessibilityFeature[] }) =>
-      updateAdminPlaceAccessibilityFeatures(placeId, selectedGu, selectedDong, features, accessToken),
+      updateAdminPlaceAccessibilityFeatures(placeId, selectedGu, selectedScopeDong, features, accessToken),
     onSuccess: (place) => {
       queryClient.setQueryData(["admin-place", place.placeId, accessToken], place);
       queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
@@ -723,11 +725,6 @@ function AdminApp() {
     queryClient.invalidateQueries({ queryKey: ["admin-road-network-bridges"] });
   }, [activeRoadEditJob, clearDraftForAssignment]);
 
-  const filteredDongs = useMemo(() => {
-    const areas = areasQuery.data ?? [];
-    return areas.filter((area) => area.gu === selectedGu);
-  }, [areasQuery.data, selectedGu]);
-
   const auditLogGuOptions = useMemo(() => {
     return Array.from(new Set((areasQuery.data ?? []).map((area) => area.gu))).sort();
   }, [areasQuery.data]);
@@ -744,9 +741,9 @@ function AdminApp() {
   const selectedAssignment = useMemo(() => {
     return (areaAssignmentsQuery.data ?? []).find((assignment) =>
       assignment.gu === selectedGu
-      && assignment.dong === selectedDong
+      && assignment.dong === selectedScopeDong
       && assignment.assignmentType === selectedAssignmentType) ?? null;
-  }, [areaAssignmentsQuery.data, selectedAssignmentType, selectedDong, selectedGu]);
+  }, [areaAssignmentsQuery.data, selectedAssignmentType, selectedScopeDong, selectedGu]);
 
   const canEditSelectedArea = selectedAssignment?.assigneeUserId === currentAdmin?.userId;
   const selectedAssignmentLabel = selectedAssignment?.assigneeLabel || selectedAssignment?.assigneeUserId || "미지정";
@@ -950,8 +947,7 @@ function AdminApp() {
                     disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
                     onChange={(event) => {
                       const nextGu = event.target.value;
-                      const nextDong = (areasQuery.data ?? []).find((area) => area.gu === nextGu)?.dong ?? "";
-                      setSelectedArea(nextGu, nextDong);
+                      setSelectedArea(nextGu, selectedScopeDong);
                       setSelectedFacility(null);
                       setSelectedSegment(null);
                     }}
@@ -966,24 +962,9 @@ function AdminApp() {
                     {!areasQuery.data?.length && <option value={selectedGu}>{selectedGu}</option>}
                   </select>
                 </label>
-                <label>
-                  동
-                  <select
-                    value={selectedDong}
-                    disabled={applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
-                    onChange={(event) => {
-                      setSelectedArea(selectedGu, event.target.value);
-                      setSelectedFacility(null);
-                      setSelectedSegment(null);
-                    }}
-                  >
-                    {filteredDongs.map((area) => (
-                      <option key={`${area.gu}-${area.dong}`} value={area.dong}>
-                        {area.dong}
-                      </option>
-                    ))}
-                    {!filteredDongs.length && <option value={selectedDong}>{selectedDong}</option>}
-                  </select>
+                <label className="backend-field">
+                  범위
+                  <span>{selectedScopeDong}</span>
                 </label>
               </>
             )}
@@ -1008,7 +989,7 @@ function AdminApp() {
           <RouteTuningPage
             accessToken={accessToken}
             gu={selectedGu}
-            dong={selectedDong}
+            dong={selectedScopeDong}
             payload={payloadQuery.data}
             loading={payloadQuery.isLoading}
             error={payloadQuery.error}
@@ -1017,8 +998,8 @@ function AdminApp() {
             canEdit={canEditSelectedArea}
             assignmentMessage={
               canEditSelectedArea
-                ? `${selectedGu} ${selectedDong} 보행 네트워크 담당자로 수정할 수 있습니다.`
-                : `${selectedGu} ${selectedDong} 보행 네트워크 담당자만 수정할 수 있습니다. 현재 담당자: ${selectedAssignmentLabel}`
+                ? `${selectedAssignmentScopeLabel} 보행 네트워크 담당자로 수정할 수 있습니다.`
+                : `${selectedAssignmentScopeLabel} 보행 네트워크 담당자만 수정할 수 있습니다. 현재 담당자: ${selectedAssignmentLabel}`
             }
             roadviewContainerRef={roadviewContainerRef}
             onRoadviewChange={setRoadviewDock}
@@ -1139,7 +1120,7 @@ function AdminApp() {
                   <AttributeRow label="상태" value={workStatusLabel(selectedAssignment?.status ?? "NOT_STARTED")} />
                 </dl>
                 {!canEditSelectedArea && (
-                  <p className="error-box">현재 계정은 {selectedGu} {selectedDong} 담당자가 아니므로 수정할 수 없습니다.</p>
+                  <p className="error-box">현재 계정은 {selectedAssignmentScopeLabel} 담당자가 아니므로 수정할 수 없습니다.</p>
                 )}
                 <button
                   className="primary"
@@ -1246,8 +1227,8 @@ function AdminApp() {
                       className={`facility-assignment-badge ${canEditSelectedArea ? "is-editable" : "is-readonly"}`}
                       title={
                         canEditSelectedArea
-                          ? `${selectedGu} ${selectedDong} 편의시설 담당자로 수정할 수 있습니다.`
-                          : `${selectedGu} ${selectedDong} 편의시설 담당자만 수정할 수 있습니다. 현재 담당자: ${selectedAssignmentLabel}`
+                          ? `${selectedAssignmentScopeLabel} 편의시설 담당자로 수정할 수 있습니다.`
+                          : `${selectedAssignmentScopeLabel} 편의시설 담당자만 수정할 수 있습니다. 현재 담당자: ${selectedAssignmentLabel}`
                       }
                     >
                       {canEditSelectedArea ? "수정 가능" : "담당자 아님"}
@@ -2131,7 +2112,7 @@ function FacilityCategorySummary({
   }
 
   if (visibleCategories.length === 0) {
-    return <p className="muted facility-summary-note">현재 선택한 구·동에는 선택 카테고리 시설이 없습니다.</p>;
+    return <p className="muted facility-summary-note">현재 선택한 구에는 선택 카테고리 시설이 없습니다.</p>;
   }
 
   return (
@@ -2180,10 +2161,11 @@ function UserManagementPage({
     return left.userId.localeCompare(right.userId);
   });
   const assignmentByArea = new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}:${assignment.assignmentType}`, assignment]));
-  const normalizedAreas = areas.length
+  const sourceAreas = areas.length
     ? areas
     : [...new Map(assignments.map((assignment) => [`${assignment.gu}:${assignment.dong}`, { gu: assignment.gu, dong: assignment.dong }])).values()];
-  const guOptions = [...new Set(normalizedAreas.map((area) => area.gu))].filter(Boolean).sort((left, right) => left.localeCompare(right, "ko"));
+  const guOptions = [...new Set(sourceAreas.map((area) => area.gu))].filter(Boolean).sort((left, right) => left.localeCompare(right, "ko"));
+  const guAreas = guOptions.map((gu) => ({ gu, dong: allDongScope }));
   const [promoteUserId, setPromoteUserId] = useState("");
   const [selectedGuFilter, setSelectedGuFilter] = useState("");
   const guOptionsKey = guOptions.join("|");
@@ -2197,8 +2179,8 @@ function UserManagementPage({
     }
   }, [guOptionsKey, selectedGuFilter]);
   const filteredAreas = selectedGuFilter
-    ? normalizedAreas.filter((area) => area.gu === selectedGuFilter)
-    : normalizedAreas;
+    ? guAreas.filter((area) => area.gu === selectedGuFilter)
+    : guAreas;
 
   return (
     <div className="user-management-layout">
@@ -2269,8 +2251,8 @@ function UserManagementPage({
       </section>
 
       <section className="panel-section">
-        <h3>구·동 담당자 및 작업 상태</h3>
-        <p className="muted">보행 네트워크와 편의시설 담당자를 분리합니다. 담당자로 지정된 관리자만 해당 영역을 수정할 수 있습니다.</p>
+        <h3>구 담당자 및 작업 상태</h3>
+        <p className="muted">보행 네트워크와 편의시설 담당자를 구 단위로 분리합니다. 담당자로 지정된 관리자만 해당 구를 수정할 수 있습니다.</p>
         <div className="assignment-filter-row">
           <label>
             구
@@ -2333,7 +2315,7 @@ function AssignmentTable({
           <thead>
             <tr>
               <th>구</th>
-              <th>동</th>
+              <th>범위</th>
               <th>담당자</th>
               <th>상태</th>
               <th>수정일</th>
@@ -2401,7 +2383,7 @@ function AssignmentTable({
             })}
             {!normalizedAreas.length && (
               <tr>
-                <td colSpan={5}>구·동 목록이 없습니다.</td>
+                <td colSpan={5}>구 목록이 없습니다.</td>
               </tr>
             )}
           </tbody>
@@ -2523,7 +2505,7 @@ function AuditLogsPage({
                 <dd>{log.targetType}{log.targetId ? ` #${log.targetId}` : ""}</dd>
               </div>
               <div>
-                <dt>구/동</dt>
+                <dt>구/범위</dt>
                 <dd>{log.gu && log.dong ? `${log.gu} ${log.dong}` : "-"}</dd>
               </div>
             </dl>

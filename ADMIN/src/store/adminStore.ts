@@ -3,7 +3,7 @@ import type { AdminPage, AdminRole, EditAction } from "../types";
 
 const draftStoragePrefix = "busan-eumgil-ADMIN:draft-edits:";
 const defaultGu = "강서구";
-const defaultDong = "명지동";
+const defaultDong = "전체";
 
 function areaAssignmentId(gu: string, dong: string) {
   return `area:${gu}:${dong}`;

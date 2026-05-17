@@ -272,6 +272,10 @@ sealed interface ReportUiAction {
 
     data object ReportHistoryClicked : ReportUiAction
 
+    data class RecentReportClicked(
+        val historyId: String,
+    ) : ReportUiAction
+
     data object StartNewReportClicked : ReportUiAction
 
     data object BackToMapClicked : ReportUiAction
@@ -301,7 +305,9 @@ sealed interface ReportUiEvent {
         val message: String,
     ) : ReportUiEvent
 
-    data object NavigateToReportHistory : ReportUiEvent
+    data class NavigateToReportHistory(
+        val historyId: String? = null,
+    ) : ReportUiEvent
 
     data object NavigateToMap : ReportUiEvent
 }

@@ -36,7 +36,7 @@ private const val REPORT_PHOTO_PICKER_LOG_TAG = "ReportPhotoPicker"
 @Composable
 fun ReportRoute(
     onNavigateBack: () -> Unit,
-    onNavigateToReportHistory: () -> Unit,
+    onNavigateToReportHistory: (String?) -> Unit,
     onNavigateToMap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -123,7 +123,7 @@ fun ReportRoute(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 ReportUiEvent.NavigateBack -> onNavigateBack()
-                ReportUiEvent.NavigateToReportHistory -> onNavigateToReportHistory()
+                is ReportUiEvent.NavigateToReportHistory -> onNavigateToReportHistory(event.historyId)
                 ReportUiEvent.NavigateToMap -> onNavigateToMap()
                 is ReportUiEvent.AnnounceForAccessibility -> {
                     // View.announceForAccessibility는 API 33+에서 deprecated이지만

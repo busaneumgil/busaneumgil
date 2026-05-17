@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.collect
 
 @Composable
 fun ReportHistoryRoute(
+    initialHistoryId: String? = null,
     onNavigateBack: () -> Unit,
     onNavigateToReport: () -> Unit,
     modifier: Modifier = Modifier,
@@ -38,6 +39,12 @@ fun ReportHistoryRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(initialHistoryId, viewModel) {
+        initialHistoryId
+            ?.takeIf(String::isNotBlank)
+            ?.let { historyId -> viewModel.onAction(ReportHistoryUiAction.ReportClicked(historyId)) }
+    }
 
     LaunchedEffect(viewModel, onNavigateBack, onNavigateToReport, snackbarHostState) {
         viewModel.uiEvent.collect { event ->

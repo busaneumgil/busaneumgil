@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.report
 
+import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
@@ -72,7 +73,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
@@ -100,7 +100,9 @@ fun ReportScreen(
     scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
-    var locationAddressSearchExpanded by remember { mutableStateOf(false) }
+    BackHandler(enabled = reportTopBarShowsBackButton(uiState.currentStep)) {
+        onAction(ReportUiAction.BackClicked)
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -119,16 +121,13 @@ fun ReportScreen(
             ReportBottomBar(
                 uiState = uiState,
                 onAction = onAction,
-                onLocationAddressSearchClick = {
-                    locationAddressSearchExpanded = true
-                },
             )
         },
     ) { innerPadding ->
-        // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
+        // Home과 TypeSelection은 남은 공간을 화면 안에서 배분해야 하므로 verticalScroll 미사용 (weight 사용 가능).
         // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.
         // scrollState는 ReportRoute에서 hoist하여 ScrollToFirstError 이벤트로 외부 제어 가능.
-        val isFlexStep = uiState.currentStep == ReportStep.TypeSelection
+        val isFlexStep = uiState.currentStep == ReportStep.Home || uiState.currentStep == ReportStep.TypeSelection
         Column(
             modifier =
                 Modifier
@@ -170,7 +169,6 @@ fun ReportScreen(
                     ReportLocationStep(
                         input = uiState.location,
                         selectedType = uiState.reportType.value,
-                        addressSearchExpanded = locationAddressSearchExpanded,
                         onAction = onAction,
                     )
                 ReportStep.DetailInput ->
@@ -214,7 +212,6 @@ internal fun reportTopBarShowsBackButton(step: ReportStep): Boolean =
 private fun ReportBottomBar(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
-    onLocationAddressSearchClick: () -> Unit,
 ) {
     when (uiState.currentStep) {
         ReportStep.Home -> Unit
@@ -226,12 +223,11 @@ private fun ReportBottomBar(
                 suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
             )
         ReportStep.LocationConfirm ->
-            ReportStepActionBar(
-                primaryLabel = "이 위치로 다음",
+            ReportPrimaryActionBar(
+                label = "다음",
                 enabled = uiState.isLocationStepConfirmable,
-                onPrimaryClick = { onAction(ReportUiAction.NextStepClicked) },
-                secondaryLabel = "주소 검색",
-                onSecondaryClick = onLocationAddressSearchClick,
+                onClick = { onAction(ReportUiAction.NextStepClicked) },
+                suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
             )
         ReportStep.DetailInput -> {
             val submitting = uiState.submitState is ReportSubmitState.Submitting
@@ -395,9 +391,9 @@ private fun ReportHomeStep(
         )
         ReportHomeRecentSection(
             reports = uiState.recentReports,
-            onHistoryClick = { onAction(ReportUiAction.ReportHistoryClicked) },
+            onReportClick = { historyId -> onAction(ReportUiAction.RecentReportClicked(historyId)) },
+            modifier = Modifier.weight(1f),
         )
-        ReportHomeNotice()
     }
 }
 
@@ -475,15 +471,21 @@ private fun ReportHomeCtaButton(
                 color = MaterialTheme.colorScheme.onPrimary,
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "+",
-                        style =
-                            MaterialTheme.typography.titleMedium.copy(
-                                fontSize = 24.sp,
-                                lineHeight = 24.sp,
-                            ),
-                        fontWeight = FontWeight.Bold,
-                        color = EumPrimary600,
+                    Box(
+                        modifier =
+                            Modifier
+                                .width(18.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(EumPrimary600),
+                    )
+                    Box(
+                        modifier =
+                            Modifier
+                                .width(4.dp)
+                                .height(18.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(EumPrimary600),
                     )
                 }
             }
@@ -611,7 +613,7 @@ private fun ReportHomeStatusCount(
         Spacer(modifier = Modifier.width(EumSpacing.small))
         Column(
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            horizontalAlignment = Alignment.Start,
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(
                 verticalAlignment = Alignment.Bottom,
@@ -649,33 +651,24 @@ private fun ReportHomeStatusCount(
 @Composable
 private fun ReportHomeRecentSection(
     reports: List<ReportRecentUiModel>,
-    onHistoryClick: () -> Unit,
+    onReportClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "최근 제보",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = "더보기 >",
-                modifier = Modifier.clickable(onClick = onHistoryClick),
-                style = MaterialTheme.typography.bodyMedium,
-                color = EumTextMuted,
-            )
-        }
+        Text(
+            text = "최근 제보",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
             shape = RoundedCornerShape(EumRadius.large),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
@@ -704,7 +697,10 @@ private fun ReportHomeRecentSection(
                             .padding(horizontal = EumSpacing.medium),
                 ) {
                     reports.forEachIndexed { index, report ->
-                        ReportHomeRecentItem(report = report)
+                        ReportHomeRecentItem(
+                            report = report,
+                            onClick = { onReportClick(report.historyId) },
+                        )
                         if (index != reports.lastIndex) {
                             HorizontalDivider(color = EumBorderSubtle)
                         }
@@ -718,12 +714,14 @@ private fun ReportHomeRecentSection(
 @Composable
 private fun ReportHomeRecentItem(
     report: ReportRecentUiModel,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
+                .clickable(role = Role.Button, onClick = onClick)
                 .padding(vertical = EumSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
@@ -787,35 +785,6 @@ private fun ReportHomeRecentItem(
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
                 tint = EumTextMuted,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ReportHomeNotice(modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(50),
-        color = EumSurfaceInfo,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_status_safe_info),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = EumTextMuted,
-            )
-            Text(
-                text = "제보 내용은 관리자의 검토 후 반영되며, 결과는 알림으로 안내드려요.",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
-                color = EumTextMuted,
-                textAlign = TextAlign.Start,
             )
         }
     }
@@ -996,7 +965,6 @@ private fun ReportTypeCard(
 private fun ReportLocationStep(
     input: ReportLocationInput,
     selectedType: ReportType?,
-    addressSearchExpanded: Boolean,
     onAction: (ReportUiAction) -> Unit,
 ) {
     val errorText = reportLocationErrorText(input.error)
@@ -1054,16 +1022,6 @@ private fun ReportLocationStep(
             location = input.value,
             addressText = input.addressText,
         )
-        if (addressSearchExpanded) {
-            OutlinedTextField(
-                value = input.addressText,
-                onValueChange = { onAction(ReportUiAction.AddressTextChanged(it)) },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(text = "상세 주소를 입력해주세요") },
-                singleLine = true,
-                isError = input.error == ReportLocationError.AddressTooLong,
-            )
-        }
         if (isError && errorText != null) {
             Text(
                 text = errorText,
@@ -1119,7 +1077,7 @@ private fun ReportMapProblemChip(
         modifier = modifier,
         shape = RoundedCornerShape(EumRadius.medium),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 0.dp,
+        shadowElevation = 6.dp,
         border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.35f)),
     ) {
         Row(
@@ -1404,37 +1362,49 @@ private fun ReportLocationBottomCard(
         border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
         shadowElevation = 0.dp,
     ) {
-        Column(
+        Row(
             modifier = Modifier.padding(EumSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
-            Text(
-                text = "선택된 위치",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+            Icon(
+                painter = painterResource(id = R.drawable.ic_map_selected_pin_blue),
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = Color.Unspecified,
             )
-            if (!hasAnyAddress) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            ) {
                 Text(
-                    text = "아직 위치가 선택되지 않았습니다.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    text = "선택된 위치",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
                 )
-            }
-            if (autoAddress != null) {
-                Text(
-                    text = autoAddress,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            if (userDetail != null) {
-                Text(
-                    text = userDetail,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (!hasAnyAddress) {
+                    Text(
+                        text = "아직 위치가 선택되지 않았습니다.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                if (autoAddress != null) {
+                    Text(
+                        text = autoAddress,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                if (userDetail != null) {
+                    Text(
+                        text = userDetail,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

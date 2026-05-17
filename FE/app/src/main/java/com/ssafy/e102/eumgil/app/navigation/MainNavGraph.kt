@@ -521,8 +521,8 @@ fun NavGraphBuilder.mainNavGraph(
             onNavigateBack = {
                 navController.popBackStack()
             },
-            onNavigateToReportHistory = {
-                navController.navigate(ReportRoute.History.route)
+            onNavigateToReportHistory = { historyId ->
+                navController.navigate(ReportRoute.History.createRoute(historyId))
             },
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
@@ -530,8 +530,19 @@ fun NavGraphBuilder.mainNavGraph(
         )
     }
 
-    composable(route = ReportRoute.History.route) {
+    composable(
+        route = ReportRoute.History.route,
+        arguments =
+            listOf(
+                navArgument(ReportRoute.History.ARG_HISTORY_ID) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+    ) { backStackEntry ->
         ReportHistoryRoute(
+            initialHistoryId = backStackEntry.arguments?.getString(ReportRoute.History.ARG_HISTORY_ID),
             onNavigateBack = {
                 navController.popBackStack()
             },

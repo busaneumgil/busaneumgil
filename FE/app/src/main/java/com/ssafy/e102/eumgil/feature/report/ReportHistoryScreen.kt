@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.report
 
+import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -50,6 +51,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
@@ -101,6 +103,10 @@ fun ReportHistoryScreen(
     val selectedDetail = uiState.selectedDetail
     val isDetailMode = selectedDetail != null || uiState.detailLoadingHistoryId != null
 
+    BackHandler(enabled = isDetailMode) {
+        onAction(ReportHistoryUiAction.DetailBackClicked)
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -124,8 +130,6 @@ fun ReportHistoryScreen(
         if (isDetailMode) {
             ReportHistoryDetailContent(
                 detail = selectedDetail,
-                onBackToList = { onAction(ReportHistoryUiAction.DetailBackClicked) },
-                onReportAgain = { onAction(ReportHistoryUiAction.ReportCtaClicked) },
                 modifier =
                     Modifier
                         .fillMaxSize()
@@ -178,24 +182,24 @@ private fun ReportHistoryListContent(
             }
         }
 
-    LazyColumn(
+    Column(
         modifier =
             modifier
                 .fillMaxSize()
                 .padding(horizontal = EumSpacing.medium),
-        contentPadding = PaddingValues(top = EumSpacing.medium, bottom = EumSpacing.large),
-        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
-        item {
-            ReportHistoryListControls(
-                selectedFilter = selectedFilter,
-                onFilterSelected = { selectedFilter = it },
-            )
-        }
+        ReportHistoryListControls(
+            selectedFilter = selectedFilter,
+            onFilterSelected = { selectedFilter = it },
+            modifier = Modifier.padding(top = EumSpacing.medium),
+        )
 
         when (uiState.screenState) {
             ReportHistoryScreenState.LOADING ->
-                item {
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
                     ReportHistoryStateCard(
                         title = "제보 내역을 불러오는 중입니다",
                         description = "저장된 제보 목록을 확인하고 있어요.",
@@ -204,20 +208,21 @@ private fun ReportHistoryListContent(
                 }
 
             ReportHistoryScreenState.EMPTY ->
-                item {
-                    ReportHistoryStateCard(
-                        title = "아직 제보 내역이 없어요",
-                        description = "이동 중 발견한 보행 불편 사항을 제보해 주세요.",
-                        primaryActionLabel = "제보하기",
-                        primaryActionSuppressRipple = true,
-                        onPrimaryActionClick = {
-                            onAction(ReportHistoryUiAction.ReportCtaClicked)
-                        },
-                    )
-                }
+                ReportHistoryEmptyState(
+                    title = "아직 제보 내역이 없어요",
+                    description = "이동 중 발견한 보행 불편 사항을 제보해 주세요.",
+                    primaryActionLabel = "제보하기",
+                    onPrimaryActionClick = {
+                        onAction(ReportHistoryUiAction.ReportCtaClicked)
+                    },
+                    modifier = Modifier.weight(1f),
+                )
 
             ReportHistoryScreenState.ERROR ->
-                item {
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
                     ReportHistoryStateCard(
                         title = "제보 내역을 불러오지 못했습니다",
                         description = uiState.errorMessage ?: "잠시 후 다시 시도해 주세요.",
@@ -236,28 +241,32 @@ private fun ReportHistoryListContent(
 
             ReportHistoryScreenState.CONTENT -> {
                 if (filteredReports.isEmpty()) {
-                    item {
-                        ReportHistoryStateCard(
-                            title = "${selectedFilter.label} 제보가 없습니다",
-                            description = "다른 상태를 선택하거나 새 제보를 등록해 주세요.",
-                            primaryActionLabel = "제보하기",
-                            primaryActionSuppressRipple = true,
-                            onPrimaryActionClick = {
-                                onAction(ReportHistoryUiAction.ReportCtaClicked)
-                            },
-                        )
-                    }
+                    ReportHistoryEmptyState(
+                        title = "${selectedFilter.label} 제보가 없습니다",
+                        description = "다른 상태를 선택하거나 새 제보를 등록해 주세요.",
+                        primaryActionLabel = "제보하기",
+                        onPrimaryActionClick = {
+                            onAction(ReportHistoryUiAction.ReportCtaClicked)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
                 } else {
-                    items(
-                        items = filteredReports,
-                        key = { report -> report.outboxId },
-                    ) { report ->
-                        ReportHistoryListCard(
-                            report = report,
-                            onClick = {
-                                onAction(ReportHistoryUiAction.ReportClicked(report.outboxId))
-                            },
-                        )
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(top = EumSpacing.medium, bottom = EumSpacing.large),
+                        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+                    ) {
+                        items(
+                            items = filteredReports,
+                            key = { report -> report.outboxId },
+                        ) { report ->
+                            ReportHistoryListCard(
+                                report = report,
+                                onClick = {
+                                    onAction(ReportHistoryUiAction.ReportClicked(report.outboxId))
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -269,29 +278,12 @@ private fun ReportHistoryListContent(
 private fun ReportHistoryListControls(
     selectedFilter: ReportHistoryFilter,
     onFilterSelected: (ReportHistoryFilter) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "최신순",
-                style = MaterialTheme.typography.titleSmall,
-                color = EumTextMuted,
-            )
-            Spacer(modifier = Modifier.width(EumSpacing.xSmall))
-            Icon(
-                painter = painterResource(id = R.drawable.ic_action_dropdown),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = EumTextMuted,
-            )
-        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
@@ -338,6 +330,56 @@ private fun ReportHistoryFilterChip(
 }
 
 @Composable
+private fun ReportHistoryEmptyState(
+    title: String,
+    description: String,
+    primaryActionLabel: String,
+    onPrimaryActionClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            NoRippleReportHistoryNavigationButton(
+                onClick = onPrimaryActionClick,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = reportHistoryLayoutSpec().buttonMinHeightDp.dp),
+                shape = RoundedCornerShape(reportHistoryLayoutSpec().buttonCornerRadiusDp.dp),
+            ) {
+                Text(
+                    text = primaryActionLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ReportHistoryListCard(
     report: ReportHistoryUiModel,
     onClick: () -> Unit,
@@ -354,6 +396,7 @@ private fun ReportHistoryListCard(
                 .semantics { contentDescription = accessibilityDescription },
         shape = RoundedCornerShape(spec.cardCornerRadiusDp.dp),
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
         shadowElevation = spec.cardShadowElevationDp.dp,
     ) {
         Row(
@@ -447,8 +490,6 @@ private fun ReportHistoryStatusChip(
 @Composable
 private fun ReportHistoryDetailContent(
     detail: ReportHistoryDetailUiModel?,
-    onBackToList: () -> Unit,
-    onReportAgain: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -471,40 +512,6 @@ private fun ReportHistoryDetailContent(
             item { ReportHistoryDetailSummaryCard(detail = detail) }
             item { ReportHistoryDetailDescriptionCard(description = detail.description) }
             item { ReportHistoryProcessingCard(detail = detail) }
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-                ) {
-                    NoRippleReportHistoryNavigationButton(
-                        onClick = onBackToList,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .heightIn(min = reportHistoryLayoutSpec().buttonMinHeightDp.dp),
-                        isOutlined = true,
-                    ) {
-                        Text(
-                            text = "목록으로",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    NoRippleReportHistoryNavigationButton(
-                        onClick = onReportAgain,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .heightIn(min = reportHistoryLayoutSpec().buttonMinHeightDp.dp),
-                    ) {
-                        Text(
-                            text = "다시 제보",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -515,6 +522,7 @@ private fun ReportHistoryDetailSummaryCard(detail: ReportHistoryDetailUiModel) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(reportHistoryLayoutSpec().cardCornerRadiusDp.dp),
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
         shadowElevation = reportHistoryLayoutSpec().cardShadowElevationDp.dp,
     ) {
         Column(
@@ -592,6 +600,7 @@ private fun ReportHistoryDetailDescriptionCard(description: String) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(reportHistoryLayoutSpec().cardCornerRadiusDp.dp),
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
         shadowElevation = reportHistoryLayoutSpec().cardShadowElevationDp.dp,
     ) {
         Column(
@@ -619,6 +628,7 @@ private fun ReportHistoryProcessingCard(detail: ReportHistoryDetailUiModel) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(reportHistoryLayoutSpec().cardCornerRadiusDp.dp),
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
         shadowElevation = reportHistoryLayoutSpec().cardShadowElevationDp.dp,
     ) {
         Column(

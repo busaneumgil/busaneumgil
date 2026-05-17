@@ -126,7 +126,13 @@ class ReportViewModel(
                 if (mutableUiState.value.screenState is ReportScreenState.Completed) {
                     resetForm()
                 }
-                emitUiEvent(ReportUiEvent.NavigateToReportHistory)
+                emitUiEvent(ReportUiEvent.NavigateToReportHistory())
+            }
+            is ReportUiAction.RecentReportClicked -> {
+                if (mutableUiState.value.screenState is ReportScreenState.Completed) {
+                    resetForm()
+                }
+                emitUiEvent(ReportUiEvent.NavigateToReportHistory(action.historyId))
             }
             ReportUiAction.StartNewReportClicked -> {
                 if (mutableUiState.value.screenState is ReportScreenState.Completed) {

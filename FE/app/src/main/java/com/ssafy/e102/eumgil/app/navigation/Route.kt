@@ -324,7 +324,17 @@ sealed interface ReportRoute : AppRoute {
     }
 
     data object History : ReportRoute {
-        override val route: String = "report/history"
+        const val ARG_HISTORY_ID: String = "historyId"
+        private const val BASE_ROUTE: String = "report/history"
+
+        override val route: String = "$BASE_ROUTE?$ARG_HISTORY_ID={$ARG_HISTORY_ID}"
+
+        fun createRoute(historyId: String? = null): String =
+            if (historyId.isNullOrBlank()) {
+                BASE_ROUTE
+            } else {
+                "$BASE_ROUTE?$ARG_HISTORY_ID=${historyId.navArgEncode()}"
+            }
     }
 }
 

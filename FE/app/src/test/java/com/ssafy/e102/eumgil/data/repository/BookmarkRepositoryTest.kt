@@ -16,11 +16,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -138,18 +134,16 @@ class BookmarkRepositoryTest {
                     authSessionRepository = authSessionRepository,
                 )
 
-            val emissions = mutableListOf<List<BookmarkData>>()
-            val collection = async { repository.observeBookmarks().take(2).toList(emissions) }
-            yield()
+            val firstScopeBookmarks = repository.observeBookmarks().first()
 
             authSessionRepository.updateAuthSession(
                 authSession = AuthSession(accessToken = "token-b", userId = "user-b"),
                 isProfileCompleted = true,
             )
-            collection.await()
+            val secondScopeBookmarks = repository.observeBookmarks().first()
 
-            assertEquals(listOf("place-a"), emissions[0].map(BookmarkData::placeId))
-            assertEquals(listOf("place-b"), emissions[1].map(BookmarkData::placeId))
+            assertEquals(listOf("place-a"), firstScopeBookmarks.map(BookmarkData::placeId))
+            assertEquals(listOf("place-b"), secondScopeBookmarks.map(BookmarkData::placeId))
         }
 
     @Test
@@ -310,7 +304,7 @@ class BookmarkRepositoryTest {
         }
 
     @Test
-    fun `saveBookmark only caches locally when access token is null`() =
+    fun `saveBookmark fails without access token and does not cache locally`() =
         runBlocking {
             val fakeDao = FakeBookmarkDao()
             val fakeDataSource = FakeBookmarksRemoteDataSource()
@@ -321,23 +315,27 @@ class BookmarkRepositoryTest {
                     accessTokenProvider = { null },
                 )
 
-            repository.saveBookmark(
-                BookmarkData(
-                    placeId = "42",
-                    placeName = "Busan Citizens Park",
-                    address = null,
-                    latitude = 35.1686,
-                    longitude = 129.0576,
-                    category = null,
-                ),
-            )
+            val result =
+                runCatching {
+                    repository.saveBookmark(
+                        BookmarkData(
+                            placeId = "42",
+                            placeName = "Busan Citizens Park",
+                            address = null,
+                            latitude = 35.1686,
+                            longitude = 129.0576,
+                            category = null,
+                        ),
+                    )
+                }
 
+            assertTrue(result.isFailure)
             assertTrue(fakeDataSource.createdRequests.isEmpty())
-            assertEquals(1, fakeDao.bookmarkCount())
+            assertEquals(0, fakeDao.bookmarkCount())
         }
 
     @Test
-    fun `saveBookmark only caches locally when request cannot be represented`() =
+    fun `saveBookmark fails when request cannot be represented and does not cache locally`() =
         runBlocking {
             val fakeDao = FakeBookmarkDao()
             val fakeDataSource = FakeBookmarksRemoteDataSource()
@@ -348,19 +346,54 @@ class BookmarkRepositoryTest {
                     accessTokenProvider = { "test-token" },
                 )
 
-            repository.saveBookmark(
-                BookmarkData(
-                    placeId = "kakao-only-id",
-                    placeName = "External place without provider",
-                    address = null,
-                    latitude = 0.0,
-                    longitude = 0.0,
-                    category = null,
-                ),
-            )
+            val result =
+                runCatching {
+                    repository.saveBookmark(
+                        BookmarkData(
+                            placeId = "kakao-only-id",
+                            placeName = "External place without provider",
+                            address = null,
+                            latitude = 0.0,
+                            longitude = 0.0,
+                            category = null,
+                        ),
+                    )
+                }
 
+            assertTrue(result.isFailure)
             assertTrue(fakeDataSource.createdRequests.isEmpty())
-            assertEquals(1, fakeDao.bookmarkCount())
+            assertEquals(0, fakeDao.bookmarkCount())
+        }
+
+    @Test
+    fun `saveBookmark keeps cache empty when server create fails`() =
+        runBlocking {
+            val fakeDao = FakeBookmarkDao()
+            val fakeDataSource = FakeBookmarksRemoteDataSource(throwOnCreate = true)
+            val repository =
+                DefaultBookmarkRepository(
+                    bookmarkDao = fakeDao,
+                    bookmarksRemoteDataSource = fakeDataSource,
+                    accessTokenProvider = { "test-token" },
+                )
+
+            val result =
+                runCatching {
+                    repository.saveBookmark(
+                        BookmarkData(
+                            placeId = "42",
+                            placeName = "Busan Citizens Park",
+                            address = null,
+                            latitude = 35.1686,
+                            longitude = 129.0576,
+                            category = "TOURIST_SPOT",
+                        ),
+                    )
+                }
+
+            assertTrue(result.isFailure)
+            assertEquals(1, fakeDataSource.createdRequests.size)
+            assertEquals(0, fakeDao.bookmarkCount())
         }
 
     @Test
@@ -503,6 +536,7 @@ private class FakeBookmarksRemoteDataSource(
     private val serverContent: List<BookmarkListItemDto> = emptyList(),
     private val createResponse: CreateBookmarkResponseDto? = null,
     private val throwOnGet: Boolean = false,
+    private val throwOnCreate: Boolean = false,
     private val throwOnDelete: Boolean = false,
 ) : BookmarksRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "http://test.invalid")) {
     val createdRequests = mutableListOf<CreateBookmarkRequestDto>()
@@ -537,6 +571,7 @@ private class FakeBookmarksRemoteDataSource(
         request: CreateBookmarkRequestDto,
     ): CreateBookmarkResponseDto {
         createdRequests.add(request)
+        if (throwOnCreate) throw RuntimeException("server create failure")
         return createResponse
             ?: CreateBookmarkResponseDto(
                 bookmarkId = 1L,

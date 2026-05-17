@@ -4,6 +4,7 @@ import com.kakao.vectormap.label.TransformMethod
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.core.model.PlaceMarkerKind
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
@@ -601,7 +602,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `transit detail walk route line uses the confirmed walk gray token`() {
+    fun `transit detail walk route line uses the confirmed transit walk token`() {
         val routeLineStates =
             createKakaoRouteLineRenderStates(
                 listOf(
@@ -618,8 +619,8 @@ class KakaoMapViewportBindingsTest {
                 ),
             )
 
-        assertEquals(0xFFD9D9D9.toInt(), routeLineStates.single().lineColor)
-        assertEquals(0xFFD9D9D9.toInt(), routeLineStates.single().strokeColor)
+        assertEquals(0xFF99B5D1.toInt(), routeLineStates.single().lineColor)
+        assertEquals(0xFF99B5D1.toInt(), routeLineStates.single().strokeColor)
     }
 
     @Test
@@ -718,7 +719,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `focused navigation route camera fits the focused segment and focus halo`() {
+    fun `focused navigation route camera uses projection target without route fit camera`() {
         val overlayState =
             createNavigationViewportOverlayState(
                 NavigationMapOverlayUiState(
@@ -742,18 +743,10 @@ class KakaoMapViewportBindingsTest {
                     focusCoordinate = GeoCoordinate(latitude = 35.1795, longitude = 129.0655),
                     mapFocusMode = NavigationMapFocusMode.FOCUSED,
                 ),
-            )
-
-        val cameraState = requireNotNull(createKakaoRouteCameraRenderState(overlayState))
-
-        assertEquals(
-            listOf(
-                MapCoordinate(latitude = 35.178, longitude = 129.063),
-                MapCoordinate(latitude = 35.181, longitude = 129.068),
-                MapCoordinate(latitude = 35.1795, longitude = 129.0655),
-            ),
-            cameraState.points,
         )
+
+        assertFalse(overlayState.fitToProjection)
+        assertNull(createKakaoRouteCameraRenderState(overlayState))
     }
 
     @Test
@@ -843,7 +836,7 @@ class KakaoMapViewportBindingsTest {
                 R.drawable.ic_place_healthcare,
                 R.drawable.ic_place_tourist_spot,
                 R.drawable.ic_place_tourist_spot,
-                R.drawable.ic_place_other,
+                R.drawable.ic_map_selected_pin_blue,
             ),
             listOf(
                 facilityMarkerGlyphResId(FacilityCategory.RESTAURANT),
@@ -852,6 +845,49 @@ class KakaoMapViewportBindingsTest {
                 facilityMarkerGlyphResId(FacilityCategory.TOURIST_SPOT),
                 facilityMarkerGlyphResId(FacilityCategory.TOURIST_ATTRACTION),
                 facilityMarkerGlyphResId(FacilityCategory.OTHER),
+            ),
+        )
+    }
+
+    @Test
+    fun `facility glyph mapping uses accessibility icon and default pin when marker context requires it`() {
+        assertEquals(
+            R.drawable.ic_accessibility_tag_accessible_toilet,
+            facilityMarkerGlyphResId(
+                category = FacilityCategory.OTHER,
+                selectedFilterCategory = FacilityCategory.TOILET,
+            ),
+        )
+        assertEquals(
+            R.drawable.ic_accessibility_tag_elevator,
+            facilityMarkerGlyphResId(
+                category = FacilityCategory.OTHER,
+                selectedFilterCategory = FacilityCategory.ELEVATOR,
+            ),
+        )
+        assertEquals(
+            R.drawable.ic_accessibility_tag_charging_station,
+            facilityMarkerGlyphResId(
+                category = FacilityCategory.OTHER,
+                selectedFilterCategory = FacilityCategory.CHARGING_STATION,
+            ),
+        )
+        assertEquals(
+            R.drawable.ic_map_selected_pin_blue,
+            facilityMarkerGlyphResId(category = FacilityCategory.OTHER),
+        )
+        assertEquals(
+            R.drawable.ic_place_bus,
+            facilityMarkerGlyphResId(
+                category = FacilityCategory.OTHER,
+                markerKind = PlaceMarkerKind.BUS_STOP,
+            ),
+        )
+        assertEquals(
+            R.drawable.ic_place_subway,
+            facilityMarkerGlyphResId(
+                category = FacilityCategory.OTHER,
+                markerKind = PlaceMarkerKind.SUBWAY_STATION,
             ),
         )
     }

@@ -40,3 +40,11 @@ Capture recurring investigation patterns, sharp reproductions, and failure signa
 - Fastest reproduction path: run `e102-prod-deploy` on `master` with a valid `.env.prod`, then inspect `s14p31e102-prod-backend-1` logs for `missing table [bookmarks]`.
 - Durable fix: treat early prod as bootstrap. Set `JPA_DDL_AUTO=update` in `.env.prod` and keep the repo default aligned until the initial schema is created, then explicitly switch `.env.prod` and the repo default back to `validate` before real 운영 모드.
 - Regression test or alert that should exist: deployment checklist item that records whether prod is still bootstrap or has switched to validate-mode operations.
+
+## 2026-05-17
+
+- Symptom: `e102-graphhopper-refresh` fails on S2 during GraphHopper export validation with `endpoint_mismatch: segment endpoints do not match from/to node coordinates`, even though the admin editor intentionally connected the line to an existing node and the mismatch is under 1 meter.
+- Root cause: `AdminRoadNetworkEditService` resolved `from_node_id` and `to_node_id` from snap candidates or explicit node refs, but `insertBulkRoadSegments()` persisted the original `line_wkt` geometry unchanged. That left rows where the segment IDs referenced snapped nodes while the stored `geom` endpoint still used the pre-snap cursor coordinate.
+- Fastest reproduction path: inspect the latest `runtime/graphhopper/refresh/*.json` report on S2, then query `road_segments` and `road_nodes` for the sampled `edge_id` from `road-network-validation-report.json`. If the node IDs look right but `ST_StartPoint` or `ST_EndPoint` differ from `road_nodes.point`, the write path is still storing unsynchronized geometry.
+- Durable fix: normalize new segment geometry endpoints to the resolved node coordinates before insert, keep FE messaging explicit when snap or projection adjusts the drawn endpoint, and fail the transaction immediately if the just-inserted segment geometry no longer matches `road_nodes.point`.
+- Regression test or alert that should exist: service-level regression test that inspects the insert SQL for endpoint synchronization and a validation query for new segments, plus the existing GraphHopper export validation report as a release blocker.

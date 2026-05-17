@@ -1,13 +1,28 @@
-import type { EditAction, SegmentFeature } from "../types";
+import type { EditAction, EditNodeRef, RoadNodeFeature, SegmentFeature } from "../types";
 import type { Coord } from "./routeGraph";
 
 type AddSegmentType = Extract<EditAction, { action: "add_segment" }>["segmentType"];
+const DEFAULT_NODE_SNAP_DISTANCE_METER = 1.0;
 
 export interface CoordBounds {
   minLng: number;
   minLat: number;
   maxLng: number;
   maxLat: number;
+}
+
+export interface SegmentEndpointNodeCandidate {
+  nodeId: string;
+  sourceNodeKey?: string | null;
+  coord: Coord;
+}
+
+export interface SnappedSegmentEndpoint {
+  coord: Coord;
+  snapped: boolean;
+  nodeId?: string;
+  distanceMeter?: number;
+  nodeRef: EditNodeRef;
 }
 
 export function deletedEdgeIds(edits: EditAction[]): Set<string> {
@@ -39,18 +54,113 @@ export function draftSegmentFeatures(edits: EditAction[]): SegmentFeature[] {
   });
 }
 
-export function twoPointAddDraft(segmentType: AddSegmentType, points: Coord[]): {
+export function twoPointAddDraft(segmentType: AddSegmentType, points: Coord[], endpoints?: SnappedSegmentEndpoint[]): {
   edit: Extract<EditAction, { action: "add_segment" }> | null;
   remainingPoints: Coord[];
+  rejectedReason?: string;
 } {
   if (points.length < 2) return { edit: null, remainingPoints: points };
+  const coordinates = points.slice(0, 2);
+  const fromNode = endpoints?.[0]?.nodeRef;
+  const toNode = endpoints?.[1]?.nodeRef;
   return {
     edit: {
       action: "add_segment",
       segmentType,
-      geom: { type: "LineString", coordinates: points.slice(0, 2) },
+      geom: { type: "LineString", coordinates },
+      ...(fromNode && toNode ? { fromNode, toNode } : {}),
     },
     remainingPoints: [],
+  };
+}
+
+export function describeSideLineNodeSnap(nodeId: string, distanceMeter: number): string {
+  return `SIDE_LINE 끝점을 node #${nodeId}에 ${formatAdjustmentDistance(distanceMeter)} 보정했습니다. 저장 시 보정 좌표로 반영됩니다.`;
+}
+
+export function describeCrossWalkProjection(distanceMeter: number): string {
+  return `CROSS_WALK 끝점을 기존 선 위로 ${formatAdjustmentDistance(distanceMeter)} 보정했습니다. 저장 시 보정 좌표로 반영됩니다.`;
+}
+
+export function roadNodeCandidates(nodes: RoadNodeFeature[]): SegmentEndpointNodeCandidate[] {
+  return nodes.map((node) => ({
+    nodeId: String(node.properties.vertexId),
+    sourceNodeKey: node.properties.sourceNodeKey ?? null,
+    coord: node.geometry.coordinates,
+  }));
+}
+
+export function segmentEndpointNodeCandidates(segments: SegmentFeature[]): SegmentEndpointNodeCandidate[] {
+  const candidatesByNodeId = new Map<string, Coord>();
+  segments.forEach((feature) => {
+    const coordinates = feature.geometry.coordinates;
+    const first = coordinates[0];
+    const last = coordinates[coordinates.length - 1];
+    const fromNodeId = feature.properties.fromNodeId;
+    const toNodeId = feature.properties.toNodeId;
+    if (first && fromNodeId !== undefined && fromNodeId !== null) {
+      candidatesByNodeId.set(String(fromNodeId), first);
+    }
+    if (last && toNodeId !== undefined && toNodeId !== null) {
+      candidatesByNodeId.set(String(toNodeId), last);
+    }
+  });
+  return Array.from(candidatesByNodeId, ([nodeId, coord]) => ({ nodeId, coord }));
+}
+
+export function snapToSegmentEndpointNode(
+  coord: Coord,
+  candidates: SegmentEndpointNodeCandidate[],
+  snapDistanceMeter = DEFAULT_NODE_SNAP_DISTANCE_METER,
+): SnappedSegmentEndpoint {
+  let nearest: { candidate: SegmentEndpointNodeCandidate; distanceMeter: number } | null = null;
+  for (const candidate of candidates) {
+    const distance = distanceMeter(coord, candidate.coord);
+    if (distance <= snapDistanceMeter && (!nearest || distance < nearest.distanceMeter)) {
+      nearest = { candidate, distanceMeter: distance };
+    }
+  }
+  if (!nearest) {
+    return {
+      coord,
+      snapped: false,
+      nodeRef: newNodeRef(coord),
+    };
+  }
+  return {
+    coord: nearest.candidate.coord,
+    snapped: true,
+    nodeId: nearest.candidate.nodeId,
+    distanceMeter: nearest.distanceMeter,
+    nodeRef: {
+      mode: "existing",
+      vertexId: nearest.candidate.nodeId,
+      sourceNodeKey: nearest.candidate.sourceNodeKey ?? null,
+      geom: { type: "Point", coordinates: nearest.candidate.coord },
+      snapDistanceMeter: nearest.distanceMeter,
+    },
+  };
+}
+
+export function isSameSnappedNode(left: SnappedSegmentEndpoint | undefined, right: SnappedSegmentEndpoint | undefined): boolean {
+  if (!left || !right) return false;
+  if (left.nodeRef.mode === "existing" && right.nodeRef.mode === "existing") {
+    return String(left.nodeRef.vertexId) === String(right.nodeRef.vertexId);
+  }
+  if (left.nodeRef.mode === "new" && right.nodeRef.mode === "new") {
+    return left.nodeRef.tempNodeId === right.nodeRef.tempNodeId;
+  }
+  return false;
+}
+
+export function newNodeRef(coord: Coord): EditNodeRef {
+  const key = `manual_node:${coord[0].toFixed(8)}:${coord[1].toFixed(8)}`;
+  return {
+    mode: "new",
+    tempNodeId: key,
+    sourceNodeKey: key,
+    geom: { type: "Point", coordinates: coord },
+    snapDistanceMeter: null,
   };
 }
 
@@ -169,4 +279,17 @@ function pointOnSegment(a: Coord, b: Coord, c: Coord): boolean {
     c[1] >= Math.min(a[1], b[1]) &&
     c[1] <= Math.max(a[1], b[1])
   );
+}
+
+function distanceMeter(a: Coord, b: Coord) {
+  const metersPerDegreeLat = 111_320;
+  const originLat = (a[1] + b[1]) / 2;
+  const metersPerDegreeLng = metersPerDegreeLat * Math.cos((originLat * Math.PI) / 180);
+  const dx = (a[0] - b[0]) * metersPerDegreeLng;
+  const dy = (a[1] - b[1]) * metersPerDegreeLat;
+  return Math.hypot(dx, dy);
+}
+
+function formatAdjustmentDistance(distanceMeter: number): string {
+  return `${distanceMeter.toFixed(1)}m`;
 }

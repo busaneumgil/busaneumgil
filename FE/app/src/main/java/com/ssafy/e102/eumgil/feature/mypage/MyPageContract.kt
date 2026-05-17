@@ -4,7 +4,12 @@ data class MyPageUiState(
     val displayName: String? = null,
     val userMode: MyPageUserMode = MyPageUserMode.UNKNOWN,
     val mobilitySubtype: MyPageMobilitySubtype? = null,
+    val reportHistoryCount: Int = 0,
+    val placeBookmarkCount: Int = 0,
+    val routeBookmarkCount: Int = 0,
+    val recentNavigationCount: Int = 0,
     val isLogoutLoading: Boolean = false,
+    val isWithdrawLoading: Boolean = false,
 )
 
 enum class MyPageUserMode {
@@ -23,12 +28,16 @@ enum class MyPageMenuItem {
     NOTICE,
     REPORT_HISTORY,
     APP_HELP,
+    PRIVACY_POLICY,
+    SERVICE_TERMS,
 }
 
 sealed interface MyPageUiAction {
     data object UserTypeChangeClicked : MyPageUiAction
 
     data object LogoutClicked : MyPageUiAction
+
+    data object WithdrawClicked : MyPageUiAction
 
     data class MainMenuClicked(
         val menuItem: MyPageMenuItem,
@@ -42,7 +51,11 @@ sealed interface MyPageUiEvent {
 
     data object NavigateToReportHistory : MyPageUiEvent
 
-    data object NavigateToAppInfo : MyPageUiEvent
+    data object NavigateToGuide : MyPageUiEvent
+
+    data object OpenPrivacyPolicy : MyPageUiEvent
+
+    data object OpenServiceTerms : MyPageUiEvent
 
     data object ShowPreparingMessage : MyPageUiEvent
 

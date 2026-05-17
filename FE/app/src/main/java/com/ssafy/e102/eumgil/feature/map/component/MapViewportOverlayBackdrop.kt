@@ -87,7 +87,7 @@ internal fun MapViewportOverlayBackdrop(
                 neutral = Color(0xFFD9D9D9),
                 navy = Color(0xFF005391),
                 navigationWalk = Color(0xFF0061FE),
-                transitWalk = Color(0xFFD9D9D9),
+                transitWalk = Color(0xFF99B5D1),
                 error = MaterialTheme.colorScheme.error,
                 outline = MaterialTheme.colorScheme.outline,
             )
@@ -573,7 +573,7 @@ private fun ViewportPointMarker(
         tonalElevation = if (point.isSelected) 4.dp else 0.dp,
         shadowElevation = if (point.isSelected) 10.dp else 6.dp,
         border =
-            BorderStroke(if (point.isSelected) 2.dp else 1.dp, spec.borderColor),
+            BorderStroke(if (point.isSelected) 2.dp else spec.borderWidth, spec.borderColor),
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (point.kind == MapViewportPointKind.CAMERA_FOCUS) {
@@ -700,8 +700,10 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
                 label = null,
                 containerColor = Color.White,
                 contentColor = Color.Transparent,
-                borderColor = Color(0xFF8C8C8E),
-                size = 18.dp,
+                borderColor = GuidanceJunctionMarkerStrokeColor,
+                size = 20.dp,
+                isDiamond = false,
+                borderWidth = GuidanceJunctionMarkerStrokeWidth,
                 fontSize = 1.sp,
             )
 
@@ -791,6 +793,7 @@ private data class ViewportPointMarkerSpec(
     val isDiamond: Boolean = false,
     val isRotated: Boolean = false,
     val fontSize: androidx.compose.ui.unit.TextUnit,
+    val borderWidth: Dp = 1.dp,
 )
 
 private data class FacilityMarkerPalette(
@@ -798,6 +801,9 @@ private data class FacilityMarkerPalette(
     val content: Color,
     val border: Color,
 )
+
+private val GuidanceJunctionMarkerStrokeWidth = 2.dp
+private val GuidanceJunctionMarkerStrokeColor = Color(0xFF9CA3AF)
 
 private fun MapMarkerCategoryType.toFacilityPalette(): FacilityMarkerPalette =
     when (category) {

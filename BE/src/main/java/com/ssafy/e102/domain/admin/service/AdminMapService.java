@@ -44,6 +44,7 @@ import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkBridgeProperties
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkBridgeSummaryResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkSummaryResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadNodePropertiesResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentPropertiesResponse;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.admin.type.AdminAreaAssignmentType;
@@ -54,8 +55,10 @@ import com.ssafy.e102.domain.place.exception.PlaceException;
 import com.ssafy.e102.domain.place.repository.PlaceAccessibilityFeatureRepository;
 import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
+import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
+import com.ssafy.e102.domain.route.repository.RoadNodeRepository;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
 import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
 import com.ssafy.e102.domain.route.type.SegmentFeatureType;
@@ -74,6 +77,7 @@ public class AdminMapService {
 	private static final double BRIDGE_AUTO_DISTANCE_METER = 12.0;
 
 	private final AdminAreaRepository adminAreaRepository;
+	private final RoadNodeRepository roadNodeRepository;
 	private final RoadSegmentRepository roadSegmentRepository;
 	private final SegmentFeatureRepository segmentFeatureRepository;
 	private final PlaceRepository placeRepository;
@@ -84,6 +88,7 @@ public class AdminMapService {
 
 	public AdminMapService(
 		AdminAreaRepository adminAreaRepository,
+		RoadNodeRepository roadNodeRepository,
 		RoadSegmentRepository roadSegmentRepository,
 		SegmentFeatureRepository segmentFeatureRepository,
 		PlaceRepository placeRepository,
@@ -92,6 +97,7 @@ public class AdminMapService {
 		AdminService adminService,
 		AdminAuditLogService adminAuditLogService) {
 		this.adminAreaRepository = adminAreaRepository;
+		this.roadNodeRepository = roadNodeRepository;
 		this.roadSegmentRepository = roadSegmentRepository;
 		this.segmentFeatureRepository = segmentFeatureRepository;
 		this.placeRepository = placeRepository;
@@ -151,14 +157,25 @@ public class AdminMapService {
 			.stream()
 			.map(roadSegment -> toRoadSegmentFeature(roadSegment, featureTypesByEdgeId))
 			.toList();
+		Set<Long> visibleNodeIds = roadSegments.stream()
+			.flatMap(roadSegment -> List.of(roadSegment.getFromNodeId(), roadSegment.getToNodeId()).stream())
+			.collect(Collectors.toCollection(TreeSet::new));
+		List<AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminRoadNodePropertiesResponse>> nodeFeatures = roadNodeRepository
+			.findAllById(visibleNodeIds)
+			.stream()
+			.sorted(Comparator.comparing(RoadNode::getVertexId))
+			.map(this::toRoadNodeFeature)
+			.toList();
 
 		return new AdminRoadNetworkResponse(
-			new AdminRoadNetworkSummaryResponse(segmentCount, features.size()),
+			new AdminRoadNetworkSummaryResponse(segmentCount, features.size(), nodeFeatures.size(),
+				nodeFeatures.size()),
 			toBbox(roadSegments.stream()
 				.map(RoadSegment::getGeom)
 				.map(LineString::getEnvelopeInternal)
 				.toList()),
-			AdminGeoJsonFeatureCollectionResponse.of(features));
+			AdminGeoJsonFeatureCollectionResponse.of(features),
+			AdminGeoJsonFeatureCollectionResponse.of(nodeFeatures));
 	}
 
 	public AdminRoadNetworkBridgePayloadResponse getRoadNetworkBridges(String gu, String dong) {
@@ -375,7 +392,8 @@ public class AdminMapService {
 		nodesById.keySet()
 			.forEach(nodeId -> {
 				Long root = unionFind.find(nodeId);
-				componentByNodeId.put(nodeId, componentIndexes.computeIfAbsent(root, ignored -> componentIndexes.size() + 1));
+				componentByNodeId.put(nodeId,
+					componentIndexes.computeIfAbsent(root, ignored -> componentIndexes.size() + 1));
 			});
 		List<BridgeEndpoint> endpoints = nodesById.values()
 			.stream()
@@ -444,7 +462,8 @@ public class AdminMapService {
 				continue;
 			}
 			if (nearest == null || closestPoint.distanceMeter() < nearest.distanceMeter()
-				|| closestPoint.distanceMeter() == nearest.distanceMeter() && segment.edgeId() < nearest.segment().edgeId()) {
+				|| closestPoint.distanceMeter() == nearest.distanceMeter()
+					&& segment.edgeId() < nearest.segment().edgeId()) {
 				nearest = new ClosestBridgeTarget(segment, closestPoint.coord(), closestPoint.distanceMeter());
 			}
 		}
@@ -640,6 +659,16 @@ public class AdminMapService {
 				.distinct()
 				.sorted(Comparator.comparing(Enum::name))
 				.toList());
+	}
+
+	private AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminRoadNodePropertiesResponse> toRoadNodeFeature(
+		RoadNode roadNode) {
+		Point point = roadNode.getPoint();
+		return AdminGeoJsonFeatureResponse.of(
+			AdminPointGeometryResponse.of(point.getX(), point.getY()),
+			new AdminRoadNodePropertiesResponse(
+				roadNode.getVertexId(),
+				roadNode.getSourceNodeKey()));
 	}
 
 	private AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminFacilityPropertiesResponse> toFacilityFeature(

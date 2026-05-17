@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -64,9 +65,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -114,11 +113,10 @@ import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
-import com.ssafy.e102.eumgil.feature.guidance.component.GuideCollapsedRailItem
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelShell
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelStepRow
-import com.ssafy.e102.eumgil.feature.guidance.component.resolveGuideRailPromotedItemIndex
-import com.ssafy.e102.eumgil.feature.guidance.component.shouldHideGuideRailItemForTopCard
+import com.ssafy.e102.eumgil.feature.guidance.component.RouteStepScrubberItem
+import com.ssafy.e102.eumgil.feature.guidance.component.RouteStepScrubberRail
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayTone
@@ -154,6 +152,9 @@ fun RouteSettingScreen(
     onLowFloorReservationConfirm: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val showsRouteLoadingScreen = uiState.shouldShowRouteLoadingScreen()
+    val showsRouteUnsupportedAreaScreen = uiState.shouldShowRouteUnsupportedAreaScreen()
+    val showsRouteFailureScreen = uiState.shouldShowRouteFailureScreen()
     val ctaSupportingText =
         if (uiState.cta.isEnabled) {
             null
@@ -169,58 +170,64 @@ fun RouteSettingScreen(
         mutableStateOf(false)
     }
 
-    Scaffold(
-        modifier = modifier,
-        contentWindowInsets =
-            if (disablesDefaultWindowInsets) {
-                WindowInsets(0, 0, 0, 0)
-            } else {
-                WindowInsets(0, 0, 0, 0)
-            },
-        topBar = {
-            RouteSearchHeaderKakao(
-                uiState = uiState,
-                onBackClick = { onAction(RouteSettingUiAction.BackClicked) },
-                onOriginClick = {
-                    onAction(RouteSettingUiAction.WaypointClicked(RouteEditingTarget.ORIGIN))
+    Box(modifier = modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.matchParentSize(),
+            contentWindowInsets =
+                if (disablesDefaultWindowInsets) {
+                    WindowInsets(0, 0, 0, 0)
+                } else {
+                    WindowInsets(0, 0, 0, 0)
                 },
-                onDestinationClick = {
-                    onAction(RouteSettingUiAction.WaypointClicked(RouteEditingTarget.DESTINATION))
-                },
-                onSwapClick = { onAction(RouteSettingUiAction.WaypointsSwapClicked) },
-                onModeSelected = { mode ->
-                    onAction(RouteSettingUiAction.TravelModeSelected(mode))
-                },
-            )
-        },
-    ) { innerPadding ->
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-        ) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(RouteSettingContentGap),
-            ) {
-                RouteMapStage(
+            topBar = {
+                RouteSearchHeaderKakao(
                     uiState = uiState,
-                    modifier = Modifier.weight(1f),
-                    onOptionClick = { routeOption ->
-                        onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+                    onBackClick = { onAction(RouteSettingUiAction.BackClicked) },
+                    onOriginClick = {
+                        onAction(RouteSettingUiAction.WaypointClicked(RouteEditingTarget.ORIGIN))
                     },
-                    onOptionDetailClick = { routeOption ->
-                        onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
+                    onDestinationClick = {
+                        onAction(RouteSettingUiAction.WaypointClicked(RouteEditingTarget.DESTINATION))
+                    },
+                    onSwapClick = { onAction(RouteSettingUiAction.WaypointsSwapClicked) },
+                    onModeSelected = { mode ->
+                        onAction(RouteSettingUiAction.TravelModeSelected(mode))
                     },
                 )
-                if (uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
-                    RouteSettingRouteSheet(
+            },
+        ) { innerPadding ->
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+            ) {
+                if (showsRouteLoadingScreen && uiState.selectedTravelMode != RouteTravelMode.TRANSIT) {
+                    RouteLoadingScreen(
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else if (showsRouteUnsupportedAreaScreen) {
+                    RouteUnsupportedAreaScreen(
+                        onSelectPlaceClick = {
+                            onAction(
+                                RouteSettingUiAction.WaypointClicked(
+                                    uiState.unsupportedArea?.editingTarget ?: RouteEditingTarget.DESTINATION,
+                                ),
+                            )
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else if (showsRouteFailureScreen) {
+                    RouteFailureScreen(
+                        uiState = uiState,
+                        onDuribalCallClick = onDuribalCallClick,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else if (uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
+                    RouteSettingTransitResultPane(
                         uiState = uiState,
                         onLowFloorReservationClick = onLowFloorReservationClick,
-                        onDuribalCallClick = onDuribalConfirm,
+                        onDuribalCallClick = onDuribalCallClick,
                         onDuribalCancelClick = { isDuribalPromptDismissed = true },
                         showDuribalCallPrompt = !isDuribalPromptDismissed,
                         onOptionClick = { routeOption ->
@@ -229,19 +236,41 @@ fun RouteSettingScreen(
                         onOptionDetailClick = { routeOption ->
                             onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
                         },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    RouteMapStage(
+                        uiState = uiState,
+                        modifier = Modifier.fillMaxSize(),
+                        onOptionClick = { routeOption ->
+                            onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
+                        },
+                        onOptionDetailClick = { routeOption ->
+                            onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
+                        },
+                    )
+                }
+                if (!showsRouteLoadingScreen && !showsRouteUnsupportedAreaScreen && !showsRouteFailureScreen) {
+                    RouteSettingBottomBar(
+                        buttonLabel = uiState.cta.label,
+                        enabled = uiState.isStartEnabled,
+                        supportingText = ctaSupportingText,
+                        selectedRoute = uiState.selectedRoute,
+                        showRefreshAction =
+                            uiState.selectedTravelMode == RouteTravelMode.TRANSIT &&
+                                uiState.selectedRoute != null,
+                        isRefreshInProgress = uiState.isTransitRefreshing,
+                        onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
+                        onRefreshClick = { onAction(RouteSettingUiAction.TransitRefreshClicked) },
+                        modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
             }
-            RouteSettingBottomBar(
-                buttonLabel = uiState.cta.label,
-                enabled = uiState.isStartEnabled,
-                supportingText = ctaSupportingText,
-                selectedRoute = uiState.selectedRoute,
-                onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
         }
+        if (uiState.isLoading && uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
+            RouteSearchFullscreenLoadingOverlay(modifier = Modifier.matchParentSize())
         }
+    }
 
     if (isDuribalConfirmDialogVisible) {
         EumDuribalCallConfirmDialog(
@@ -286,6 +315,7 @@ fun RouteDetailScreen(
 
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             RouteDetailTopBar(
                 originName = uiState.origin.name,
@@ -409,7 +439,10 @@ fun RouteDetailScreen(
                         modifier =
                             Modifier
                                 .align(Alignment.CenterStart)
-                                .fillMaxHeight(),
+                                .fillMaxHeight()
+                                .then(
+                                    if (!isDetailSidePanelExpanded) Modifier.padding(top = RouteDetailCollapsedGuideCardMinHeight) else Modifier,
+                                ),
                     )
             }
             if (!isDetailSidePanelExpanded && selectedRoute != null) {
@@ -503,9 +536,10 @@ private fun RouteDetailCollapsedGuideCard(
             ?: selectedRoute.detailSteps.firstOrNull()
     Surface(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.primary,
+        color = RouteDetailCollapsedGuideCardContainerColor,
         shadowElevation = 0.dp,
     ) {
+        Column {
         AnimatedContent(
             targetState = step,
             label = "route-detail-collapsed-guide",
@@ -519,7 +553,7 @@ private fun RouteDetailCollapsedGuideCard(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = RouteDetailCollapsedGuideCardMinHeight)
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
+                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         ) {
@@ -527,16 +561,13 @@ private fun RouteDetailCollapsedGuideCard(
                 RouteDetailTransitGuideCardContent(
                     step = targetStep,
                     modifier = Modifier.weight(1f),
-                    contentColor = Color.White,
-                    secondaryContentColor = Color.White.copy(alpha = 0.82f),
-                    iconTint = Color.White,
+                    contentColor = RouteDetailCollapsedGuideCardContentColor,
+                    secondaryContentColor = RouteDetailCollapsedGuideCardContentColor,
+                    iconTint = RouteDetailCollapsedGuideCardContentColor,
                 )
             } else {
-            Icon(
-                painter = painterResource(id = routeDetailStepIconRes(targetStep?.kind ?: RouteDetailStepKind.START)),
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(RouteDetailCollapsedGuideIconSize),
+            RouteDetailCollapsedGuideCardIcon(
+                kind = targetStep?.kind ?: RouteDetailStepKind.START,
             )
             Column(
                 modifier = Modifier.weight(1f),
@@ -544,15 +575,15 @@ private fun RouteDetailCollapsedGuideCard(
             ) {
                 Text(
                     text = targetStep?.title ?: origin.name.ifBlank { "출발지" },
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp),
-                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = RouteDetailCollapsedGuideCardContentColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = targetStep?.description ?: "출발지에서 안내를 시작합니다.",
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
-                    color = Color.White.copy(alpha = 0.9f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = RouteDetailCollapsedGuideCardContentColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -560,6 +591,34 @@ private fun RouteDetailCollapsedGuideCard(
             }
         }
         }
+            HorizontalDivider(
+                modifier = Modifier.padding(start = RouteDetailCollapsedRailWidth),
+                thickness = RouteDetailCollapsedGuideCardBottomStrokeWidth,
+                color = RouteDetailCollapsedGuideCardBottomStrokeColor,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteDetailCollapsedGuideCardIcon(
+    kind: RouteDetailStepKind,
+    modifier: Modifier = Modifier,
+) {
+    if (kind.usesLabeledWaypointPinIcon()) {
+        Image(
+            painter = painterResource(id = routeDetailStepIconRes(kind)),
+            contentDescription = null,
+            modifier = modifier.size(RouteDetailCollapsedGuideIconSize),
+            contentScale = ContentScale.Fit,
+        )
+    } else {
+        Icon(
+            painter = painterResource(id = routeDetailStepIconRes(kind)),
+            contentDescription = null,
+            tint = RouteDetailCollapsedGuideCardContentColor,
+            modifier = modifier.size(RouteDetailCollapsedGuideIconSize),
+        )
     }
 }
 
@@ -756,8 +815,7 @@ private fun RouteDetailSidePanel(
                 onTopVisibleStepChanged = onTopVisibleStepChanged,
                 modifier =
                     Modifier
-                        .fillMaxHeight()
-                        .statusBarsPadding(),
+                        .fillMaxHeight(),
             )
         }
     }
@@ -776,6 +834,7 @@ private fun RouteDetailTimelinePanelContent(
 ) {
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()
     val startStep = steps.firstOrNull()
     val renderedSteps =
         if (steps.size > 1) {
@@ -802,7 +861,7 @@ private fun RouteDetailTimelinePanelContent(
                 Modifier
                     .fillMaxSize(),
             state = listState,
-            contentPadding = PaddingValues(bottom = RouteDetailSidePanelBottomClearance),
+            contentPadding = PaddingValues(bottom = bottomBarOverlayClearance),
         ) {
             if (startStep == null) {
                 item(key = "route-detail-empty") {
@@ -896,7 +955,7 @@ private fun RouteDetailBadgeHeader(
         modifier =
             modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .background(RouteDetailFeatureCardContainerColor)
                 .padding(
                     horizontal = EumSpacing.large,
                     vertical = EumSpacing.medium,
@@ -905,7 +964,7 @@ private fun RouteDetailBadgeHeader(
     ) {
         Text(
             text = "경로 특징",
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = RouteDetailFeatureTitleFontSize),
             color = MaterialTheme.colorScheme.onSurface,
         )
         FlowRow(
@@ -967,148 +1026,33 @@ private fun RouteDetailIconRail(
     onTopVisibleStepChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
-    var hiddenRailStepIndex by remember { mutableStateOf<Int?>(null) }
-    val fallbackRailItemSizePx = with(LocalDensity.current) { RouteDetailCollapsedRailItemSize.roundToPx() }
-    val currentFocusedStepIndex by rememberUpdatedState(focusedStepIndex)
-    val currentOnTopVisibleStepChanged by rememberUpdatedState(onTopVisibleStepChanged)
-
-    LaunchedEffect(listState, steps, fallbackRailItemSizePx) {
-        var hasObservedInitialPosition = false
-        snapshotFlow {
-            val firstVisibleItemSizePx =
-                listState.layoutInfo.visibleItemsInfo
-                    .firstOrNull { item -> item.index == listState.firstVisibleItemIndex }
-                    ?.size
-                    ?: fallbackRailItemSizePx
-            val promotedIndex =
-                resolveGuideRailPromotedItemIndex(
-                    firstVisibleItemIndex = listState.firstVisibleItemIndex,
-                    firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
-                    firstVisibleItemSizePx = firstVisibleItemSizePx,
-                    itemCount = steps.size,
-                )
-            RouteDetailRailPromotionSnapshot(
-                firstVisibleItemIndex = listState.firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
-                firstVisibleItemSizePx = firstVisibleItemSizePx,
-                isScrollInProgress = listState.isScrollInProgress,
-                promotedStepIndex = promotedIndex,
-            )
-        }
-            .distinctUntilChanged()
-            .collect { snapshot ->
-                val promotedStepIndex = snapshot.promotedStepIndex
-                if (!hasObservedInitialPosition) {
-                    hasObservedInitialPosition = true
-                    hiddenRailStepIndex = focusedStepIndex
-                    return@collect
-                }
-                if (snapshot.shouldSnapToPromotedStep()) {
-                    promotedStepIndex?.let { index ->
-                        hiddenRailStepIndex = index
-                        listState.animateScrollToItem(index, scrollOffset = 0)
-                        listState.scrollToItem(index, scrollOffset = 0)
-                    }
-                }
-                val isSettlingAfterCollapsedTopCard =
-                    !snapshot.isScrollInProgress &&
-                        snapshot.firstVisibleItemScrollOffset == 0 &&
-                        hiddenRailStepIndex != null &&
-                        snapshot.firstVisibleItemIndex == hiddenRailStepIndex?.plus(1)
-                if (!isSettlingAfterCollapsedTopCard && promotedStepIndex != null) {
-                    hiddenRailStepIndex = promotedStepIndex
-                    promotedStepIndex
-                        .takeIf { stepIndex -> stepIndex != currentFocusedStepIndex }
-                        ?.let(currentOnTopVisibleStepChanged)
-                }
-            }
-    }
-
-    LaunchedEffect(focusedStepIndex, steps.size) {
-        val focusedIndex = focusedStepIndex ?: return@LaunchedEffect
-        if (steps.isEmpty() || listState.isScrollInProgress) return@LaunchedEffect
-        if (focusedIndex !in steps.indices) return@LaunchedEffect
-        hiddenRailStepIndex = focusedIndex
-        val targetScrollIndex =
-            resolveGuideRailAutoScrollItemIndex(
-                focusedItemPosition = focusedIndex,
-                itemCount = steps.size,
-            ) ?: return@LaunchedEffect
-        val isTargetVisible = listState.layoutInfo.visibleItemsInfo.any { item -> item.index == targetScrollIndex }
-        if (!isTargetVisible || listState.firstVisibleItemIndex != targetScrollIndex) {
-            listState.animateScrollToItem(targetScrollIndex, scrollOffset = 0)
-        }
-    }
-
-    BoxWithConstraints(
-        modifier =
-            modifier
-                .fillMaxWidth(),
-    ) {
-        val routeDetailCollapsedRailEndSnapPadding =
-            resolveGuideRailEndSnapPadding(
-                viewportHeight = maxHeight,
-                guideItemHeight = RouteDetailCollapsedRailItemSize,
-                trailingActionHeight = RouteDetailCollapsedRailItemSize,
-            )
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            contentPadding = PaddingValues(bottom = routeDetailCollapsedRailEndSnapPadding),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            itemsIndexed(
-                items = steps,
-                key = { index, step -> "route-detail-rail-$index-${step.kind}-${step.indexLabel}" },
-            ) { index, step ->
-                val isFocused = focusedStepIndex == index
-                GuideCollapsedRailItem(
+    val scrubberItems =
+        remember(steps, focusedStepIndex) {
+            steps.mapIndexed { index, step ->
+                RouteStepScrubberItem(
+                    index = index,
                     action = step.kind.toNavigationGuidanceAction(),
                     isOrigin = step.kind == RouteDetailStepKind.START,
                     isDestination = step.kind == RouteDetailStepKind.ARRIVAL,
-                    isFocused = isFocused,
-                    isSelected = isFocused,
                     contentDescription = "${step.title} ${step.description}",
-                    stateDescription = if (isFocused) "focused guide step" else "guide step",
-                    dividerColor = RouteDetailGuideDividerColor,
-                    height = RouteDetailCollapsedRailItemSize,
-                    isContentHidden = shouldHideGuideRailItemForTopCard(index, hiddenRailStepIndex),
-                    onClick = {
-                        hiddenRailStepIndex = index
-                        onStepClick(index)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            item(key = "route-detail-rail-scroll-top") {
-                RouteDetailCollapsedRailScrollTopAction(
-                    onClick = {
-                        coroutineScope.launch {
-                            hiddenRailStepIndex = 0
-                            listState.animateScrollToItem(0, scrollOffset = 0)
-                            listState.scrollToItem(0, scrollOffset = 0)
-                            onStepClick(0)
-                        }
-                    },
+                    stateDescription = if (focusedStepIndex == index) "focused guide step" else "guide step",
                 )
             }
         }
-    }
-}
-
-private data class RouteDetailRailPromotionSnapshot(
-    val firstVisibleItemIndex: Int,
-    val firstVisibleItemScrollOffset: Int,
-    val firstVisibleItemSizePx: Int,
-    val isScrollInProgress: Boolean,
-    val promotedStepIndex: Int?,
-) {
-    fun shouldSnapToPromotedStep(): Boolean =
-        promotedStepIndex != null &&
-            !isScrollInProgress &&
-            (firstVisibleItemScrollOffset > 0 || firstVisibleItemIndex != promotedStepIndex)
+    RouteStepScrubberRail(
+        items = scrubberItems,
+        focusedItemIndex = focusedStepIndex,
+        onFocusedItemChanged = onTopVisibleStepChanged,
+        itemHeight = RouteDetailCollapsedRailItemSize,
+        trailingActionHeight = RouteDetailCollapsedRailItemSize,
+        dividerColor = RouteDetailGuideDividerColor,
+        trailingAction = {
+            RouteDetailCollapsedRailScrollTopAction(
+                onClick = { onStepClick(0) },
+            )
+        },
+        modifier = modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -1918,6 +1862,8 @@ private fun RouteDetailStepKind.isTransitStep(): Boolean =
 
 private fun RouteDetailStepKind.toNavigationGuidanceAction(): NavigationGuidanceAction =
     when (this) {
+        RouteDetailStepKind.ARRIVAL -> NavigationGuidanceAction.ARRIVAL
+        RouteDetailStepKind.ALIGHT -> NavigationGuidanceAction.ALIGHT
         RouteDetailStepKind.BUS -> NavigationGuidanceAction.BUS
         RouteDetailStepKind.SUBWAY -> NavigationGuidanceAction.SUBWAY
         RouteDetailStepKind.CROSSWALK -> NavigationGuidanceAction.CROSSWALK
@@ -2100,7 +2046,7 @@ private fun RouteSearchHeaderKakao(
                             iconResId = tabPolicy.iconResId,
                             iconSize = tabPolicy.iconSize,
                             selected = uiState.selectedTravelMode == tabPolicy.mode,
-                            enabled = true,
+                            enabled = routeSearchHeaderModeTabEnabled(uiState, tabPolicy.mode),
                             onClick = { onModeSelected(tabPolicy.mode) },
                         )
                     }
@@ -2109,6 +2055,12 @@ private fun RouteSearchHeaderKakao(
         }
     }
 }
+
+private fun routeSearchHeaderModeTabEnabled(
+    state: RouteSettingUiState,
+    mode: RouteTravelMode,
+): Boolean =
+    !state.showsDuribalCallAction || mode == RouteTravelMode.TRANSIT
 
 @Composable
 private fun RouteSearchHeaderModeTab(
@@ -2257,6 +2209,13 @@ internal data class RouteSearchHeaderModeTabPolicy(
 )
 
 internal fun routeSettingUsesEmptyWindowInsets(): Boolean = true
+
+@Composable
+private fun routeSettingBottomBarOverlayClearance(extraSpacing: Dp = EumSpacing.medium): Dp {
+    val density = LocalDensity.current
+    val navigationBarInset = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
+    return RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + extraSpacing + navigationBarInset
+}
 
 internal fun routeSearchHeaderPolicy(showModeTabs: Boolean = true): RouteSearchHeaderPolicy =
     RouteSearchHeaderPolicy(
@@ -2473,7 +2432,7 @@ private fun RouteWaypointCard(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(RouteSectionCardCornerRadius),
-        color = MaterialTheme.colorScheme.surface,
+        color = RouteWaypointInputContainerColor,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         shadowElevation = 0.dp,
     ) {
@@ -2517,7 +2476,6 @@ private fun RouteWaypointCard(
                             name = originPresentation.name,
                             status = originPresentation.status,
                             supportingText = originPresentation.supportingText,
-                            markerColor = RouteWaypointOriginColor,
                             labelWidth = labelColumnWidth,
                             onClick = onOriginClick,
                         )
@@ -2535,7 +2493,6 @@ private fun RouteWaypointCard(
                             name = destination.name,
                             status = null,
                             supportingText = destination.supportingText,
-                            markerColor = RouteWaypointDestinationColor,
                             labelWidth = labelColumnWidth,
                             onClick = onDestinationClick,
                         )
@@ -2656,7 +2613,6 @@ private fun RouteWaypointRow(
     name: String,
     status: RouteOriginStatusUiState?,
     supportingText: String?,
-    markerColor: Color,
     labelWidth: Dp,
     onClick: () -> Unit,
 ) {
@@ -2686,7 +2642,7 @@ private fun RouteWaypointRow(
                         .width(labelWidth)
                         .alignByBaseline(),
                 style = MaterialTheme.typography.labelMedium,
-                color = markerColor,
+                color = RouteWaypointInputLabelColor,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
             )
@@ -2956,6 +2912,12 @@ private fun RouteMapStage(
     val selectedRoute = uiState.selectedRoute
     val previewMap = uiState.routePreviewMap
     val mapControlState = rememberMapOverlayViewportControlState()
+    val navigationBarBottomInset =
+        with(LocalDensity.current) {
+            WindowInsets.navigationBars.getBottom(this).toDp()
+        }
+    val walkPreviewBottomPadding = routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset)
+    val mapControlsBottomPadding = routeWalkMapControlsBottomPadding(navigationBarBottomInset)
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(RouteMapStageCornerRadius),
@@ -2986,6 +2948,7 @@ private fun RouteMapStage(
                     RouteMapMessageCard(
                         title = routePreviewFallbackTitle(previewMap.status),
                         description = routePreviewFallbackDescription(previewMap),
+                        showNoRouteImage = previewMap.status == RoutePreviewMapStatus.NO_ROUTE,
                         modifier =
                             Modifier
                                 .align(Alignment.BottomStart)
@@ -2993,14 +2956,24 @@ private fun RouteMapStage(
                     )
             }
 
+            val mapControlsModifier =
+                if (uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()) {
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(
+                            end = EumSpacing.small,
+                            bottom = mapControlsBottomPadding,
+                        )
+                } else {
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = EumSpacing.small)
+                }
             RouteMapControls(
                 onActionClick = { mapControlState.recenter() },
                 onZoomInClick = { mapControlState.zoomIn() },
                 onZoomOutClick = { mapControlState.zoomOut() },
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = EumSpacing.small),
+                modifier = mapControlsModifier,
             )
 
             if (uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()) {
@@ -3014,7 +2987,7 @@ private fun RouteMapStage(
                             .padding(
                                 start = EumSpacing.medium,
                                 end = EumSpacing.medium,
-                                bottom = RouteWalkPreviewCarouselBottomPadding,
+                                bottom = walkPreviewBottomPadding,
                             ),
                 )
             }
@@ -3026,6 +2999,7 @@ private fun RouteMapStage(
 private fun RouteMapMessageCard(
     title: String,
     description: String,
+    showNoRouteImage: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -3038,17 +3012,27 @@ private fun RouteMapMessageCard(
         Column(
             modifier = Modifier.padding(EumSpacing.small),
             verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalAlignment = if (showNoRouteImage) Alignment.CenterHorizontally else Alignment.Start,
         ) {
+            if (showNoRouteImage) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_status_warning),
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold,
+                textAlign = if (showNoRouteImage) TextAlign.Center else TextAlign.Start,
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = if (showNoRouteImage) TextAlign.Center else TextAlign.Start,
             )
         }
     }
@@ -3212,6 +3196,27 @@ private fun RouteWalkPreviewBadgeRow(
     }
 }
 
+private fun RouteSettingUiState.shouldShowRouteSheet(): Boolean =
+    selectedTravelMode == RouteTravelMode.TRANSIT &&
+        !shouldShowRouteLoadingScreen() &&
+        !shouldShowRouteUnsupportedAreaScreen() &&
+        !shouldShowRouteFailureScreen()
+
+private fun RouteSettingUiState.shouldShowRouteLoadingScreen(): Boolean =
+    isLoading && optionCards.isEmpty()
+
+private fun RouteSettingUiState.shouldShowRouteUnsupportedAreaScreen(): Boolean =
+    unsupportedArea != null
+
+private fun RouteSettingUiState.shouldShowRouteFailureScreen(): Boolean =
+    unsupportedArea == null &&
+    selectedRoute == null &&
+        (
+            routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE ||
+                routePreviewMap.status == RoutePreviewMapStatus.ERROR ||
+                loadErrorMessage != null
+        )
+
 @Composable
 private fun RouteMapControls(
     onActionClick: () -> Unit = {},
@@ -3235,7 +3240,7 @@ private fun RouteMapControls(
 }
 
 @Composable
-private fun RouteSettingRouteSheet(
+private fun RouteSettingTransitResultPane(
     uiState: RouteSettingUiState,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     onDuribalCallClick: () -> Unit,
@@ -3243,27 +3248,25 @@ private fun RouteSettingRouteSheet(
     showDuribalCallPrompt: Boolean,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape =
-            RoundedCornerShape(
-                topStart = RouteBottomSheetTopCornerRadius,
-                topEnd = RouteBottomSheetTopCornerRadius,
-                bottomStart = 0.dp,
-                bottomEnd = 0.dp,
-            ),
+        modifier = modifier.fillMaxSize(),
         color = Color.White,
-        shadowElevation = RouteBottomSheetElevation,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier =
-                Modifier.padding(
-                    start = EumSpacing.small,
-                    end = EumSpacing.small,
-                    top = RouteSettingSheetVerticalPadding,
-                    bottom = RouteSettingBottomBarOverlayClearance,
-                ),
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = EumSpacing.small,
+                        end = EumSpacing.small,
+                        top = RouteSettingSheetVerticalPadding,
+                        bottom = bottomBarOverlayClearance,
+                    ),
             verticalArrangement = Arrangement.spacedBy(RouteSettingSheetGap),
         ) {
             RouteOptionSection(
@@ -3293,8 +3296,14 @@ private fun RouteOptionSection(
         verticalArrangement = Arrangement.spacedBy(RouteOptionCardGap),
     ) {
         when {
-            uiState.isLoading && uiState.optionCards.isEmpty() ->
-                RouteSearchLoadingState()
+            uiState.isLoading && uiState.optionCards.isEmpty() -> Unit
+
+            uiState.routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE ->
+                RouteFailureFallbackState(
+                    title = stringResource(id = R.string.route_setting_no_route_result_title),
+                    description = stringResource(id = R.string.route_setting_no_route_result_description),
+                    onDuribalCallClick = onDuribalCallClick,
+                )
 
             uiState.loadErrorMessage != null && uiState.showsDuribalCallAction && showDuribalCallPrompt ->
                 RouteDuribalCallPromptCard(
@@ -3303,11 +3312,10 @@ private fun RouteOptionSection(
                 )
 
             uiState.loadErrorMessage != null ->
-                RouteStateCard(
+                RouteFailureFallbackState(
                     title = stringResource(id = R.string.route_setting_summary_error_title),
                     description = uiState.loadErrorMessage,
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.32f),
-                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.24f),
+                    onDuribalCallClick = onDuribalCallClick,
                 )
 
             uiState.optionCards.isEmpty() ->
@@ -3334,6 +3342,210 @@ private fun RouteOptionSection(
                 }
         }
     }
+}
+
+@Composable
+private fun RouteLoadingScreen(
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(44.dp),
+                strokeWidth = 4.dp,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
+            Text(
+                text = stringResource(id = R.string.route_setting_summary_loading_title),
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.small))
+            Text(
+                text = stringResource(id = R.string.route_setting_summary_loading_description),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteUnsupportedAreaScreen(
+    onSelectPlaceClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_status_warning),
+                contentDescription = null,
+                modifier = Modifier.size(72.dp),
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
+            Text(
+                text = stringResource(id = R.string.route_setting_unsupported_area_title),
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.small))
+            Text(
+                text = stringResource(id = R.string.route_setting_unsupported_area_description),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
+            Button(
+                onClick = onSelectPlaceClick,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = RouteSettingBottomBarButtonHeight),
+                shape = RoundedCornerShape(RouteStandardCardCornerRadius),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+            ) {
+                Text(
+                    text = stringResource(id = R.string.route_setting_unsupported_area_action),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteFailureScreen(
+    uiState: RouteSettingUiState,
+    onDuribalCallClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isNoRoute = uiState.routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE
+    val title =
+        if (isNoRoute) {
+            stringResource(id = R.string.route_setting_no_route_result_title)
+        } else {
+            stringResource(id = R.string.route_setting_summary_error_title)
+        }
+    val description =
+        if (isNoRoute) {
+            stringResource(id = R.string.route_setting_no_route_result_description)
+        } else {
+            uiState.loadErrorMessage ?: stringResource(id = R.string.route_setting_summary_error_title)
+        }
+    val showsDuribalCallAction = uiState.selectedTravelMode == RouteTravelMode.TRANSIT
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_status_warning),
+                contentDescription = null,
+                modifier = Modifier.size(72.dp),
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.small))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
+            if (showsDuribalCallAction) {
+                Button(
+                    onClick = onDuribalCallClick,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = RouteSettingBottomBarButtonHeight),
+                    shape = RoundedCornerShape(RouteStandardCardCornerRadius),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.route_setting_duribal_call_prompt_call),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteFailureFallbackState(
+    title: String,
+    description: String,
+    onDuribalCallClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    RouteStateCard(
+        title = title,
+        description = description,
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.surface,
+        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.32f),
+        actionLabel = stringResource(id = R.string.route_setting_duribal_call_prompt_call),
+        onActionClick = onDuribalCallClick,
+        leadingContent = {
+            Image(
+                painter = painterResource(id = R.drawable.ic_status_warning),
+                contentDescription = null,
+                modifier = Modifier.size(56.dp),
+            )
+        },
+    )
 }
 
 @Composable
@@ -3463,6 +3675,7 @@ private fun RouteCompactOptionCard(
                     RouteOptionPrefixBadge(
                         label = routeOptionCompactPrefix(card.routeOption),
                         accentColor = accentColor,
+                        isEmphasized = isTransitCard,
                     )
                     if (!isTransitCard) {
                         Text(
@@ -3480,7 +3693,12 @@ private fun RouteCompactOptionCard(
                 ) {
                     Text(
                         text = compactEstimatedTimeLabel(card.estimatedTimeMinutes),
-                        style = MaterialTheme.typography.titleSmall,
+                        style =
+                            if (isTransitCard) {
+                                MaterialTheme.typography.titleSmall.copy(fontSize = RouteTransitOptionEstimatedTimeFontSize)
+                            } else {
+                                MaterialTheme.typography.titleSmall
+                            },
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -3546,6 +3764,39 @@ private fun RouteCompactOptionCard(
                 accentColor = detailArrowColor,
                 onClick = onDetailClick,
             )
+        }
+    }
+}
+
+@Composable
+private fun RouteSearchFullscreenLoadingOverlay(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.background(Color.White.copy(alpha = 0.72f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+            shadowElevation = RouteOverlayCardElevation,
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = EumSpacing.large, vertical = EumSpacing.medium),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(32.dp),
+                    strokeWidth = 3.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "경로 탐색중",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }
@@ -3819,11 +4070,17 @@ private fun RouteOptionPrefixBadge(
     label: String,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    isEmphasized: Boolean = false,
 ) {
     Text(
         text = label,
         modifier = modifier,
-        style = MaterialTheme.typography.labelSmall,
+        style =
+            if (isEmphasized) {
+                MaterialTheme.typography.labelSmall.copy(fontSize = RouteTransitOptionTitleFontSize)
+            } else {
+                MaterialTheme.typography.labelSmall
+            },
         fontWeight = FontWeight.SemiBold,
         color = accentColor,
     )
@@ -3942,6 +4199,9 @@ private fun RouteSettingBottomBar(
     selectedRoute: RouteSelectedRouteUiState?,
     onStartClick: () -> Unit,
     modifier: Modifier = Modifier,
+    showRefreshAction: Boolean = false,
+    isRefreshInProgress: Boolean = false,
+    onRefreshClick: () -> Unit = {},
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -3949,25 +4209,83 @@ private fun RouteSettingBottomBar(
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {
-        RouteSettingCtaContent(
-            buttonLabel = buttonLabel,
-            enabled = enabled,
-            supportingText = supportingText,
-            selectedRoute = selectedRoute,
-            buttonHeight = RouteSettingBottomBarButtonHeight,
-            verticalGap = EumSpacing.small,
-            compactSupportingText = false,
-            onStartClick = onStartClick,
+        Box(
             modifier =
                 Modifier
                     .navigationBarsPadding()
                     .padding(
                         start = RouteSettingBottomBarHorizontalPadding,
                         end = RouteSettingBottomBarHorizontalPadding,
-                        top = EumSpacing.small,
+                        top = RouteSettingBottomBarTopGap,
                         bottom = RouteSettingBottomBarBottomGap,
                     ),
-        )
+        ) {
+            RouteSettingCtaContent(
+                buttonLabel = buttonLabel,
+                enabled = enabled,
+                supportingText = supportingText,
+                selectedRoute = selectedRoute,
+                buttonHeight = RouteSettingBottomBarButtonHeight,
+                verticalGap = EumSpacing.small,
+                compactSupportingText = false,
+                onStartClick = onStartClick,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (showRefreshAction) {
+                RouteTransitRefreshFloatingButton(
+                    isRefreshing = isRefreshInProgress,
+                    enabled = !isRefreshInProgress,
+                    onClick = onRefreshClick,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(y = -RouteTransitRefreshButtonDiagonalOffset),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteTransitRefreshFloatingButton(
+    isRefreshing: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .size(RouteTransitRefreshButtonSize)
+                .clip(CircleShape)
+                .clickable(
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClick = onClick,
+                ).semantics {
+                    contentDescription = "대중교통 도착정보 새로고침"
+                    stateDescription = if (isRefreshing) "새로고침 중" else "새로고침 가능"
+                },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 3.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (isRefreshing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(RouteTransitRefreshProgressSize),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_status_refresh),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(RouteTransitRefreshIconSize),
+                )
+            }
+        }
     }
 }
 
@@ -4048,14 +4366,23 @@ private fun RouteSettingCtaContent(
                     disabledElevation = 0.dp,
                 ),
         ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onPrimary,
-            )
-            Spacer(modifier = Modifier.width(EumSpacing.xSmall))
-            Text(text = buttonLabel)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                )
+                Text(
+                    text = buttonLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+            }
         }
     }
 }
@@ -4296,6 +4623,7 @@ private fun RouteStateCard(
     borderColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
     actionLabel: String? = null,
     onActionClick: (() -> Unit)? = null,
+    leadingContent: (@Composable () -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -4307,16 +4635,22 @@ private fun RouteStateCard(
         Column(
             modifier = Modifier.padding(EumSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+            horizontalAlignment = if (leadingContent != null) Alignment.CenterHorizontally else Alignment.Start,
         ) {
+            leadingContent?.invoke()
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                textAlign = if (leadingContent != null) TextAlign.Center else TextAlign.Start,
+                modifier = Modifier.fillMaxWidth(),
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = if (leadingContent != null) TextAlign.Center else TextAlign.Start,
+                modifier = Modifier.fillMaxWidth(),
             )
             if (actionLabel != null && onActionClick != null) {
                 TextButton(onClick = onActionClick) {
@@ -4475,6 +4809,7 @@ private fun routeDetailStepIconRes(kind: RouteDetailStepKind): Int =
         RouteDetailStepKind.START -> R.drawable.ic_navigation_rail_origin_pin
         RouteDetailStepKind.ARRIVAL -> R.drawable.ic_navigation_rail_destination_pin
 
+        RouteDetailStepKind.ALIGHT -> R.drawable.ic_route_alight
         RouteDetailStepKind.BUS -> R.drawable.ic_place_bus
         RouteDetailStepKind.SUBWAY -> R.drawable.ic_route_subway
         RouteDetailStepKind.STRAIGHT -> R.drawable.ic_direction_straight
@@ -4595,6 +4930,7 @@ private fun String.routeDetailStepMarkerIndexOrNull(): Int? =
 private fun routeDetailStepMarkerTone(kind: RouteDetailStepKind): MapViewportOverlayTone =
     when (kind) {
         RouteDetailStepKind.BUS,
+        RouteDetailStepKind.ALIGHT,
         RouteDetailStepKind.SUBWAY,
             -> MapViewportOverlayTone.NAVY
 
@@ -4615,6 +4951,7 @@ private fun routeDetailStepMarkerTone(kind: RouteDetailStepKind): MapViewportOve
 private fun routeDetailTimelineColor(kind: RouteDetailStepKind): Color =
     when (kind) {
         RouteDetailStepKind.BUS,
+        RouteDetailStepKind.ALIGHT,
         RouteDetailStepKind.SUBWAY,
         -> RouteTransitNavy
 
@@ -4631,6 +4968,7 @@ private fun routeDetailIconRailTint(kind: RouteDetailStepKind): Color =
         RouteDetailStepKind.START -> RouteSafeBlue
         RouteDetailStepKind.ARRIVAL -> RouteWaypointDestinationColor
         RouteDetailStepKind.BUS,
+        RouteDetailStepKind.ALIGHT,
         RouteDetailStepKind.SUBWAY,
             -> RouteTransitNavy
         else -> Color(0xFF333333)
@@ -4875,14 +5213,13 @@ private val RouteAccessibilityLabelHorizontalPadding = 4.dp
 private val RouteAccessibilityLabelGap = 2.dp
 private val RouteTravelModeInactiveContentColor = Color(0xFF374151)
 private val RouteSearchHeaderContainerColor = EumPrimary600
-private val RouteSearchHeaderEmphasizedBoxColor = EumWhite
+private val RouteSearchHeaderEmphasizedBoxColor = Color(0xFFF5F8FF)
 private val RouteSearchHeaderInactiveBoxColor = Color.White.copy(alpha = 0.18f)
 private val RouteSearchHeaderAccentColor = EumPrimary600
 private val RouteSearchHeaderEmphasizedContentColor = EumTextPrimary
 private val RouteSearchHeaderInactiveContentColor = Color.White
 private val RouteSearchHeaderDisabledContentColor = Color.White.copy(alpha = 0.54f)
 private val RouteSearchHeaderDividerColor = EumPrimary600.copy(alpha = 0.16f)
-private val RouteSettingContentGap = 6.dp
 private val RouteWaypointCardVerticalPadding = 8.dp
 private val RouteWaypointGap = 4.dp
 private val RouteWaypointIndicatorGap = 12.dp
@@ -4917,8 +5254,12 @@ private val RouteDetailWaypointPinWidth = 22.dp
 private val RouteDetailWaypointPinHeight = 24.dp
 private val RouteDetailCollapsedRailWidth = 58.dp
 private val RouteDetailCollapsedRailItemSize = 72.dp
-private val RouteDetailCollapsedGuideCardMinHeight = 76.dp
-private val RouteDetailCollapsedGuideIconSize = 32.dp
+private val RouteDetailCollapsedGuideCardMinHeight = 92.dp
+private val RouteDetailCollapsedGuideIconSize = 44.dp
+private val RouteDetailCollapsedGuideCardContainerColor = Color.White
+private val RouteDetailCollapsedGuideCardContentColor = Color(0xFF333333)
+private val RouteDetailCollapsedGuideCardBottomStrokeWidth = 0.5.dp
+private val RouteDetailCollapsedGuideCardBottomStrokeColor = Color(0xFFD9D9D9)
 private val RouteDetailScrollTopButtonSize = 48.dp
 private val RouteDetailScrollTopIconSize = 24.dp
 private val RouteDetailCollapsedRailScrollTopButtonSize = 36.dp
@@ -4934,6 +5275,8 @@ private val RouteDetailGuideDividerColor = Color(0xFFD9D9D9)
 private val RouteDetailRowAccessorySize = 36.dp
 private val RouteDetailRowAccessoryIconSize = 20.dp
 private val RouteDetailRowAccessoryIconColor = Color(0xFF9A9A9A)
+private val RouteWaypointInputContainerColor = Color(0xFFF5F8FF)
+private val RouteWaypointInputLabelColor = Color(0xFF94A3B8)
 private val RouteDetailArrivalInfoChipRadius = 18.dp
 private val RouteTimelineDividerColor = Color(0xFFD9D9D9)
 private val RouteTravelModeTabVerticalPadding = 7.dp
@@ -4944,6 +5287,8 @@ private val RouteSettingSheetVerticalPadding = 8.dp
 private val RouteSettingSheetGap = 6.dp
 private val RouteOptionCardGap = 6.dp
 private val RouteOptionCardVerticalPadding = 6.dp
+private val RouteTransitOptionTitleFontSize = 13.sp
+private val RouteTransitOptionEstimatedTimeFontSize = 20.sp
 private val RouteSearchLoadingHeight = 156.dp
 private val RouteSafeBlue = Color(0xFF006BE0)
 private val RouteFastOrange = Color(0xFFF9AB4D)
@@ -4961,7 +5306,7 @@ private val RouteWalkPreviewChevronTouchTargetSize = 36.dp
 private val RouteWalkPreviewChevronIconSize = 18.dp
 private val RouteWalkPreviewChevronColor = Color(0xFF111827)
 private val RouteTransitNavy = Color(0xFF005391)
-private val RouteTransitWalkGray = Color(0xFFD9D9D9)
+private val RouteTransitWalkGray = Color(0xFF99B5D1)
 private val RouteSubwayLine1 = Color(0xFFFF7F00)
 private val RouteSubwayLine2 = Color(0xFF3ED93B)
 private val RouteSubwayLine3 = Color(0xFFE8AB56)
@@ -4980,11 +5325,31 @@ private val RouteOptionDetailButtonIconSize = 24.dp
 private val RouteInlineButtonHeight = 44.dp
 private val RouteSettingBottomBarButtonHeight = 50.dp
 private val RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
+private val RouteSettingBottomBarTopGap = EumSpacing.small
 private val RouteSettingBottomBarBottomGap = 30.dp
-private val RouteSettingBottomBarOverlayClearance = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
-private val RouteDetailSidePanelBottomClearance = RouteSettingBottomBarOverlayClearance
-private val RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp
+private val RouteTransitRefreshButtonSize = 44.dp
+private val RouteTransitRefreshIconSize = 22.dp
+private val RouteTransitRefreshProgressSize = 20.dp
+private val RouteTransitRefreshButtonDiagonalOffset = 40.dp
+private val RouteDetailSidePanelBottomClearance =
+    RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
+// Match the tighter card-to-CTA spacing users currently see on devices with a visible system nav bar.
+private val RouteWalkPreviewToStartButtonGap = 22.dp
+private val RouteWalkMapControlsToPreviewGap = 70.dp
+private val RouteDetailFeatureCardContainerColor = Color(0xFFE9ECF3)
+private val RouteDetailFeatureTitleFontSize = 18.sp
 private val RouteDetailExpandedSidePanelScrimColor = Color(0x66000000)
 private val RoutePreviewMarkerSize = 38.dp
 private const val MIN_ROUTE_PREVIEW_LATITUDE_SPAN = 0.0035
 private const val MIN_ROUTE_PREVIEW_LONGITUDE_SPAN = 0.0045
+
+internal fun routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset: Dp): Dp =
+    RouteSettingBottomBarButtonHeight +
+        RouteSettingBottomBarBottomGap +
+        RouteWalkPreviewToStartButtonGap +
+        navigationBarBottomInset
+
+internal fun routeWalkMapControlsBottomPadding(navigationBarBottomInset: Dp): Dp =
+    routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset) +
+        RouteWalkPreviewCardMinHeight +
+        RouteWalkMapControlsToPreviewGap

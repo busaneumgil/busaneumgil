@@ -25,6 +25,7 @@ import com.ssafy.e102.eumgil.core.external.requestLowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
@@ -32,7 +33,7 @@ import kotlinx.coroutines.launch
 fun RouteSettingEntryRoute(
     onNavigateBack: () -> Unit,
     onNavigateToMap: () -> Unit = {},
-    onNavigateToSearch: (RouteEditingTarget) -> Unit = {},
+    onNavigateToSearch: (RouteEditingTarget, SearchSelectionMode) -> Unit = { _, _ -> },
     onNavigateToRouteDetail: (RouteOption) -> Unit = {},
     onStartNavigation: (RouteNavigationRequest) -> Unit = {},
     autoStartNavigation: Boolean = false,
@@ -61,7 +62,7 @@ fun RouteSettingEntryRoute(
                 RouteSettingUiEvent.NavigateToMap -> onNavigateToMap()
                 RouteSettingUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)
-                is RouteSettingUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget)
+                is RouteSettingUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget, event.selectionMode)
                 is RouteSettingUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
             }
@@ -187,9 +188,7 @@ fun RouteDetailEntryRoute(
     RouteDetailScreen(
         uiState = uiState,
         onBackClick = onNavigateBack,
-        onCloseClick = {
-            viewModel.onAction(RouteSettingUiAction.CloseClicked)
-        },
+        onCloseClick = onNavigateToMap,
         onStartClick = {
             viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
         },

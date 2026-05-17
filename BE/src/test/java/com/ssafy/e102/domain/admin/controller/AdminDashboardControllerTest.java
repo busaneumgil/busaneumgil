@@ -18,7 +18,6 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import com.ssafy.e102.domain.admin.dto.response.AdminAuditLogResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminDashboardBottleneckResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminDashboardSummaryResponse;
 import com.ssafy.e102.domain.admin.service.AdminDashboardService;
@@ -62,8 +61,8 @@ class AdminDashboardControllerTest {
 		when(adminDashboardService.getSummary(from, to)).thenReturn(response);
 
 		mockMvc.perform(get("/admin/dashboard/summary")
-				.param("from", "2026-05-14")
-				.param("to", "2026-05-14"))
+			.param("from", "2026-05-14")
+			.param("to", "2026-05-14"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.period.from").value("2026-05-14"))
@@ -111,9 +110,9 @@ class AdminDashboardControllerTest {
 		when(adminDashboardService.getBottlenecks(from, to, 5)).thenReturn(response);
 
 		mockMvc.perform(get("/admin/dashboard/bottlenecks")
-				.param("from", "2026-05-08")
-				.param("to", "2026-05-14")
-				.param("limit", "5"))
+			.param("from", "2026-05-08")
+			.param("to", "2026-05-14")
+			.param("limit", "5"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.telemetryBased").value(false))

@@ -110,7 +110,8 @@ public class AdminDashboardService {
 		long completedRoadNetworkAssignments = adminAreaAssignmentRepository.countByAssignmentTypeAndStatus(
 			AdminAreaAssignmentType.ROAD_NETWORK,
 			AdminAreaWorkStatus.COMPLETED);
-		long facilityAssignments = adminAreaAssignmentRepository.countByAssignmentType(AdminAreaAssignmentType.FACILITY);
+		long facilityAssignments = adminAreaAssignmentRepository
+			.countByAssignmentType(AdminAreaAssignmentType.FACILITY);
 		long completedFacilityAssignments = adminAreaAssignmentRepository.countByAssignmentTypeAndStatus(
 			AdminAreaAssignmentType.FACILITY,
 			AdminAreaWorkStatus.COMPLETED);

@@ -3,16 +3,21 @@ package com.ssafy.e102.eumgil.feature.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.ssafy.e102.eumgil.core.location.ANDROID_GEOCODER_PROVIDER
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
+import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
+import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.SearchQuery
 import com.ssafy.e102.eumgil.core.model.SearchResult
 import com.ssafy.e102.eumgil.core.model.SearchSortOption
 import com.ssafy.e102.eumgil.core.model.SearchVoiceMode
+import com.ssafy.e102.eumgil.core.model.bookmarkProvider
+import com.ssafy.e102.eumgil.core.model.bookmarkProviderPlaceId
+import com.ssafy.e102.eumgil.core.model.isAddressSearchFallback
 import com.ssafy.e102.eumgil.core.model.toPlaceDestinationOrNull
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
@@ -20,6 +25,7 @@ import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.NoOpDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -51,6 +57,7 @@ class SearchViewModel(
     private val destinationPreviewRepository: DestinationPreviewRepository = NoOpDestinationPreviewRepository,
     private val placesRepository: PlacesRepository? = null,
     private val currentLocationManager: CurrentLocationManager? = null,
+    private val locationPermissionManager: LocationPermissionManager? = null,
 ) : ViewModel() {
     private val mutableUiState =
         MutableStateFlow(
@@ -65,6 +72,8 @@ class SearchViewModel(
 
     private var searchJob: Job? = null
     private var voiceSearchNavigationJob: Job? = null
+    private var currentLocationJob: Job? = null
+    private var pendingCurrentLocationPermissionRequest = false
     private var activeSearchOrigin: SearchLocationOrigin? = null
 
     init {
@@ -74,9 +83,16 @@ class SearchViewModel(
     fun onAction(action: SearchUiAction) {
         when (action) {
             SearchUiAction.BackClicked -> emitUiEvent(SearchUiEvent.NavigateBack)
-            is SearchUiAction.EditingTargetConfigured -> configureEditingTarget(action.editingTarget)
+            is SearchUiAction.EditingTargetConfigured ->
+                configureSearchEntry(
+                    editingTarget = action.editingTarget,
+                    selectionMode = action.selectionMode,
+                )
             is SearchUiAction.EntryRouteEntered -> enterEntryRoute(preserveState = action.preserveState)
             SearchUiAction.VoiceInputClicked -> emitUiEvent(SearchUiEvent.NavigateToVoiceInput)
+            SearchUiAction.CurrentLocationClicked -> requestCurrentLocationForRouteEndpoint()
+            SearchUiAction.MapPickerClicked -> openRouteEndpointMapPicker()
+            SearchUiAction.RefreshLocationPermission -> handleRefreshLocationPermission()
             SearchUiAction.VoiceRouteEntered -> enterVoiceRoute()
             SearchUiAction.VoiceCaptureButtonClicked -> startVoiceCapture()
             SearchUiAction.VoiceCaptureEmpty -> handleVoiceCaptureEmpty()
@@ -90,7 +106,11 @@ class SearchViewModel(
                     searchQuery = action.searchQuery,
                 )
             is SearchUiAction.QueryChanged -> updateQuery(action.query)
-            is SearchUiAction.ResultsRouteEntered -> enterResultsRoute(action.query)
+            is SearchUiAction.ResultsRouteEntered ->
+                enterResultsRoute(
+                    query = action.query,
+                    selectionMode = action.selectionMode,
+                )
             is SearchUiAction.RecentSearchClicked -> submitSearch(keyword = action.keyword)
             is SearchUiAction.RecentSearchDeleteClicked -> deleteRecentSearch(action.keyword)
             SearchUiAction.RecentSearchClearAllClicked -> clearRecentSearches()
@@ -106,7 +126,140 @@ class SearchViewModel(
     private fun selectSearchResult(result: SearchResult) {
         if (!handoffSearchResult(result)) return
 
-        emitUiEvent(SearchUiEvent.NavigateToRouteSetting)
+        emitUiEvent(
+            SearchUiEvent.NavigateToRouteSetting(
+                locationPermissionPrechecked = destinationSelectionRepository.selectedOrigin.value != null,
+            ),
+        )
+    }
+
+    private fun openRouteEndpointMapPicker() {
+        val currentState = mutableUiState.value
+        if (currentState.selectionMode != SearchSelectionMode.APPLY_TO_ROUTE) return
+
+        destinationSelectionRepository.setEditingTarget(currentState.editingTarget)
+        emitUiEvent(SearchUiEvent.NavigateToRouteEndpointMapPicker(currentState.editingTarget))
+    }
+
+    private fun requestCurrentLocationForRouteEndpoint() {
+        val currentState = mutableUiState.value
+        if (currentState.selectionMode != SearchSelectionMode.APPLY_TO_ROUTE) return
+
+        locationPermissionManager?.refreshPermissionState()
+        when (locationPermissionManager?.permissionState?.value) {
+            null,
+            is LocationPermissionState.Granted -> startCurrentLocationFetchForRouteEndpoint()
+
+            LocationPermissionState.Denied -> {
+                pendingCurrentLocationPermissionRequest = true
+                updateCurrentLocationQuickActionStatus(SearchCurrentLocationQuickActionStatus.PermissionDenied)
+                emitUiEvent(SearchUiEvent.RequestLocationPermission)
+            }
+
+            is LocationPermissionState.Unavailable -> {
+                pendingCurrentLocationPermissionRequest = false
+                updateCurrentLocationQuickActionStatus(SearchCurrentLocationQuickActionStatus.LocationAccessUnavailable)
+            }
+        }
+    }
+
+    private fun handleRefreshLocationPermission() {
+        if (!pendingCurrentLocationPermissionRequest) return
+        val permissionManager = locationPermissionManager ?: return
+        val currentState = mutableUiState.value
+        if (currentState.selectionMode != SearchSelectionMode.APPLY_TO_ROUTE) {
+            pendingCurrentLocationPermissionRequest = false
+            return
+        }
+
+        permissionManager.refreshPermissionState()
+        when (permissionManager.permissionState.value) {
+            is LocationPermissionState.Granted -> {
+                pendingCurrentLocationPermissionRequest = false
+                startCurrentLocationFetchForRouteEndpoint()
+            }
+
+            LocationPermissionState.Denied ->
+                updateCurrentLocationQuickActionStatus(SearchCurrentLocationQuickActionStatus.PermissionDenied)
+
+            is LocationPermissionState.Unavailable -> {
+                pendingCurrentLocationPermissionRequest = false
+                updateCurrentLocationQuickActionStatus(SearchCurrentLocationQuickActionStatus.LocationAccessUnavailable)
+            }
+        }
+    }
+
+    private fun startCurrentLocationFetchForRouteEndpoint() {
+        val currentState = mutableUiState.value
+        if (currentState.selectionMode != SearchSelectionMode.APPLY_TO_ROUTE) return
+
+        pendingCurrentLocationPermissionRequest = false
+        currentLocationJob?.cancel()
+        currentLocationJob =
+            viewModelScope.launch {
+                updateCurrentLocationQuickActionStatus(SearchCurrentLocationQuickActionStatus.Resolving)
+                val snapshot =
+                    try {
+                        fetchFreshCurrentLocationSnapshot()
+                    } catch (throwable: Throwable) {
+                        if (throwable is CancellationException) throw throwable
+                        null
+                    }
+
+                if (snapshot == null) {
+                    updateCurrentLocationQuickActionStatus(SearchCurrentLocationQuickActionStatus.LocationUnavailable)
+                    return@launch
+                }
+
+                applyCurrentLocationSnapshotToRouteEndpoint(snapshot)
+            }
+    }
+
+    private suspend fun fetchFreshCurrentLocationSnapshot(): LocationSnapshot? {
+        val locationManager = currentLocationManager ?: return null
+        locationManager.startLocationUpdates()
+        locationManager.refreshLatestLocation()
+        locationManager.latestLocation.value.toFreshSearchLocationSnapshotOrNull()?.let { snapshot ->
+            return snapshot
+        }
+
+        return withTimeoutOrNull(SEARCH_CURRENT_LOCATION_ACTION_WAIT_TIMEOUT_MILLIS) {
+            locationManager.latestLocation
+                .filterNotNull()
+                .first { snapshot -> snapshot.toFreshSearchLocationSnapshotOrNull() != null }
+                .toFreshSearchLocationSnapshotOrNull()
+        }
+    }
+
+    private fun applyCurrentLocationSnapshotToRouteEndpoint(snapshot: LocationSnapshot) {
+        val destination = snapshot.toCurrentLocationDestinationOrNull()
+        if (destination == null) {
+            updateCurrentLocationQuickActionStatus(SearchCurrentLocationQuickActionStatus.LocationUnavailable)
+            return
+        }
+
+        when (mutableUiState.value.editingTarget) {
+            RouteEditingTarget.ORIGIN -> {
+                destinationSelectionRepository.setEditingTarget(RouteEditingTarget.ORIGIN)
+                destinationSelectionRepository.clearSelectedOrigin()
+            }
+
+            RouteEditingTarget.DESTINATION -> {
+                destinationSelectionRepository.setEditingTarget(RouteEditingTarget.DESTINATION)
+                destinationSelectionRepository.updateSelectedDestination(destination)
+            }
+        }
+        updateCurrentLocationQuickActionStatus(SearchCurrentLocationQuickActionStatus.Applied)
+        emitUiEvent(SearchUiEvent.NavigateToRouteSetting(locationPermissionPrechecked = true))
+    }
+
+    private fun updateCurrentLocationQuickActionStatus(status: SearchCurrentLocationQuickActionStatus) {
+        mutableUiState.update { state ->
+            state.copy(
+                currentLocationQuickActionState =
+                    state.currentLocationQuickActionState.copy(status = status),
+            )
+        }
     }
 
     private fun previewSearchResult(result: SearchResult) {
@@ -142,10 +295,25 @@ class SearchViewModel(
         emitUiEvent(SearchUiEvent.NavigateToRouteBriefing)
     }
 
-    private fun configureEditingTarget(editingTarget: com.ssafy.e102.eumgil.data.repository.RouteEditingTarget) {
+    private fun configureSearchEntry(
+        editingTarget: RouteEditingTarget,
+        selectionMode: SearchSelectionMode,
+    ) {
         destinationSelectionRepository.setEditingTarget(editingTarget)
         mutableUiState.update { state ->
-            state.copy(editingTarget = editingTarget)
+            state.copy(
+                editingTarget = editingTarget,
+                selectionMode = selectionMode,
+                currentLocationQuickActionState =
+                    if (
+                        selectionMode == SearchSelectionMode.APPLY_TO_ROUTE &&
+                        state.editingTarget == editingTarget
+                    ) {
+                        state.currentLocationQuickActionState
+                    } else {
+                        SearchCurrentLocationQuickActionUiState()
+                    },
+            )
         }
     }
 
@@ -305,6 +473,7 @@ class SearchViewModel(
                 hasEditedQuery = false,
                 resultState = SearchResultUiState.Initial,
                 voiceInputState = SearchVoiceInputUiState(),
+                currentLocationQuickActionState = SearchCurrentLocationQuickActionUiState(),
             )
         }
     }
@@ -448,9 +617,16 @@ class SearchViewModel(
         }
     }
 
-    private fun enterResultsRoute(query: String) {
+    private fun enterResultsRoute(
+        query: String,
+        selectionMode: SearchSelectionMode,
+    ) {
         val normalizedQuery = query.trim()
         if (normalizedQuery.isEmpty()) return
+
+        mutableUiState.update { state ->
+            state.copy(selectionMode = selectionMode)
+        }
 
         val resultState = mutableUiState.value.resultState
         if (resultState.hasResultQuery(normalizedQuery)) {
@@ -496,6 +672,7 @@ class SearchViewModel(
                 SearchUiEvent.NavigateToResults(
                     query = normalizedQuery,
                     editingTarget = destinationSelectionRepository.editingTarget.value,
+                    selectionMode = mutableUiState.value.selectionMode,
                 ),
             )
         }
@@ -727,6 +904,7 @@ class SearchViewModel(
     override fun onCleared() {
         cancelPendingVoiceSearchNavigation()
         searchJob?.cancel()
+        currentLocationJob?.cancel()
         super.onCleared()
     }
 
@@ -742,6 +920,7 @@ class SearchViewModel(
             destinationPreviewRepository: DestinationPreviewRepository,
             placesRepository: PlacesRepository,
             currentLocationManager: CurrentLocationManager? = null,
+            locationPermissionManager: LocationPermissionManager? = null,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -754,6 +933,7 @@ class SearchViewModel(
                             destinationPreviewRepository = destinationPreviewRepository,
                             placesRepository = placesRepository,
                             currentLocationManager = currentLocationManager,
+                            locationPermissionManager = locationPermissionManager,
                         ) as T
                     }
 
@@ -771,20 +951,6 @@ private fun SearchResultUiState.hasResultQuery(query: String): Boolean =
         is SearchResultUiState.Error -> this.query == query
         else -> false
     }
-
-private fun SearchResult.bookmarkProvider(): String? =
-    when {
-        isAddressSearchFallback() -> "KAKAO"
-        !provider.isNullOrBlank() -> provider
-        !providerPlaceId.isNullOrBlank() -> "KAKAO"
-        else -> null
-    }
-
-private fun SearchResult.bookmarkProviderPlaceId(): String? =
-    providerPlaceId?.takeIf { !isAddressSearchFallback() && it.isNotBlank() }
-
-private fun SearchResult.isAddressSearchFallback(): Boolean =
-    provider?.equals(ANDROID_GEOCODER_PROVIDER, ignoreCase = true) == true
 
 private data class SearchLocationOrigin(
     val latitude: Double,
@@ -805,13 +971,30 @@ private fun String.toSearchQuery(
     )
 
 private fun LocationSnapshot?.toSearchLocationOriginOrNull(): SearchLocationOrigin? {
+    val snapshot = toFreshSearchLocationSnapshotOrNull() ?: return null
+
+    return SearchLocationOrigin(
+        latitude = snapshot.latitude,
+        longitude = snapshot.longitude,
+    )
+}
+
+private fun LocationSnapshot?.toCurrentLocationDestinationOrNull(): PlaceDestination? {
+    val snapshot = toFreshSearchLocationSnapshotOrNull() ?: return null
+
+    return PlaceDestination(
+        placeId = CURRENT_LOCATION_DESTINATION_PLACE_ID,
+        name = CURRENT_LOCATION_DESTINATION_NAME,
+        latitude = snapshot.latitude,
+        longitude = snapshot.longitude,
+    )
+}
+
+private fun LocationSnapshot?.toFreshSearchLocationSnapshotOrNull(): LocationSnapshot? {
     if (this == null || !isFreshCurrentLocation()) return null
     if (!isValidSearchCoordinate(latitude = latitude, longitude = longitude)) return null
 
-    return SearchLocationOrigin(
-        latitude = latitude,
-        longitude = longitude,
-    )
+    return this
 }
 
 private fun List<SearchResult>.withDistanceFrom(origin: SearchLocationOrigin?): List<SearchResult> {
@@ -868,3 +1051,6 @@ private const val MAX_LATITUDE = 90.0
 private const val MIN_LONGITUDE = -180.0
 private const val MAX_LONGITUDE = 180.0
 private const val SEARCH_LOCATION_WAIT_TIMEOUT_MILLIS = 1_500L
+private const val SEARCH_CURRENT_LOCATION_ACTION_WAIT_TIMEOUT_MILLIS = 1_500L
+private const val CURRENT_LOCATION_DESTINATION_PLACE_ID = "current-location"
+private const val CURRENT_LOCATION_DESTINATION_NAME = "현재 위치"

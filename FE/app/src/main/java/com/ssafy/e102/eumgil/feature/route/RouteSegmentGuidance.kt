@@ -9,9 +9,10 @@ import com.ssafy.e102.eumgil.core.model.RouteSegment
 import java.util.Locale
 
 internal fun RouteCandidate.toRouteDetailStepKind(segment: RouteSegment): RouteDetailStepKind =
-    when (segment.resolveSourceLeg(legs = legs)?.type) {
-        RouteLegType.BUS -> RouteDetailStepKind.BUS
-        RouteLegType.SUBWAY -> RouteDetailStepKind.SUBWAY
+    when {
+        segment.guidanceType == RouteGuidanceType.ARRIVING_POINT -> RouteDetailStepKind.ALIGHT
+        segment.resolveSourceLeg(legs = legs)?.type == RouteLegType.BUS -> RouteDetailStepKind.BUS
+        segment.resolveSourceLeg(legs = legs)?.type == RouteLegType.SUBWAY -> RouteDetailStepKind.SUBWAY
         else -> segment.toRouteDetailStepKind()
     }
 
@@ -20,6 +21,7 @@ internal fun RouteSegment.toRouteDetailStepKind(): RouteDetailStepKind {
 
     return when {
         guidanceType == RouteGuidanceType.DESTINATION -> RouteDetailStepKind.ARRIVAL
+        guidanceType == RouteGuidanceType.ARRIVING_POINT -> RouteDetailStepKind.ALIGHT
         guidanceType == RouteGuidanceType.STRAIGHT -> RouteDetailStepKind.STRAIGHT
         guidanceType == RouteGuidanceType.CROSSWALK -> RouteDetailStepKind.CROSSWALK
         guidanceType == RouteGuidanceType.STAIR -> RouteDetailStepKind.STAIRS

@@ -20,6 +20,14 @@ class MapTopSearchBarConfigurationTest {
             "Map top search bar should provide its own interaction source when ripple indication is disabled.",
             source.contains("MutableInteractionSource"),
         )
+        assertTrue(
+            "Map top search bar should expose a dedicated mic button callback instead of routing every tap through the search entry action.",
+            source.contains("onVoiceInputClick"),
+        )
+        assertTrue(
+            "Map top search bar should keep the voice icon as its own button target without reintroducing the larger Material icon button height.",
+            source.contains(".defaultMinSize(minWidth = 32.dp, minHeight = 32.dp)"),
+        )
     }
 
     @Test

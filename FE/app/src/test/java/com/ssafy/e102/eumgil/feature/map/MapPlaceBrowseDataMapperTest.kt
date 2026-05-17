@@ -6,6 +6,7 @@ import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureAvailability
 import com.ssafy.e102.eumgil.core.model.PlaceFeatureType
+import com.ssafy.e102.eumgil.core.model.PlaceMarkerKind
 import com.ssafy.e102.eumgil.core.model.PlaceSummary
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -23,6 +24,7 @@ class MapPlaceBrowseDataMapperTest {
                         latitude = 35.1796,
                         longitude = 129.0756,
                         category = PlaceCategory.FOOD_CAFE,
+                        markerKind = PlaceMarkerKind.BUS_STOP,
                         features =
                             listOf(
                                 PlaceFeatureAvailability(
@@ -45,6 +47,7 @@ class MapPlaceBrowseDataMapperTest {
         val marker = requireNotNull(browseData.facilityMarkers.single())
 
         assertEquals(FacilityCategory.FOOD_CAFE, marker.category)
+        assertEquals(PlaceMarkerKind.BUS_STOP, marker.markerKind)
         assertEquals(
             setOf(
                 FacilityCategory.FOOD_CAFE,

@@ -27,11 +27,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -171,7 +167,7 @@ class RouteBookmarkRepositoryTest {
         }
 
     @Test
-    fun `observeRouteBookmarks preserves local only routes during server refresh`() =
+    fun `observeRouteBookmarks drops local only routes during server refresh`() =
         runBlocking {
             val localOnlyEntity =
                 testFavoriteRouteEntity(favoriteRouteId = -1L, routeName = "local-only")
@@ -199,12 +195,12 @@ class RouteBookmarkRepositoryTest {
 
             val bookmarks = repository.observeRouteBookmarks().first()
 
-            assertEquals(setOf("-1", "7"), bookmarks.map { it.bookmarkId }.toSet())
-            assertTrue(fakeDao.routes().any { it.favoriteRouteId == -1L })
+            assertEquals(listOf("7"), bookmarks.map { it.bookmarkId })
+            assertFalse(fakeDao.routes().any { it.favoriteRouteId == -1L })
         }
 
     @Test
-    fun `observeRouteBookmarks preserves transit transport mode and unknown route option label`() =
+    fun `observeRouteBookmarks preserves transit transport mode and route option label`() =
         runBlocking {
             val serverItem =
                 FavoriteRouteListItemDto(
@@ -231,7 +227,7 @@ class RouteBookmarkRepositoryTest {
 
             assertEquals("PUBLIC_TRANSIT", bookmarks[0].transportMode)
             assertEquals("MIN_TRANSFER", bookmarks[0].routeOptionLabel)
-            assertEquals(RouteOption.SAFE, bookmarks[0].routeOption)
+            assertEquals(RouteOption.MIN_TRANSFER, bookmarks[0].routeOption)
         }
 
     @Test
@@ -287,23 +283,16 @@ class RouteBookmarkRepositoryTest {
                     authSessionRepository = authSessionRepository,
                 )
 
-            val emissions = mutableListOf<List<String>>()
-            val collection =
-                async {
-                    repository.observeRouteBookmarks().take(2).toList().forEach { bookmarks ->
-                        emissions += bookmarks.map { bookmark -> bookmark.routeName }
-                    }
-                }
-            yield()
+            val firstScopeBookmarks = repository.observeRouteBookmarks().first()
 
             authSessionRepository.updateAuthSession(
                 authSession = AuthSession(accessToken = "token-b", userId = "user-b"),
                 isProfileCompleted = true,
             )
-            collection.await()
+            val secondScopeBookmarks = repository.observeRouteBookmarks().first()
 
-            assertEquals(listOf("route-a"), emissions[0])
-            assertEquals(listOf("route-b"), emissions[1])
+            assertEquals(listOf("route-a"), firstScopeBookmarks.map { bookmark -> bookmark.routeName })
+            assertEquals(listOf("route-b"), secondScopeBookmarks.map { bookmark -> bookmark.routeName })
         }
 
     @Test
@@ -378,7 +367,7 @@ class RouteBookmarkRepositoryTest {
         }
 
     @Test
-    fun `saveRouteBookmark skips server create when route id is missing`() =
+    fun `saveRouteBookmark fails when route id is missing and does not cache locally`() =
         runBlocking {
             val fakeDao = FakeFavoriteRouteDao()
             val fakeDataSource = FakeFavoriteRoutesRemoteDataSource(createdId = 42L)
@@ -390,15 +379,15 @@ class RouteBookmarkRepositoryTest {
                     accessTokenProvider = { "test-token" },
                 )
 
-            val saved = repository.saveRouteBookmark(testSaveRequest(routeId = null))
+            val result = runCatching { repository.saveRouteBookmark(testSaveRequest(routeId = null)) }
 
-            assertTrue(saved.bookmarkId.toLong() < 0L)
+            assertTrue(result.isFailure)
             assertEquals(0, fakeDataSource.createCallCount)
-            assertEquals(1, fakeDao.routes().size)
+            assertEquals(0, fakeDao.routes().size)
         }
 
     @Test
-    fun `saveRouteBookmark caches locally when access token is null`() =
+    fun `saveRouteBookmark fails without access token and does not cache locally`() =
         runBlocking {
             val fakeDao = FakeFavoriteRouteDao()
             val fakeDataSource = FakeFavoriteRoutesRemoteDataSource()
@@ -410,15 +399,15 @@ class RouteBookmarkRepositoryTest {
                     accessTokenProvider = { null },
                 )
 
-            val saved = repository.saveRouteBookmark(testSaveRequest())
+            val result = runCatching { repository.saveRouteBookmark(testSaveRequest()) }
 
-            assertTrue(saved.bookmarkId.toLong() < 0L)
+            assertTrue(result.isFailure)
             assertEquals(0, fakeDataSource.createCallCount)
-            assertEquals(1, fakeDao.routes().size)
+            assertEquals(0, fakeDao.routes().size)
         }
 
     @Test
-    fun `saveRouteBookmark remains observable when auth session is missing`() =
+    fun `saveRouteBookmark does not create local only cache when auth session is missing`() =
         runBlocking {
             val authSessionRepository =
                 TestAuthSessionRepository(
@@ -433,12 +422,12 @@ class RouteBookmarkRepositoryTest {
                     accessTokenProvider = { null },
                 )
 
-            repository.saveRouteBookmark(testSaveRequest(routeId = null))
+            val result = runCatching { repository.saveRouteBookmark(testSaveRequest()) }
 
+            assertTrue(result.isFailure)
             val bookmarks = repository.observeRouteBookmarks().first()
 
-            assertEquals(1, bookmarks.size)
-            assertEquals(testSaveRequest(routeId = null).routeName, bookmarks.single().routeName)
+            assertTrue(bookmarks.isEmpty())
         }
 
     @Test
@@ -497,29 +486,22 @@ class RouteBookmarkRepositoryTest {
         }
 
     @Test
-    fun `getRouteBookmarkDetail falls back to local snapshot for local only bookmark`() =
+    fun `saveRouteBookmark keeps cache empty when server create fails`() =
         runBlocking {
             val fakeDao = FakeFavoriteRouteDao()
+            val fakeDataSource = FakeFavoriteRoutesRemoteDataSource(throwOnCreate = true)
             val repository =
                 DefaultRouteBookmarkRepository(
                     favoriteRouteDao = fakeDao,
-                    favoriteRoutesRemoteDataSource = null,
-                    accessTokenProvider = { null },
+                    favoriteRoutesRemoteDataSource = fakeDataSource,
+                    accessTokenProvider = { "test-token" },
                 )
 
-            val saved =
-                repository.saveRouteBookmark(
-                    testSaveRequest(
-                        routeId = null,
-                        routeSnapshot = testRouteCandidateSnapshot(),
-                    ),
-                )
+            val result = runCatching { repository.saveRouteBookmark(testSaveRequest()) }
 
-            val detail = repository.getRouteBookmarkDetail(saved.bookmarkId)
-
-            assertEquals("local-snapshot-route-1", detail?.route?.serverRouteId)
-            assertEquals(RouteOption.SAFE, detail?.route?.routeOption)
-            assertEquals(3, detail?.route?.geometry?.points?.size)
+            assertTrue(result.isFailure)
+            assertEquals(1, fakeDataSource.createCallCount)
+            assertTrue(fakeDao.routes().isEmpty())
         }
 
     @Test
@@ -785,6 +767,7 @@ private class FakeFavoriteRoutesRemoteDataSource(
     private val createdId: Long = 1L,
     private val detail: FavoriteRouteDetailDto? = null,
     private val throwOnGet: Boolean = false,
+    private val throwOnCreate: Boolean = false,
     private val throwOnDelete: Boolean = false,
 ) : FavoriteRoutesRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "http://test.invalid")) {
     val deletedFavRouteIds = mutableListOf<Long>()
@@ -834,6 +817,7 @@ private class FakeFavoriteRoutesRemoteDataSource(
         createdRouteIds.add(routeId)
         createdStartLabels.add(startLabel)
         createdEndLabels.add(endLabel)
+        if (throwOnCreate) throw RuntimeException("server create failure")
         return CreateFavoriteRouteResponseDto(favRouteId = createdId)
     }
 

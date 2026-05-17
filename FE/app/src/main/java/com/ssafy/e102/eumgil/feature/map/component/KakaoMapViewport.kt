@@ -1956,6 +1956,7 @@ private class KakaoFacilityMarkerStyleCache(
         val key =
             KakaoFacilityMarkerBitmapCacheKey(
                 category = marker.category,
+                glyphResId = marker.glyphResId,
                 isSelected = marker.isSelected,
                 densityBucket = densityBucket,
             )
@@ -1998,7 +1999,7 @@ private class KakaoFacilityMarkerStyleCache(
     ): Bitmap {
         val sizePx = dpToPx(sizeDp.toFloat())
         val borderWidthPx = dpToPx(if (isSelected) 2f else 1f).coerceAtLeast(1f)
-        val glyphSizePx = dpToPx(resolveFacilityMarkerGlyphSizeDp(category).toFloat())
+        val glyphSizePx = dpToPx(resolveFacilityMarkerGlyphSizeDp(category, glyphResId).toFloat())
         val bitmapSizePx = sizePx.roundToInt()
         val glyphSizeIntPx = glyphSizePx.roundToInt()
         val outerRect = RectF(0f, 0f, sizePx, sizePx)
@@ -2136,11 +2137,23 @@ private fun facilityMarkerPalette(category: FacilityCategory): KakaoFacilityMark
             )
     }
 
-private fun resolveFacilityMarkerGlyphSizeDp(category: FacilityCategory): Int =
-    when (category) {
-        FacilityCategory.ELEVATOR -> 16
-        FacilityCategory.BRAILLE_BLOCK -> 15
-        else -> 14
+private fun resolveFacilityMarkerGlyphSizeDp(
+    category: FacilityCategory,
+    glyphResId: Int,
+): Int =
+    when (glyphResId) {
+        R.drawable.ic_accessibility_tag_accessible_toilet -> 18
+        R.drawable.ic_accessibility_tag_elevator,
+        R.drawable.ic_accessibility_tag_charging_station,
+        R.drawable.ic_map_selected_pin_blue,
+        -> 16
+
+        else ->
+            when (category) {
+                FacilityCategory.ELEVATOR -> 16
+                FacilityCategory.BRAILLE_BLOCK -> 15
+                else -> 14
+            }
     }
 
 private fun resolveDensityBucket(densityDpi: Int): Int =
@@ -2154,11 +2167,13 @@ private fun resolveDensityBucket(densityDpi: Int): Int =
 
 private data class KakaoFacilityMarkerBitmapCacheKey(
     val category: FacilityCategory,
+    val glyphResId: Int,
     val isSelected: Boolean,
     val densityBucket: Int,
 ) {
     val styleId: String
-        get() = "facility-${category.name.lowercase(Locale.US)}-${if (isSelected) "selected" else "normal"}-$densityBucket"
+        get() =
+            "facility-${category.name.lowercase(Locale.US)}-$glyphResId-${if (isSelected) "selected" else "normal"}-$densityBucket"
 }
 
 private data class KakaoOverlayMarkerBitmapCacheKey(

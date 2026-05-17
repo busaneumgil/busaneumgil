@@ -66,7 +66,7 @@ public class AppStartDestinationTest {
                                 true,
                                 true));
 
-        assertEquals(LowVisionRoute.Home.INSTANCE.getRoute(), destination.getRoute());
+        assertEquals("low_vision_graph", destination.getRoute());
     }
 
     @Test

@@ -1,12 +1,16 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,14 +41,26 @@ import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumTopLevelTabBar
 import com.ssafy.e102.eumgil.core.model.AuthGateState
 import com.ssafy.e102.eumgil.core.model.InitSettings
+import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
+import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
+import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.data.repository.provideProfileUserTypeUpdateRepository
 import com.ssafy.e102.eumgil.feature.map.MapKwsEvent
 import com.ssafy.e102.eumgil.feature.map.MapKwsViewModel
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
+import com.ssafy.e102.eumgil.feature.voiceassistant.CloseOverlay
+import com.ssafy.e102.eumgil.feature.voiceassistant.DispatchAction
+import com.ssafy.e102.eumgil.feature.voiceassistant.UiAction as VoiceAssistantUiAction
+import com.ssafy.e102.eumgil.feature.voiceassistant.VoiceAssistantAction
+import com.ssafy.e102.eumgil.feature.voiceassistant.VoiceAssistantContext
+import com.ssafy.e102.eumgil.feature.voiceassistant.VoiceAssistantOverlay
+import com.ssafy.e102.eumgil.feature.voiceassistant.VoiceAssistantUserType
+import com.ssafy.e102.eumgil.feature.voiceassistant.VoiceAssistantViewModel
 
 internal val AppNavHostContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AppNavHost(modifier: Modifier = Modifier) {
     val context = LocalContext.current.applicationContext
     val appContainer = remember(context) { (context as BusanEumgilApp).appContainer }
@@ -86,6 +102,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val initialAuthGateState = bootstrappedAuthGateState ?: return
     val initialInitSettings = bootstrappedInitSettings ?: return
     val navController = rememberNavController()
+    val voiceAssistantViewModel: VoiceAssistantViewModel = viewModel()
+    val voiceAssistantUiState by voiceAssistantViewModel.uiState.collectAsStateWithLifecycle()
+    var voiceAssistantVisible by remember { mutableStateOf(false) }
+    var voiceAssistantSourceContext by remember { mutableStateOf(VoiceAssistantContext()) }
     val authGateState by
         remember(authSessionRepository) {
             authSessionRepository.observeAuthGateState()
@@ -103,9 +123,65 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             ?.getStateFlow(MAP_FACILITY_DETAIL_VISIBLE_KEY, false)
             ?.collectAsStateWithLifecycle()
             ?: remember { mutableStateOf(false) }
-    val showTopLevelBar = currentTopLevelRoute != null && !isMapFacilityDetailVisible
-
+    val isMapVoiceSearchVisible by
+        currentBackStackEntry
+            ?.savedStateHandle
+            ?.getStateFlow(MAP_VOICE_SEARCH_VISIBLE_KEY, false)
+            ?.collectAsStateWithLifecycle()
+            ?: remember { mutableStateOf(false) }
     val selectedPrimaryUserType = initSettings.selectedPrimaryUserType
+    val currentVoiceAssistantSourceContext =
+        VoiceAssistantContext(
+            currentRoute = currentRoute,
+            currentTopLevelRoute = currentTopLevelRoute,
+            userType = selectedPrimaryUserType.toVoiceAssistantUserType(),
+        )
+
+    fun showVoiceAssistant(sourceContext: VoiceAssistantContext) {
+        if (shouldRequestMapFacilityDetailDismissOnGlobalVoiceAssistantOpen(currentRoute)) {
+            navController.currentBackStackEntry?.savedStateHandle?.requestMapFacilityDetailDismiss()
+        }
+        voiceAssistantSourceContext = sourceContext
+        voiceAssistantViewModel.onAction(VoiceAssistantUiAction.ContextChanged(sourceContext))
+        voiceAssistantViewModel.onAction(VoiceAssistantUiAction.AssistantClicked)
+        voiceAssistantVisible = true
+    }
+
+    val voiceAssistantPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            if (isGranted) {
+                showVoiceAssistant(voiceAssistantSourceContext)
+            }
+        }
+
+    val openVoiceAssistant: (VoiceAssistantContext) -> Unit = { sourceContext ->
+        voiceAssistantSourceContext = sourceContext
+        when (context.resolveMicrophonePermissionState()) {
+            MicrophonePermissionState.GRANTED -> showVoiceAssistant(sourceContext)
+            MicrophonePermissionState.DENIED -> voiceAssistantPermissionLauncher.launch(MICROPHONE_PERMISSION)
+            MicrophonePermissionState.UNAVAILABLE -> Unit
+        }
+    }
+
+    LaunchedEffect(voiceAssistantViewModel, navController) {
+        voiceAssistantViewModel.uiEvent.collect { event ->
+            when (event) {
+                CloseOverlay -> voiceAssistantVisible = false
+                is DispatchAction -> {
+                    voiceAssistantVisible = false
+                    navController.navigateByVoiceAssistantAction(event.action)
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    val showTopLevelBar =
+        currentTopLevelRoute != null &&
+            !isMapFacilityDetailVisible &&
+            !isMapVoiceSearchVisible
 
     LaunchedEffect(navController, authGateState, currentRoute) {
         if (authGateState.hasSession || authGateState.hasPendingSignup || currentRoute == null) return@LaunchedEffect
@@ -122,64 +198,81 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     if (selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue) {
         MobilityKwsEffect(
             navController = navController,
-            onNavigateToVoiceInput = {
-                navController.navigate(SearchRoute.VoiceInput.createRoute()) {
-                    launchSingleTop = true
-                }
-            },
+            shouldPauseForMapVoiceInput = isMapVoiceSearchVisible,
+            voiceAssistantVisible = voiceAssistantVisible,
+            onOpenVoiceAssistant = { openVoiceAssistant(currentVoiceAssistantSourceContext) },
         )
     }
 
-    Scaffold(
-        contentWindowInsets = AppNavHostContentWindowInsets,
-        bottomBar = {
-            if (showTopLevelBar) {
-                EumTopLevelTabBar(
-                    destinations = TopLevelDestination.entries,
-                    currentRoute = currentTopLevelRoute,
-                    onDestinationSelected = { destination ->
-                        if (
-                            shouldNavigateToTopLevelMapForHomeEntry(
-                                currentRoute = currentRoute,
-                                destination = destination,
-                            )
-                        ) {
-                            Log.i(
-                                APP_NAV_HOST_LOG_TAG,
-                                "Map home tab selected from aliased route=$currentRoute; forcing home reentry reset",
-                            )
-                            navController.navigateToTopLevelMapForHomeEntry()
-                        } else {
-                            navController.navigateToTopLevel(destination)
-                        }
+    Box(modifier = modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = AppNavHostContentWindowInsets,
+            bottomBar = {
+                if (showTopLevelBar) {
+                    EumTopLevelTabBar(
+                        destinations = TopLevelDestination.entries,
+                        currentRoute = currentTopLevelRoute,
+                        onDestinationSelected = { destination ->
+                            if (
+                                shouldNavigateToTopLevelMapForHomeEntry(
+                                    currentRoute = currentRoute,
+                                    destination = destination,
+                                )
+                            ) {
+                                Log.i(
+                                    APP_NAV_HOST_LOG_TAG,
+                                    "Map home tab selected from aliased route=$currentRoute; forcing home reentry reset",
+                                )
+                                navController.navigateToTopLevelMapForHomeEntry()
+                            } else {
+                                navController.navigateToTopLevel(destination)
+                            }
+                        },
+                    )
+                }
+            },
+        ) { innerPadding ->
+            NavHost(
+                navController = navController,
+                startDestination = startDestination.route,
+                modifier = Modifier.padding(innerPadding),
+                enterTransition = { appEnterTransition() },
+                exitTransition = { appExitTransition() },
+                popEnterTransition = { appEnterTransition() },
+                popExitTransition = { appExitTransition() },
+            ) {
+                authNavGraph(
+                    navController = navController,
+                    authSessionRepository = authSessionRepository,
+                    settingsRepository = settingsRepository,
+                )
+                onboardingNavGraph(
+                    navController = navController,
+                    settingsRepository = settingsRepository,
+                    authSignupRepository = authSignupRepository,
+                    profileUserTypeUpdateRepository = profileUserTypeUpdateRepository,
+                )
+                lowVisionNavGraph(navController = navController)
+                mainNavGraph(
+                    navController = navController,
+                    onOpenVoiceAssistant = { editingTarget ->
+                        openVoiceAssistant(currentVoiceAssistantSourceContext.copy(editingTarget = editingTarget))
                     },
                 )
             }
-        },
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = startDestination.route,
-            modifier = modifier.padding(innerPadding),
-            enterTransition = { appEnterTransition() },
-            exitTransition = { appExitTransition() },
-            popEnterTransition = { appEnterTransition() },
-            popExitTransition = { appExitTransition() },
-        ) {
-            authNavGraph(
-                navController = navController,
-                authSessionRepository = authSessionRepository,
-                settingsRepository = settingsRepository,
-            )
-            onboardingNavGraph(
-                navController = navController,
-                settingsRepository = settingsRepository,
-                authSignupRepository = authSignupRepository,
-                profileUserTypeUpdateRepository = profileUserTypeUpdateRepository,
-            )
-            lowVisionNavGraph(navController = navController)
-            mainNavGraph(navController = navController)
         }
+
+        VoiceAssistantOverlay(
+            uiState = voiceAssistantUiState,
+            onAction = { action ->
+                if (action == VoiceAssistantUiAction.Dismissed) {
+                    voiceAssistantVisible = false
+                }
+                voiceAssistantViewModel.onAction(action)
+            },
+            visible = voiceAssistantVisible,
+        )
     }
 }
 
@@ -207,6 +300,44 @@ internal fun shouldNavigateToTopLevelMapForHomeEntry(
         currentRoute != TopLevelRoute.SavedRoute.route &&
         currentRoute.toCurrentTopLevelRoute() != null
 
+internal fun shouldRequestMapFacilityDetailDismissOnGlobalVoiceAssistantOpen(currentRoute: String?): Boolean =
+    currentRoute == TopLevelRoute.Map.route
+
+internal sealed interface VoiceAssistantNavigationRequest {
+    data class TopLevel(
+        val destination: TopLevelDestination,
+    ) : VoiceAssistantNavigationRequest
+
+    data object MapHomeEntry : VoiceAssistantNavigationRequest
+
+    data class Route(
+        val route: String,
+    ) : VoiceAssistantNavigationRequest
+}
+
+internal fun VoiceAssistantAction.toNavigationRequest(): VoiceAssistantNavigationRequest? =
+    when (this) {
+        is VoiceAssistantAction.OpenReport ->
+            VoiceAssistantNavigationRequest.TopLevel(TopLevelDestination.Report)
+
+        is VoiceAssistantAction.OpenSavedRoutes ->
+            VoiceAssistantNavigationRequest.TopLevel(TopLevelDestination.SavedRoute)
+
+        is VoiceAssistantAction.OpenMyPage ->
+            VoiceAssistantNavigationRequest.TopLevel(TopLevelDestination.MyPage)
+
+        is VoiceAssistantAction.OpenMap ->
+            VoiceAssistantNavigationRequest.MapHomeEntry
+
+        is VoiceAssistantAction.SearchPlace ->
+            VoiceAssistantNavigationRequest.Route(SearchRoute.Results.createRoute(query, editingTarget))
+
+        is VoiceAssistantAction.ResumeNavigationGuidance,
+        is VoiceAssistantAction.StopNavigation,
+        is VoiceAssistantAction.UnknownCommand,
+        -> null
+    }
+
 internal fun shouldUseInstantAppDestinationTransitions(): Boolean = true
 
 private fun appEnterTransition(): EnterTransition = EnterTransition.None
@@ -216,20 +347,44 @@ private fun appExitTransition(): ExitTransition = ExitTransition.None
 private const val APP_NAV_HOST_LOG_TAG = "AppNavHost"
 internal const val MAP_FACILITY_DETAIL_VISIBLE_KEY: String = "mapFacilityDetailVisible"
 
+internal fun shouldPauseMapKws(
+    currentRoute: String?,
+    shouldPauseForMapVoiceInput: Boolean,
+    voiceAssistantVisible: Boolean,
+): Boolean =
+    voiceAssistantVisible ||
+        currentRoute == SearchRoute.VoiceInput.route ||
+        shouldPauseForMapVoiceInput
+
 @Composable
 private fun MobilityKwsEffect(
     navController: NavController,
-    onNavigateToVoiceInput: () -> Unit,
+    shouldPauseForMapVoiceInput: Boolean,
+    voiceAssistantVisible: Boolean,
+    onOpenVoiceAssistant: () -> Unit,
 ) {
     val kwsViewModel: MapKwsViewModel = viewModel()
     val lifecycleOwner = LocalLifecycleOwner.current
-    val currentOnNavigateToVoiceInput by rememberUpdatedState(onNavigateToVoiceInput)
+    val currentOnOpenVoiceAssistant by rememberUpdatedState(onOpenVoiceAssistant)
+    val currentShouldPauseForMapVoiceInput by rememberUpdatedState(shouldPauseForMapVoiceInput)
+    val currentVoiceAssistantVisible by rememberUpdatedState(voiceAssistantVisible)
 
-    // 앱 백그라운드 전환 시 마이크 해제 / 복귀 시 재시작
     DisposableEffect(lifecycleOwner, kwsViewModel) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> kwsViewModel.resumeSpotting()
+                Lifecycle.Event.ON_RESUME ->
+                    if (
+                        shouldPauseMapKws(
+                            currentRoute = navController.currentBackStackEntry?.destination?.route,
+                            shouldPauseForMapVoiceInput = currentShouldPauseForMapVoiceInput,
+                            voiceAssistantVisible = currentVoiceAssistantVisible,
+                        )
+                    ) {
+                        kwsViewModel.pauseSpotting()
+                    } else {
+                        kwsViewModel.resumeSpotting()
+                    }
+
                 Lifecycle.Event.ON_PAUSE -> kwsViewModel.pauseSpotting()
                 else -> Unit
             }
@@ -238,14 +393,32 @@ private fun MobilityKwsEffect(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // VoiceInput 바텀시트 닫힐 때 KWS 재시작
-    // (Activity ON_RESUME은 같은 앱 내 화면 전환 시 발생하지 않으므로 별도 처리)
-    LaunchedEffect(navController) {
+    LaunchedEffect(navController, kwsViewModel, shouldPauseForMapVoiceInput, voiceAssistantVisible) {
+        if (
+            shouldPauseMapKws(
+                currentRoute = navController.currentBackStackEntry?.destination?.route,
+                shouldPauseForMapVoiceInput = shouldPauseForMapVoiceInput,
+                voiceAssistantVisible = voiceAssistantVisible,
+            )
+        ) {
+            kwsViewModel.pauseSpotting()
+        } else {
+            kwsViewModel.resumeSpotting()
+        }
+    }
+
+    LaunchedEffect(navController, shouldPauseForMapVoiceInput, voiceAssistantVisible) {
         navController.currentBackStackEntryFlow.collect { entry ->
-            if (entry.destination.route != SearchRoute.VoiceInput.route) {
-                kwsViewModel.resumeSpotting()
-            } else {
+            if (
+                shouldPauseMapKws(
+                    currentRoute = entry.destination.route,
+                    shouldPauseForMapVoiceInput = shouldPauseForMapVoiceInput,
+                    voiceAssistantVisible = voiceAssistantVisible,
+                )
+            ) {
                 kwsViewModel.pauseSpotting()
+            } else {
+                kwsViewModel.resumeSpotting()
             }
         }
     }
@@ -253,9 +426,29 @@ private fun MobilityKwsEffect(
     LaunchedEffect(kwsViewModel) {
         kwsViewModel.uiEvent.collect { event ->
             when (event) {
-                MapKwsEvent.NavigateToVoiceInput -> currentOnNavigateToVoiceInput()
+                MapKwsEvent.OpenVoiceAssistant -> currentOnOpenVoiceAssistant()
             }
         }
+    }
+}
+
+private fun String?.toVoiceAssistantUserType(): VoiceAssistantUserType? =
+    when (this) {
+        PrimaryUserType.MOBILITY_IMPAIRED.routeValue -> VoiceAssistantUserType.MOBILITY_IMPAIRED
+        null -> null
+        else -> VoiceAssistantUserType.GENERAL
+    }
+
+private fun NavController.navigateByVoiceAssistantAction(action: VoiceAssistantAction) {
+    when (val request = action.toNavigationRequest()) {
+        is VoiceAssistantNavigationRequest.TopLevel -> navigateToTopLevel(request.destination)
+        VoiceAssistantNavigationRequest.MapHomeEntry -> navigateToTopLevelMapForHomeEntry()
+        is VoiceAssistantNavigationRequest.Route -> navigate(request.route)
+        null ->
+            Log.i(
+                APP_NAV_HOST_LOG_TAG,
+                "VoiceAssistant action has no AppNavHost navigation mapping: ${action.javaClass.simpleName}",
+            )
     }
 }
 

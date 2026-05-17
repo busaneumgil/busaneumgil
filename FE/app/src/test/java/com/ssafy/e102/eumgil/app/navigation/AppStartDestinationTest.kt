@@ -128,10 +128,10 @@ class AppStartDestinationRoutingTest {
                         isLocationTermsAgreed = true,
                         isPrivacyPolicyAgreed = true,
                     ),
-            )
+        )
 
         assertSame(AppStartDestination.LowVisionHome, destination)
-        assertEquals(LowVisionRoute.Home.route, destination.route)
+        assertEquals(LOW_VISION_GRAPH_ROUTE, destination.route)
     }
 
     private companion object {

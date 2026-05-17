@@ -9,6 +9,7 @@ import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
 import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 
 data class RouteSettingUiState(
     val isLoading: Boolean = true,
@@ -31,11 +32,17 @@ data class RouteSettingUiState(
     val sourceLabel: String? = null,
     val cta: RouteSettingCtaUiState = RouteSettingCtaUiState(),
     val ctaAcknowledged: Boolean = false,
+    val isTransitRefreshing: Boolean = false,
     val showsDuribalCallAction: Boolean = false,
+    val unsupportedArea: RouteUnsupportedAreaUiState? = null,
 ) {
     val isStartEnabled: Boolean
         get() = cta.isEnabled
 }
+
+data class RouteUnsupportedAreaUiState(
+    val editingTarget: RouteEditingTarget,
+)
 
 data class RouteLocationUiState(
     val placeId: String? = null,
@@ -245,6 +252,7 @@ enum class RouteDetailChipKind {
 
 enum class RouteDetailStepKind {
     START,
+    ALIGHT,
     BUS,
     SUBWAY,
     STRAIGHT,
@@ -301,6 +309,8 @@ sealed interface RouteSettingUiAction {
     data object WaypointsSwapClicked : RouteSettingUiAction
 
     data object StartNavigationClicked : RouteSettingUiAction
+
+    data object TransitRefreshClicked : RouteSettingUiAction
 }
 
 sealed interface RouteSettingUiEvent {
@@ -312,6 +322,7 @@ sealed interface RouteSettingUiEvent {
 
     data class NavigateToSearch(
         val editingTarget: RouteEditingTarget,
+        val selectionMode: SearchSelectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
     ) : RouteSettingUiEvent
 
     data class NavigateToRouteDetail(

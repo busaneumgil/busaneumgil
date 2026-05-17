@@ -2,29 +2,32 @@ package com.ssafy.e102.eumgil.feature.mypage
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -38,96 +41,101 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import com.ssafy.e102.eumgil.BuildConfig
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDialog
 import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDismissStyle
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary200
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceInfo
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextPrimary
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextSecondary
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextTertiary
 
 @Composable
 fun MyPageScreen(
     uiState: MyPageUiState,
     onAction: (MyPageUiAction) -> Unit,
     isDuribalConfirmDialogVisible: Boolean,
+    isWithdrawConfirmDialogVisible: Boolean,
     onDuribalCallClick: () -> Unit,
     onDuribalConfirmDismiss: () -> Unit,
     onDuribalConfirm: () -> Unit,
+    onWithdrawClick: () -> Unit,
+    onWithdrawConfirmDismiss: () -> Unit,
+    onWithdrawConfirm: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        topBar = {
+            EumCenteredTopBar(
+                title = stringResource(id = R.string.my_page_screen_title),
+            )
+        },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            MyPageTopBar()
-        },
+        containerColor = MyPageBackground,
     ) { innerPadding ->
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
                     .padding(
                         start = EumSpacing.medium,
                         end = EumSpacing.medium,
                         top = EumSpacing.medium,
-                        bottom = EumSpacing.large,
+                        bottom = EumSpacing.small,
                     ),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ProfileCard(
+            ProfileOverviewCard(
                 uiState = uiState,
                 onUserTypeChangeClick = {
                     onAction(MyPageUiAction.UserTypeChangeClicked)
                 },
             )
 
-            MainMenuSection(
+            QuickActionGrid(
                 onDuribalCallClick = onDuribalCallClick,
-                onMenuClick = { menuItem ->
-                    onAction(MyPageUiAction.MainMenuClicked(menuItem = menuItem))
+                onGuideClick = {
+                    onAction(MyPageUiAction.MainMenuClicked(MyPageMenuItem.APP_HELP))
                 },
             )
 
-            Button(
-                onClick = { onAction(MyPageUiAction.LogoutClicked) },
-                enabled = !uiState.isLogoutLoading,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp),
-                shape = RoundedCornerShape(EumRadius.small),
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.10f),
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-            ) {
-                Text(
-                    text =
-                        stringResource(
-                            id =
-                                if (uiState.isLogoutLoading) {
-                                    R.string.my_page_logout_loading
-                                } else {
-                                    R.string.my_page_logout
-                                },
-                        ),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
+            MainMenuCard(
+                onMenuClick = { menuItem ->
+                    onAction(MyPageUiAction.MainMenuClicked(menuItem = menuItem))
+                },
+                modifier = Modifier.weight(1f, fill = false),
+            )
+
+            MyPageFooter(
+                isLogoutLoading = uiState.isLogoutLoading,
+                onLogoutClick = { onAction(MyPageUiAction.LogoutClicked) },
+                onWithdrawClick = onWithdrawClick,
+            )
         }
     }
 
@@ -138,129 +146,369 @@ fun MyPageScreen(
             dismissStyle = EumDuribalCallConfirmDismissStyle.SecondaryButton,
         )
     }
+
+    if (isWithdrawConfirmDialogVisible) {
+        MyPageWithdrawConfirmDialog(
+            isLoading = uiState.isWithdrawLoading,
+            onDismiss = onWithdrawConfirmDismiss,
+            onConfirm = onWithdrawConfirm,
+        )
+    }
 }
 
 @Composable
-private fun MyPageTopBar() {
-    EumCenteredTopBar(
-        title = stringResource(id = R.string.my_page_screen_title),
-        titleFontWeight = FontWeight.SemiBold,
-    )
-}
-
-@Composable
-private fun ProfileCard(
+private fun ProfileOverviewCard(
     uiState: MyPageUiState,
     onUserTypeChangeClick: () -> Unit,
 ) {
-    val avatarDescription = stringResource(id = R.string.my_page_profile_avatar_description)
-    val avatarRes = resolveProfileAvatarRes(uiState)
-    val headlineTextRes = resolveHeadlineTextRes(uiState)
-
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.medium),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 4.dp,
     ) {
-        Row(
+        Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.large),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.large),
-            verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = 18.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.92f))
-                        .semantics { contentDescription = avatarDescription },
-                contentAlignment = Alignment.Center,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (avatarRes == R.drawable.ic_nav_mypage) {
-                    Icon(
-                        painter = painterResource(id = avatarRes),
-                        contentDescription = null,
-                        modifier = Modifier.size(38.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                } else {
-                    Image(
-                        painter = painterResource(id = avatarRes),
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        contentScale = ContentScale.Fit,
-                    )
+                ProfileAvatar(uiState = uiState)
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = resolveDisplayName(uiState),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = EumTextPrimary,
+                            maxLines = 1,
+                        )
+                        MyPageBadge(text = stringResource(id = R.string.my_page_member_badge))
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        UserModeIcon(uiState = uiState)
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = stringResource(id = resolveHeadlineTextRes(uiState)),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = EumPrimary600,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                            Text(
+                                text = resolveModeDescription(uiState),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = EumTextSecondary,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
+                    }
                 }
             }
 
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
+            Button(
+                onClick = onUserTypeChangeClick,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 44.dp),
+                shape = RoundedCornerShape(EumRadius.medium),
+                border = BorderStroke(1.dp, EumPrimary600),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = EumPrimary600,
+                    ),
+                elevation =
+                    ButtonDefaults.buttonElevation(
+                        defaultElevation = 0.dp,
+                        pressedElevation = 0.dp,
+                        focusedElevation = 0.dp,
+                        hoveredElevation = 0.dp,
+                        disabledElevation = 0.dp,
+                    ),
+                contentPadding = PaddingValues(horizontal = EumSpacing.medium, vertical = 0.dp),
             ) {
                 Text(
-                    text = stringResource(id = headlineTextRes),
-                    style = MaterialTheme.typography.titleMedium,
+                    text = stringResource(id = R.string.my_page_change_user_type),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    softWrap = false,
                 )
-                uiState.mobilitySubtype?.let { subtype ->
-                    Text(
-                        text = stringResource(id = subtype.labelRes),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.76f),
-                    )
-                }
-                Button(
-                    onClick = onUserTypeChangeClick,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 44.dp),
-                    shape = RoundedCornerShape(EumRadius.small),
-                    border =
-                        BorderStroke(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.35f),
-                        ),
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.14f),
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.my_page_change_user_type),
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                }
             }
+
+            HorizontalDivider(color = EumBorderSubtle)
+
+            ProfileStatsRow(uiState = uiState)
         }
     }
 }
 
 @Composable
-private fun MainMenuSection(
-    onDuribalCallClick: () -> Unit,
-    onMenuClick: (MyPageMenuItem) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
-        Text(
-            text = stringResource(id = R.string.my_page_main_menu_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+private fun ProfileAvatar(uiState: MyPageUiState) {
+    val avatarDescription = stringResource(id = R.string.my_page_profile_avatar_description)
+    val avatarRes = resolveProfileAvatarRes(uiState)
+
+    Box(
+        modifier =
+            Modifier
+                .size(86.dp)
+                .clip(CircleShape)
+                .background(EumSurfaceInfo)
+                .semantics { contentDescription = avatarDescription },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (avatarRes == R.drawable.ic_nav_mypage) {
+            Icon(
+                painter = painterResource(id = avatarRes),
+                contentDescription = null,
+                modifier = Modifier.size(38.dp),
+                tint = EumPrimary600,
+            )
+        } else {
+            Image(
+                painter = painterResource(id = avatarRes),
+                contentDescription = null,
+                modifier = Modifier.size(72.dp),
+                contentScale = ContentScale.Fit,
+            )
+        }
+    }
+}
+
+@Composable
+private fun UserModeIcon(uiState: MyPageUiState) {
+    Box(
+        modifier =
+            Modifier
+                .size(46.dp)
+                .clip(RoundedCornerShape(EumRadius.medium))
+                .background(EumSurfaceInfo),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(id = resolveUserModeIconRes(uiState)),
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+            tint = EumPrimary600,
         )
-        DuribalCallButton(onClick = onDuribalCallClick)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(EumRadius.medium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(width = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f)),
+    }
+}
+
+@Composable
+private fun ProfileStatsRow(uiState: MyPageUiState) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StatItem(
+            iconRes = R.drawable.ic_mypage_report_history,
+            label = stringResource(id = R.string.my_page_stat_reports),
+            value = uiState.reportHistoryCount,
+            unit = "건",
+            modifier = Modifier.weight(1f),
+        )
+        StatDivider()
+        StatItem(
+            iconRes = R.drawable.ic_nav_bookmark_selected,
+            label = stringResource(id = R.string.my_page_stat_bookmarks),
+            value = uiState.totalBookmarkCount,
+            unit = "건",
+            modifier = Modifier.weight(1f),
+        )
+        StatDivider()
+        StatItem(
+            iconRes = R.drawable.ic_nav_route,
+            label = stringResource(id = R.string.my_page_stat_recent_navigation),
+            value = uiState.recentNavigationCount,
+            unit = "회",
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun StatItem(
+    @DrawableRes iconRes: Int,
+    label: String,
+    value: Int,
+    unit: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(30.dp),
+            tint = EumPrimary600,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = EumTextTertiary,
+                maxLines = 1,
+                softWrap = false,
+            )
+            Text(
+                text =
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append(value.toString())
+                        }
+                        withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
+                            append(unit)
+                        }
+                    },
+                style = MaterialTheme.typography.titleMedium,
+                color = EumTextPrimary,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatDivider() {
+    Box(
+        modifier =
+            Modifier
+                .height(42.dp)
+                .width(1.dp)
+                .background(EumBorderSubtle),
+    )
+}
+
+@Composable
+private fun QuickActionGrid(
+    onDuribalCallClick: () -> Unit,
+    onGuideClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        QuickActionCard(
+            titleRes = R.string.my_page_duribal_title,
+            iconRes = R.drawable.ic_mypage_duribal_call,
+            containerColor = EumSurfaceInfo,
+            onClick = onDuribalCallClick,
+            modifier = Modifier.weight(1f),
+        )
+        QuickActionCard(
+            titleRes = R.string.my_page_guide_title,
+            iconRes = R.drawable.ic_terms_document,
+            containerColor = MaterialTheme.colorScheme.surface,
+            onClick = onGuideClick,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun QuickActionCard(
+    @StringRes titleRes: Int,
+    @DrawableRes iconRes: Int,
+    containerColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .height(88.dp)
+                .clickable(role = Role.Button, onClick = onClick),
+        shape = RoundedCornerShape(EumRadius.medium),
+        color = containerColor,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.surface),
+        shadowElevation = 3.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(36.dp),
+                tint = EumPrimary600,
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = stringResource(id = titleRes),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = EumTextPrimary,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+            Icon(
+                painter = painterResource(id = R.drawable.ic_action_dropdown),
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .size(18.dp)
+                        .rotate(-90f),
+                tint = EumPrimary600,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MainMenuCard(
+    onMenuClick: (MyPageMenuItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(EumRadius.large),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 4.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
         ) {
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.NOTICE,
@@ -268,48 +516,28 @@ private fun MainMenuSection(
                 iconRes = R.drawable.ic_mypage_notice_bell_vector,
                 onClick = onMenuClick,
             )
+            MyPageMenuDivider()
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.REPORT_HISTORY,
                 titleRes = R.string.my_page_menu_report_history,
                 iconRes = R.drawable.ic_mypage_report_history,
                 onClick = onMenuClick,
             )
+            MyPageMenuDivider()
             MyPageMenuRow(
-                menuItem = MyPageMenuItem.APP_HELP,
-                titleRes = R.string.my_page_menu_app_help,
-                iconRes = R.drawable.ic_status_help_circle,
+                menuItem = MyPageMenuItem.PRIVACY_POLICY,
+                titleRes = R.string.my_page_app_info_privacy_policy,
+                iconRes = R.drawable.ic_terms_privacy,
+                onClick = onMenuClick,
+            )
+            MyPageMenuDivider()
+            MyPageMenuRow(
+                menuItem = MyPageMenuItem.SERVICE_TERMS,
+                titleRes = R.string.my_page_app_info_service_terms,
+                iconRes = R.drawable.ic_terms_document,
                 onClick = onMenuClick,
             )
         }
-    }
-}
-
-@Composable
-private fun DuribalCallButton(onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp),
-        shape = RoundedCornerShape(EumRadius.medium),
-        colors =
-            ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
-    ) {
-        Icon(
-            painter = painterResource(id = R.drawable.ic_mypage_duribal_call),
-            contentDescription = null,
-            modifier = Modifier.size(22.dp),
-            tint = MaterialTheme.colorScheme.onPrimary,
-        )
-        Text(
-            text = stringResource(id = R.string.my_page_duribal_call_button),
-            modifier = Modifier.padding(start = EumSpacing.small),
-            style = MaterialTheme.typography.titleSmall,
-        )
     }
 }
 
@@ -340,50 +568,280 @@ private fun MyPageMenuRow(
             )
         }
 
-    Surface(
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 56.dp)
+                .height(58.dp)
                 .then(clickableModifier),
-        color = MaterialTheme.colorScheme.surface,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = EumTextPrimary,
+        )
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = EumTextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Icon(
+            painter = painterResource(id = R.drawable.ic_action_dropdown),
+            contentDescription = null,
             modifier =
                 Modifier
+                    .size(20.dp)
+                    .rotate(-90f),
+            tint = EumTextTertiary,
+        )
+    }
+}
+
+@Composable
+private fun MyPageMenuDivider() {
+    HorizontalDivider(color = EumBorderSubtle)
+}
+
+@Composable
+private fun MyPageFooter(
+    isLogoutLoading: Boolean,
+    onLogoutClick: () -> Unit,
+    onWithdrawClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = EumSpacing.small, vertical = 0.dp)
+                .heightIn(min = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FooterTextButton(
+            text =
+                stringResource(
+                    id =
+                        if (isLogoutLoading) {
+                            R.string.my_page_logout_loading
+                        } else {
+                            R.string.my_page_logout
+                        },
+                ),
+            enabled = !isLogoutLoading,
+            onClick = onLogoutClick,
+        )
+        Spacer(modifier = Modifier.width(EumSpacing.medium))
+        Box(
+            modifier =
+                Modifier
+                    .height(16.dp)
+                    .width(1.dp)
+                    .background(EumBorderSubtle),
+        )
+        Spacer(modifier = Modifier.width(EumSpacing.medium))
+        FooterTextButton(
+            text = stringResource(id = R.string.my_page_app_info_withdraw),
+            enabled = true,
+            onClick = onWithdrawClick,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            text = stringResource(id = R.string.my_page_app_info_version, BuildConfig.VERSION_NAME),
+            style = MaterialTheme.typography.bodySmall,
+            color = EumTextTertiary,
+        )
+    }
+}
+
+@Composable
+private fun FooterTextButton(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = text,
+        modifier =
+            Modifier.clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            ),
+        style = MaterialTheme.typography.bodySmall,
+        color = EumTextTertiary,
+    )
+}
+
+@Composable
+private fun MyPageBadge(text: String) {
+    Box(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(EumRadius.full))
+                .background(EumPrimary200)
+                .padding(horizontal = EumSpacing.small, vertical = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = EumPrimary600,
+        )
+    }
+}
+
+@Composable
+private fun MyPageWithdrawConfirmDialog(
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier =
+                modifier
                     .fillMaxWidth()
-                    .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.small),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = EumSpacing.medium)
+                    .widthIn(max = 360.dp),
+            shape = RoundedCornerShape(EumRadius.large),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
+            shadowElevation = 16.dp,
         ) {
-            Icon(
-                painter = painterResource(id = iconRes),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = title,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Icon(
-                painter = painterResource(id = R.drawable.ic_action_dropdown),
-                contentDescription = null,
+            Column(
                 modifier =
                     Modifier
-                        .size(20.dp)
-                        .rotate(-90f),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+                        .fillMaxWidth()
+                        .padding(
+                            start = EumSpacing.medium,
+                            end = EumSpacing.medium,
+                            top = EumSpacing.large,
+                            bottom = EumSpacing.medium,
+                        ),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.large),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(EumSpacing.medium)) {
+                    Text(
+                        text = stringResource(id = R.string.my_page_withdraw_dialog_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(id = R.string.my_page_withdraw_dialog_message),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(EumSpacing.small)) {
+                    Button(
+                        onClick = onConfirm,
+                        enabled = !isLoading,
+                        shape = RoundedCornerShape(EumRadius.medium),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError,
+                            ),
+                        elevation =
+                            ButtonDefaults.buttonElevation(
+                                defaultElevation = 0.dp,
+                                pressedElevation = 0.dp,
+                                focusedElevation = 0.dp,
+                                hoveredElevation = 0.dp,
+                                disabledElevation = 0.dp,
+                            ),
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onError,
+                            )
+                        } else {
+                            Text(
+                                text = stringResource(id = R.string.my_page_withdraw_dialog_confirm),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = onDismiss,
+                        enabled = !isLoading,
+                        shape = RoundedCornerShape(EumRadius.medium),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        elevation =
+                            ButtonDefaults.buttonElevation(
+                                defaultElevation = 0.dp,
+                                pressedElevation = 0.dp,
+                                focusedElevation = 0.dp,
+                                hoveredElevation = 0.dp,
+                                disabledElevation = 0.dp,
+                            ),
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.my_page_withdraw_dialog_dismiss),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
+@Composable
+private fun CircleChevron() {
+    Box(
+        modifier =
+            Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_action_dropdown),
+            contentDescription = null,
+            modifier =
+                Modifier
+                    .size(20.dp)
+                    .rotate(-90f),
+            tint = EumPrimary600,
+        )
+    }
+}
+
 internal fun shouldSuppressMyPageMenuRipple(menuItem: MyPageMenuItem): Boolean =
-    menuItem == MyPageMenuItem.REPORT_HISTORY || menuItem == MyPageMenuItem.APP_HELP
+    menuItem == MyPageMenuItem.REPORT_HISTORY ||
+        menuItem == MyPageMenuItem.APP_HELP ||
+        menuItem == MyPageMenuItem.PRIVACY_POLICY ||
+        menuItem == MyPageMenuItem.SERVICE_TERMS
 
 private val MyPageUserMode.labelRes: Int
     get() =
@@ -401,6 +859,9 @@ private val MyPageMobilitySubtype.labelRes: Int
             MyPageMobilitySubtype.OTHER -> R.string.my_page_mobility_subtype_other
         }
 
+private val MyPageUiState.totalBookmarkCount: Int
+    get() = placeBookmarkCount + routeBookmarkCount
+
 @StringRes
 internal fun resolveHeadlineTextRes(uiState: MyPageUiState): Int = uiState.userMode.labelRes
 
@@ -416,3 +877,26 @@ internal fun resolveProfileAvatarRes(uiState: MyPageUiState): Int =
             null -> R.drawable.ic_nav_mypage
         }
     }
+
+@DrawableRes
+internal fun resolveUserModeIconRes(uiState: MyPageUiState): Int =
+    when (uiState.userMode) {
+        MyPageUserMode.LOW_VISION -> R.drawable.ic_user_visual_impairment
+        MyPageUserMode.MOBILITY_IMPAIRED -> R.drawable.ic_user_wheelchair
+        MyPageUserMode.UNKNOWN -> R.drawable.ic_nav_mypage
+    }
+
+internal fun resolveDisplayName(uiState: MyPageUiState): String =
+    uiState.displayName?.trim()?.takeIf(String::isNotEmpty) ?: "사용자"
+
+@Composable
+private fun resolveModeDescription(uiState: MyPageUiState): String =
+    uiState.mobilitySubtype
+        ?.let { subtype -> stringResource(id = subtype.labelRes) }
+        ?: when (uiState.userMode) {
+            MyPageUserMode.LOW_VISION -> stringResource(id = R.string.my_page_mode_low_vision_description)
+            MyPageUserMode.MOBILITY_IMPAIRED -> stringResource(id = R.string.my_page_mode_mobility_description)
+            MyPageUserMode.UNKNOWN -> stringResource(id = R.string.my_page_mode_unknown_description)
+        }
+
+private val MyPageBackground = Color(0xFFF8FAFC)

@@ -20,9 +20,9 @@ class EumTopLevelTabBarConfigurationTest {
     }
 
     @Test
-    fun `top level tab bar keeps same icon resource for selected state`() {
+    fun `top level tab bar uses selected icon resource for selected state`() {
         assertEquals(
-            R.drawable.ic_nav_home,
+            R.drawable.ic_nav_home_selected,
             topLevelTabIconRes(destination = TopLevelDestination.Map, selected = true),
         )
         assertEquals(
@@ -30,7 +30,7 @@ class EumTopLevelTabBarConfigurationTest {
             topLevelTabIconRes(destination = TopLevelDestination.Map, selected = false),
         )
         assertEquals(
-            R.drawable.ic_nav_bookmark_outline,
+            R.drawable.ic_nav_bookmark_selected,
             topLevelTabIconRes(destination = TopLevelDestination.SavedRoute, selected = true),
         )
     }

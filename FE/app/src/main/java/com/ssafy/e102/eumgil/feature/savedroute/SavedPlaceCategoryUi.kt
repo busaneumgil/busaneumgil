@@ -20,8 +20,8 @@ internal fun savedPlaceCategoryIconRes(category: String?): Int =
         "BRAILLE_BLOCK" -> R.drawable.ic_route_tactile_blocks
         "RESTAURANT" -> R.drawable.ic_place_restaurant
         "TOURIST_ATTRACTION" -> R.drawable.ic_place_tourist_spot
-        "OTHER", null -> R.drawable.ic_place_other
-        else -> R.drawable.ic_place_other
+        "OTHER", null -> R.drawable.ic_map_selected_pin_blue
+        else -> R.drawable.ic_map_selected_pin_blue
     }
 
 @Composable

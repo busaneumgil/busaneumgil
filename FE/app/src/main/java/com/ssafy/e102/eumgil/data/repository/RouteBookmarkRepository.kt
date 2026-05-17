@@ -103,15 +103,13 @@ class DefaultRouteBookmarkRepository(
     override suspend fun saveRouteBookmark(request: RouteBookmarkSaveRequest): RouteBookmark {
         val accountScopeKey = getCurrentAccountScopeKey()
         val now = clock()
-        val serverFavRouteId =
-            runCatching { trySaveOnServer(request) }.getOrNull()
-        val resolvedFavoriteRouteId = serverFavRouteId ?: request.localCacheFavoriteRouteId()
-        val existingEntity = favoriteRouteDao.getFavoriteRoute(accountScopeKey, resolvedFavoriteRouteId)
+        val serverFavRouteId = trySaveOnServer(request)
+        val existingEntity = favoriteRouteDao.getFavoriteRoute(accountScopeKey, serverFavRouteId)
 
         val cachedEntity =
             FavoriteRouteEntity(
                 accountScopeKey = accountScopeKey,
-                favoriteRouteId = resolvedFavoriteRouteId,
+                favoriteRouteId = serverFavRouteId,
                 routeName = request.routeName.trim().ifBlank { request.fallbackRouteName() },
                 originName = request.startLabel,
                 originLatitude = request.startPoint.latitude,
@@ -157,10 +155,16 @@ class DefaultRouteBookmarkRepository(
         favoriteRouteDao.deleteFavoriteRoute(accountScopeKey, favoriteRouteId)
     }
 
-    private suspend fun trySaveOnServer(request: RouteBookmarkSaveRequest): Long? {
-        val datasource = favoriteRoutesRemoteDataSource ?: return null
-        val token = resolveAccessToken() ?: return null
-        val routeId = request.routeId?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    private suspend fun trySaveOnServer(request: RouteBookmarkSaveRequest): Long {
+        val datasource =
+            favoriteRoutesRemoteDataSource
+                ?: throw RouteBookmarkSaveException("경로 북마크 서버 저장을 지원하지 않는 환경입니다.")
+        val token =
+            resolveAccessToken()
+                ?: throw RouteBookmarkSaveException("로그인 세션이 없어 경로 북마크를 서버에 저장할 수 없습니다.")
+        val routeId =
+            request.routeId?.trim()?.takeIf(String::isNotEmpty)
+                ?: throw RouteBookmarkSaveException("안내 종료 경로 ID가 없어 경로 북마크를 저장할 수 없습니다.")
 
         val response =
             datasource.createFavoriteRoute(
@@ -194,22 +198,20 @@ class DefaultRouteBookmarkRepository(
             val now = clock()
             val cachedRoutes = favoriteRouteDao.getFavoriteRoutes(accountScopeKey)
             val cachedById = cachedRoutes.associateBy(FavoriteRouteEntity::favoriteRouteId)
-            val localOnlyRoutes = cachedRoutes.filter { it.favoriteRouteId <= 0L }
 
             favoriteRouteDao.clearFavoriteRoutes(accountScopeKey)
             favoriteRouteDao.upsertFavoriteRoutes(
-                localOnlyRoutes +
-                    serverFavoriteRoutes.map { item ->
-                        val cached = cachedById[item.favRouteId]
-                        item.toFavoriteRouteEntity(
-                            accountScopeKey = accountScopeKey,
-                            createdAt = cached?.createdAt ?: now,
-                            updatedAt = now,
-                            cachedDistanceMeters = cached?.summaryDistanceMeters,
-                            cachedDurationSeconds = cached?.summaryDurationSeconds,
-                            cachedRouteSnapshotJson = cached?.routeSnapshotJson,
-                        )
-                    },
+                serverFavoriteRoutes.map { item ->
+                    val cached = cachedById[item.favRouteId]
+                    item.toFavoriteRouteEntity(
+                        accountScopeKey = accountScopeKey,
+                        createdAt = cached?.createdAt ?: now,
+                        updatedAt = now,
+                        cachedDistanceMeters = cached?.summaryDistanceMeters,
+                        cachedDurationSeconds = cached?.summaryDurationSeconds,
+                        cachedRouteSnapshotJson = cached?.routeSnapshotJson,
+                    )
+                },
             )
         }
     }
@@ -247,7 +249,8 @@ class DefaultRouteBookmarkRepository(
             ?: if (authSessionRepository == null) DEFAULT_TEST_ACCOUNT_SCOPE_KEY else LOCAL_ONLY_ROUTE_BOOKMARK_SCOPE_KEY
 
     private suspend fun resolveAccessToken(): String? =
-        authSessionRepository?.getCurrentAuthSession()?.accessToken ?: accessTokenProvider()
+        authSessionRepository?.getCurrentAuthSession()?.accessToken?.takeIf(String::isNotBlank)
+            ?: accessTokenProvider()?.takeIf(String::isNotBlank)
 
     private companion object {
         private const val DEFAULT_PAGE_SIZE = 50
@@ -647,31 +650,6 @@ private fun RoutePolyline.toLineStringOrNull(): String? =
             "${coordinate.longitude} ${coordinate.latitude}"
         }
 
-private fun RouteBookmarkSaveRequest.localCacheFavoriteRouteId(): Long {
-    val signature = bookmarkId()
-    val hash =
-        signature.fold(1_125_899_906_842_597L) { accumulator, character ->
-            (accumulator * 31L) + character.code.toLong()
-        }
-    return when {
-        hash == 0L -> -1L
-        hash > 0L -> -hash
-        hash == Long.MIN_VALUE -> Long.MIN_VALUE + 1L
-        else -> hash
-    }
-}
-
-private fun RouteBookmarkSaveRequest.toUncachedRouteBookmark(now: Long): RouteBookmark =
-    RouteBookmark(
-        bookmarkId = localCacheFavoriteRouteId().toString(),
-        routeName = routeName.trim().ifBlank { fallbackRouteName() },
-        startLabel = startLabel,
-        endLabel = endLabel,
-        startPoint = startPoint,
-        endPoint = endPoint,
-        routeOption = routeOption,
-        distanceMeters = distanceMeters,
-        durationMinutes = durationMinutes,
-        createdAt = now,
-        updatedAt = now,
-    )
+class RouteBookmarkSaveException(
+    message: String,
+) : IllegalStateException(message)

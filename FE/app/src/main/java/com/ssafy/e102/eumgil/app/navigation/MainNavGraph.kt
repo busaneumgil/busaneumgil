@@ -29,7 +29,6 @@ import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
 import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.feature.arrival.ArrivalRoute as ArrivalScreenRoute
 import com.ssafy.e102.eumgil.feature.map.MapRoute
-import com.ssafy.e102.eumgil.feature.mypage.MyPageAppInfoRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
@@ -41,18 +40,34 @@ import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
 import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
 import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputRoute
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
 import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
 
-fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
+fun NavGraphBuilder.mainNavGraph(
+    navController: NavHostController,
+    onOpenVoiceAssistant: (RouteEditingTarget) -> Unit,
+) {
     composable(route = TopLevelRoute.Map.route) { backStackEntry ->
         val shouldResetForHomeEntry by
             backStackEntry.savedStateHandle
                 .getStateFlow(MAP_HOME_REENTRY_RESET_KEY, false)
                 .collectAsStateWithLifecycle()
+        val facilityDetailDismissRequestId by
+            backStackEntry.savedStateHandle
+                .getStateFlow(
+                    MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY,
+                    MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID,
+                )
+                .collectAsStateWithLifecycle()
+        val routeEndpointMapPickerTargetName by
+            backStackEntry.savedStateHandle
+                .getStateFlow<String?>(MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY, null)
+                .collectAsStateWithLifecycle()
+        val routeEndpointMapPickerTarget = routeEndpointMapPickerTargetName.toRouteEditingTargetOrNull()
         MapRoute(
             viewModelStoreOwner = backStackEntry,
             onNavigateToSavedRoutes = {
@@ -61,11 +76,20 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToMyPage = {
                 navController.navigateToTopLevel(TopLevelDestination.MyPage)
             },
-            onNavigateToRouteSetting = {
-                navController.navigateToRouteSettingPermissionGate()
+            onNavigateToRouteSetting = { locationPermissionPrechecked ->
+                navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked)
             },
             onNavigateToSearch = { editingTarget ->
                 navController.navigate(SearchRoute.Entry.createRoute(editingTarget))
+            },
+            onNavigateToSearchResults = { query, editingTarget ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+                    launchSingleTop = true
+                }
+            },
+            routeEndpointMapPickerTarget = routeEndpointMapPickerTarget,
+            onRouteEndpointMapPickerTargetConsumed = {
+                backStackEntry.savedStateHandle.consumeRouteEndpointMapPickerTarget()
             },
             shouldResetForHomeEntry = shouldResetForHomeEntry,
             onHomeReentryResetConsumed = {
@@ -73,6 +97,13 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             },
             onFacilityDetailVisibilityChanged = { isVisible ->
                 backStackEntry.savedStateHandle[MAP_FACILITY_DETAIL_VISIBLE_KEY] = isVisible
+            },
+            facilityDetailDismissRequestId = facilityDetailDismissRequestId,
+            onFacilityDetailDismissRequestConsumed = { requestId ->
+                backStackEntry.savedStateHandle.consumeMapFacilityDetailDismissRequest(requestId)
+            },
+            onVoiceSearchVisibilityChanged = { isVisible ->
+                backStackEntry.savedStateHandle[MAP_VOICE_SEARCH_VISIBLE_KEY] = isVisible
             },
         )
     }
@@ -118,8 +149,8 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToReportHistory = {
                 navController.navigate(MyPageSubRoute.ReportHistory.route)
             },
-            onNavigateToAppInfo = {
-                navController.navigate(MyPageSubRoute.AppInfo.route)
+            onNavigateToGuide = {
+                navController.navigate(resolveMyPageGuideRoute())
             },
         )
     }
@@ -133,12 +164,21 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(SearchRoute.Entry.ARG_SELECTION_MODE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
     ) { backStackEntry ->
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.Entry.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val initialSelectionMode =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.Entry.ARG_SELECTION_MODE)
+                .toSearchSelectionModeOrDefault()
         val preserveEntryStateOnReentry =
             backStackEntry.savedStateHandle.get<Boolean>(SEARCH_PRESERVE_ENTRY_STATE_KEY) == true
         backStackEntry.savedStateHandle.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, false)
@@ -146,16 +186,14 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateBack = {
                 navController.popBackStack()
             },
-            onNavigateToResults = { query, editingTarget ->
-                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget))
+            onNavigateToResults = { query, editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget, selectionMode))
             },
             onNavigateToVoiceInput = {
-                navController.navigate(SearchRoute.VoiceInput.createRoute(initialEditingTarget)) {
-                    launchSingleTop = true
-                }
+                onOpenVoiceAssistant(initialEditingTarget)
             },
-            onNavigateToRouteSetting = {
-                navController.navigateToRouteSettingPermissionGate {
+            onNavigateToRouteSetting = { locationPermissionPrechecked ->
+                navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -170,6 +208,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     navController.navigateToTopLevel(TopLevelDestination.Map)
                 }
             },
+            onNavigateToRouteEndpointMapPicker = { editingTarget ->
+                navController.navigateToRouteEndpointMapPicker(editingTarget)
+            },
             onNavigateToRouteBriefing = {
                 navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
@@ -178,6 +219,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             initialEditingTarget = initialEditingTarget,
+            initialSelectionMode = initialSelectionMode,
             preserveEntryStateOnReentry = preserveEntryStateOnReentry,
         )
     }
@@ -194,12 +236,21 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(SearchRoute.Results.ARG_SELECTION_MODE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
     ) { backStackEntry ->
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.Results.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val initialSelectionMode =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.Results.ARG_SELECTION_MODE)
+                .toSearchSelectionModeOrDefault()
         SearchResultsRoute(
             initialQuery = backStackEntry.arguments?.getString(SearchRoute.Results.ARG_QUERY).orEmpty(),
             onNavigateBack = {
@@ -208,18 +259,16 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     ?.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, true)
                 navController.popBackStack()
             },
-            onNavigateToResults = { query, editingTarget ->
-                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+            onNavigateToResults = { query, editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget, selectionMode)) {
                     launchSingleTop = true
                 }
             },
             onNavigateToVoiceInput = {
-                navController.navigate(SearchRoute.VoiceInput.createRoute(initialEditingTarget)) {
-                    launchSingleTop = true
-                }
+                onOpenVoiceAssistant(initialEditingTarget)
             },
-            onNavigateToRouteSetting = {
-                navController.navigateToRouteSettingPermissionGate {
+            onNavigateToRouteSetting = { locationPermissionPrechecked ->
+                navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -234,6 +283,9 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     navController.navigateToTopLevel(TopLevelDestination.Map)
                 }
             },
+            onNavigateToRouteEndpointMapPicker = { editingTarget ->
+                navController.navigateToRouteEndpointMapPicker(editingTarget)
+            },
             onNavigateToRouteBriefing = {
                 navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
@@ -242,6 +294,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             initialEditingTarget = initialEditingTarget,
+            initialSelectionMode = initialSelectionMode,
         )
     }
 
@@ -254,12 +307,21 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     nullable = true
                     defaultValue = null
                 },
+                navArgument(SearchRoute.VoiceInput.ARG_SELECTION_MODE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
     ) { backStackEntry ->
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.VoiceInput.ARG_EDITING_TARGET)
                 .toRouteEditingTargetOrDefault()
+        val initialSelectionMode =
+            backStackEntry.arguments
+                ?.getString(SearchRoute.VoiceInput.ARG_SELECTION_MODE)
+                .toSearchSelectionModeOrDefault()
         val context = LocalContext.current
         val micPermissionLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
@@ -280,8 +342,8 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                     ?.set(SEARCH_PRESERVE_ENTRY_STATE_KEY, true)
                 navController.popBackStack()
             },
-            onNavigateToResults = { query, editingTarget ->
-                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+            onNavigateToResults = { query, editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget, selectionMode)) {
                     launchSingleTop = true
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = false
@@ -289,6 +351,7 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 }
             },
             initialEditingTarget = initialEditingTarget,
+            initialSelectionMode = initialSelectionMode,
         )
     }
 
@@ -393,8 +456,8 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
             },
-            onNavigateToSearch = { editingTarget ->
-                navController.navigate(SearchRoute.Entry.createRoute(editingTarget)) {
+            onNavigateToSearch = { editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Entry.createRoute(editingTarget, selectionMode)) {
                     launchSingleTop = true
                 }
             },
@@ -491,32 +554,6 @@ fun NavGraphBuilder.mainNavGraph(navController: NavHostController) {
                 // 제보 작성은 제보 탭의 top-level destination이므로 마이페이지 stack에 push하지 말고
                 // 정상적으로 제보 탭으로 switch한다.
                 navController.navigateToTopLevel(TopLevelDestination.Report)
-            },
-        )
-    }
-
-    composable(route = MyPageSubRoute.AppInfo.route) {
-        MyPageAppInfoRoute(
-            onNavigateBack = {
-                val didPopToMyPage =
-                    navController.popBackStack(
-                        route = TopLevelRoute.MyPage.route,
-                        inclusive = false,
-                    )
-                if (!didPopToMyPage) {
-                    navController.navigateToTopLevel(TopLevelDestination.MyPage)
-                }
-            },
-            onNavigateToLogin = {
-                navController.navigate(AuthRoute.Login.route) {
-                    launchSingleTop = true
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        inclusive = true
-                    }
-                }
-            },
-            onNavigateToGuide = {
-                navController.navigate(resolveAppInfoGuideRoute())
             },
         )
     }
@@ -631,13 +668,18 @@ internal fun resolveArrivalHomeRoute(selectedPrimaryUserType: String?): String =
 
 internal fun resolveSearchResultBriefingRoute(): String = LowVisionRoute.RouteBriefing.route
 
-internal fun resolveAppInfoGuideRoute(): String = TutorialRoute.Guide.route
+internal fun resolveMyPageGuideRoute(): String = TutorialRoute.Guide.route
 
 internal fun shouldUseLowVisionNavigationUi(selectedPrimaryUserType: String?): Boolean =
     selectedPrimaryUserType == PrimaryUserType.LOW_VISION.routeValue
 
 private const val SEARCH_PRESERVE_ENTRY_STATE_KEY: String = "searchPreserveEntryState"
 private const val MAP_HOME_REENTRY_RESET_KEY: String = "mapHomeReentryReset"
+private const val MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY: String = "mapFacilityDetailDismissRequestId"
+private const val MAP_FACILITY_DETAIL_DISMISS_CONSUMED_ID_KEY: String = "mapFacilityDetailDismissConsumedId"
+internal const val MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID: Long = 0L
+private const val MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY: String = "mapRouteEndpointPickerTarget"
+internal const val MAP_VOICE_SEARCH_VISIBLE_KEY: String = "mapVoiceSearchVisible"
 
 internal data class TopLevelNavigationPolicy(
     val launchSingleTop: Boolean,
@@ -674,6 +716,18 @@ internal fun NavController.navigateToTopLevelMapForHomeEntry() {
     getBackStackEntry(TopLevelRoute.Map.route).savedStateHandle.requestMapHomeReentryReset()
 }
 
+private fun NavController.navigateToRouteEndpointMapPicker(editingTarget: RouteEditingTarget) {
+    val didReturnToMap =
+        popBackStack(
+            route = TopLevelRoute.Map.route,
+            inclusive = false,
+        )
+    if (!didReturnToMap) {
+        navigateToTopLevel(TopLevelDestination.Map)
+    }
+    getBackStackEntry(TopLevelRoute.Map.route).savedStateHandle.requestRouteEndpointMapPicker(editingTarget)
+}
+
 private fun NavController.navigateToRouteSettingPermissionGate(
     autoStartNavigation: Boolean = false,
     initialRouteOption: RouteOption? = null,
@@ -686,6 +740,21 @@ private fun NavController.navigateToRouteSettingPermissionGate(
         ),
         builder,
     )
+}
+
+private fun NavController.navigateToRouteSettingAfterSearch(
+    locationPermissionPrechecked: Boolean,
+    builder: NavOptionsBuilder.() -> Unit = {},
+) {
+    if (locationPermissionPrechecked) {
+        navigate(
+            RouteSettingRoute.Setting.createRoute(locationPermissionPrechecked = true),
+            builder,
+        )
+        return
+    }
+
+    navigateToRouteSettingPermissionGate(builder = builder)
 }
 
 private fun NavController.navigateToRouteSettingFromPermissionGate(
@@ -732,12 +801,45 @@ internal fun SavedStateHandle.requestMapHomeReentryReset() {
     set(MAP_HOME_REENTRY_RESET_KEY, true)
 }
 
+internal fun SavedStateHandle.requestRouteEndpointMapPicker(editingTarget: RouteEditingTarget) {
+    set(MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY, editingTarget.name)
+}
+
+internal fun SavedStateHandle.consumeRouteEndpointMapPickerTarget() {
+    set<String?>(MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY, null)
+}
+
 internal fun SavedStateHandle.consumeMapHomeReentryReset(): Boolean {
     val shouldReset = get<Boolean>(MAP_HOME_REENTRY_RESET_KEY) == true
     if (shouldReset) {
         set(MAP_HOME_REENTRY_RESET_KEY, false)
     }
     return shouldReset
+}
+
+internal fun SavedStateHandle.requestMapFacilityDetailDismiss(): Long {
+    val nextRequestId =
+        (get<Long>(MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY)
+            ?: MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID) + 1L
+    set(MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY, nextRequestId)
+    return nextRequestId
+}
+
+internal fun SavedStateHandle.consumeMapFacilityDetailDismissRequest(requestId: Long): Boolean {
+    if (requestId <= MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID) return false
+
+    val currentRequestId =
+        get<Long>(MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY)
+            ?: MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID
+    if (currentRequestId != requestId) return false
+
+    val consumedRequestId =
+        get<Long>(MAP_FACILITY_DETAIL_DISMISS_CONSUMED_ID_KEY)
+            ?: MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID
+    if (requestId <= consumedRequestId) return false
+
+    set(MAP_FACILITY_DETAIL_DISMISS_CONSUMED_ID_KEY, requestId)
+    return true
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =
@@ -754,6 +856,15 @@ private fun String?.toRouteEditingTargetOrDefault(): RouteEditingTarget =
     this
         ?.let { value -> runCatching { RouteEditingTarget.valueOf(value) }.getOrNull() }
         ?: RouteEditingTarget.DESTINATION
+
+private fun String?.toRouteEditingTargetOrNull(): RouteEditingTarget? =
+    this
+        ?.let { value -> runCatching { RouteEditingTarget.valueOf(value) }.getOrNull() }
+
+private fun String?.toSearchSelectionModeOrDefault(): SearchSelectionMode =
+    this
+        ?.let { value -> runCatching { SearchSelectionMode.valueOf(value) }.getOrNull() }
+        ?: SearchSelectionMode.PREVIEW_ON_MAP
 
 @androidx.compose.runtime.Composable
 internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel {

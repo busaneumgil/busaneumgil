@@ -14,6 +14,10 @@ import type {
 } from "../types";
 
 type PointMode = "start" | "end";
+type RouteLineVisibility = {
+  safe: boolean;
+  fast: boolean;
+};
 
 const profileGroups: Array<{ value: AdminRouteProfileGroup; label: string }> = [
   { value: "PEDESTRIAN", label: "일반 보행" },
@@ -64,6 +68,10 @@ export function RouteTuningPage({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [savingAttributes, setSavingAttributes] = useState(false);
   const [attributeDraft, setAttributeDraft] = useState<AdminRoadSegmentAttributesUpdateRequest>({});
+  const [routeLineVisibility, setRouteLineVisibility] = useState<RouteLineVisibility>({
+    safe: true,
+    fast: true,
+  });
 
   useEffect(() => {
     if (!selectedSegment) {
@@ -157,8 +165,8 @@ export function RouteTuningPage({
           end: endPoint,
         }}
         routeLines={{
-          safe: preview?.safeRoute.coordinates,
-          fast: preview?.fastRoute.coordinates,
+          safe: routeLineVisibility.safe ? preview?.safeRoute.coordinates : undefined,
+          fast: routeLineVisibility.fast ? preview?.fastRoute.coordinates : undefined,
         }}
       />
       <aside className="detail-panel">
@@ -204,10 +212,26 @@ export function RouteTuningPage({
             </button>
           </div>
           {preview && (
-            <div className="route-result-grid">
-              <RouteResultCard label="빠른" color="#2563eb" route={preview.fastRoute} />
-              <RouteResultCard label="안전" color="#dc2626" route={preview.safeRoute} />
-            </div>
+            <>
+              <div className="route-line-toggle-row" aria-label="경로 표시 선택">
+                <RouteLineToggle
+                  label="안전 경로"
+                  color="#dc2626"
+                  checked={routeLineVisibility.safe}
+                  onChange={(checked) => setRouteLineVisibility((visibility) => ({ ...visibility, safe: checked }))}
+                />
+                <RouteLineToggle
+                  label="빠른 경로"
+                  color="#2563eb"
+                  checked={routeLineVisibility.fast}
+                  onChange={(checked) => setRouteLineVisibility((visibility) => ({ ...visibility, fast: checked }))}
+                />
+              </div>
+              <div className="route-result-grid">
+                <RouteResultCard label="안전" color="#dc2626" route={preview.safeRoute} />
+                <RouteResultCard label="빠른" color="#2563eb" route={preview.fastRoute} />
+              </div>
+            </>
           )}
         </section>
 
@@ -288,6 +312,26 @@ function RouteResultCard({
       <strong>{formatDistance(Number(route.distanceMeter))}</strong>
       <small>{route.profile} · {route.estimatedTimeMinute}분</small>
     </div>
+  );
+}
+
+function RouteLineToggle({
+  label,
+  color,
+  checked,
+  onChange,
+}: {
+  label: string;
+  color: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="route-line-toggle">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span style={{ backgroundColor: color }} />
+      {label}
+    </label>
   );
 }
 

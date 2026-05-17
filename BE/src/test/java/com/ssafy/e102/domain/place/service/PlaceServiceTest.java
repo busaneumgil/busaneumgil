@@ -42,6 +42,7 @@ import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
 import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.place.type.PlaceClickType;
 import com.ssafy.e102.domain.place.type.PlaceDetailType;
+import com.ssafy.e102.domain.place.type.PlaceMarkerKind;
 import com.ssafy.e102.domain.route.entity.SubwayStation;
 import com.ssafy.e102.domain.route.entity.SubwayTimetable;
 import com.ssafy.e102.domain.route.repository.SubwayTimetableRepository;
@@ -60,6 +61,8 @@ import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
 
 class PlaceServiceTest {
+
+	private static final String BUSAN_SEARCH_RECT = "128.75,34.85,129.35,35.40";
 
 	@Mock
 	private PlaceRepository placeRepository;
@@ -124,6 +127,7 @@ class PlaceServiceTest {
 			35.1686,
 			129.0576,
 			1000,
+			BUSAN_SEARCH_RECT,
 			1,
 			10,
 			"accuracy")))
@@ -190,6 +194,7 @@ class PlaceServiceTest {
 			35.1,
 			128.9,
 			null,
+			BUSAN_SEARCH_RECT,
 			1,
 			15,
 			"accuracy")))
@@ -215,6 +220,44 @@ class PlaceServiceTest {
 		assertThat(response.places())
 			.extracting(PlaceSearchItemResponse::address)
 			.allMatch(address -> address.startsWith("부산"));
+	}
+
+	@Test
+	@DisplayName("관련도순 장소 검색은 부산 bbox를 카카오 요청에 전달한다")
+	void searchPlacesConstrainsRelevanceSearchToBusanRect() {
+		KakaoPlaceDocument busanPlace = new KakaoPlaceDocument(
+			"busan",
+			"삼성전기 부산사업장",
+			"부산 강서구 녹산산업중로 333",
+			"회사",
+			"",
+			4072,
+			new GeoPointResponse(35.1002, 128.9002));
+		when(kakaoLocalClient.searchKeyword(new KakaoPlaceSearchRequest(
+			"삼성전기",
+			35.1,
+			128.9,
+			null,
+			BUSAN_SEARCH_RECT,
+			1,
+			15,
+			"accuracy")))
+			.thenReturn(new KakaoPlaceSearchResult(List.of(busanPlace), 1, true));
+		when(placeRepository.findAllByProviderPlaceIdIn(List.of("busan")))
+			.thenReturn(List.of());
+
+		PlaceSearchResponse response = placeService.searchPlaces(
+			"삼성전기",
+			"35.1",
+			"128.9",
+			null,
+			null,
+			"relevance",
+			"15");
+
+		assertThat(response.places())
+			.extracting(PlaceSearchItemResponse::name)
+			.containsExactly("삼성전기 부산사업장");
 	}
 
 	@Test
@@ -326,6 +369,7 @@ class PlaceServiceTest {
 			null,
 			null,
 			null,
+			BUSAN_SEARCH_RECT,
 			1,
 			10,
 			"accuracy")))
@@ -345,6 +389,7 @@ class PlaceServiceTest {
 			null,
 			null,
 			null,
+			BUSAN_SEARCH_RECT,
 			2,
 			10,
 			"accuracy")))
@@ -976,6 +1021,81 @@ class PlaceServiceTest {
 		assertThat(response.places()).hasSize(1);
 		assertThat(response.places().get(0).placeId()).isEqualTo(10L);
 		assertThat(response.places().get(0).isBookmarked()).isTrue();
+		assertThat(response.places().get(0).markerKind()).isEqualTo(PlaceMarkerKind.DEFAULT);
+	}
+
+	@Test
+	@DisplayName("주변 장소 조회는 ETC 장소의 providerPlaceId가 BS로 시작하면 버스정류장 마커로 반환한다")
+	void getPlacesMarksBusStopByProviderPlaceId() {
+		UUID userId = UUID.randomUUID();
+		Place matchedPlace = place(
+			10L,
+			"시청 버스정류장",
+			PlaceCategory.ETC,
+			"BS12345",
+			35.1686,
+			129.0576,
+			AccessibilityFeatureType.accessibleEntrance);
+		when(placeRepository.findPlaceMarkerIds(
+			35.1686,
+			129.0576,
+			500,
+			Set.of("ETC"),
+			false,
+			Set.of("__EMPTY_FILTER__"),
+			true,
+			200))
+			.thenReturn(List.of(10L));
+		when(placeRepository.findAllByPlaceIdIn(List.of(10L))).thenReturn(List.of(matchedPlace));
+		when(bookmarkRepository.findBookmarkedPlaceIds(userId, List.of(10L))).thenReturn(Set.of());
+
+		PlaceListResponse response = placeService.getPlaces(userId, "35.1686", "129.0576", "500", "ETC", null);
+
+		assertThat(response.places()).hasSize(1);
+		assertThat(response.places().get(0).markerKind()).isEqualTo(PlaceMarkerKind.BUS_STOP);
+	}
+
+	@Test
+	@DisplayName("주변 장소 조회는 ETC 장소가 지하철역 마스터 근처면 지하철역 마커로 반환한다")
+	void getPlacesMarksSubwayStationByMasterTable() {
+		UUID userId = UUID.randomUUID();
+		Place matchedPlace = place(
+			10L,
+			"서면역",
+			PlaceCategory.ETC,
+			null,
+			35.1686,
+			129.0576,
+			AccessibilityFeatureType.elevator);
+		SubwayStation station = SubwayStation.create(
+			"200",
+			"서면",
+			"부산 1호선",
+			geoPointConverter.toPoint(new GeoPointRequest(35.1686, 129.0576)));
+		when(placeRepository.findPlaceMarkerIds(
+			35.1686,
+			129.0576,
+			500,
+			Set.of("ETC"),
+			false,
+			Set.of("__EMPTY_FILTER__"),
+			true,
+			200))
+			.thenReturn(List.of(10L));
+		when(placeRepository.findAllByPlaceIdIn(List.of(10L))).thenReturn(List.of(matchedPlace));
+		when(bookmarkRepository.findBookmarkedPlaceIds(userId, List.of(10L))).thenReturn(Set.of());
+		when(subwayStationMasterService.findNearestPlaceDetail(35.1686, 129.0576, 30.0))
+			.thenReturn(Optional.of(new SubwayStationMasterService.SubwayStationPlaceDetail(
+				station,
+				List.of(station),
+				"GROUP:200",
+				List.of("부산 1호선"),
+				List.of())));
+
+		PlaceListResponse response = placeService.getPlaces(userId, "35.1686", "129.0576", "500", "ETC", null);
+
+		assertThat(response.places()).hasSize(1);
+		assertThat(response.places().get(0).markerKind()).isEqualTo(PlaceMarkerKind.SUBWAY_STATION);
 	}
 
 	@Test
@@ -1041,6 +1161,7 @@ class PlaceServiceTest {
 			null,
 			null,
 			null,
+			BUSAN_SEARCH_RECT,
 			1,
 			10,
 			"accuracy")))

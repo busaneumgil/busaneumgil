@@ -18,13 +18,13 @@ class TutorialRoutingTest {
     }
 
     @Test
-    fun `guide completion returns to app info`() {
-        assertEquals(MyPageSubRoute.AppInfo.route, resolveTutorialGuideCompletedRoute())
+    fun `guide completion returns to my page`() {
+        assertEquals(TopLevelRoute.MyPage.route, resolveTutorialGuideCompletedRoute())
     }
 
     @Test
-    fun `app info guide action opens guide tutorial`() {
-        assertEquals(TutorialRoute.Guide.route, resolveAppInfoGuideRoute())
+    fun `my page guide action opens guide tutorial`() {
+        assertEquals(TutorialRoute.Guide.route, resolveMyPageGuideRoute())
     }
 
     @Test

@@ -17,7 +17,6 @@ data class LocationTermsUiState(
     val isSensitiveInfoTermsChecked: Boolean = false,
     val isPersonalLocationInfoTermsChecked: Boolean = false,
     val isOverFourteenChecked: Boolean = false,
-    val isPrivacyPolicyChecked: Boolean = false,
     val hasRestrictionNotice: Boolean = false,
 ) {
     val checkedRequiredTermsCount: Int
@@ -30,7 +29,7 @@ data class LocationTermsUiState(
             ).count { it }
 
     val checkedTermsCount: Int
-        get() = checkedRequiredTermsCount + if (isPrivacyPolicyChecked) 1 else 0
+        get() = checkedRequiredTermsCount
 
     val isRequiredTermsChecked: Boolean
         get() =
@@ -40,7 +39,7 @@ data class LocationTermsUiState(
                 isOverFourteenChecked
 
     val isAllTermsChecked: Boolean
-        get() = isRequiredTermsChecked && isPrivacyPolicyChecked
+        get() = isRequiredTermsChecked
 
     val canProceed: Boolean
         get() = isRequiredTermsChecked
@@ -55,12 +54,12 @@ data class LocationTermsUiState(
     fun toAgreement(): LocationTermsAgreement =
         LocationTermsAgreement(
             isLocationTermsAgreed = isRequiredTermsChecked,
-            isPrivacyPolicyAgreed = isPrivacyPolicyChecked,
+            isPrivacyPolicyAgreed = false,
         )
 
     companion object {
         const val REQUIRED_TERMS_COUNT: Int = 4
-        const val TOTAL_TERMS_COUNT: Int = 5
+        const val TOTAL_TERMS_COUNT: Int = 4
     }
 }
 
@@ -94,10 +93,6 @@ enum class LocationTermsItem(
     OVER_FOURTEEN(
         titleRes = R.string.onboarding_terms_age_required_title,
         required = true,
-    ),
-    PRIVACY_POLICY_CONFIRMATION(
-        titleRes = R.string.onboarding_terms_privacy_confirmation_title,
-        required = false,
     ),
 }
 
@@ -145,7 +140,8 @@ enum class MobilitySubtype(
         routeValue = "manual_wheelchair",
         titleRes = R.string.onboarding_mobility_subtype_manual_title,
         descriptionRes = R.string.onboarding_mobility_subtype_manual_description,
-        iconRes = R.drawable.ic_user_wheelchair,
+        iconRes = R.drawable.ic_user_wheelchair_solid,
+        iconSizeDp = 84,
     ),
     OTHER(
         routeValue = "other_mobility_impaired",

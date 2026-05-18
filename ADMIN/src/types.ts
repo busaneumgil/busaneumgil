@@ -822,6 +822,8 @@ export interface AdminHazardRouteReview {
   updatedAt: string;
   completedAt: string | null;
   segmentDrafts: AdminHazardRouteReviewSegmentDraft[];
+  routingApplyStatus?: AdminRoutingApplyStatus | null;
+  routingApplyMessage?: string | null;
 }
 
 export interface StartAdminHazardRouteReviewRequest {

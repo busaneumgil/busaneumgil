@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,6 +31,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,6 +56,7 @@ import com.ssafy.e102.domain.place.type.PlaceCategory;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.RoutingSegmentOverride;
+import com.ssafy.e102.domain.report.entity.HazardReportRouteReviewSegmentDraft;
 import com.ssafy.e102.domain.route.repository.RoadNodeRepository;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
 import com.ssafy.e102.domain.route.repository.RoutingSegmentOverrideRepository;
@@ -124,6 +128,22 @@ class AdminMapServiceTest {
 			new NoOpPlatformTransactionManager());
 		geometryFactory = new GeometryFactory();
 		adminUserId = UUID.randomUUID();
+	}
+
+	@Test
+	@DisplayName("routing overlay orchestration methods must suspend class-level read-only transactions")
+	void routingOverlayOrchestrationMethodsSuspendClassLevelTransaction() throws Exception {
+		assertNotSupportedTransaction("updateRoadSegmentAttributes",
+			UUID.class,
+			Long.class,
+			String.class,
+			String.class,
+			AdminRoadSegmentAttributesUpdateRequest.class);
+		assertNotSupportedTransaction("applyRouteReviewSegmentDrafts",
+			UUID.class,
+			String.class,
+			String.class,
+			List.class);
 	}
 
 	@Test
@@ -413,6 +433,95 @@ class AdminMapServiceTest {
 	}
 
 	@Test
+	@DisplayName("route review segment drafts are batch-applied and trigger one routing overlay reload")
+	void applyRouteReviewSegmentDraftsUpdatesRoadSegmentsAndReloadsOnce() {
+		RoadSegment firstSegment = roadSegment(1L);
+		RoadSegment secondSegment = roadSegment(2L);
+		RoutingSegmentOverride existingOverride = RoutingSegmentOverride.of(
+			1L,
+			AccessibilityState.NO,
+			null,
+			null,
+			null);
+		when(roadSegmentRepository.existsIntersectingAreaByEdgeId(1L, "gu", "dong")).thenReturn(true);
+		when(roadSegmentRepository.existsIntersectingAreaByEdgeId(2L, "gu", "dong")).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(firstSegment));
+		when(roadSegmentRepository.findById(2L)).thenReturn(Optional.of(secondSegment));
+		when(routingSegmentOverrideRepository.findById(1L)).thenReturn(Optional.of(existingOverride));
+		when(graphHopperAdminClient.reloadRoutingOverrides())
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
+
+		GraphHopperReloadResult result = adminMapService.applyRouteReviewSegmentDrafts(
+			adminUserId,
+			"gu",
+			"dong",
+			List.of(
+				HazardReportRouteReviewSegmentDraft.create(
+					1L,
+					null,
+					null,
+					null,
+					WidthState.NARROW,
+					null,
+					null,
+					null),
+				HazardReportRouteReviewSegmentDraft.create(
+					2L,
+					AccessibilityState.YES,
+					AccessibilityState.NO,
+					AccessibilityState.UNKNOWN,
+					WidthState.ADEQUATE_120,
+					null,
+					AccessibilityState.NO,
+					AccessibilityState.UNKNOWN)));
+
+		assertThat(result.status()).isEqualTo(GraphHopperReloadStatus.APPLIED);
+		assertThat(firstSegment.getWidthState()).isEqualTo(WidthState.NARROW);
+		assertThat(secondSegment.getWalkAccess()).isEqualTo(AccessibilityState.YES);
+		assertThat(secondSegment.getBrailleBlockState()).isEqualTo(AccessibilityState.NO);
+		verify(routingSegmentOverrideRepository).save(org.mockito.ArgumentMatchers.argThat(override ->
+			override.getEdgeId().equals(1L)
+				&& override.getWalkAccess() == AccessibilityState.NO
+				&& override.getWidthState() == WidthState.NARROW));
+		verify(routingSegmentOverrideRepository).save(org.mockito.ArgumentMatchers.argThat(override ->
+			override.getEdgeId().equals(2L)
+				&& override.getWalkAccess() == AccessibilityState.YES
+				&& override.getBrailleBlockState() == AccessibilityState.NO
+				&& override.getWidthState() == WidthState.ADEQUATE_120
+				&& override.getStairsState() == AccessibilityState.NO));
+		verify(graphHopperAdminClient, times(1)).reloadRoutingOverrides();
+	}
+
+	@Test
+	@DisplayName("route review segment drafts without overlay values update road_segments and skip reload")
+	void applyRouteReviewSegmentDraftsSkipsReloadWhenNoOverlayValuesExist() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingAreaByEdgeId(1L, "gu", "dong")).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+
+		GraphHopperReloadResult result = adminMapService.applyRouteReviewSegmentDrafts(
+			adminUserId,
+			"gu",
+			"dong",
+			List.of(HazardReportRouteReviewSegmentDraft.create(
+				1L,
+				null,
+				null,
+				AccessibilityState.YES,
+				null,
+				null,
+				null,
+				AccessibilityState.YES)));
+
+		assertThat(result.status()).isEqualTo(GraphHopperReloadStatus.SKIPPED);
+		assertThat(roadSegment.getAudioSignalState()).isEqualTo(AccessibilityState.YES);
+		assertThat(roadSegment.getSignalState()).isEqualTo(AccessibilityState.YES);
+		verify(routingSegmentOverrideRepository, never()).save(any(RoutingSegmentOverride.class));
+		verify(routingSegmentOverrideRepository, never()).deleteById(1L);
+		verify(graphHopperAdminClient, never()).reloadRoutingOverrides();
+	}
+
+	@Test
 	@DisplayName("관리자 장소 기본 정보를 부분 수정한다")
 	void updatePlace() throws Exception {
 		Place place = place();
@@ -543,6 +652,15 @@ class AdminMapServiceTest {
 		ReflectionTestUtils.setField(feature, "featureType", featureType);
 		ReflectionTestUtils.setField(feature, "isAvailable", isAvailable);
 		return feature;
+	}
+
+	private void assertNotSupportedTransaction(String methodName, Class<?>... parameterTypes) throws Exception {
+		Transactional transactional = AdminMapService.class
+			.getMethod(methodName, parameterTypes)
+			.getAnnotation(Transactional.class);
+
+		assertThat(transactional).isNotNull();
+		assertThat(transactional.propagation()).isEqualTo(Propagation.NOT_SUPPORTED);
 	}
 
 	private static final class NoOpPlatformTransactionManager implements PlatformTransactionManager {

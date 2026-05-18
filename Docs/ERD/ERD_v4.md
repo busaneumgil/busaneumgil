@@ -580,6 +580,8 @@ erDiagram
 
 - `(review_id, edge_id)` unique 제약으로 같은 검수 내 중복 draft를 막는다.
 - draft는 검수 범위 `gu/dong`에 포함되는 `road_segments.edge_id`만 저장할 수 있다.
+- 경로 검수 완료 시 draft 값은 batch로 `road_segments` 원본 truth에 반영된다.
+- overlay 대상인 `walk_access`, `stairs_state`, `width_state`, `braille_block_state` 값이 포함된 draft는 `routing_segment_overrides` current-state도 함께 patch하며 GraphHopper reload는 완료 플로우에서 1회만 호출한다.
 
 ---
 
@@ -1248,6 +1250,7 @@ ODsay `loadLane` 호출 결과를 `map_obj` 기준으로 영속 저장한다.
 
 - `hazard_report_route_reviews 1 : N hazard_report_route_review_segment_drafts`
 - 하나의 검수는 여러 보행 세그먼트 draft를 가질 수 있다.
+- 검수 완료 시 segment draft는 `road_segments.edge_id`를 통해 원본 세그먼트와 `routing_segment_overrides.edge_id` current-state에 적용된다. `audio_signal_state`, `surface_state`, `signal_state`는 `road_segments`에만 반영되고 현재 GraphHopper overlay 대상은 아니다.
 
 ### places - bookmarks
 

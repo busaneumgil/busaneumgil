@@ -7,6 +7,8 @@ import {
   hazardRouteReviewIntentLabel,
   hydrateHazardRouteReviewRecord,
   loadStoredHazardRouteReview,
+  routeReviewCompletionClassName,
+  routeReviewCompletionMessage,
   startHazardRouteReview,
   storeHazardRouteReview,
   updateHazardRouteReviewSegmentDraft,
@@ -122,6 +124,8 @@ describe("hazard route review workflow state", () => {
       startedAt: "2026-05-18T10:00:00",
       updatedAt: "2026-05-18T10:05:00",
       completedAt: null,
+      routingApplyStatus: "FAILED",
+      routingApplyMessage: "reload failed",
       segmentDrafts: [
         {
           edgeId: 41231,
@@ -144,6 +148,8 @@ describe("hazard route review workflow state", () => {
       startedAt: "2026-05-18T10:00:00",
       updatedAt: "2026-05-18T10:05:00",
       completedAt: null,
+      routingApplyStatus: "FAILED",
+      routingApplyMessage: "reload failed",
       selectedSegmentEdgeId: "41231",
       segmentDrafts: {
         "41231": {
@@ -157,5 +163,19 @@ describe("hazard route review workflow state", () => {
         },
       },
     });
+  });
+
+  it("formats route review completion messages from routing apply status", () => {
+    expect(routeReviewCompletionMessage("APPLIED")).toBe("검수 완료 및 경로 반영이 완료되었습니다.");
+    expect(routeReviewCompletionMessage("APPLIED_WITH_WARNING")).toContain("경고");
+    expect(routeReviewCompletionMessage("FAILED")).toContain("실패");
+    expect(routeReviewCompletionMessage("SKIPPED")).toContain("즉시 반영 대상 변경은 없습니다");
+  });
+
+  it("maps route review completion status to visual severity classes", () => {
+    expect(routeReviewCompletionClassName("FAILED")).toBe("error-box");
+    expect(routeReviewCompletionClassName("APPLIED_WITH_WARNING")).toBe("warning-box");
+    expect(routeReviewCompletionClassName("APPLIED")).toBe("success-box");
+    expect(routeReviewCompletionClassName("SKIPPED")).toBe("info-box");
   });
 });

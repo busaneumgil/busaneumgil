@@ -227,7 +227,7 @@ export function HazardRouteReviewWorkspace({
       <div className="hazard-review-actionbar">
         <div className="hazard-review-actionbar__summary">
           <strong>{hazardRouteReviewIntentLabel(review.intent)}</strong>
-          <span>{canComplete ? `검수 세그먼트 ${reviewedSegmentCount}건이 저장되었습니다.` : "최소 1개 세그먼트를 검수해야 처리 완료를 진행할 수 있습니다."}</span>
+          <span>{canComplete ? `검수 세그먼트 ${reviewedSegmentCount}건이 저장되었습니다. 완료 시 사용자 재탐색부터 경로 계산에 반영됩니다.` : "최소 1개 세그먼트를 검수해야 처리 완료를 진행할 수 있습니다."}</span>
         </div>
         <div className="hazard-review-actionbar__buttons">
           <button type="button" className="hazard-action-button secondary" onClick={onBack}>
@@ -239,7 +239,7 @@ export function HazardRouteReviewWorkspace({
             disabled={!canComplete || completing}
             onClick={onComplete}
           >
-            {completing ? "처리 중" : "경로 검수 완료"}
+            {completing ? "처리 중" : "검수 완료 및 즉시 반영"}
           </button>
         </div>
       </div>

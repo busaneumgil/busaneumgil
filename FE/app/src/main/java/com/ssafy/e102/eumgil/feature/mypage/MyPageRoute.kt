@@ -45,6 +45,7 @@ fun MyPageRoute(
                 initSettingsRepository = appContainer.settingsRepository,
                 bookmarkDao = appContainer.localDatabase.bookmarkDao(),
                 favoriteRouteDao = appContainer.localDatabase.favoriteRouteDao(),
+                reportOutboxDao = appContainer.localDatabase.reportOutboxDao(),
                 isMockMode = AppEnvironment.isMockMode,
             )
         }

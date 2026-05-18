@@ -36,7 +36,7 @@ class OnboardingContractTest {
             MobilitySubtype.entries.map { it.iconRes },
         )
         assertEquals(
-            listOf(96, 96, 96),
+            listOf(96, 84, 96),
             MobilitySubtype.entries.map { it.iconSizeDp },
         )
     }

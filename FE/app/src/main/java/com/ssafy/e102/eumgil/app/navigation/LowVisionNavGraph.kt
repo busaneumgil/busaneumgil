@@ -22,6 +22,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import java.net.URLDecoder
@@ -92,6 +93,9 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
 
         // VoiceInput — KWS 제외 (STT AudioRecorder가 마이크 점유)
         lowVisionComposable(route = LowVisionRoute.VoiceInput.route) {
+            val currentBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = currentBackStackEntry?.destination?.route
+
             LowVisionVoiceInputRoute(
                 onCancelRecording = {
                     navController.navigate(resolveLowVisionVoiceInputCancelRoute()) {
@@ -135,6 +139,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                     // TODO: LowVisionMyPageViewModel.onLogoutClick()과 동일한 로직 연결
                     navController.popBackStack()
                 },
+                currentRoute = currentRoute,
             )
         }
 

@@ -5,8 +5,10 @@ import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.core.model.InitSettings
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
+import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.entity.BookmarkEntity
 import com.ssafy.e102.eumgil.data.local.entity.FavoriteRouteEntity
+import com.ssafy.e102.eumgil.data.local.entity.ReportOutboxEntity
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserApiException
@@ -253,7 +255,7 @@ class AccountWithdrawalRepositoryTest {
         }
 
     @Test
-    fun `default local data cleaner clears only current account cache and onboarding state`() =
+    fun `default local data cleaner clears current account cache report outboxes and onboarding state`() =
         runTest {
             val authSessionRepository =
                 RecordingWithdrawalAuthSessionRepository(
@@ -265,12 +267,14 @@ class AccountWithdrawalRepositoryTest {
                 )
             val bookmarkDao = RecordingBookmarkDao()
             val favoriteRouteDao = RecordingFavoriteRouteDao()
+            val reportOutboxDao = RecordingReportOutboxDao()
             val initSettingsRepository = RecordingInitSettingsRepository()
             val accountScopedLocalCacheCleaner =
                 DefaultAccountScopedLocalCacheCleaner(
                     authSessionRepository = authSessionRepository,
                     bookmarkDao = bookmarkDao,
                     favoriteRouteDao = favoriteRouteDao,
+                    reportOutboxDao = reportOutboxDao,
                 )
             val cleaner =
                 DefaultAccountWithdrawalLocalDataCleaner(
@@ -282,6 +286,7 @@ class AccountWithdrawalRepositoryTest {
 
             assertEquals(listOf("user::user-a"), bookmarkDao.clearedScopes)
             assertEquals(listOf("user::user-a"), favoriteRouteDao.clearedScopes)
+            assertTrue(reportOutboxDao.clearReportOutboxesCalled)
             assertTrue(initSettingsRepository.clearInitSettingsCalled)
         }
 }
@@ -427,6 +432,25 @@ private class RecordingFavoriteRouteDao : FavoriteRouteDao {
 
     override suspend fun clearFavoriteRoutes(accountScopeKey: String) {
         clearedScopes += accountScopeKey
+    }
+}
+
+private class RecordingReportOutboxDao : ReportOutboxDao {
+    var clearReportOutboxesCalled: Boolean = false
+        private set
+
+    override fun observeReportOutboxItems(): Flow<List<ReportOutboxEntity>> = emptyFlow()
+
+    override suspend fun getReportOutbox(outboxId: String): ReportOutboxEntity? = null
+
+    override suspend fun upsertReportOutbox(reportOutbox: ReportOutboxEntity) = Unit
+
+    override suspend fun deleteReportOutbox(outboxId: String) = Unit
+
+    override suspend fun resetSubmittingOutboxesToPending(now: Long): Int = 0
+
+    override suspend fun clearReportOutboxes() {
+        clearReportOutboxesCalled = true
     }
 }
 

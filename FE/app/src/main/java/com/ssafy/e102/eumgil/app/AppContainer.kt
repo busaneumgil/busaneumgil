@@ -233,6 +233,7 @@ class AppContainer(
             authSessionRepository = authSessionRepository,
             bookmarkDao = localDatabase.bookmarkDao(),
             favoriteRouteDao = localDatabase.favoriteRouteDao(),
+            reportOutboxDao = localDatabase.reportOutboxDao(),
             placesLocalDataSource = placesLocalDataSource,
             destinationSelectionRepository = destinationSelectionRepository,
             destinationPreviewRepository = destinationPreviewRepository,

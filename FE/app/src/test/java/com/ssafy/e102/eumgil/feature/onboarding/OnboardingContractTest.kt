@@ -30,7 +30,7 @@ class OnboardingContractTest {
         assertEquals(
             listOf(
                 R.drawable.ic_user_electric_wheelchair,
-                R.drawable.ic_user_wheelchair,
+                R.drawable.ic_user_wheelchair_solid,
                 R.drawable.ic_user_walking_aid,
             ),
             MobilitySubtype.entries.map { it.iconRes },
@@ -82,18 +82,17 @@ class OnboardingContractTest {
             )
 
         assertTrue(requiredTermsCompleted.canProceed)
-        assertFalse(requiredTermsCompleted.isAllTermsChecked)
+        assertTrue(requiredTermsCompleted.isAllTermsChecked)
     }
 
     @Test
-    fun `location terms all agreement only completes when privacy policy confirmation is included`() {
+    fun `location terms all agreement completes when required terms are included`() {
         val uiState =
             LocationTermsUiState(
                 isServiceTermsChecked = true,
                 isSensitiveInfoTermsChecked = true,
                 isPersonalLocationInfoTermsChecked = true,
                 isOverFourteenChecked = true,
-                isPrivacyPolicyChecked = true,
             )
 
         assertTrue(uiState.canProceed)
@@ -108,7 +107,6 @@ class OnboardingContractTest {
                 isSensitiveInfoTermsChecked = true,
                 isPersonalLocationInfoTermsChecked = true,
                 isOverFourteenChecked = true,
-                isPrivacyPolicyChecked = false,
             )
 
         assertEquals(
@@ -128,12 +126,11 @@ class OnboardingContractTest {
                 LocationTermsItem.SENSITIVE_INFO,
                 LocationTermsItem.PERSONAL_LOCATION_INFO,
                 LocationTermsItem.OVER_FOURTEEN,
-                LocationTermsItem.PRIVACY_POLICY_CONFIRMATION,
             ),
             LocationTermsItem.entries,
         )
         assertEquals(
-            listOf(true, true, true, true, false),
+            listOf(true, true, true, true),
             LocationTermsItem.entries.map { it.required },
         )
     }

@@ -127,9 +127,10 @@ internal class MapOverlayViewportControlState {
         val previous = baseCameraTarget
         baseCameraTarget = target
         if (previous != null && previous.requestId != target.requestId) {
-            manualCameraTarget = null
-            latestObservedCamera = null
             recenterCameraTarget = null
+            if (manualCameraTarget == null) {
+                latestObservedCamera = null
+            }
         }
     }
 

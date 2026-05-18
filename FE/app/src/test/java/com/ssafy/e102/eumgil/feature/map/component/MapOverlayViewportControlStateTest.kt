@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.map.component
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,5 +47,38 @@ class MapOverlayViewportControlStateTest {
                 reportedUserGesture = true,
             ),
         )
+    }
+
+    @Test
+    fun `manual camera survives active guidance base target changes`() {
+        val controlState = MapOverlayViewportControlState()
+        val focusedPreviewTarget =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1810, longitude = 129.0820),
+                source = MapCameraSource.SEARCH_RESULT,
+                requestId = 10L,
+                zoomLevel = 17,
+            )
+        val manualCameraCenter = MapCoordinate(latitude = 35.1777, longitude = 129.0712)
+        val activeFallbackTarget =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1796, longitude = 129.0756),
+                source = MapCameraSource.SEARCH_RESULT,
+                requestId = 11L,
+                zoomLevel = 18,
+            )
+
+        controlState.updateBaseCameraTarget(focusedPreviewTarget)
+        controlState.onCameraMoveEnd(
+            center = manualCameraCenter,
+            zoomLevel = 16,
+            isUserGesture = true,
+        )
+        controlState.updateBaseCameraTarget(activeFallbackTarget)
+
+        val cameraTarget = controlState.cameraTargetFor(activeFallbackTarget)
+        assertEquals(manualCameraCenter, cameraTarget.center)
+        assertEquals(16, cameraTarget.zoomLevel)
+        assertFalse(controlState.shouldFitProjection)
     }
 }

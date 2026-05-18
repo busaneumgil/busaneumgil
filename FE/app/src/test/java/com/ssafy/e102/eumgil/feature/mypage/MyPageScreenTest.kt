@@ -127,6 +127,41 @@ class MyPageScreenTest {
     }
 
     @Test
+    fun `my page uses requested icon resources`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+
+        assertTrue(
+            "My reports stat should use the same report icon as the navigation bar.",
+            source.contains("iconRes = R.drawable.ic_nav_report,"),
+        )
+        assertTrue(
+            "Recent navigation stat should use the requested map-pin icon resource.",
+            source.contains("iconRes = R.drawable.ic_mypage_recent_navigation,"),
+        )
+        assertTrue(
+            "Duribal quick action should use the requested Duribal vehicle image and preserve its source colors.",
+            source.contains("iconRes = R.drawable.ic_mypage_duribal_call_vehicle,") &&
+                source.contains("iconTint = Color.Unspecified"),
+        )
+        assertTrue(
+            "Privacy policy row should use the requested privacy icon resource.",
+            source.contains("iconRes = R.drawable.ic_mypage_privacy_policy,"),
+        )
+        assertTrue(
+            "Notice row should use the requested notice icon resource.",
+            source.contains("iconRes = R.drawable.ic_mypage_notice,"),
+        )
+        assertTrue(
+            "Service terms row and guide quick action should share the requested document guide icon resource.",
+            source.contains("iconRes = R.drawable.ic_mypage_terms_guide,") &&
+                source.indexOf("iconRes = R.drawable.ic_mypage_terms_guide,") !=
+                source.lastIndexOf("iconRes = R.drawable.ic_mypage_terms_guide,"),
+        )
+    }
+
+    @Test
     fun `my page display name falls back to generic user label`() {
         assertEquals("사용자", resolveDisplayName(MyPageUiState(displayName = null)))
         assertEquals("사용자", resolveDisplayName(MyPageUiState(displayName = " ")))

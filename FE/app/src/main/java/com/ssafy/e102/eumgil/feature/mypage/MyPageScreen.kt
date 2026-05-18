@@ -327,7 +327,7 @@ private fun ProfileStatsRow(uiState: MyPageUiState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         StatItem(
-            iconRes = R.drawable.ic_mypage_report_history,
+            iconRes = R.drawable.ic_nav_report,
             label = stringResource(id = R.string.my_page_stat_reports),
             value = uiState.reportHistoryCount,
             unit = "건",
@@ -343,7 +343,7 @@ private fun ProfileStatsRow(uiState: MyPageUiState) {
         )
         StatDivider()
         StatItem(
-            iconRes = R.drawable.ic_nav_route,
+            iconRes = R.drawable.ic_mypage_recent_navigation,
             label = stringResource(id = R.string.my_page_stat_recent_navigation),
             value = uiState.recentNavigationCount,
             unit = "회",
@@ -420,14 +420,15 @@ private fun QuickActionGrid(
     ) {
         QuickActionCard(
             titleRes = R.string.my_page_duribal_title,
-            iconRes = R.drawable.ic_mypage_duribal_call,
+            iconRes = R.drawable.ic_mypage_duribal_call_vehicle,
             containerColor = EumSurfaceInfo,
+            iconTint = Color.Unspecified,
             onClick = onDuribalCallClick,
             modifier = Modifier.weight(1f),
         )
         QuickActionCard(
             titleRes = R.string.my_page_guide_title,
-            iconRes = R.drawable.ic_terms_document,
+            iconRes = R.drawable.ic_mypage_terms_guide,
             containerColor = MaterialTheme.colorScheme.surface,
             onClick = onGuideClick,
             modifier = Modifier.weight(1f),
@@ -440,6 +441,7 @@ private fun QuickActionCard(
     @StringRes titleRes: Int,
     @DrawableRes iconRes: Int,
     containerColor: Color,
+    iconTint: Color = EumPrimary600,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -465,7 +467,7 @@ private fun QuickActionCard(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
                 modifier = Modifier.size(36.dp),
-                tint = EumPrimary600,
+                tint = iconTint,
             )
             Column(
                 modifier = Modifier.weight(1f),
@@ -513,21 +515,21 @@ private fun MainMenuCard(
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.NOTICE,
                 titleRes = R.string.my_page_menu_notice,
-                iconRes = R.drawable.ic_mypage_notice_bell_vector,
+                iconRes = R.drawable.ic_mypage_notice,
                 onClick = onMenuClick,
             )
             MyPageMenuDivider()
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.PRIVACY_POLICY,
                 titleRes = R.string.my_page_app_info_privacy_policy,
-                iconRes = R.drawable.ic_terms_privacy,
+                iconRes = R.drawable.ic_mypage_privacy_policy,
                 onClick = onMenuClick,
             )
             MyPageMenuDivider()
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.SERVICE_TERMS,
                 titleRes = R.string.my_page_app_info_service_terms,
-                iconRes = R.drawable.ic_terms_document,
+                iconRes = R.drawable.ic_mypage_terms_guide,
                 onClick = onMenuClick,
             )
         }

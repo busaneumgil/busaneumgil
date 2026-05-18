@@ -42,8 +42,10 @@ internal fun Location.toSnapshot(): LocationSnapshot =
     LocationSnapshot(
         latitude = latitude,
         longitude = longitude,
-        accuracyMeters = accuracy,
+        accuracyMeters = accuracy.takeIf { hasAccuracy() },
         recordedAtEpochMillis = time,
+        speedMetersPerSecond = speed.takeIf { hasSpeed() },
+        bearingDegrees = bearing.takeIf { hasBearing() },
     )
 
 private fun Context.hasPermission(permission: String): Boolean =

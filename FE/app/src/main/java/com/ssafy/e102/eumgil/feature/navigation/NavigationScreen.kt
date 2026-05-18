@@ -87,6 +87,7 @@ import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.component.createNavigationViewportOverlayState
 import com.ssafy.e102.eumgil.feature.map.component.rememberMapOverlayViewportControlState
+import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.navigation.component.NavigationSegmentRail
 import com.ssafy.e102.eumgil.feature.route.RouteTransitOptionLabelUiState
 import kotlinx.coroutines.delay
@@ -151,6 +152,12 @@ fun NavigationScreen(
                         uiState = uiState,
                         onSegmentTapped = { index ->
                             onAction(NavigationUiAction.SegmentTapped(index = index))
+                        },
+                        onCurrentLocationClick = {
+                            onAction(NavigationUiAction.CurrentLocationClicked)
+                        },
+                        onUserCameraGesture = {
+                            onAction(NavigationUiAction.MapCameraMovedByUser)
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -899,15 +906,32 @@ private fun NavigationVoiceControl(
 private fun NavigationMapStage(
     uiState: NavigationUiState,
     onSegmentTapped: (Int) -> Unit,
+    onCurrentLocationClick: () -> Unit,
+    onUserCameraGesture: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val mapControlState = rememberMapOverlayViewportControlState()
+    LaunchedEffect(uiState.locationRecenterRequestId) {
+        if (uiState.locationRecenterRequestId == 0L) return@LaunchedEffect
+        val currentLocation = uiState.mapOverlay.currentLocation?.coordinate
+        if (currentLocation != null) {
+            mapControlState.recenterToCurrentLocation(
+                MapCoordinate(
+                    latitude = currentLocation.latitude,
+                    longitude = currentLocation.longitude,
+                ),
+            )
+        } else {
+            mapControlState.recenter()
+        }
+    }
     Box(
         modifier = modifier.fillMaxWidth(),
     ) {
         NavigationMapBackdrop(
             mapOverlay = uiState.mapOverlay,
             onSegmentTapped = onSegmentTapped,
+            onUserCameraGesture = onUserCameraGesture,
             controlState = mapControlState,
             modifier = Modifier.fillMaxSize(),
         )
@@ -922,7 +946,7 @@ private fun NavigationMapStage(
             )
         }
         NavigationMapControls(
-            onActionClick = { mapControlState.recenter() },
+            onActionClick = onCurrentLocationClick,
             onZoomInClick = { mapControlState.zoomIn() },
             onZoomOutClick = { mapControlState.zoomOut() },
             modifier =
@@ -937,6 +961,7 @@ private fun NavigationMapStage(
 private fun NavigationMapBackdrop(
     mapOverlay: NavigationMapOverlayUiState,
     onSegmentTapped: (Int) -> Unit,
+    onUserCameraGesture: () -> Unit,
     controlState: MapOverlayViewportControlState? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -950,6 +975,7 @@ private fun NavigationMapBackdrop(
                 onSegmentTapped(segmentIndex)
             }
         },
+        onUserCameraGesture = onUserCameraGesture,
         controlState = controlState,
     )
 }

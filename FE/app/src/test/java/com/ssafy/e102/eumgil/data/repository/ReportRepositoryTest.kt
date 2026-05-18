@@ -170,6 +170,10 @@ private class FakeReportOutboxDao(
         outboxItems.value = outboxItems.value.filterNot { it.outboxId == outboxId }
     }
 
+    override suspend fun clearReportOutboxes() {
+        outboxItems.value = emptyList()
+    }
+
     override suspend fun resetSubmittingOutboxesToPending(now: Long): Int {
         var resetCount = 0
         outboxItems.value =

@@ -40,7 +40,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -282,7 +281,7 @@ private fun ProfileAvatar(uiState: MyPageUiState) {
                 .semantics { contentDescription = avatarDescription },
         contentAlignment = Alignment.Center,
     ) {
-        if (avatarRes == R.drawable.ic_nav_mypage) {
+        if (avatarRes == R.drawable.ic_mypage_sf3_person_circle) {
             Icon(
                 painter = painterResource(id = avatarRes),
                 contentDescription = null,
@@ -327,7 +326,7 @@ private fun ProfileStatsRow(uiState: MyPageUiState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         StatItem(
-            iconRes = R.drawable.ic_nav_report,
+            iconRes = R.drawable.ic_mypage_sf3_exclamation_bubble,
             label = stringResource(id = R.string.my_page_stat_reports),
             value = uiState.reportHistoryCount,
             unit = "건",
@@ -335,7 +334,7 @@ private fun ProfileStatsRow(uiState: MyPageUiState) {
         )
         StatDivider()
         StatItem(
-            iconRes = R.drawable.ic_nav_bookmark_selected,
+            iconRes = R.drawable.ic_mypage_sf3_bookmark,
             label = stringResource(id = R.string.my_page_stat_bookmarks),
             value = uiState.totalBookmarkCount,
             unit = "건",
@@ -343,7 +342,7 @@ private fun ProfileStatsRow(uiState: MyPageUiState) {
         )
         StatDivider()
         StatItem(
-            iconRes = R.drawable.ic_mypage_recent_navigation,
+            iconRes = R.drawable.ic_mypage_sf3_location_north_line,
             label = stringResource(id = R.string.my_page_stat_recent_navigation),
             value = uiState.recentNavigationCount,
             unit = "회",
@@ -368,7 +367,7 @@ private fun StatItem(
         Icon(
             painter = painterResource(id = iconRes),
             contentDescription = null,
-            modifier = Modifier.size(30.dp),
+            modifier = Modifier.size(28.dp),
             tint = EumPrimary600,
         )
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -428,7 +427,7 @@ private fun QuickActionGrid(
         )
         QuickActionCard(
             titleRes = R.string.my_page_guide_title,
-            iconRes = R.drawable.ic_mypage_terms_guide,
+            iconRes = R.drawable.ic_mypage_sf3_doc_text,
             containerColor = MaterialTheme.colorScheme.surface,
             onClick = onGuideClick,
             modifier = Modifier.weight(1f),
@@ -466,7 +465,7 @@ private fun QuickActionCard(
             Icon(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
-                modifier = Modifier.size(36.dp),
+                modifier = Modifier.size(34.dp),
                 tint = iconTint,
             )
             Column(
@@ -483,12 +482,9 @@ private fun QuickActionCard(
                 )
             }
             Icon(
-                painter = painterResource(id = R.drawable.ic_action_dropdown),
+                painter = painterResource(id = R.drawable.ic_mypage_sf3_chevron_right),
                 contentDescription = null,
-                modifier =
-                    Modifier
-                        .size(18.dp)
-                        .rotate(-90f),
+                modifier = Modifier.size(18.dp),
                 tint = EumPrimary600,
             )
         }
@@ -515,21 +511,21 @@ private fun MainMenuCard(
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.NOTICE,
                 titleRes = R.string.my_page_menu_notice,
-                iconRes = R.drawable.ic_mypage_notice,
+                iconRes = R.drawable.ic_mypage_sf3_bell,
                 onClick = onMenuClick,
             )
             MyPageMenuDivider()
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.PRIVACY_POLICY,
                 titleRes = R.string.my_page_app_info_privacy_policy,
-                iconRes = R.drawable.ic_mypage_privacy_policy,
+                iconRes = R.drawable.ic_mypage_sf3_shield,
                 onClick = onMenuClick,
             )
             MyPageMenuDivider()
             MyPageMenuRow(
                 menuItem = MyPageMenuItem.SERVICE_TERMS,
                 titleRes = R.string.my_page_app_info_service_terms,
-                iconRes = R.drawable.ic_mypage_terms_guide,
+                iconRes = R.drawable.ic_mypage_sf3_doc_text,
                 onClick = onMenuClick,
             )
         }
@@ -588,12 +584,9 @@ private fun MyPageMenuRow(
             overflow = TextOverflow.Ellipsis,
         )
         Icon(
-            painter = painterResource(id = R.drawable.ic_action_dropdown),
+            painter = painterResource(id = R.drawable.ic_mypage_sf3_chevron_right),
             contentDescription = null,
-            modifier =
-                Modifier
-                    .size(20.dp)
-                    .rotate(-90f),
+            modifier = Modifier.size(20.dp),
             tint = EumTextTertiary,
         )
     }
@@ -821,12 +814,9 @@ private fun CircleChevron() {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            painter = painterResource(id = R.drawable.ic_action_dropdown),
+            painter = painterResource(id = R.drawable.ic_mypage_sf3_chevron_right),
             contentDescription = null,
-            modifier =
-                Modifier
-                    .size(20.dp)
-                    .rotate(-90f),
+            modifier = Modifier.size(20.dp),
             tint = EumPrimary600,
         )
     }
@@ -862,13 +852,13 @@ internal fun resolveHeadlineTextRes(uiState: MyPageUiState): Int = uiState.userM
 @DrawableRes
 internal fun resolveProfileAvatarRes(uiState: MyPageUiState): Int =
     if (uiState.userMode != MyPageUserMode.MOBILITY_IMPAIRED) {
-        R.drawable.ic_nav_mypage
+        R.drawable.ic_mypage_sf3_person_circle
     } else {
         when (uiState.mobilitySubtype) {
             MyPageMobilitySubtype.MANUAL_WHEELCHAIR -> R.drawable.manual_galmaegi
             MyPageMobilitySubtype.ELECTRIC_WHEELCHAIR -> R.drawable.auto_galmaegi
             MyPageMobilitySubtype.OTHER -> R.drawable.crutch_galmaegi
-            null -> R.drawable.ic_nav_mypage
+            null -> R.drawable.ic_mypage_sf3_person_circle
         }
     }
 
@@ -877,7 +867,7 @@ internal fun resolveUserModeIconRes(uiState: MyPageUiState): Int =
     when (uiState.userMode) {
         MyPageUserMode.LOW_VISION -> R.drawable.ic_user_visual_impairment
         MyPageUserMode.MOBILITY_IMPAIRED -> R.drawable.ic_user_wheelchair
-        MyPageUserMode.UNKNOWN -> R.drawable.ic_nav_mypage
+        MyPageUserMode.UNKNOWN -> R.drawable.ic_mypage_sf3_person_circle
     }
 
 internal fun resolveDisplayName(uiState: MyPageUiState): String =

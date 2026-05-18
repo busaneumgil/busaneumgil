@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   approveAdminHazardReport,
+  completeAdminHazardRouteReview,
   fetchAdminDashboardSummary,
   fetchAdminHazardReportDetail,
   fetchAdminHazardReports,
   fetchAdminRoadNetworkPayload,
   rejectAdminHazardReport,
   reverseGeocodePlace,
+  startAdminHazardRouteReview,
+  updateAdminHazardRouteReview,
 } from "../api/adminApi";
 import type {
   AdminHazardReportDetail,
@@ -39,10 +42,13 @@ import {
   canStartHazardRestore,
   completeHazardRouteReview,
   deriveHazardDisplayStatus,
+  hydrateHazardRouteReviewRecord,
   isHazardReviewActive,
   loadStoredHazardRouteReview,
   startHazardRouteReview,
   storeHazardRouteReview,
+  toAdminHazardRouteReviewIntent,
+  toAdminHazardRouteReviewUpdateRequest,
   type HazardRouteReviewRecord,
 } from "./hazardRouteReviewState";
 
@@ -443,12 +449,81 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     },
   });
 
+  const startRouteReviewMutation = useMutation({
+    mutationFn: ({
+      reportId,
+      intent,
+      gu,
+      dong,
+    }: {
+      reportId: number;
+      intent: "approve" | "restore";
+      gu: string;
+      dong: string;
+    }) => startAdminHazardRouteReview(reportId, {
+      intent: toAdminHazardRouteReviewIntent(intent),
+      gu,
+      dong,
+    }, accessToken),
+    onSuccess: (response) => {
+      const hydratedReview = hydrateHazardRouteReviewRecord(response);
+      if (hydratedReview) {
+        setRouteReviewDraft(hydratedReview);
+      }
+      markReportViewed(response.reportId);
+      setSelectedReportId(response.reportId);
+      setDetailPaneMode("review");
+      void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
+    },
+  });
+
+  const updateRouteReviewMutation = useMutation({
+    mutationFn: ({ reportId, review }: { reportId: number; review: HazardRouteReviewRecord }) => updateAdminHazardRouteReview(
+      reportId,
+      toAdminHazardRouteReviewUpdateRequest(review),
+      accessToken,
+    ),
+    onSuccess: (response) => {
+      const hydratedReview = hydrateHazardRouteReviewRecord(response);
+      if (hydratedReview) {
+        setRouteReviewDraft(hydratedReview);
+      }
+    },
+  });
+
+  const completeRouteReviewMutation = useMutation({
+    mutationFn: (reportId: number) => completeAdminHazardRouteReview(reportId, accessToken),
+    onSuccess: (response) => {
+      const hydratedReview = hydrateHazardRouteReviewRecord(response);
+      if (hydratedReview) {
+        setRouteReviewDraft(hydratedReview);
+      }
+      markReportHandled(response.reportId);
+      setSelectedReportId(response.reportId);
+      setDetailPaneMode("detail");
+      void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] });
+    },
+  });
+
   const detail = preview ? previewRecord?.detail ?? null : detailQuery.data;
+  const serverReviewDraft = useMemo(
+    () => (detail ? hydrateHazardRouteReviewRecord(detail.latestRouteReview) : null),
+    [detail],
+  );
   const activeReport = detail ?? selectedReport;
-  const activeReviewDraft = activeReport ? routeReviewDrafts[activeReport.reportId] ?? null : null;
+  const activeReviewDraft = activeReport ? routeReviewDrafts[activeReport.reportId] ?? serverReviewDraft ?? null : null;
   const previewImages = detail?.imageUrls ?? (selectedReport?.representativeImageUrl ? [selectedReport.representativeImageUrl] : []);
   const selectedImageUrl = pickHazardPrimaryImage(previewImages, selectedImageIndex);
   const reportPoint = activeReport?.reportPoint ?? null;
+
+  useEffect(() => {
+    if (preview || !serverReviewDraft) {
+      return;
+    }
+    setRouteReviewDraft(serverReviewDraft);
+  }, [preview, serverReviewDraft]);
 
   const locationQuery = useQuery<HazardReverseGeocodeResult>({
     queryKey: ["admin-hazard-report-address", activeReport?.reportId, reportPoint?.lat, reportPoint?.lng, accessToken],
@@ -479,6 +554,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     : null;
   const roadviewLink = reportPoint ? createKakaoRoadviewLink(reportPoint) : null;
   const displayStatus = activeReport ? deriveHazardDisplayStatus(activeReport.status, activeReviewDraft) : null;
+  const hasRouteReviewScope = preview || Boolean(areaScope?.gu && areaScope?.dong);
   const canStartApprove = Boolean(detail && canStartHazardApprove(detail.status, activeReviewDraft));
   const canReject = Boolean(
     detail
@@ -490,6 +566,17 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   );
   const canRestore = Boolean(detail && canStartHazardRestore(detail.status, activeReviewDraft));
   const isRouteReviewMode = Boolean(activeReport && activeReviewDraft && activeReviewDraft.stage === "IN_PROGRESS" && detailPaneMode === "review");
+  const actionError = approveMutation.error instanceof Error
+    ? approveMutation.error
+    : rejectMutation.error instanceof Error
+      ? rejectMutation.error
+      : startRouteReviewMutation.error instanceof Error
+        ? startRouteReviewMutation.error
+        : updateRouteReviewMutation.error instanceof Error
+          ? updateRouteReviewMutation.error
+          : completeRouteReviewMutation.error instanceof Error
+            ? completeRouteReviewMutation.error
+            : null;
 
   useEffect(() => {
     setSelectedImageIndex(0);
@@ -501,9 +588,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       setDetailPaneMode("detail");
       return;
     }
-    const nextDraft = routeReviewDrafts[selectedReportId];
+    const nextDraft = routeReviewDrafts[selectedReportId]
+      ?? (detail?.reportId === selectedReportId ? serverReviewDraft : null);
     setDetailPaneMode(nextDraft?.stage === "IN_PROGRESS" ? "review" : "detail");
-  }, [routeReviewDrafts, selectedReportId]);
+  }, [detail?.reportId, routeReviewDrafts, selectedReportId, serverReviewDraft]);
 
   function changeStatus(nextStatus: HazardFilterKey) {
     setStatus(nextStatus);
@@ -515,6 +603,19 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     if (!activeReport) {
       return;
     }
+    if (!preview) {
+      if (!areaScope?.gu || !areaScope?.dong) {
+        return;
+      }
+      startRouteReviewMutation.mutate({
+        reportId: activeReport.reportId,
+        intent,
+        gu: areaScope.gu,
+        dong: areaScope.dong,
+      });
+      return;
+    }
+
     const now = new Date().toISOString();
     const nextReview = startHazardRouteReview({
       reportId: activeReport.reportId,
@@ -528,6 +629,17 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     setDetailPaneMode("review");
   }
 
+  function handleRouteReviewChange(nextReview: HazardRouteReviewRecord) {
+    setRouteReviewDraft(nextReview);
+    if (preview) {
+      return;
+    }
+    updateRouteReviewMutation.mutate({
+      reportId: nextReview.reportId,
+      review: nextReview,
+    });
+  }
+
   async function completeRouteReviewFlow() {
     if (!activeReport || !activeReviewDraft) {
       return;
@@ -535,10 +647,9 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
     setIsCompletingRouteReview(true);
     try {
-      if (activeReviewDraft.intent === "approve" && !preview && detail && detail.status !== "APPROVED") {
-        await approveMutation.mutateAsync(detail.reportId);
-      } else if (activeReviewDraft.intent === "restore") {
-        markReportHandled(activeReport.reportId);
+      if (!preview) {
+        await completeRouteReviewMutation.mutateAsync(activeReport.reportId);
+        return;
       }
 
       const completedReview = completeHazardRouteReview(activeReviewDraft, new Date().toISOString());
@@ -816,9 +927,9 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   networkError={preview ? null : routeNetworkQuery.error instanceof Error ? routeNetworkQuery.error : null}
                   areaScopeLabel={areaScope ? `${areaScope.gu} ${areaScope.dong}` : null}
                   onBack={() => setDetailPaneMode("detail")}
-                  onReviewChange={setRouteReviewDraft}
+                  onReviewChange={handleRouteReviewChange}
                   onComplete={completeRouteReviewFlow}
-                  completing={isCompletingRouteReview || approveMutation.isPending}
+                  completing={isCompletingRouteReview || completeRouteReviewMutation.isPending}
                 />
               ) : (
                 <>
@@ -990,7 +1101,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   <button
                     type="button"
                     className="hazard-action-button approve"
-                    disabled={!canStartApprove}
+                    disabled={!canStartApprove || !hasRouteReviewScope || startRouteReviewMutation.isPending}
                     onClick={() => startRouteReview("approve")}
                   >
                     <HazardUiIcon name="check" />
@@ -1012,7 +1123,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   <button
                     type="button"
                     className="hazard-action-button restore"
-                    disabled={!canRestore || activeReviewDraft?.stage === "IN_PROGRESS"}
+                    disabled={!canRestore || activeReviewDraft?.stage === "IN_PROGRESS" || !hasRouteReviewScope || startRouteReviewMutation.isPending}
                     onClick={() => startRouteReview("restore")}
                   >
                     <HazardUiIcon name="refresh" />
@@ -1026,9 +1137,9 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                 <span>승인과 원상복구는 먼저 경로 검수 초안을 시작한 뒤 처리 완료됩니다. 검수 도중 목록으로 나가도 마지막 초안은 이어서 검토할 수 있습니다.</span>
               </div>
 
-              {!preview && (approveMutation.error instanceof Error || rejectMutation.error instanceof Error) && (
+              {!preview && actionError && (
                 <p className="error-box">
-                  {approveMutation.error instanceof Error ? approveMutation.error.message : rejectMutation.error?.message}
+                  {actionError.message}
                 </p>
               )}
 

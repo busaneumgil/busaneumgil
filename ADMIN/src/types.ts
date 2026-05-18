@@ -794,6 +794,47 @@ export interface AdminHazardReportListResponse {
   hasNext: boolean;
 }
 
+export type AdminHazardRouteReviewIntent = "APPROVE" | "RESTORE";
+export type AdminHazardRouteReviewStage = "IN_PROGRESS" | "COMPLETED";
+
+export interface AdminHazardRouteReviewSegmentDraft {
+  edgeId: number;
+  walkAccess?: AccessibilityState | null;
+  brailleBlockState?: AccessibilityState | null;
+  audioSignalState?: AccessibilityState | null;
+  widthState?: WidthState | null;
+  surfaceState?: SurfaceState | null;
+  stairsState?: AccessibilityState | null;
+  signalState?: AccessibilityState | null;
+}
+
+export interface AdminHazardRouteReview {
+  reviewId: number;
+  reportId: number;
+  intent: AdminHazardRouteReviewIntent;
+  stage: AdminHazardRouteReviewStage;
+  reportStatus: HazardReportStatus;
+  reviewerUserId: string;
+  gu: string;
+  dong: string;
+  selectedSegmentEdgeId: number | null;
+  startedAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  segmentDrafts: AdminHazardRouteReviewSegmentDraft[];
+}
+
+export interface StartAdminHazardRouteReviewRequest {
+  intent: AdminHazardRouteReviewIntent;
+  gu: string;
+  dong: string;
+}
+
+export interface UpdateAdminHazardRouteReviewRequest {
+  selectedSegmentEdgeId?: number | null;
+  segmentDrafts?: AdminHazardRouteReviewSegmentDraft[];
+}
+
 export interface AdminHazardReportDetail {
   reportId: number;
   reporterUserId: string;
@@ -803,6 +844,7 @@ export interface AdminHazardReportDetail {
   status: HazardReportStatus;
   createdAt: string;
   imageUrls: string[];
+  latestRouteReview?: AdminHazardRouteReview | null;
 }
 
 export interface AdminHazardReportStatusResponse {

@@ -1,4 +1,10 @@
-import type { AdminRoadSegmentAttributesUpdateRequest, HazardReportStatus } from "../types";
+import type {
+  AdminHazardRouteReview,
+  AdminHazardRouteReviewIntent,
+  AdminRoadSegmentAttributesUpdateRequest,
+  HazardReportStatus,
+  UpdateAdminHazardRouteReviewRequest,
+} from "../types";
 
 const hazardRouteReviewStoragePrefix = "busan-eumgil-ADMIN:hazard-route-review:";
 
@@ -91,6 +97,55 @@ export function startHazardRouteReview({
     completedAt: null,
     selectedSegmentEdgeId: existing?.selectedSegmentEdgeId ?? null,
     segmentDrafts: existing?.segmentDrafts ?? {},
+  };
+}
+
+export function hydrateHazardRouteReviewRecord(review?: AdminHazardRouteReview | null): HazardRouteReviewRecord | null {
+  if (!review) {
+    return null;
+  }
+
+  return {
+    reportId: review.reportId,
+    intent: fromAdminHazardRouteReviewIntent(review.intent),
+    stage: review.stage,
+    reviewerUserId: review.reviewerUserId,
+    startedAt: review.startedAt,
+    updatedAt: review.updatedAt,
+    completedAt: review.completedAt,
+    selectedSegmentEdgeId: review.selectedSegmentEdgeId == null ? null : String(review.selectedSegmentEdgeId),
+    segmentDrafts: review.segmentDrafts.reduce<Record<string, AdminRoadSegmentAttributesUpdateRequest>>((drafts, segmentDraft) => {
+      drafts[String(segmentDraft.edgeId)] = {
+        walkAccess: segmentDraft.walkAccess ?? null,
+        brailleBlockState: segmentDraft.brailleBlockState ?? null,
+        audioSignalState: segmentDraft.audioSignalState ?? null,
+        widthState: segmentDraft.widthState ?? null,
+        surfaceState: segmentDraft.surfaceState ?? null,
+        stairsState: segmentDraft.stairsState ?? null,
+        signalState: segmentDraft.signalState ?? null,
+      };
+      return drafts;
+    }, {}),
+  };
+}
+
+export function toAdminHazardRouteReviewIntent(intent: HazardRouteReviewIntent): AdminHazardRouteReviewIntent {
+  return intent === "restore" ? "RESTORE" : "APPROVE";
+}
+
+export function toAdminHazardRouteReviewUpdateRequest(review: HazardRouteReviewRecord): UpdateAdminHazardRouteReviewRequest {
+  return {
+    selectedSegmentEdgeId: review.selectedSegmentEdgeId == null ? null : Number(review.selectedSegmentEdgeId),
+    segmentDrafts: Object.entries(review.segmentDrafts).map(([edgeId, draft]) => ({
+      edgeId: Number(edgeId),
+      walkAccess: draft.walkAccess ?? null,
+      brailleBlockState: draft.brailleBlockState ?? null,
+      audioSignalState: draft.audioSignalState ?? null,
+      widthState: draft.widthState ?? null,
+      surfaceState: draft.surfaceState ?? null,
+      stairsState: draft.stairsState ?? null,
+      signalState: draft.signalState ?? null,
+    })),
   };
 }
 
@@ -190,4 +245,8 @@ export function isHazardReviewActive(review?: HazardRouteReviewRecord | null) {
 
 export function hazardRouteReviewIntentLabel(intent: HazardRouteReviewIntent) {
   return intent === "restore" ? "원상복구 검수" : "승인 검수";
+}
+
+function fromAdminHazardRouteReviewIntent(intent: AdminHazardRouteReviewIntent): HazardRouteReviewIntent {
+  return intent === "RESTORE" ? "restore" : "approve";
 }

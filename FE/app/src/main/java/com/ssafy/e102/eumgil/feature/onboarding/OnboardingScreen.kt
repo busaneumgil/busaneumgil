@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
@@ -74,8 +75,8 @@ fun PrimaryUserTypeScreen(
     modifier: Modifier = Modifier,
 ) {
     OnboardingSelectionFrame(
-        currentStep = 1,
-        totalSteps = 2,
+        currentStep = PROFILE_SETUP_PRIMARY_STEP,
+        totalSteps = PROFILE_SETUP_TOTAL_STEPS,
         title = stringResource(id = R.string.onboarding_primary_user_type_screen_title),
         description = "",
         modifier = modifier,
@@ -203,8 +204,8 @@ fun MobilitySubtypeScreen(
     modifier: Modifier = Modifier,
 ) {
     OnboardingSelectionFrame(
-        currentStep = 2,
-        totalSteps = 2,
+        currentStep = PROFILE_SETUP_MOBILITY_SUBTYPE_STEP,
+        totalSteps = PROFILE_SETUP_TOTAL_STEPS,
         title = stringResource(id = R.string.onboarding_mobility_subtype_screen_title),
         description = stringResource(id = R.string.onboarding_mobility_subtype_screen_supporting),
         modifier = modifier,
@@ -330,38 +331,16 @@ fun LocationTermsScreen(
         headerStyle = OnboardingStepHeaderStyle.CENTERED_COMPACT,
         modifier = modifier,
     ) {
-        LocationTermsAllAgreementRow(
-            checked = uiState.isAllTermsChecked,
-            onCheckedChange = onAllTermsCheckedChange,
+        LocationTermsAgreementList(
+            uiState = uiState,
+            variant = LocationTermsAgreementListVariant.FULL_SCREEN,
+            onAllTermsCheckedChange = onAllTermsCheckedChange,
+            onServiceTermsCheckedChange = onServiceTermsCheckedChange,
+            onSensitiveInfoTermsCheckedChange = onSensitiveInfoTermsCheckedChange,
+            onPersonalLocationInfoTermsCheckedChange = onPersonalLocationInfoTermsCheckedChange,
+            onOverFourteenCheckedChange = onOverFourteenCheckedChange,
+            onRequestDetails = onRequestDetails,
         )
-
-        Column(
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-        ) {
-            LocationTermsItem.entries.forEach { locationTermsItem ->
-                val checked =
-                    when (locationTermsItem) {
-                        LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE -> uiState.isServiceTermsChecked
-                        LocationTermsItem.SENSITIVE_INFO -> uiState.isSensitiveInfoTermsChecked
-                        LocationTermsItem.PERSONAL_LOCATION_INFO -> uiState.isPersonalLocationInfoTermsChecked
-                        LocationTermsItem.OVER_FOURTEEN -> uiState.isOverFourteenChecked
-                    }
-                val onCheckedChange =
-                    when (locationTermsItem) {
-                        LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE -> onServiceTermsCheckedChange
-                        LocationTermsItem.SENSITIVE_INFO -> onSensitiveInfoTermsCheckedChange
-                        LocationTermsItem.PERSONAL_LOCATION_INFO -> onPersonalLocationInfoTermsCheckedChange
-                        LocationTermsItem.OVER_FOURTEEN -> onOverFourteenCheckedChange
-                    }
-
-                LocationTermsAgreementRow(
-                    item = locationTermsItem,
-                    checked = checked,
-                    onCheckedChange = onCheckedChange,
-                    onRequestDetails = { onRequestDetails(locationTermsItem) },
-                )
-            }
-        }
 
         if (!uiState.canProceed) {
             Text(
@@ -459,38 +438,16 @@ private fun LocationTermsBottomSheetContent(
             )
         }
 
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            LocationTermsSheetAllAgreementRow(
-                checked = uiState.isAllTermsChecked,
-                onCheckedChange = onAllTermsCheckedChange,
-            )
-
-            LocationTermsItem.entries.forEach { item ->
-                val checked =
-                    when (item) {
-                        LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE -> uiState.isServiceTermsChecked
-                        LocationTermsItem.SENSITIVE_INFO -> uiState.isSensitiveInfoTermsChecked
-                        LocationTermsItem.PERSONAL_LOCATION_INFO -> uiState.isPersonalLocationInfoTermsChecked
-                        LocationTermsItem.OVER_FOURTEEN -> uiState.isOverFourteenChecked
-                    }
-                val onCheckedChange =
-                    when (item) {
-                        LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE -> onServiceTermsCheckedChange
-                        LocationTermsItem.SENSITIVE_INFO -> onSensitiveInfoTermsCheckedChange
-                        LocationTermsItem.PERSONAL_LOCATION_INFO -> onPersonalLocationInfoTermsCheckedChange
-                        LocationTermsItem.OVER_FOURTEEN -> onOverFourteenCheckedChange
-                    }
-
-                LocationTermsSheetAgreementRow(
-                    item = item,
-                    checked = checked,
-                    onCheckedChange = onCheckedChange,
-                    onRequestDetails = { onRequestDetails(item) },
-                )
-            }
-        }
+        LocationTermsAgreementList(
+            uiState = uiState,
+            variant = LocationTermsAgreementListVariant.BOTTOM_SHEET,
+            onAllTermsCheckedChange = onAllTermsCheckedChange,
+            onServiceTermsCheckedChange = onServiceTermsCheckedChange,
+            onSensitiveInfoTermsCheckedChange = onSensitiveInfoTermsCheckedChange,
+            onPersonalLocationInfoTermsCheckedChange = onPersonalLocationInfoTermsCheckedChange,
+            onOverFourteenCheckedChange = onOverFourteenCheckedChange,
+            onRequestDetails = onRequestDetails,
+        )
 
         Button(
             onClick = onPrimaryActionClick,
@@ -517,118 +474,159 @@ private fun LocationTermsBottomSheetContent(
 }
 
 @Composable
-private fun LocationTermsSheetAllAgreementRow(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
+private fun LocationTermsAgreementList(
+    uiState: LocationTermsUiState,
+    variant: LocationTermsAgreementListVariant,
+    onAllTermsCheckedChange: (Boolean) -> Unit,
+    onServiceTermsCheckedChange: (Boolean) -> Unit,
+    onSensitiveInfoTermsCheckedChange: (Boolean) -> Unit,
+    onPersonalLocationInfoTermsCheckedChange: (Boolean) -> Unit,
+    onOverFourteenCheckedChange: (Boolean) -> Unit,
+    onRequestDetails: (LocationTermsItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val selectedStateDescription = stringResource(id = R.string.a11y_option_selected)
-    val unselectedStateDescription = stringResource(id = R.string.a11y_option_unselected)
-
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) {
-                role = Role.Checkbox
-                stateDescription = if (checked) selectedStateDescription else unselectedStateDescription
-            }
-            .toggleable(
-                value = checked,
-                onValueChange = onCheckedChange,
-                role = Role.Checkbox,
-            ),
-        color = EumSurfaceMuted,
-        shape = RoundedCornerShape(EumRadius.scaleM),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 64.dp)
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(id = R.string.onboarding_terms_all_agreement_title).stabilizeOnboardingWrap(),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium.onboardingBodyLineBreak(),
-                fontWeight = FontWeight.SemiBold,
-                color = EumTextPrimary,
-            )
-            LocationTermsSheetCheckIcon(checked = checked)
-        }
-    }
-}
-
-@Composable
-private fun LocationTermsSheetAgreementRow(
-    item: LocationTermsItem,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    onRequestDetails: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val selectedStateDescription = stringResource(id = R.string.a11y_option_selected)
-    val unselectedStateDescription = stringResource(id = R.string.a11y_option_unselected)
-    val canOpenDetails = item != LocationTermsItem.OVER_FOURTEEN
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 58.dp),
-        horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stringResource(id = item.titleRes).stabilizeOnboardingWrap(),
-            modifier = Modifier
-                .weight(1f)
-                .clickable(enabled = canOpenDetails, onClick = onRequestDetails),
-            style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
-            fontWeight = FontWeight.SemiBold,
-            color = EumTextTertiary,
-            textDecoration = if (canOpenDetails) TextDecoration.Underline else TextDecoration.None,
+    val itemStates =
+        locationTermsAgreementItemStates(
+            uiState = uiState,
+            onServiceTermsCheckedChange = onServiceTermsCheckedChange,
+            onSensitiveInfoTermsCheckedChange = onSensitiveInfoTermsCheckedChange,
+            onPersonalLocationInfoTermsCheckedChange = onPersonalLocationInfoTermsCheckedChange,
+            onOverFourteenCheckedChange = onOverFourteenCheckedChange,
         )
 
-        IconButton(
-            onClick = { onCheckedChange(!checked) },
-            modifier = Modifier
-                .size(48.dp)
-                .semantics {
-                    role = Role.Checkbox
-                    stateDescription = if (checked) selectedStateDescription else unselectedStateDescription
-                },
-        ) {
-            LocationTermsSheetCheckIcon(checked = checked)
-        }
-    }
-}
-
-@Composable
-private fun LocationTermsSheetCheckIcon(
-    checked: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.size(32.dp),
-        color = if (checked) EumPrimary600 else Color(0xFFE5E7EB),
-        shape = CircleShape,
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(variant.groupSpacing),
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            if (checked) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_check_mark),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = EumWhite,
+        LocationTermsAllAgreementRow(
+            checked = uiState.isAllTermsChecked,
+            onCheckedChange = onAllTermsCheckedChange,
+            variant = variant,
+        )
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(variant.itemSpacing),
+        ) {
+            itemStates.forEach { itemState ->
+                LocationTermsAgreementRow(
+                    state = itemState,
+                    variant = variant,
+                    onRequestDetails = { onRequestDetails(itemState.item) },
                 )
             }
         }
     }
 }
 
+private fun locationTermsAgreementItemStates(
+    uiState: LocationTermsUiState,
+    onServiceTermsCheckedChange: (Boolean) -> Unit,
+    onSensitiveInfoTermsCheckedChange: (Boolean) -> Unit,
+    onPersonalLocationInfoTermsCheckedChange: (Boolean) -> Unit,
+    onOverFourteenCheckedChange: (Boolean) -> Unit,
+): List<LocationTermsAgreementItemState> =
+    LocationTermsItem.entries.map { item ->
+        when (item) {
+            LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE ->
+                LocationTermsAgreementItemState(
+                    item = item,
+                    checked = uiState.isServiceTermsChecked,
+                    onCheckedChange = onServiceTermsCheckedChange,
+                )
+
+            LocationTermsItem.SENSITIVE_INFO ->
+                LocationTermsAgreementItemState(
+                    item = item,
+                    checked = uiState.isSensitiveInfoTermsChecked,
+                    onCheckedChange = onSensitiveInfoTermsCheckedChange,
+                )
+
+            LocationTermsItem.PERSONAL_LOCATION_INFO ->
+                LocationTermsAgreementItemState(
+                    item = item,
+                    checked = uiState.isPersonalLocationInfoTermsChecked,
+                    onCheckedChange = onPersonalLocationInfoTermsCheckedChange,
+                )
+
+            LocationTermsItem.OVER_FOURTEEN ->
+                LocationTermsAgreementItemState(
+                    item = item,
+                    checked = uiState.isOverFourteenChecked,
+                    onCheckedChange = onOverFourteenCheckedChange,
+                )
+        }
+    }
+
+private data class LocationTermsAgreementItemState(
+    val item: LocationTermsItem,
+    val checked: Boolean,
+    val onCheckedChange: (Boolean) -> Unit,
+)
+
+private enum class LocationTermsAgreementListVariant(
+    val groupSpacing: Dp,
+    val itemSpacing: Dp,
+) {
+    FULL_SCREEN(
+        groupSpacing = EumSpacing.medium,
+        itemSpacing = EumSpacing.small,
+    ),
+    BOTTOM_SHEET(
+        groupSpacing = 8.dp,
+        itemSpacing = 8.dp,
+    ),
+}
+
 @Composable
 private fun LocationTermsAllAgreementRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    variant: LocationTermsAgreementListVariant,
+    modifier: Modifier = Modifier,
+) {
+    when (variant) {
+        LocationTermsAgreementListVariant.FULL_SCREEN ->
+            LocationTermsAllAgreementFullScreenRow(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                modifier = modifier,
+            )
+
+        LocationTermsAgreementListVariant.BOTTOM_SHEET ->
+            LocationTermsAllAgreementBottomSheetRow(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                modifier = modifier,
+            )
+    }
+}
+
+@Composable
+private fun LocationTermsAgreementRow(
+    state: LocationTermsAgreementItemState,
+    variant: LocationTermsAgreementListVariant,
+    onRequestDetails: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    when (variant) {
+        LocationTermsAgreementListVariant.FULL_SCREEN ->
+            LocationTermsAgreementFullScreenRow(
+                state = state,
+                onRequestDetails = onRequestDetails,
+                modifier = modifier,
+            )
+
+        LocationTermsAgreementListVariant.BOTTOM_SHEET ->
+            LocationTermsAgreementBottomSheetRow(
+                state = state,
+                onRequestDetails = onRequestDetails,
+                modifier = modifier,
+            )
+    }
+}
+
+@Composable
+private fun LocationTermsAllAgreementFullScreenRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -694,16 +692,58 @@ private fun LocationTermsAllAgreementRow(
 }
 
 @Composable
-private fun LocationTermsAgreementRow(
-    item: LocationTermsItem,
+private fun LocationTermsAllAgreementBottomSheetRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selectedStateDescription = stringResource(id = R.string.a11y_option_selected)
+    val unselectedStateDescription = stringResource(id = R.string.a11y_option_unselected)
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                role = Role.Checkbox
+                stateDescription = if (checked) selectedStateDescription else unselectedStateDescription
+            }
+            .toggleable(
+                value = checked,
+                onValueChange = onCheckedChange,
+                role = Role.Checkbox,
+            ),
+        color = EumSurfaceMuted,
+        shape = RoundedCornerShape(EumRadius.scaleM),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 64.dp)
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(id = R.string.onboarding_terms_all_agreement_title).stabilizeOnboardingWrap(),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium.onboardingBodyLineBreak(),
+                fontWeight = FontWeight.SemiBold,
+                color = EumTextPrimary,
+            )
+            LocationTermsCheckCircle(checked = checked)
+        }
+    }
+}
+
+@Composable
+private fun LocationTermsAgreementFullScreenRow(
+    state: LocationTermsAgreementItemState,
     onRequestDetails: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val selectedStateDescription = stringResource(id = R.string.a11y_option_selected)
     val unselectedStateDescription = stringResource(id = R.string.a11y_option_unselected)
-    val showDetailDisclosure = item != LocationTermsItem.OVER_FOURTEEN
+    val showDetailDisclosure = state.item != LocationTermsItem.OVER_FOURTEEN
     val detailContentDescription = stringResource(id = R.string.a11y_terms_detail_open)
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -715,7 +755,7 @@ private fun LocationTermsAgreementRow(
             BorderStroke(
                 width = 1.dp,
                 color =
-                    if (checked) {
+                    if (state.checked) {
                         EumPrimary600.copy(alpha = 0.38f)
                     } else {
                         MaterialTheme.colorScheme.outline
@@ -736,30 +776,30 @@ private fun LocationTermsAgreementRow(
                     .semantics(mergeDescendants = true) {
                         role = Role.Checkbox
                         stateDescription =
-                            if (checked) {
+                            if (state.checked) {
                                 selectedStateDescription
                             } else {
                                 unselectedStateDescription
                             }
                     }
                     .toggleable(
-                        value = checked,
+                        value = state.checked,
                         interactionSource = interactionSource,
                         indication = null,
                         role = Role.Checkbox,
-                        onValueChange = onCheckedChange,
+                        onValueChange = state.onCheckedChange,
                     ),
                 horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Checkbox(
-                    checked = checked,
+                    checked = state.checked,
                     onCheckedChange = null,
                     colors = locationTermsCheckboxColors(),
                 )
 
                 Text(
-                    text = buildLocationTermsLabel(stringResource(id = item.titleRes).stabilizeOnboardingWrap()),
+                    text = buildLocationTermsLabel(stringResource(id = state.item.titleRes).stabilizeOnboardingWrap()),
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
                     color = MaterialTheme.colorScheme.onSurface,
@@ -778,6 +818,71 @@ private fun LocationTermsAgreementRow(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocationTermsAgreementBottomSheetRow(
+    state: LocationTermsAgreementItemState,
+    onRequestDetails: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selectedStateDescription = stringResource(id = R.string.a11y_option_selected)
+    val unselectedStateDescription = stringResource(id = R.string.a11y_option_unselected)
+    val canOpenDetails = state.item != LocationTermsItem.OVER_FOURTEEN
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 58.dp),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(id = state.item.titleRes).stabilizeOnboardingWrap(),
+            modifier = Modifier
+                .weight(1f)
+                .clickable(enabled = canOpenDetails, onClick = onRequestDetails),
+            style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
+            fontWeight = FontWeight.SemiBold,
+            color = EumTextTertiary,
+            textDecoration = if (canOpenDetails) TextDecoration.Underline else TextDecoration.None,
+        )
+
+        IconButton(
+            onClick = { state.onCheckedChange(!state.checked) },
+            modifier = Modifier
+                .size(48.dp)
+                .semantics {
+                    role = Role.Checkbox
+                    stateDescription = if (state.checked) selectedStateDescription else unselectedStateDescription
+                },
+        ) {
+            LocationTermsCheckCircle(checked = state.checked)
+        }
+    }
+}
+
+@Composable
+private fun LocationTermsCheckCircle(
+    checked: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.size(32.dp),
+        color = if (checked) EumPrimary600 else Color(0xFFE5E7EB),
+        shape = CircleShape,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (checked) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_check_mark),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = EumWhite,
+                )
             }
         }
     }
@@ -818,4 +923,8 @@ private fun locationTermsCheckboxColors() =
         disabledUncheckedColor = MaterialTheme.colorScheme.outline,
     )
 
+// This progress bar tracks only profile setup choices before permission and tutorial screens.
+private const val PROFILE_SETUP_PRIMARY_STEP = 1
+private const val PROFILE_SETUP_MOBILITY_SUBTYPE_STEP = 2
+private const val PROFILE_SETUP_TOTAL_STEPS = 2
 private val MobilitySubtypeIconSlotSize = 96.dp

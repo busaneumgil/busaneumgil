@@ -58,6 +58,7 @@ import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
 import com.ssafy.e102.domain.route.repository.RoutingSegmentOverrideRepository;
 import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
 import com.ssafy.e102.domain.route.type.AccessibilityState;
+import com.ssafy.e102.domain.route.type.WidthState;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadStatus;
@@ -226,7 +227,7 @@ class AdminMapServiceTest {
 
 	@Test
 	@DisplayName("관리자 segment walk_access=NO 변경에서 즉시 경로 반영을 선택하면 overlay upsert 후 runtime reload를 호출한다")
-	void updateRoadSegmentAttributesAppliesOverlayWhenImmediateApplyEnabled() {
+	void updateRoadSegmentAttributesSynchronizesFourColumnOverlayWhenImmediateApplyEnabled() {
 		RoadSegment roadSegment = roadSegment(1L);
 		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
 		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
@@ -241,42 +242,91 @@ class AdminMapServiceTest {
 			1L,
 			"강서구",
 			"명지동",
-			new AdminRoadSegmentAttributesUpdateRequest(AccessibilityState.NO, null, null, null, null, null, null, true));
+			new AdminRoadSegmentAttributesUpdateRequest(
+				AccessibilityState.NO,
+				AccessibilityState.YES,
+				null,
+				WidthState.NARROW,
+				null,
+				AccessibilityState.YES,
+				null,
+				true));
 
 		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.NO);
+		assertThat(response.segment().brailleBlockState()).isEqualTo(AccessibilityState.YES);
+		assertThat(response.segment().widthState()).isEqualTo(WidthState.NARROW);
+		assertThat(response.segment().stairsState()).isEqualTo(AccessibilityState.YES);
 		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
 		assertThat(response.routingApplyMessage()).isEqualTo("reloaded");
-		verify(routingSegmentOverrideRepository).save(any(RoutingSegmentOverride.class));
+		verify(routingSegmentOverrideRepository).save(org.mockito.ArgumentMatchers.argThat(override ->
+			override.getEdgeId().equals(1L)
+				&& override.getWalkAccess() == AccessibilityState.NO
+				&& override.getBrailleBlockState() == AccessibilityState.YES
+				&& override.getWidthState() == WidthState.NARROW
+				&& override.getStairsState() == AccessibilityState.YES));
 		verify(graphHopperAdminClient).reloadRoutingOverrides();
 	}
 
 	@Test
-	@DisplayName("관리자 segment walk_access=YES 변경에서 즉시 경로 반영을 선택하면 overlay를 삭제하고 runtime reload를 호출한다")
-	void updateRoadSegmentAttributesClearsOverlayWhenImmediateApplyEnabledForYes() {
+	@DisplayName("관리자 segment 수정에서 overlay 대상 필드 요청이 없으면 기존 overlay와 runtime reload는 생략된다")
+	void updateRoadSegmentAttributesSkipsOverlayWhenNoOverlayTargetFieldIsRequested() {
 		RoadSegment roadSegment = roadSegment(1L);
 		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
 		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
-		when(graphHopperAdminClient.reloadRoutingOverrides())
-			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
 
 		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
 			adminUserId,
 			1L,
 			"강서구",
 			"명지동",
-			new AdminRoadSegmentAttributesUpdateRequest(AccessibilityState.YES, AccessibilityState.YES, null, null, null, null, null, true));
+			new AdminRoadSegmentAttributesUpdateRequest(null, null, null, null, null, null, AccessibilityState.YES, true));
 
-		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.YES);
-		assertThat(response.segment().brailleBlockState()).isEqualTo(AccessibilityState.YES);
-		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED_WITH_WARNING);
-		assertThat(response.routingApplyMessage()).contains("full GraphHopper rebuild");
+		assertThat(response.segment().signalState()).isEqualTo(AccessibilityState.YES);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.SKIPPED);
+		assertThat(response.routingApplyMessage()).contains("overlay");
+		verify(routingSegmentOverrideRepository, never()).save(any(RoutingSegmentOverride.class));
+		verify(routingSegmentOverrideRepository, never()).deleteById(1L);
+		verify(graphHopperAdminClient, never()).reloadRoutingOverrides();
+	}
+
+	@Test
+	@DisplayName("관리자 segment 즉시 반영에서 overlay 대상 필드가 명시 null이면 current-state row를 삭제하고 reload한다")
+	void updateRoadSegmentAttributesDeletesOverlayWhenAllOverlayColumnsAreExplicitNull() throws Exception {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+		when(graphHopperAdminClient.reloadRoutingOverrides())
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
+		AdminRoadSegmentAttributesUpdateRequest request = new ObjectMapper().readValue(
+			"""
+				{
+				  "walkAccess": null,
+				  "stairsState": null,
+				  "widthState": null,
+				  "brailleBlockState": null,
+				  "signalState": "YES",
+				  "applyRoutingImmediately": true
+				}
+				""",
+			AdminRoadSegmentAttributesUpdateRequest.class);
+
+		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
+			adminUserId,
+			1L,
+			"강서구",
+			"명지동",
+			request);
+
+		assertThat(response.segment().signalState()).isEqualTo(AccessibilityState.YES);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
+		assertThat(response.routingApplyMessage()).isEqualTo("reloaded");
 		verify(routingSegmentOverrideRepository).deleteById(1L);
 		verify(graphHopperAdminClient).reloadRoutingOverrides();
 	}
 
 	@Test
 	@DisplayName("관리자 segment walk_access=UNKNOWN 변경에서 즉시 경로 반영을 선택하면 stale overlay를 제거하고 runtime reload를 호출한다")
-	void updateRoadSegmentAttributesClearsOverlayWhenImmediateApplyEnabledForUnknown() {
+	void updateRoadSegmentAttributesReloadsForStairsState() {
 		RoadSegment roadSegment = roadSegment(1L);
 		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
 		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
@@ -288,34 +338,78 @@ class AdminMapServiceTest {
 			1L,
 			"강서구",
 			"명지동",
-			new AdminRoadSegmentAttributesUpdateRequest(AccessibilityState.UNKNOWN, null, null, null, null, null, null, true));
+			new AdminRoadSegmentAttributesUpdateRequest(null, null, null, null, null, AccessibilityState.YES, null, true));
 
-		assertThat(response.segment().walkAccess()).isEqualTo(AccessibilityState.UNKNOWN);
-		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED_WITH_WARNING);
-		assertThat(response.routingApplyMessage()).contains("full GraphHopper rebuild");
-		verify(routingSegmentOverrideRepository).deleteById(1L);
+		assertThat(response.segment().stairsState()).isEqualTo(AccessibilityState.YES);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
+		verify(routingSegmentOverrideRepository).save(org.mockito.ArgumentMatchers.argThat(override ->
+			override.getEdgeId().equals(1L)
+				&& override.getWalkAccess() == null
+				&& override.getBrailleBlockState() == null
+				&& override.getWidthState() == null
+				&& override.getStairsState() == AccessibilityState.YES));
 		verify(graphHopperAdminClient).reloadRoutingOverrides();
 	}
 
 	@Test
 	@DisplayName("관리자 segment 수정에서 walk_access 요청이 없으면 overlay와 runtime reload는 생략된다")
-	void updateRoadSegmentAttributesSkipsOverlayWhenWalkAccessNotRequested() {
+	void updateRoadSegmentAttributesReloadsForWidthState() {
 		RoadSegment roadSegment = roadSegment(1L);
+		RoutingSegmentOverride existingOverride = RoutingSegmentOverride.of(
+			1L,
+			AccessibilityState.NO,
+			null,
+			null,
+			null);
 		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
 		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+		when(routingSegmentOverrideRepository.findById(1L)).thenReturn(Optional.of(existingOverride));
+		when(graphHopperAdminClient.reloadRoutingOverrides())
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
 
 		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
 			adminUserId,
 			1L,
 			"강서구",
 			"명지동",
-			new AdminRoadSegmentAttributesUpdateRequest(null, AccessibilityState.YES, null, null, null, null, null, true));
+			new AdminRoadSegmentAttributesUpdateRequest(null, null, null, WidthState.NARROW, null, null, null, true));
 
-		assertThat(response.segment().brailleBlockState()).isEqualTo(AccessibilityState.YES);
-		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.SKIPPED);
-		verify(routingSegmentOverrideRepository, never()).save(any(RoutingSegmentOverride.class));
-		verify(routingSegmentOverrideRepository, never()).deleteById(1L);
-		verify(graphHopperAdminClient, never()).reloadRoutingOverrides();
+		assertThat(response.segment().widthState()).isEqualTo(WidthState.NARROW);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
+		verify(routingSegmentOverrideRepository).save(org.mockito.ArgumentMatchers.argThat(override ->
+			override.getEdgeId().equals(1L)
+				&& override.getWalkAccess() == AccessibilityState.NO
+				&& override.getBrailleBlockState() == null
+				&& override.getWidthState() == WidthState.NARROW
+				&& override.getStairsState() == null));
+		verify(graphHopperAdminClient).reloadRoutingOverrides();
+	}
+
+	@Test
+	@DisplayName("관리자 segment braille_block_state=NO 즉시 반영은 current-state 저장과 runtime reload 대상이다")
+	void updateRoadSegmentAttributesReloadsForBrailleBlockState() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.existsIntersectingGuByEdgeId(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+		when(roadSegmentRepository.findById(1L)).thenReturn(Optional.of(roadSegment));
+		when(graphHopperAdminClient.reloadRoutingOverrides())
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
+
+		AdminRoadSegmentUpdateResponse response = adminMapService.updateRoadSegmentAttributes(
+			adminUserId,
+			1L,
+			"gu",
+			"dong",
+			new AdminRoadSegmentAttributesUpdateRequest(null, AccessibilityState.NO, null, null, null, null, null, true));
+
+		assertThat(response.segment().brailleBlockState()).isEqualTo(AccessibilityState.NO);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
+		verify(routingSegmentOverrideRepository).save(org.mockito.ArgumentMatchers.argThat(override ->
+			override.getEdgeId().equals(1L)
+				&& override.getWalkAccess() == null
+				&& override.getBrailleBlockState() == AccessibilityState.NO
+				&& override.getWidthState() == null
+				&& override.getStairsState() == null));
+		verify(graphHopperAdminClient).reloadRoutingOverrides();
 	}
 
 	@Test

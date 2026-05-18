@@ -160,15 +160,26 @@ def first_non_blank(*candidates: str | None) -> str | None:
     return None
 
 
-def fetch_previous_override(edge_id: int) -> str | None:
+def fetch_previous_override(edge_id: int) -> dict[str, str | None] | None:
     with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                "select walk_access from routing_segment_overrides where edge_id = %s",
+                """
+                select walk_access, stairs_state, width_state, braille_block_state
+                from routing_segment_overrides
+                where edge_id = %s
+                """,
                 (edge_id,),
             )
             row = cursor.fetchone()
-            return None if row is None else str(row[0])
+            if row is None:
+                return None
+            return {
+                "walk_access": row[0],
+                "stairs_state": row[1],
+                "width_state": row[2],
+                "braille_block_state": row[3],
+            }
 
 
 def apply_override(edge_id: int, walk_access: str) -> None:
@@ -193,11 +204,34 @@ def clear_override(edge_id: int) -> None:
         connection.commit()
 
 
-def restore_override(edge_id: int, previous_override: str | None) -> None:
+def restore_override(edge_id: int, previous_override: dict[str, str | None] | None) -> None:
     if previous_override is None:
         clear_override(edge_id)
     else:
-        apply_override(edge_id, previous_override)
+        with open_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into routing_segment_overrides(
+                      edge_id, walk_access, stairs_state, width_state, braille_block_state
+                    )
+                    values (%s, %s, %s, %s, %s)
+                    on conflict (edge_id)
+                    do update set
+                      walk_access = excluded.walk_access,
+                      stairs_state = excluded.stairs_state,
+                      width_state = excluded.width_state,
+                      braille_block_state = excluded.braille_block_state
+                    """,
+                    (
+                        edge_id,
+                        previous_override["walk_access"],
+                        previous_override["stairs_state"],
+                        previous_override["width_state"],
+                        previous_override["braille_block_state"],
+                    ),
+                )
+            connection.commit()
 
 
 def main() -> int:

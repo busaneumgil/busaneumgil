@@ -1,6 +1,7 @@
 package com.ssafy.e102.domain.route.entity;
 
 import com.ssafy.e102.domain.route.type.AccessibilityState;
+import com.ssafy.e102.domain.route.type.WidthState;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,16 +24,37 @@ public class RoutingSegmentOverride {
 	private Long edgeId;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "walk_access", nullable = false, length = 30)
+	@Column(name = "walk_access", length = 30)
 	private AccessibilityState walkAccess;
 
-	public static RoutingSegmentOverride of(Long edgeId, AccessibilityState walkAccess) {
-		if (walkAccess != AccessibilityState.YES && walkAccess != AccessibilityState.NO) {
-			throw new IllegalArgumentException("routing overlay walk_access must be YES or NO");
-		}
+	@Enumerated(EnumType.STRING)
+	@Column(name = "stairs_state", length = 30)
+	private AccessibilityState stairsState;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "width_state", length = 30)
+	private WidthState widthState;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "braille_block_state", length = 30)
+	private AccessibilityState brailleBlockState;
+
+	public static RoutingSegmentOverride of(
+		Long edgeId,
+		AccessibilityState walkAccess,
+		AccessibilityState stairsState,
+		WidthState widthState,
+		AccessibilityState brailleBlockState) {
 		RoutingSegmentOverride override = new RoutingSegmentOverride();
 		override.edgeId = edgeId;
 		override.walkAccess = walkAccess;
+		override.stairsState = stairsState;
+		override.widthState = widthState;
+		override.brailleBlockState = brailleBlockState;
 		return override;
+	}
+
+	public boolean hasAnyOverride() {
+		return walkAccess != null || stairsState != null || widthState != null || brailleBlockState != null;
 	}
 }

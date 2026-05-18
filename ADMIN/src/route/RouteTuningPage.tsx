@@ -142,7 +142,7 @@ export function RouteTuningPage({
       } else if (response.routingApplyStatus === "SKIPPED") {
         setMessage(
           applyRoutingImmediately
-            ? "저장은 완료되었습니다. walk_access 변경이 없어 즉시 경로 반영은 생략했습니다."
+            ? "저장은 완료되었습니다. 즉시 반영 대상 overlay 변경이 없어 경로 반영은 생략했습니다."
             : "저장은 완료되었습니다. DB에만 반영되었습니다.",
         );
       } else {

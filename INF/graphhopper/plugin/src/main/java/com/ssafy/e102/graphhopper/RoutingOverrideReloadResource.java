@@ -24,7 +24,7 @@ public class RoutingOverrideReloadResource {
 	@POST
 	@Path("/reload")
 	public Map<String, Object> reload() {
-		routingSegmentOverrideStore.reload();
+		routingSegmentOverrideStore.reloadStrict();
 		return Map.of(
 			"status", "RELOADED",
 			"overrideCount", routingSegmentOverrideStore.size());

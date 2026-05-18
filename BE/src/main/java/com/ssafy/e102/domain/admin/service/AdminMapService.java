@@ -700,43 +700,47 @@ public class AdminMapService {
 			"보행 segment 속성 변경 edgeId=" + edgeId,
 			before,
 			after);
-		applyRoutingOverride(edgeId, request);
-		return new RoadSegmentUpdateContext(before, after, request.walkAccess(), Boolean.TRUE.equals(request.applyRoutingImmediately()));
+		boolean routingOverlayReloadRequired = applyRoutingOverride(edgeId, request);
+		return new RoadSegmentUpdateContext(
+			before,
+			after,
+			Boolean.TRUE.equals(request.applyRoutingImmediately()),
+			routingOverlayReloadRequired);
 	}
 
-	private void applyRoutingOverride(Long edgeId, AdminRoadSegmentAttributesUpdateRequest request) {
+	private boolean applyRoutingOverride(Long edgeId, AdminRoadSegmentAttributesUpdateRequest request) {
 		if (!Boolean.TRUE.equals(request.applyRoutingImmediately())) {
-			return;
+			return false;
 		}
-		if (request.walkAccess() == null) {
-			return;
+		if (!request.hasRoutingOverlayTargetField()) {
+			return false;
 		}
-		if (request.walkAccess() == AccessibilityState.NO) {
-			routingSegmentOverrideRepository.save(RoutingSegmentOverride.of(edgeId, AccessibilityState.NO));
-			return;
-		}
-		if (request.walkAccess() == AccessibilityState.YES || request.walkAccess() == AccessibilityState.UNKNOWN) {
+		RoutingSegmentOverride currentOverride = routingSegmentOverrideRepository.findById(edgeId)
+			.orElseGet(() -> RoutingSegmentOverride.of(edgeId, null, null, null, null));
+		RoutingSegmentOverride nextOverride = RoutingSegmentOverride.of(
+			edgeId,
+			request.hasWalkAccessField() ? request.walkAccess() : currentOverride.getWalkAccess(),
+			request.hasStairsStateField() ? request.stairsState() : currentOverride.getStairsState(),
+			request.hasWidthStateField() ? request.widthState() : currentOverride.getWidthState(),
+			request.hasBrailleBlockStateField()
+				? request.brailleBlockState()
+				: currentOverride.getBrailleBlockState());
+		if (!nextOverride.hasAnyOverride()) {
 			routingSegmentOverrideRepository.deleteById(edgeId);
+		} else {
+			routingSegmentOverrideRepository.save(nextOverride);
 		}
+		return true;
 	}
 
 	private GraphHopperReloadResult resolveRoutingApplyResult(RoadSegmentUpdateContext updateContext) {
 		if (!updateContext.applyRoutingImmediately()) {
 			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "immediate routing apply disabled");
 		}
-		if (updateContext.requestedWalkAccess() == null) {
-			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "walk_access update not requested; runtime override unchanged");
+		if (!updateContext.routingOverlayReloadRequired()) {
+			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "no routing overlay fields requested");
 		}
-		GraphHopperReloadResult reloadResult = graphHopperAdminClient.reloadRoutingOverrides();
-		if (updateContext.requestedWalkAccess() == AccessibilityState.NO) {
-			return reloadResult;
-		}
-		if (reloadResult.status() == GraphHopperReloadStatus.FAILED) {
-			return reloadResult;
-		}
-		return new GraphHopperReloadResult(
-			GraphHopperReloadStatus.APPLIED_WITH_WARNING,
-			"runtime override cleared, but reopening walk_access may still require a full GraphHopper rebuild if the current graph-cache is already blocked");
+		return graphHopperAdminClient.reloadRoutingOverrides();
 	}
 
 	private AdminRoutingApplyStatus toAdminRoutingApplyStatus(GraphHopperReloadStatus applyStatus) {
@@ -931,7 +935,7 @@ public class AdminMapService {
 	private record RoadSegmentUpdateContext(
 		AdminRoadSegmentPropertiesResponse before,
 		AdminRoadSegmentPropertiesResponse after,
-		AccessibilityState requestedWalkAccess,
-		boolean applyRoutingImmediately) {
+		boolean applyRoutingImmediately,
+		boolean routingOverlayReloadRequired) {
 	}
 }

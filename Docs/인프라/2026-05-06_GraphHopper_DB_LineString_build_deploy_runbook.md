@@ -28,6 +28,17 @@ flowchart LR
   DB --> Export --> Import --> Runtime --> Backend
 ```
 
+### Runtime overlay current-state
+
+- 원본 truth는 계속 `road_segments`이며 GraphHopper build/export도 `road_segments`와 custom model JSON을 source of truth로 사용한다.
+- `routing_segment_overrides`는 runtime current-state overlay 전용 단일 테이블이다. 컬럼은 `edge_id`, nullable `walk_access`, `stairs_state`, `width_state`, `braille_block_state`다.
+- Admin 즉시 반영은 요청에 포함된 overlay 대상 필드만 current-state row에 patch한다. overlay 대상 필드가 없으면 기존 overlay를 유지하고 reload를 생략하며, admin reload 중 overlay 컬럼 스키마가 맞지 않으면 성공이 아니라 실패로 드러나야 한다.
+- migration은 신규 create뿐 아니라 기존 테이블에 대해 `walk_access DROP NOT NULL`, `ADD COLUMN IF NOT EXISTS stairs_state`, `width_state`, `braille_block_state`를 수행한다.
+- Runtime route 계산은 final weight를 사후 보정하지 않는다. `OverlayAwareWeighting`이 delegate/custom model 호출 전에 effective `EdgeIteratorState` wrapper를 넘겨 custom model이 overlay EV를 읽게 한다.
+- wheelchair 계열 profile은 `walk_access`, `stairs_state`, `width_state` overlay만 반영한다. visual 계열 profile은 `braille_block_state` overlay만 반영한다.
+- 현재 정책상 visual profile은 `walk_access=NO` overlay도 무시한다. 통행 불가를 모든 보행 profile 공통으로 볼지 별도 검토가 필요하다.
+- Route calculation smoke는 route shape / route availability 반영을 검증한다. GraphHopper response details/guidance는 base graph EV를 읽을 수 있으므로 앱 배지/안내 문구까지 overlay와 일치해야 하면 별도 설계가 필요하다.
+
 ## 3. build job
 
 local:

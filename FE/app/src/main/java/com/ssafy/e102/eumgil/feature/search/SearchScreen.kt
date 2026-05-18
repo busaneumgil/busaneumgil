@@ -633,6 +633,7 @@ private fun SearchResultsContent(
                         illustrationRes = R.drawable.search_empty_result_illustration,
                         illustrationSize = SearchEmptyResultIllustrationSize,
                         contentOffsetY = SearchEmptyResultContentOffsetY,
+                        titleTopPadding = SearchEmptyResultTitleTopPadding,
                         useEmptyResultTypography = true,
                     )
                 }
@@ -1175,6 +1176,7 @@ private fun SearchResultSection(
                     illustrationRes = R.drawable.search_empty_result_illustration,
                     illustrationSize = SearchEmptyResultIllustrationSize,
                     contentOffsetY = SearchEmptyResultContentOffsetY,
+                    titleTopPadding = SearchEmptyResultTitleTopPadding,
                     useEmptyResultTypography = true,
                 )
 
@@ -1661,6 +1663,7 @@ private val SearchStateIllustrationMinHeight: Dp = 360.dp
 private val SearchStateIllustrationSize: Dp = 128.dp
 private val SearchEmptyResultIllustrationSize: Dp = 260.dp
 private val SearchEmptyResultContentOffsetY: Dp = (-32).dp
+private val SearchEmptyResultTitleTopPadding: Dp = 8.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
 private val SearchVoiceInputBottomSheetWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
@@ -1678,6 +1681,7 @@ private fun SearchCenteredStateMessage(
     @DrawableRes illustrationRes: Int = R.drawable.manual_galmaegi,
     illustrationSize: Dp = SearchStateIllustrationSize,
     contentOffsetY: Dp = 0.dp,
+    titleTopPadding: Dp = EumSpacing.medium,
     useEmptyResultTypography: Boolean = false,
 ) {
     val titleStyle =
@@ -1740,7 +1744,7 @@ private fun SearchCenteredStateMessage(
         }
         Text(
             text = title,
-            modifier = Modifier.padding(top = EumSpacing.medium),
+            modifier = Modifier.padding(top = titleTopPadding),
             style = titleStyle,
             color = titleColor,
             textAlign = TextAlign.Center,

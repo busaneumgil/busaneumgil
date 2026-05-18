@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -573,7 +572,7 @@ private enum class LocationTermsAgreementListVariant(
     ),
     BOTTOM_SHEET(
         groupSpacing = 8.dp,
-        itemSpacing = 8.dp,
+        itemSpacing = 4.dp,
     ),
 }
 
@@ -719,7 +718,7 @@ private fun LocationTermsAllAgreementBottomSheetRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = 64.dp)
-                .padding(horizontal = 18.dp, vertical = 12.dp),
+                .padding(start = 18.dp, end = 0.dp, top = 12.dp, bottom = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -730,7 +729,12 @@ private fun LocationTermsAllAgreementBottomSheetRow(
                 fontWeight = FontWeight.SemiBold,
                 color = EumTextPrimary,
             )
-            LocationTermsCheckCircle(checked = checked)
+            Box(
+                modifier = Modifier.size(48.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                LocationTermsCheckCircle(checked = checked)
+            }
         }
     }
 }
@@ -836,7 +840,8 @@ private fun LocationTermsAgreementBottomSheetRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 58.dp),
+            .defaultMinSize(minHeight = 60.dp)
+            .padding(start = 18.dp),
         horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -847,7 +852,7 @@ private fun LocationTermsAgreementBottomSheetRow(
                 .clickable(enabled = canOpenDetails, onClick = onRequestDetails),
             style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
             fontWeight = FontWeight.SemiBold,
-            color = EumTextTertiary,
+            color = LocationTermsBottomSheetTextColor,
             textDecoration = if (canOpenDetails) TextDecoration.Underline else TextDecoration.None,
         )
 
@@ -927,4 +932,5 @@ private fun locationTermsCheckboxColors() =
 private const val PROFILE_SETUP_PRIMARY_STEP = 1
 private const val PROFILE_SETUP_MOBILITY_SUBTYPE_STEP = 2
 private const val PROFILE_SETUP_TOTAL_STEPS = 2
+private val LocationTermsBottomSheetTextColor = Color(0xFF9CA3AF)
 private val MobilitySubtypeIconSlotSize = 96.dp

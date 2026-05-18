@@ -141,7 +141,7 @@ enum class MobilitySubtype(
         titleRes = R.string.onboarding_mobility_subtype_manual_title,
         descriptionRes = R.string.onboarding_mobility_subtype_manual_description,
         iconRes = R.drawable.ic_user_wheelchair_solid,
-        iconSizeDp = 96,
+        iconSizeDp = 84,
     ),
     OTHER(
         routeValue = "other_mobility_impaired",

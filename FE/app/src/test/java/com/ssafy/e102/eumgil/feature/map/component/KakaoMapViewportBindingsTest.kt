@@ -119,6 +119,13 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
+    fun `kakao camera rotation converts heading degrees to radians`() {
+        assertEquals(Math.PI / 2.0, kakaoCameraRotationRadians(90.0), 0.000001)
+        assertEquals(Math.PI, kakaoCameraRotationRadians(180.0), 0.000001)
+        assertEquals(0.0, kakaoCameraRotationRadians(null), 0.0)
+    }
+
+    @Test
     fun `lifecycle command resumes immediately after start when lifecycle is resumed`() {
         assertEquals(
             KakaoMapLifecycleCommand.NONE,
@@ -233,6 +240,37 @@ class KakaoMapViewportBindingsTest {
         assertEquals(129.0762, markerStates.first().coordinate.longitude, 0.0)
         assertEquals(0.5f, markerStates.first().anchorPointX)
         assertEquals(0.5f, markerStates.first().anchorPointY)
+    }
+
+    @Test
+    fun `overlay current location with heading adds separate direction arrow marker`() {
+        val markerStates =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+                overlayPoints =
+                    listOf(
+                        MapViewportPointOverlay(
+                            overlayId = "navigation-current",
+                            coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                            kind = MapViewportPointKind.CURRENT_LOCATION,
+                        ),
+                        MapViewportPointOverlay(
+                            overlayId = "navigation-current-heading",
+                            coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                            kind = MapViewportPointKind.CURRENT_LOCATION_HEADING,
+                            headingDegrees = 135.0,
+                        ),
+                    ),
+            )
+
+        assertEquals(2, markerStates.size)
+        assertEquals(R.drawable.ic_map_current_location, markerStates.first().iconResId)
+        assertEquals(0f, markerStates.first().rotationDegrees)
+        assertEquals(R.drawable.ic_map_current_location_direction_arrow, markerStates.last().iconResId)
+        assertEquals(135f, markerStates.last().rotationDegrees)
+        assertEquals(18, markerStates.last().translationDistanceDp)
     }
 
     @Test
@@ -745,7 +783,7 @@ class KakaoMapViewportBindingsTest {
                 ),
         )
 
-        assertFalse(overlayState.fitToProjection)
+        assertTrue(overlayState.fitToProjection)
         assertNull(createKakaoRouteCameraRenderState(overlayState))
     }
 

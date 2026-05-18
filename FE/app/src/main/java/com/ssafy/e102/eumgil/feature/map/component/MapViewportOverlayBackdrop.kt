@@ -378,6 +378,8 @@ private fun DrawScope.drawViewportPointHalo(
                 center = projectedPoint,
             )
 
+        MapViewportPointKind.CURRENT_LOCATION_HEADING -> Unit
+
         MapViewportPointKind.SEGMENT_JUNCTION,
         MapViewportPointKind.TRANSIT_BUS_STOP,
         MapViewportPointKind.TRANSIT_SUBWAY_STATION,
@@ -692,6 +694,16 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 borderColor = MaterialTheme.colorScheme.surface,
                 size = 38.dp,
+                fontSize = 11.sp,
+            )
+
+        MapViewportPointKind.CURRENT_LOCATION_HEADING ->
+            ViewportPointMarkerSpec(
+                label = "▲",
+                containerColor = Color(0xFFFF5A4F),
+                contentColor = Color.White,
+                borderColor = Color.White,
+                size = 20.dp,
                 fontSize = 11.sp,
             )
 

@@ -102,6 +102,7 @@ class ReportViewModel(
 
     fun onAction(action: ReportUiAction) {
         when (action) {
+            is ReportUiAction.RouteEntered -> handleRouteEntered(action.entryPoint)
             ReportUiAction.BackClicked -> handleBackClicked()
             ReportUiAction.DraftDiscardClicked -> discardDraft()
             ReportUiAction.DraftResumeClicked -> resumeDraft()
@@ -166,9 +167,19 @@ class ReportViewModel(
         }
     }
 
+    private fun handleRouteEntered(entryPoint: ReportEntryPoint) {
+        mutableUiState.update { state ->
+            if (state.entryPoint == entryPoint) {
+                state
+            } else {
+                state.copy(entryPoint = entryPoint)
+            }
+        }
+    }
+
     private fun handleBackClicked() {
-        val currentStep = mutableUiState.value.currentStep
-        val previousStep = currentStep.previousOrNull()
+        val state = mutableUiState.value
+        val previousStep = state.currentStep.previousOrNull(state.entryPoint)
         if (previousStep == null) {
             emitUiEvent(ReportUiEvent.NavigateBack)
         } else {
@@ -258,7 +269,7 @@ class ReportViewModel(
 
     private fun resumeDraft() {
         val draft = latestDraft ?: return
-        mutableUiState.value = draft.toUiState()
+        mutableUiState.value = draft.toUiState(entryPoint = mutableUiState.value.entryPoint)
     }
 
     private fun discardDraft() {
@@ -829,6 +840,7 @@ class ReportViewModel(
         val currentState = mutableUiState.value
         mutableUiState.value =
             ReportUiState(
+                entryPoint = currentState.entryPoint,
                 processingCounts = currentState.processingCounts,
                 recentReports = currentState.recentReports,
                 isOnline = currentState.isOnline,
@@ -890,10 +902,15 @@ class ReportViewModel(
     }
 }
 
-private fun ReportStep.previousOrNull(): ReportStep? =
+private fun ReportStep.previousOrNull(entryPoint: ReportEntryPoint): ReportStep? =
     when (this) {
         ReportStep.Home -> null
-        ReportStep.TypeSelection -> ReportStep.Home
+        ReportStep.TypeSelection ->
+            if (entryPoint == ReportEntryPoint.NavigationGuidance) {
+                null
+            } else {
+                ReportStep.Home
+            }
         ReportStep.LocationConfirm -> ReportStep.TypeSelection
         ReportStep.DetailInput -> ReportStep.LocationConfirm
         ReportStep.Complete -> null
@@ -993,7 +1010,7 @@ private fun ReportPhoto.toOutboxPhotoData(): ReportOutboxPhotoData =
         sizeBytes = sizeBytes,
     )
 
-private fun ReportDraftData.toUiState(): ReportUiState {
+private fun ReportDraftData.toUiState(entryPoint: ReportEntryPoint): ReportUiState {
     val reportType = reportCategory.toReportType()
     val location =
         if (latitude != null && longitude != null) {
@@ -1019,6 +1036,7 @@ private fun ReportDraftData.toUiState(): ReportUiState {
 
     return ReportUiState(
         currentStep = resumedStep,
+        entryPoint = entryPoint,
         draftId = draftId,
         hasExistingDraft = true,
         reportType =

@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -35,6 +36,7 @@ data class EumMapFloatingActionButtonState(
     val label: String? = null,
     val enabled: Boolean = true,
     val tint: Color,
+    val iconSize: Dp = MAP_FLOATING_ACTION_ICON_SIZE,
 )
 
 @Composable
@@ -42,6 +44,8 @@ fun EumMapFloatingControls(
     actionButtonState: EumMapFloatingActionButtonState,
     onActionClick: () -> Unit,
     modifier: Modifier = Modifier,
+    topActionButtonState: EumMapFloatingActionButtonState? = null,
+    onTopActionClick: () -> Unit = {},
     onZoomInClick: () -> Unit = {},
     onZoomOutClick: () -> Unit = {},
     zoomInLabel: String = "+",
@@ -52,6 +56,13 @@ fun EumMapFloatingControls(
         verticalArrangement = Arrangement.spacedBy(EumSpacing.xxSmall),
         horizontalAlignment = Alignment.End,
     ) {
+        topActionButtonState?.let { state ->
+            EumMapFloatingActionButton(
+                state = state,
+                onClick = onTopActionClick,
+            )
+        }
+
         Surface(
             modifier = Modifier.width(48.dp),
             shape = RoundedCornerShape(EumRadius.scaleS),
@@ -74,40 +85,51 @@ fun EumMapFloatingControls(
             }
         }
 
-        Surface(
+        EumMapFloatingActionButton(
+            state = actionButtonState,
             onClick = onActionClick,
-            enabled = actionButtonState.enabled,
-            modifier = Modifier.size(48.dp),
-            shape = RoundedCornerShape(EumRadius.scaleS),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
-            shadowElevation = 6.dp,
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (actionButtonState.iconRes != null) {
-                    Icon(
-                        painter = painterResource(id = actionButtonState.iconRes),
-                        contentDescription = actionButtonState.contentDescription,
-                        modifier = Modifier.size(MAP_FLOATING_ACTION_ICON_SIZE),
-                        tint = actionButtonState.tint,
-                    )
-                } else {
-                    Text(
-                        text = actionButtonState.label.orEmpty(),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = actionButtonState.tint,
-                    )
-                }
-            }
-        }
+        )
     }
 }
 
 private val MAP_FLOATING_ACTION_ICON_SIZE = 18.dp
+
+@Composable
+private fun EumMapFloatingActionButton(
+    state: EumMapFloatingActionButtonState,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        enabled = state.enabled,
+        modifier = Modifier.size(48.dp),
+        shape = RoundedCornerShape(EumRadius.scaleS),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+        shadowElevation = 6.dp,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (state.iconRes != null) {
+                Icon(
+                    painter = painterResource(id = state.iconRes),
+                    contentDescription = state.contentDescription,
+                    modifier = Modifier.size(state.iconSize),
+                    tint = state.tint,
+                )
+            } else {
+                Text(
+                    text = state.label.orEmpty(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = state.tint,
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun EumMapZoomControlButton(

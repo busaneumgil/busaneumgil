@@ -32,6 +32,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+internal const val LOW_VISION_NAVIGATION_LOCATION_REQUIRED_MESSAGE: String =
+    "현재 위치를 확인한 뒤 길 안내를 시작할게요."
+
 @Composable
 fun LowVisionNavigationRoute(
     onNavigateToComplete: () -> Unit,
@@ -47,9 +50,17 @@ fun LowVisionNavigationRoute(
         }
     val activity = remember(context) { context.findComponentActivity() }
     val viewModelFactory =
-        remember(appContainer.currentLocationManager, appContainer.bookmarkRepository, appContainer.routeRepository) {
+        remember(
+            appContainer.currentLocationManager,
+            appContainer.currentHeadingManager,
+            appContainer.locationPermissionManager,
+            appContainer.bookmarkRepository,
+            appContainer.routeRepository,
+        ) {
             NavigationViewModel.provideFactory(
                 currentLocationManager = appContainer.currentLocationManager,
+                currentHeadingManager = appContainer.currentHeadingManager,
+                locationPermissionManager = appContainer.locationPermissionManager,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 routeRepository = appContainer.routeRepository,
                 isLowVisionMode = true,
@@ -90,6 +101,7 @@ fun LowVisionNavigationRoute(
                 when (event) {
                     NavigationUiEvent.NavigateBack -> Unit
                     is NavigationUiEvent.NavigateToRouteDetail -> Unit
+                    NavigationUiEvent.NavigateToReport -> Unit
                     NavigationUiEvent.NavigateToMap,
                     NavigationUiEvent.NavigateToArrival,
                         -> onNavigateToComplete()
@@ -111,23 +123,28 @@ fun LowVisionNavigationRoute(
         loadErrorMessage = null
         viewModel.setLowVisionMode(enabled = true)
         appContainer.currentLocationManager.startLocationUpdates()
+        appContainer.currentHeadingManager.startHeadingUpdates()
         appContainer.currentLocationManager.refreshLatestLocation()
         val origin =
             awaitLowVisionOriginSnapshot(
                 currentLocationManager = appContainer.currentLocationManager,
                 immediateSnapshot = currentLocationSnapshot,
-            ).toLowVisionRouteOriginWaypoint()
-        val request =
-            appContainer.routeRepository
-                .buildLowVisionNavigationRequest(
-                    destinationSelectionRepository = appContainer.destinationSelectionRepository,
-                    origin = origin,
-                )
-        if (request == null) {
-            loadErrorMessage = LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE
+            ).toLowVisionRouteOriginWaypointOrNull()
+        if (origin == null) {
+            loadErrorMessage = LOW_VISION_NAVIGATION_LOCATION_REQUIRED_MESSAGE
         } else {
-            viewModel.bindNavigationRequest(request)
-            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            val request =
+                appContainer.routeRepository
+                    .buildLowVisionNavigationRequest(
+                        destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                        origin = origin,
+                    )
+            if (request == null) {
+                loadErrorMessage = LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE
+            } else {
+                viewModel.bindNavigationRequest(request)
+                viewModel.onAction(NavigationUiAction.NavigationEntered)
+            }
         }
     }
 
@@ -135,6 +152,7 @@ fun LowVisionNavigationRoute(
         onDispose {
             viewModel.setLowVisionMode(enabled = false)
             appContainer.currentLocationManager.stopLocationUpdates()
+            appContainer.currentHeadingManager.stopHeadingUpdates()
             textToSpeechController.stop()
             textToSpeechController.shutdown()
             routeChangeAlertPlayer.release()

@@ -22,9 +22,11 @@ import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
 import com.ssafy.e102.eumgil.data.remote.datasource.RouteApiException
 import com.ssafy.e102.eumgil.feature.navigation.NavigationUiEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import java.io.File
 import org.junit.Test
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
@@ -42,6 +44,17 @@ class LowVisionNavigationRouteTest {
         assertEquals(false, shouldNavigateLowVisionHome(NavigationUiEvent.NavigateToSavedRoute))
         assertEquals(false, shouldNavigateLowVisionHome(NavigationUiEvent.NavigateToRouteDetail(RouteOption.SAFE)))
         assertEquals(false, shouldNavigateLowVisionHome(NavigationUiEvent.ShowToast("Saved")))
+    }
+
+    @Test
+    fun `low vision navigation route does not start guidance with the default origin when current location is missing`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/lowvision/LowVisionNavigationRoute.kt")
+                .readText()
+
+        assertTrue(source.contains("toLowVisionRouteOriginWaypointOrNull()"))
+        assertFalse(source.contains(").toLowVisionRouteOriginWaypoint()"))
+        assertTrue(source.contains("LOW_VISION_NAVIGATION_LOCATION_REQUIRED_MESSAGE"))
     }
 
     @Test

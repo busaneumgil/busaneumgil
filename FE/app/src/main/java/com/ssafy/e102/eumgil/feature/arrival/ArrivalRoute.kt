@@ -75,6 +75,7 @@ private fun rememberNavigationGuidanceViewModel(): NavigationViewModel {
         remember(appContainer) {
             NavigationViewModel.provideFactory(
                 currentLocationManager = appContainer.currentLocationManager,
+                currentHeadingManager = appContainer.currentHeadingManager,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 routeRepository = appContainer.routeRepository,
             )

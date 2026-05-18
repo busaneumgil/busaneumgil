@@ -18,6 +18,7 @@ data class MapCameraTarget(
     val source: MapCameraSource,
     val requestId: Long = 0L,
     val zoomLevel: Int? = null,
+    val bearingDegrees: Double? = null,
     val shouldAnimateTransition: Boolean = true,
 ) {
     companion object {

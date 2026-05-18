@@ -88,9 +88,8 @@ public class AdminHazardReportService {
 
 	@Transactional
 	public AdminHazardReportStatusResponse approveHazardReport(Long reportId, UUID actorUserId) {
-		HazardReport hazardReport = getHazardReport(reportId);
-		ReportStatus beforeStatus = hazardReport.getStatus();
-		hazardReport.approve(actorUserId, LocalDateTime.now(clock));
+		LocalDateTime now = LocalDateTime.now(clock);
+		updateHazardReportStatus(reportId, ReportStatus.PENDING, ReportStatus.APPROVED, actorUserId, now);
 		adminAuditLogService.record(
 			actorUserId,
 			"HAZARD_REPORT_STATUS_UPDATE",
@@ -99,9 +98,9 @@ public class AdminHazardReportService {
 			null,
 			null,
 			"제보 승인 처리 reportId=" + reportId,
-			beforeStatus,
-			hazardReport.getStatus());
-		return new AdminHazardReportStatusResponse(reportId, hazardReport.getStatus());
+			ReportStatus.PENDING,
+			ReportStatus.APPROVED);
+		return new AdminHazardReportStatusResponse(reportId, ReportStatus.APPROVED);
 	}
 
 	@Transactional
@@ -111,9 +110,8 @@ public class AdminHazardReportService {
 
 	@Transactional
 	public AdminHazardReportStatusResponse rejectHazardReport(Long reportId, UUID actorUserId) {
-		HazardReport hazardReport = getHazardReport(reportId);
-		ReportStatus beforeStatus = hazardReport.getStatus();
-		hazardReport.reject(actorUserId, LocalDateTime.now(clock));
+		LocalDateTime now = LocalDateTime.now(clock);
+		updateHazardReportStatus(reportId, ReportStatus.PENDING, ReportStatus.REJECTED, actorUserId, now);
 		adminAuditLogService.record(
 			actorUserId,
 			"HAZARD_REPORT_STATUS_UPDATE",
@@ -122,9 +120,31 @@ public class AdminHazardReportService {
 			null,
 			null,
 			"제보 반려 처리 reportId=" + reportId,
-			beforeStatus,
-			hazardReport.getStatus());
-		return new AdminHazardReportStatusResponse(reportId, hazardReport.getStatus());
+			ReportStatus.PENDING,
+			ReportStatus.REJECTED);
+		return new AdminHazardReportStatusResponse(reportId, ReportStatus.REJECTED);
+	}
+
+	private void updateHazardReportStatus(
+		Long reportId,
+		ReportStatus currentStatus,
+		ReportStatus nextStatus,
+		UUID actorUserId,
+		LocalDateTime processedAt) {
+		int updated = hazardReportRepository.updateStatusIfCurrentStatus(
+			reportId,
+			currentStatus,
+			nextStatus,
+			actorUserId,
+			processedAt);
+		if (updated > 0) {
+			return;
+		}
+
+		HazardReport hazardReport = getHazardReport(reportId);
+		throw new HazardReportException(
+			HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED,
+			"현재 상태(" + hazardReport.getStatus() + ")에서는 해당 제보를 처리할 수 없습니다.");
 	}
 
 	private Slice<HazardReport> findHazardReports(ReportStatus status, Long cursor, PageRequest pageRequest) {

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -78,7 +79,7 @@ public class AdminHazardRouteReviewService {
 			request.gu(),
 			request.dong(),
 			now);
-		HazardReportRouteReview savedReview = hazardReportRouteReviewRepository.save(review);
+		HazardReportRouteReview savedReview = saveRouteReview(review);
 		adminAuditLogService.record(
 			userId,
 			"HAZARD_REPORT_ROUTE_REVIEW_START",
@@ -158,6 +159,16 @@ public class AdminHazardRouteReviewService {
 	private HazardReport getHazardReport(Long reportId) {
 		return hazardReportRepository.findWithImagesAndUserByReportId(reportId)
 			.orElseThrow(() -> new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_NOT_FOUND));
+	}
+
+	private HazardReportRouteReview saveRouteReview(HazardReportRouteReview review) {
+		try {
+			return hazardReportRouteReviewRepository.save(review);
+		} catch (DataIntegrityViolationException exception) {
+			throw new HazardReportException(
+				HazardReportErrorCode.HAZARD_ROUTE_REVIEW_CONFLICT,
+				"이미 진행 중인 제보 경로 검수가 있어 새 검수를 시작할 수 없습니다.");
+		}
 	}
 
 	private HazardReportRouteReview findLatestReview(Long reportId) {

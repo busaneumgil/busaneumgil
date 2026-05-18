@@ -28,15 +28,22 @@ public record AdminHazardReportDetailResponse(
 	GeoPointResponse reportPoint,
 	@Schema(description = "처리 상태", example = "PENDING")
 	ReportStatus status,
+	@Schema(description = "마지막 처리 관리자 사용자 ID")
+	UUID processedByUserId,
+	@Schema(description = "마지막 처리 시각")
+	LocalDateTime processedAt,
 	@Schema(description = "등록 일시", example = "2026-05-07T22:00:00")
 	LocalDateTime createdAt,
 	@Schema(description = "전체 첨부 이미지 URL 목록")
-	List<String> imageUrls) {
+	List<String> imageUrls,
+	@Schema(description = "최신 경로 검수 정보")
+	AdminHazardRouteReviewResponse latestRouteReview) {
 
 	public static AdminHazardReportDetailResponse of(
 		HazardReport hazardReport,
 		GeoPointConverter geoPointConverter,
-		List<String> imageUrls) {
+		List<String> imageUrls,
+		AdminHazardRouteReviewResponse latestRouteReview) {
 		return new AdminHazardReportDetailResponse(
 			hazardReport.getReportId(),
 			hazardReport.getUser().getUserId(),
@@ -45,7 +52,10 @@ public record AdminHazardReportDetailResponse(
 			hazardReport.getAddress(),
 			geoPointConverter.toResponse(hazardReport.getReportPoint()),
 			hazardReport.getStatus(),
+			hazardReport.getProcessedByUserId(),
+			hazardReport.getProcessedAt(),
 			hazardReport.getCreatedAt(),
-			imageUrls);
+			imageUrls,
+			latestRouteReview);
 	}
 }

@@ -16,6 +16,7 @@ interface VoiceAnalyzeRepository {
         text: String,
         mode: VoiceAnalyzeMode,
         history: List<VoiceAnalyzeHistoryItem> = emptyList(),
+        currentRoute: String? = null,
     ): VoiceAnalyzeResult
 }
 
@@ -29,6 +30,7 @@ class DefaultVoiceAnalyzeRepository(
         text: String,
         mode: VoiceAnalyzeMode,
         history: List<VoiceAnalyzeHistoryItem>,
+        currentRoute: String?,
     ): VoiceAnalyzeResult {
         val readPlan = sourcePolicy.readPlan(RepositoryDomain.VOICE_ANALYZE)
         val historyDtos = history.map { VoiceAnalyzeHistoryDto(role = it.role, content = it.content) }
@@ -42,6 +44,7 @@ class DefaultVoiceAnalyzeRepository(
                             text = text,
                             mode = mode.name,
                             history = historyDtos,
+                            currentRoute = currentRoute,
                         )
                     }
                     if (result.isSuccess) {
@@ -52,7 +55,12 @@ class DefaultVoiceAnalyzeRepository(
 
                 RepositorySource.MOCK -> {
                     return mockDataSource
-                        .analyze(text = text, mode = mode.name, history = historyDtos)
+                        .analyze(
+                            text = text,
+                            mode = mode.name,
+                            history = historyDtos,
+                            currentRoute = currentRoute,
+                        )
                         .toVoiceAnalyzeResult()
                 }
 
@@ -70,6 +78,12 @@ class DefaultVoiceAnalyzeRepository(
         VoiceAnalyzeResult(
             intent = runCatching { enumValueOf<VoiceAnalyzeIntent>(intent) }.getOrDefault(VoiceAnalyzeIntent.UNKNOWN),
             placeName = placeName,
+            category = category,
+            bookmarkAction = bookmarkAction,
+            departure = departure,
+            destination = destination,
+            reportType = reportType,
+            description = description,
             confirmed = confirmed,
             confirmationMessage = confirmationMessage,
         )

@@ -4,6 +4,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,29 +17,43 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportListResponse;
+import com.ssafy.e102.domain.report.dto.response.AdminHazardRouteReviewResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportStatusResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportSummaryResponse;
+import com.ssafy.e102.domain.report.service.AdminHazardRouteReviewService;
 import com.ssafy.e102.domain.report.service.AdminHazardReportService;
+import com.ssafy.e102.domain.report.type.HazardRouteReviewIntent;
+import com.ssafy.e102.domain.report.type.HazardRouteReviewStage;
 import com.ssafy.e102.domain.report.type.ReportStatus;
 import com.ssafy.e102.domain.report.type.ReportType;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
+import com.ssafy.e102.global.security.principal.AuthPrincipal;
 
 class AdminHazardReportControllerTest {
 
 	@Mock
 	private AdminHazardReportService adminHazardReportService;
 
+	@Mock
+	private AdminHazardRouteReviewService adminHazardRouteReviewService;
+
 	private MockMvc mockMvc;
 
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		mockMvc = MockMvcBuilders.standaloneSetup(new AdminHazardReportController(adminHazardReportService))
+		mockMvc = MockMvcBuilders.standaloneSetup(
+				new AdminHazardReportController(adminHazardReportService, adminHazardRouteReviewService))
+			.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
 			.build();
 	}
 
@@ -91,8 +106,11 @@ class AdminHazardReportControllerTest {
 				"부산 부산진구 시민공원로 73",
 				new GeoPointResponse(35.1686, 129.0576),
 				ReportStatus.PENDING,
+				null,
+				null,
 				LocalDateTime.of(2026, 5, 7, 22, 0),
-				List.of("https://example.com/reports/1/image-1.jpg")));
+				List.of("https://example.com/reports/1/image-1.jpg"),
+				null));
 
 		mockMvc.perform(get("/admin/hazard-reports/1"))
 			.andExpect(status().isOk())
@@ -108,28 +126,110 @@ class AdminHazardReportControllerTest {
 	@Test
 	@DisplayName("관리자 제보 승인은 변경된 상태를 반환한다")
 	void approveHazardReport() throws Exception {
-		when(adminHazardReportService.approveHazardReport(1L))
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(adminHazardReportService.approveHazardReport(1L, userId))
 			.thenReturn(new AdminHazardReportStatusResponse(1L, ReportStatus.APPROVED));
 
-		mockMvc.perform(patch("/admin/hazard-reports/1/approve"))
+		mockMvc.perform(patch("/admin/hazard-reports/1/approve").principal(authentication))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.reportId").value(1))
 			.andExpect(jsonPath("$.data.status").value("APPROVED"));
 
-		verify(adminHazardReportService).approveHazardReport(1L);
+		verify(adminHazardReportService).approveHazardReport(1L, userId);
 	}
 
 	@Test
 	@DisplayName("관리자 제보 반려는 변경된 상태를 반환한다")
 	void rejectHazardReport() throws Exception {
-		when(adminHazardReportService.rejectHazardReport(1L))
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(adminHazardReportService.rejectHazardReport(1L, userId))
 			.thenReturn(new AdminHazardReportStatusResponse(1L, ReportStatus.REJECTED));
 
-		mockMvc.perform(patch("/admin/hazard-reports/1/reject"))
+		mockMvc.perform(patch("/admin/hazard-reports/1/reject").principal(authentication))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.reportId").value(1))
 			.andExpect(jsonPath("$.data.status").value("REJECTED"));
 
-		verify(adminHazardReportService).rejectHazardReport(1L);
+		verify(adminHazardReportService).rejectHazardReport(1L, userId);
+	}
+
+	@Test
+	@DisplayName("관리자 제보 경로 검수 시작은 검수 draft를 반환한다")
+	void startRouteReview() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(adminHazardRouteReviewService.startRouteReview(
+			userId,
+			1L,
+			new com.ssafy.e102.domain.report.dto.request.StartHazardRouteReviewRequest(
+				HazardRouteReviewIntent.APPROVE,
+				"부산진구",
+				"부전동")))
+			.thenReturn(new AdminHazardRouteReviewResponse(
+				7L,
+				1L,
+				HazardRouteReviewIntent.APPROVE,
+				HazardRouteReviewStage.IN_PROGRESS,
+				ReportStatus.PENDING,
+				userId,
+				"부산진구",
+				"부전동",
+				41231L,
+				LocalDateTime.of(2026, 5, 18, 15, 0),
+				LocalDateTime.of(2026, 5, 18, 15, 5),
+				null,
+				List.of()));
+
+		mockMvc.perform(post("/admin/hazard-reports/1/route-review/start")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "intent": "APPROVE",
+				  "gu": "부산진구",
+				  "dong": "부전동"
+				}
+				"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.reviewId").value(7))
+			.andExpect(jsonPath("$.data.intent").value("APPROVE"))
+			.andExpect(jsonPath("$.data.stage").value("IN_PROGRESS"));
+	}
+
+	@Test
+	@DisplayName("관리자 제보 경로 검수 완료는 완료된 검수 상태를 반환한다")
+	void completeRouteReview() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(adminHazardRouteReviewService.completeRouteReview(userId, 1L))
+			.thenReturn(new AdminHazardRouteReviewResponse(
+				7L,
+				1L,
+				HazardRouteReviewIntent.APPROVE,
+				HazardRouteReviewStage.COMPLETED,
+				ReportStatus.APPROVED,
+				userId,
+				"부산진구",
+				"부전동",
+				41231L,
+				LocalDateTime.of(2026, 5, 18, 15, 0),
+				LocalDateTime.of(2026, 5, 18, 15, 10),
+				LocalDateTime.of(2026, 5, 18, 15, 10),
+				List.of()));
+
+		mockMvc.perform(post("/admin/hazard-reports/1/route-review/complete")
+			.principal(authentication))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.stage").value("COMPLETED"))
+			.andExpect(jsonPath("$.data.reportStatus").value("APPROVED"));
+	}
+
+	private UsernamePasswordAuthenticationToken authentication(UUID userId) {
+		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+			new AuthPrincipal(userId, "access-token"), null);
+		SecurityContextHolder.getContext().setAuthentication(authentication);
+		return authentication;
 	}
 }

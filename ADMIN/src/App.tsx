@@ -497,7 +497,7 @@ function AdminApp() {
     : null;
   const fullShellPreviewEnabled = typeof window !== "undefined"
     && import.meta.env.DEV
-    && (previewPage === "routeStats" || previewPage === "bottleneckMonitoring");
+    && (previewPage === "routeStats" || previewPage === "bottleneckMonitoring" || previewPage === "hazards");
   const currentAdmin = adminPrincipal ?? (fullShellPreviewEnabled
     ? {
         userId: "7e7e00a4-bf81-4a82-918c-7a5e062dc325",
@@ -983,6 +983,19 @@ function AdminApp() {
               </button>
             </div>
           )}
+          {page === "hazards" && (
+            <div className="topbar-actions hazard-topbar-actions">
+              <button className="topbar-icon-button" type="button" aria-label="알림">
+                <DashboardIcon name="bell" />
+              </button>
+              <span className="topbar-action-divider" aria-hidden="true" />
+              <button className="topbar-profile-button" type="button">
+                <DashboardIcon name="user" />
+                <span>Admin</span>
+                <DashboardIcon name="chevron" />
+              </button>
+            </div>
+          )}
           {page !== "home" && page !== "hazards" && page !== "users" && <div className="topbar-actions admin-topbar-actions">
             <label className="backend-field">
               Admin
@@ -1053,7 +1066,14 @@ function AdminApp() {
           />
         )}
 
-        {page === "hazards" && <HazardReportsPage accessToken={accessToken} adminPrincipal={currentAdmin} onLogout={logoutAdmin} />}
+        {page === "hazards" && (
+          <HazardReportsPage
+            accessToken={accessToken}
+            adminPrincipal={currentAdmin}
+            onLogout={logoutAdmin}
+            preview={previewPage === "hazards" && fullShellPreviewEnabled}
+          />
+        )}
 
         {page === "routeTuning" && (
           <RouteTuningPage
@@ -1082,8 +1102,10 @@ function AdminApp() {
         {page === "routeStats" && (
           <RouteStatsPage
             data={usesRealAdminApi ? routeStatsQuery.data : routeStatsMockResponse}
+            dataSourceMode={usesRealAdminApi ? "real" : "mock"}
             loading={usesRealAdminApi && routeStatsQuery.isLoading}
             error={routeStatsQuery.error}
+            updatedAt={usesRealAdminApi ? routeStatsQuery.dataUpdatedAt : undefined}
           />
         )}
 

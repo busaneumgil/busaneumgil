@@ -70,7 +70,7 @@ internal class AudioRecorder(private val context: Context? = null) {
         // 인스턴스 필드가 아닌 flow 호출마다 독립된 지역 변수로 선언.
         // 이전 flow의 finally가 새 flow의 객체를 null로 만드는 레이스 컨디션 방지.
         val audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
             SAMPLE_RATE,
             CHANNEL_CONFIG,
             AUDIO_FORMAT,

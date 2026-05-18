@@ -2,7 +2,7 @@
 
 > **작성일:** 2026-04-23
 > **기준 문서:** `docs/erd.md` (원본 OSM 기반)
-> **최종 수정일:** 2026-05-09
+> **최종 수정일:** 2026-05-18
 > **변경 사유:** canonical source를 `busan.osm.pbf`에서 `N3L_A0020000_26` SHP(국토교통부 도로 중심선)로 전환함에 따라 `road_nodes`와 `road_segments`의 source identity 컬럼을 재정의하고, 편의시설 PoC 채택본 기준으로 장소 카테고리를 최신화했으며, 선택된 경로 안내 세션 복구를 위한 `route_sessions`를 추가
 > **참조 계획:** `.ai/PLANS/current-sprint/02-osm-schema-and-network-load.md`
 
@@ -99,6 +99,8 @@ erDiagram
     USERS ||--o{ BOOKMARKS : saves
     USERS ||--o{ FAVORITE_ROUTES : saves
     USERS ||--o{ HAZARD_REPORTS : reports
+    HAZARD_REPORTS ||--o{ HAZARD_REPORT_ROUTE_REVIEWS : reviewedBy
+    HAZARD_REPORT_ROUTE_REVIEWS ||--o{ HAZARD_REPORT_ROUTE_REVIEW_SEGMENT_DRAFTS : drafts
     USERS ||--o{ ROUTE_RATINGS : rates
     USERS ||--o{ ROUTE_SESSIONS : starts
     ROUTE_SESSIONS ||--o| ROUTE_RATINGS : rated
@@ -157,6 +159,34 @@ erDiagram
         TEXT description
         GEOMETRY report_point
         VARCHAR status
+        UUID processed_by_user_id
+        TIMESTAMP processed_at
+    }
+
+    HAZARD_REPORT_ROUTE_REVIEWS {
+        BIGINT review_id PK
+        BIGINT report_id FK
+        VARCHAR intent
+        VARCHAR stage
+        UUID reviewer_user_id
+        VARCHAR gu
+        VARCHAR dong
+        TIMESTAMP started_at
+        TIMESTAMP completed_at
+        BIGINT selected_segment_edge_id
+    }
+
+    HAZARD_REPORT_ROUTE_REVIEW_SEGMENT_DRAFTS {
+        BIGINT draft_id PK
+        BIGINT review_id FK
+        BIGINT edge_id FK
+        ENUM walk_access
+        ENUM braille_block_state
+        ENUM audio_signal_state
+        ENUM width_state
+        VARCHAR surface_state
+        ENUM stairs_state
+        ENUM signal_state
     }
 
     HAZARD_REPORT_IMAGES {
@@ -440,6 +470,8 @@ erDiagram
 | 멱등성 만료 시각 | idempotency_expires_at | TIMESTAMP | NULL |  |
 | 제보 위치 | report_point | GEOMETRY(POINT, 4326) | NOT NULL |  |
 | 상태 | status | VARCHAR(30) | NOT NULL | PENDING |
+| 마지막 처리 관리자 | processed_by_user_id | UUID | NULL |  |
+| 마지막 처리 시각 | processed_at | TIMESTAMP | NULL |  |
 
 ### 후보값
 
@@ -449,8 +481,9 @@ erDiagram
 ### 비고
 
 - 신규 제보는 기본적으로 `PENDING` 상태로 생성한다.
-- `APPROVED`, `REJECTED` 상태 변경은 `/admin/hazard-reports/{reportId}/approve`, `/admin/hazard-reports/{reportId}/reject`에서 처리한다.
+- `APPROVED`, `REJECTED` 상태 변경은 `/admin/hazard-reports/{reportId}/approve`, `/admin/hazard-reports/{reportId}/reject`, `/admin/hazard-reports/{reportId}/route-review/complete`에서 처리한다.
 - 사용자 화면에는 처리 상태를 노출하지 않지만, 서버는 운영 검토를 위해 `status`를 관리한다.
+- `processed_by_user_id`, `processed_at`은 마지막 승인/반려/원상복구 검수 완료 담당자와 시각을 저장한다.
 - 제보 위치의 기준 데이터는 `report_point`다. `address`는 사용자 목록 카드 표시용 역지오코딩 snapshot이며, 주소 보강 실패 또는 기존 데이터는 `NULL`일 수 있다.
 - `idempotency_key`, `idempotency_request_hash`, `idempotency_expires_at`은 `POST /hazard-reports` 재시도 중복 방지용 메타데이터다.
 - `(user_id, idempotency_key)`는 unique 제약이다. `idempotency_key`가 `NULL`인 일반 생성 요청은 중복 제한을 받지 않는다.
@@ -482,6 +515,71 @@ erDiagram
 - 제보 사진은 선택 입력이며 최대 5장까지 허용한다.
 - 목록 응답에서는 DB `display_order=0` 이미지를 대표 사진으로 사용하고, API에서는 조회 시점에 presigned GET URL로 변환해 노출한다.
 - 기존 데이터에 공개 URL이 저장된 경우에도 조회 시 URL path를 object key로 정규화해 presigned GET URL을 발급한다.
+
+---
+
+## 5-1) hazard_report_route_reviews
+
+### 역할
+
+관리자 불편신고 검수 플로우의 진행 상태와 draft 메타데이터를 저장한다.
+
+승인 검수와 원상복구 검수를 별도 row로 남기며, 실제 세그먼트 변경 반영 전까지 작업을 이어서 할 수 있는 기준 데이터가 된다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| 검수 ID | review_id | BIGINT | NOT NULL |  |
+| 제보 ID | report_id | BIGINT | NOT NULL |  |
+| 검수 유형 | intent | VARCHAR(30) | NOT NULL |  |
+| 검수 단계 | stage | VARCHAR(30) | NOT NULL | IN_PROGRESS |
+| 검수 관리자 | reviewer_user_id | UUID | NOT NULL |  |
+| 검수 구 | gu | VARCHAR(40) | NOT NULL |  |
+| 검수 동 | dong | VARCHAR(80) | NOT NULL |  |
+| 검수 시작 시각 | started_at | TIMESTAMP | NOT NULL |  |
+| 검수 완료 시각 | completed_at | TIMESTAMP | NULL |  |
+| 현재 선택 세그먼트 | selected_segment_edge_id | BIGINT | NULL |  |
+
+### 후보값
+
+- `intent`: `APPROVE`, `RESTORE`
+- `stage`: `IN_PROGRESS`, `COMPLETED`
+
+### 비고
+
+- 같은 제보는 동시에 하나의 `IN_PROGRESS` 검수만 가질 수 있다.
+- 승인 검수는 `PENDING`, `REJECTED` 제보에서 시작할 수 있다.
+- 원상복구 검수는 `APPROVED` 제보에서만 시작할 수 있다.
+- 실제 `road_segments` 반영 전까지 검수 draft를 보관하는 용도이며, DB 반영 job은 후속 단계에서 연결한다.
+
+---
+
+## 5-2) hazard_report_route_review_segment_drafts
+
+### 역할
+
+경로 검수 중 관리자가 선택한 `road_segments` 속성 변경 draft를 저장한다.
+
+### 컬럼 명세
+
+| 한글명 | 영어명 | 타입 | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| draft ID | draft_id | BIGINT | NOT NULL |  |
+| 검수 ID | review_id | BIGINT | NOT NULL |  |
+| 세그먼트 ID | edge_id | BIGINT | NOT NULL |  |
+| 통행 가능 여부 | walk_access | VARCHAR(30) | NULL |  |
+| 점자블록 상태 | braille_block_state | VARCHAR(30) | NULL |  |
+| 음향신호 상태 | audio_signal_state | VARCHAR(30) | NULL |  |
+| 보도폭 상태 | width_state | VARCHAR(30) | NULL |  |
+| 노면 상태 | surface_state | VARCHAR(30) | NULL |  |
+| 계단 상태 | stairs_state | VARCHAR(30) | NULL |  |
+| 신호기 상태 | signal_state | VARCHAR(30) | NULL |  |
+
+### 비고
+
+- `(review_id, edge_id)` unique 제약으로 같은 검수 내 중복 draft를 막는다.
+- draft는 검수 범위 `gu/dong`에 포함되는 `road_segments.edge_id`만 저장할 수 있다.
 
 ---
 
@@ -1140,6 +1238,16 @@ ODsay `loadLane` 호출 결과를 `map_obj` 기준으로 영속 저장한다.
 ### hazard_reports - hazard_report_images
 
 - `hazard_reports 1 : N hazard_report_images`
+
+### hazard_reports - hazard_report_route_reviews
+
+- `hazard_reports 1 : N hazard_report_route_reviews`
+- 하나의 제보는 승인 검수, 원상복구 검수를 시간순으로 여러 번 가질 수 있다.
+
+### hazard_report_route_reviews - hazard_report_route_review_segment_drafts
+
+- `hazard_report_route_reviews 1 : N hazard_report_route_review_segment_drafts`
+- 하나의 검수는 여러 보행 세그먼트 draft를 가질 수 있다.
 
 ### places - bookmarks
 

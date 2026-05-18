@@ -59,6 +59,10 @@ services:
       dockerfile: INF/graphhopper/Dockerfile
     restart: unless-stopped
     environment:
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/e102}
+      DB_USERNAME: ${DB_USERNAME:-e102}
+      DB_PASSWORD: ${DB_PASSWORD:-e102}
+      DB_SSLMODE: ${DB_SSLMODE:-prefer}
       GRAPHHOPPER_GRAPH_LOCATION: ${GRAPHHOPPER_GRAPH_LOCATION:-/graphhopper/data}
     ports:
       - "${GRAPHHOPPER_PORT:-8989}:8989"

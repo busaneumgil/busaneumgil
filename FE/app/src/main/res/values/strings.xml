@@ -512,7 +512,7 @@
     <string name="search_screen_result_summary">도착지 검색 결과 %1$d건</string>
     <string name="search_screen_sort_relevance">관련도순</string>
     <string name="search_screen_sort_distance">거리순</string>
-    <string name="search_screen_empty_result_title">검색 결과가\n존재하지 않습니다.</string>
+    <string name="search_screen_empty_result_title">검색 결과가\n존재하지 않습니다</string>
     <string name="search_screen_empty_result_description">다른 장소명이나 주소로 다시 검색해 주세요.</string>
     <string name="search_screen_error_title">검색 결과를\n불러오지 못했습니다</string>
     <string name="search_screen_error_description">잠시 후 다시 시도해 주세요.</string>
@@ -611,6 +611,7 @@
     <string name="route_setting_preview_loading_description">선택한 경로의 지도 표시 상태를 준비하고 있습니다.</string>
     <string name="route_setting_preview_no_destination_title">목적지 선택 필요</string>
     <string name="route_setting_preview_no_destination_description">검색 또는 지도에서 목적지를 선택하면 경로 미리보기 지도를 표시합니다.</string>
+    <string name="route_setting_start_destination_required_snackbar">도착지를 설정해 주세요.</string>
     <string name="route_setting_preview_invalid_destination_title">목적지 좌표 확인 필요</string>
     <string name="route_setting_preview_invalid_destination_description">선택한 목적지 좌표를 확인할 수 없어 지도 미리보기를 표시하지 않습니다.</string>
     <string name="route_setting_preview_no_route_title">표시할 경로 없음</string>

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
@@ -92,6 +93,8 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
 
         // VoiceInput — KWS 제외 (STT AudioRecorder가 마이크 점유)
         lowVisionComposable(route = LowVisionRoute.VoiceInput.route) {
+            val currentRoute = navController.previousBackStackEntry?.destination?.route
+
             LowVisionVoiceInputRoute(
                 onCancelRecording = {
                     navController.navigate(resolveLowVisionVoiceInputCancelRoute()) {
@@ -110,6 +113,32 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                     }
                 },
                 onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+                onCategorySearchCompleted = { category ->
+                    navController.navigate(LowVisionRoute.CategoryResult.createRoute(category))
+                },
+                onBookmarkAddCompleted = { placeName ->
+                    // TODO: 북마크 추가 정책 협의 후 구현
+                },
+                onBookmarkDeleteCompleted = { placeName ->
+                    // TODO: 북마크 삭제 정책 협의 후 구현
+                },
+                onNavigateCompleted = { departure, destination ->
+                    // TODO: 현재 GPS 위치 기반 경로 안내 구현
+                    // departure가 빈 문자열이면 현재 GPS 위치 사용
+                    // destination으로 GET /places/search → 좌표 → 경로 안내 화면
+                    navController.popBackStack()
+                },
+                onShowBookmarksCompleted = {
+                    navController.navigate(LowVisionRoute.Bookmark.route)
+                },
+                onShowFavoriteRoutesCompleted = {
+                    navController.navigate(LowVisionRoute.Bookmark.route)
+                },
+                onLogoutCompleted = {
+                    // TODO: LowVisionMyPageViewModel.onLogoutClick()과 동일한 로직 연결
+                    navController.popBackStack()
+                },
+                currentRoute = currentRoute,
             )
         }
 
@@ -216,8 +245,12 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        // Guidance — KWS 제외 (음성 안내가 실행 중일 수 있음)
-        lowVisionComposable(route = LowVisionRoute.Guidance.route) {
+        // Guidance — KWS 활성화 (길 안내 중 음성 에이전트 호출 가능)
+        lowVisionComposable(route = LowVisionRoute.Guidance.route) { backStackEntry ->
+            LowVisionKwsNavEffect(
+                navController = navController,
+                backStackEntry = backStackEntry,
+            )
             LowVisionNavigationRoute(
                 onNavigateToComplete = {
                     navController.navigate(resolveLowVisionNavigationExitRoute()) {

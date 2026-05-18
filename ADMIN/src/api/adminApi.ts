@@ -2,6 +2,7 @@ import type {
   AreaOption,
   AdminPlaceDetailResponse,
   AdminPlaceUpdateRequest,
+  AdminHazardRouteReview,
   AdminRoadSegmentAttributesUpdateRequest,
   AdminRoadSegmentUpdateResponse,
   AdminRoutePreviewRequest,
@@ -25,8 +26,10 @@ import type {
   AdminRouteStatsResponse,
   HazardReportStatus,
   SegmentPayload,
+  StartAdminHazardRouteReviewRequest,
   TokenResponse,
   UserRole,
+  UpdateAdminHazardRouteReviewRequest,
   WorkStatus,
   AssignmentType,
   GeoPoint,
@@ -532,5 +535,42 @@ export async function rejectAdminHazardReport(
 ): Promise<AdminHazardReportStatusResponse> {
   return requestAdminJson<AdminHazardReportStatusResponse>(`/admin/hazard-reports/${reportId}/reject`, accessToken, {
     method: "PATCH",
+  });
+}
+
+export async function startAdminHazardRouteReview(
+  reportId: number,
+  request: StartAdminHazardRouteReviewRequest,
+  accessToken: string,
+): Promise<AdminHazardRouteReview> {
+  return requestAdminJson<AdminHazardRouteReview>(`/admin/hazard-reports/${reportId}/route-review/start`, accessToken, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+}
+
+export async function updateAdminHazardRouteReview(
+  reportId: number,
+  request: UpdateAdminHazardRouteReviewRequest,
+  accessToken: string,
+): Promise<AdminHazardRouteReview> {
+  return requestAdminJson<AdminHazardRouteReview>(`/admin/hazard-reports/${reportId}/route-review`, accessToken, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+}
+
+export async function completeAdminHazardRouteReview(
+  reportId: number,
+  accessToken: string,
+): Promise<AdminHazardRouteReview> {
+  return requestAdminJson<AdminHazardRouteReview>(`/admin/hazard-reports/${reportId}/route-review/complete`, accessToken, {
+    method: "POST",
   });
 }

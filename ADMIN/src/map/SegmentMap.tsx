@@ -38,6 +38,14 @@ interface SegmentMapProps {
     start?: GeoPoint | null;
     end?: GeoPoint | null;
   };
+  focusMarker?: {
+    point: GeoPoint;
+    label?: string;
+  } | null;
+  preferredView?: {
+    point: GeoPoint;
+    level?: number;
+  } | null;
   toolbarMode?: "editor" | "roadSegmentLegend" | "segmentFeatureLegend" | "routeAttributeLegend";
   draftEditCount?: number;
   onUndoDraftEdit?: () => void;
@@ -125,6 +133,8 @@ export function SegmentMap({
   onRoutePointPick,
   routeLines,
   routePoints,
+  focusMarker = null,
+  preferredView = null,
   toolbarMode = "editor",
   draftEditCount = 0,
   onUndoDraftEdit,
@@ -143,6 +153,7 @@ export function SegmentMap({
   const referenceOverlaysRef = useRef<KakaoOverlay[]>([]);
   const routeOverlaysRef = useRef<KakaoOverlay[]>([]);
   const routePointOverlaysRef = useRef<KakaoOverlay[]>([]);
+  const focusMarkerOverlayRef = useRef<KakaoOverlay | null>(null);
   const segmentFeatureOverlaysRef = useRef<KakaoOverlay[]>([]);
   const selectedSegmentOverlayRef = useRef<KakaoOverlay | null>(null);
   const roadAttributeTooltipRef = useRef<KakaoOverlay | null>(null);
@@ -250,7 +261,7 @@ export function SegmentMap({
     overlaysRef.current = [];
     segmentOverlayByEdgeRef.current.clear();
 
-    const useHitArea = toolbarMode === "editor";
+    const useHitArea = toolbarMode === "editor" || toolbarMode === "routeAttributeLegend";
     const canRenderDetails = detailedSegmentsVisible;
     const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
     overlaysRef.current.push(...createAreaBoundaryOverlay(payload?.areaBoundary, mapRef.current));
@@ -306,7 +317,7 @@ export function SegmentMap({
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [payload, bridgePayload, detailedSegmentsVisible, mapReady, mode, polygonDeleteActive, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
+  }, [bridgePayload, detailedSegmentsVisible, focusMarker, mapReady, mode, payload, polygonDeleteActive, preferredView, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
 
   useEffect(() => {
     if (detailedSegmentsVisible) {
@@ -328,6 +339,10 @@ export function SegmentMap({
   useEffect(() => {
     renderRoutePointOverlays();
   }, [routePoints, mapReady]);
+
+  useEffect(() => {
+    renderFocusMarkerOverlay();
+  }, [focusMarker, mapReady]);
 
   useEffect(() => {
     renderSegmentFeatureOverlays();
@@ -569,6 +584,14 @@ export function SegmentMap({
     if (end) routePointOverlaysRef.current.push(end);
   }
 
+  function renderFocusMarkerOverlay() {
+    if (!window.kakao?.maps || !mapRef.current) return;
+    focusMarkerOverlayRef.current?.setMap(null);
+    focusMarkerOverlayRef.current = null;
+    if (!focusMarker) return;
+    focusMarkerOverlayRef.current = createFocusMarkerOverlay(focusMarker.point, focusMarker.label ?? "신고 지점", mapRef.current);
+  }
+
   function renderSegmentFeatureOverlays() {
     if (!window.kakao?.maps || !mapRef.current) return;
     const map = mapRef.current;
@@ -606,7 +629,7 @@ export function SegmentMap({
   }
 
   function centerMapForPayloadOnce(segmentFeatures: SegmentFeature[], bridgeFeatures: BridgeFeature[]) {
-    const nextKey = mapCenterKey(payload, bridgePayload, segmentFeatures, bridgeFeatures);
+    const nextKey = mapCenterKey(payload, bridgePayload, segmentFeatures, bridgeFeatures, focusMarker, preferredView);
     if (!nextKey || centeredPayloadKeyRef.current === nextKey) {
       return;
     }
@@ -616,6 +639,14 @@ export function SegmentMap({
 
   function centerMapForPayload(segmentFeatures: SegmentFeature[], bridgeFeatures: BridgeFeature[]) {
     if (!window.kakao?.maps || !mapRef.current) return;
+    if (preferredView) {
+      if (typeof preferredView.level === "number" && mapRef.current.setLevel) {
+        mapRef.current.setLevel(preferredView.level);
+      }
+      mapRef.current.setCenter(new window.kakao.maps.LatLng(preferredView.point.lat, preferredView.point.lng));
+      return;
+    }
+
     const bbox = payload?.bbox;
     if (bbox && window.kakao.maps.LatLngBounds && mapRef.current.setBounds) {
       const bounds = new window.kakao.maps.LatLngBounds();
@@ -627,6 +658,10 @@ export function SegmentMap({
     const firstCoord = segmentFeatures[0]?.geometry.coordinates[0] ?? bridgeFeatures[0]?.geometry.coordinates[0];
     if (firstCoord) {
       mapRef.current.setCenter(new window.kakao.maps.LatLng(firstCoord[1], firstCoord[0]));
+      return;
+    }
+    if (focusMarker) {
+      mapRef.current.setCenter(new window.kakao.maps.LatLng(focusMarker.point.lat, focusMarker.point.lng));
     }
   }
 
@@ -1007,11 +1042,17 @@ function mapCenterKey(
   bridgePayload: BridgePayload | undefined,
   segmentFeatures: SegmentFeature[],
   bridgeFeatures: BridgeFeature[],
+  focusMarker?: { point: GeoPoint } | null,
+  preferredView?: { point: GeoPoint; level?: number } | null,
 ) {
+  if (preferredView) {
+    return `${preferredView.point.lng},${preferredView.point.lat},${preferredView.level ?? ""}`;
+  }
   const bbox = payload?.bbox ?? bridgePayload?.bbox;
   if (bbox) return bbox.join(",");
   const firstCoord = segmentFeatures[0]?.geometry.coordinates[0] ?? bridgeFeatures[0]?.geometry.coordinates[0];
-  return firstCoord ? firstCoord.join(",") : null;
+  if (firstCoord) return firstCoord.join(",");
+  return focusMarker ? `${focusMarker.point.lng},${focusMarker.point.lat}` : null;
 }
 
 function createRoutePolyline(
@@ -1046,6 +1087,21 @@ function createRoutePointOverlay(point: GeoPoint, label: string, type: "start" |
     xAnchor: 0.5,
     yAnchor: 1,
     zIndex: 36,
+  });
+}
+
+function createFocusMarkerOverlay(point: GeoPoint, label: string, map: KakaoMap): KakaoOverlay | null {
+  if (!window.kakao?.maps) return null;
+  const marker = document.createElement("div");
+  marker.className = "route-point-marker report";
+  marker.textContent = label;
+  return new window.kakao.maps.CustomOverlay({
+    map,
+    position: new window.kakao.maps.LatLng(point.lat, point.lng),
+    content: marker,
+    xAnchor: 0.5,
+    yAnchor: 1,
+    zIndex: 37,
   });
 }
 

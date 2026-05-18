@@ -15,6 +15,7 @@ class KtorVoiceAnalyzeRemoteDataSource(
         text: String,
         mode: String,
         history: List<VoiceAnalyzeHistoryDto>,
+        currentRoute: String?,
     ): VoiceAnalyzeResponseDto {
         try {
             val historyArray = JSONArray().apply {
@@ -31,6 +32,11 @@ class KtorVoiceAnalyzeRemoteDataSource(
                     .put("text", text)
                     .put("mode", mode)
                     .put("history", historyArray)
+                    .apply {
+                        if (currentRoute != null) {
+                            put("currentRoute", currentRoute)
+                        }
+                    }
                     .toString()
 
             val response = httpJsonClient.postJson(
@@ -51,6 +57,12 @@ class KtorVoiceAnalyzeRemoteDataSource(
             return VoiceAnalyzeResponseDto(
                 intent = dataJson.optString("intent", "UNKNOWN"),
                 placeName = if (dataJson.isNull("placeName")) null else dataJson.optString("placeName").takeIf { it.isNotBlank() },
+                category = if (dataJson.isNull("category")) null else dataJson.optString("category").takeIf { it.isNotBlank() },
+                bookmarkAction = if (dataJson.isNull("bookmarkAction")) null else dataJson.optString("bookmarkAction").takeIf { it.isNotBlank() },
+                departure = if (dataJson.isNull("departure")) null else dataJson.optString("departure").takeIf { it.isNotBlank() },
+                destination = if (dataJson.isNull("destination")) null else dataJson.optString("destination").takeIf { it.isNotBlank() },
+                reportType = if (dataJson.isNull("reportType")) null else dataJson.optString("reportType").takeIf { it.isNotBlank() },
+                description = if (dataJson.isNull("description")) null else dataJson.optString("description").takeIf { it.isNotBlank() },
                 confirmed = confirmed,
                 confirmationMessage = if (dataJson.isNull("confirmationMessage")) null else dataJson.optString("confirmationMessage").takeIf { it.isNotBlank() },
             )

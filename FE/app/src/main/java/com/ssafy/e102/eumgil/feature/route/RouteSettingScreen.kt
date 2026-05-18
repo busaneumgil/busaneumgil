@@ -56,6 +56,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -103,10 +105,13 @@ import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallCo
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingActionButtonState
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingControls
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceMuted
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextPrimary
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextTertiary
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
@@ -150,17 +155,14 @@ fun RouteSettingScreen(
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit = {},
     onLowFloorReservationDismiss: () -> Unit = {},
     onLowFloorReservationConfirm: () -> Unit = {},
+    snackbarHostState: SnackbarHostState? = null,
+    onDisabledStartClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val showsRouteLoadingScreen = uiState.shouldShowRouteLoadingScreen()
     val showsRouteUnsupportedAreaScreen = uiState.shouldShowRouteUnsupportedAreaScreen()
     val showsRouteFailureScreen = uiState.shouldShowRouteFailureScreen()
-    val ctaSupportingText =
-        if (uiState.cta.isEnabled) {
-            null
-        } else {
-            uiState.cta.supportingText
-        }
+    val ctaSupportingText: String? = null
     val disablesDefaultWindowInsets = routeSettingUsesEmptyWindowInsets()
     var isDuribalPromptDismissed by remember(
         uiState.selectedTravelMode,
@@ -262,11 +264,26 @@ fun RouteSettingScreen(
                         showRefreshAction = uiState.selectedRoute != null,
                         isRefreshInProgress = uiState.isRouteRefreshing,
                         onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
+                        onDisabledStartClick = onDisabledStartClick,
                         onRefreshClick = { onAction(RouteSettingUiAction.RouteRefreshClicked) },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
             }
+        }
+        snackbarHostState?.let { hostState ->
+            SnackbarHost(
+                hostState = hostState,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .wrapContentWidth()
+                        .padding(
+                            start = EumSpacing.medium,
+                            end = EumSpacing.medium,
+                            bottom = routeSettingBottomBarOverlayClearance(extraSpacing = EumSpacing.small),
+                        ),
+            )
         }
         if (uiState.isLoading && uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
             RouteSearchFullscreenLoadingOverlay(modifier = Modifier.matchParentSize())
@@ -2968,17 +2985,16 @@ private fun RouteMapStage(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            when {
-                selectedRoute == null || !previewMap.isDisplayable ->
-                    RouteMapMessageCard(
-                        title = routePreviewFallbackTitle(previewMap.status),
-                        description = routePreviewFallbackDescription(previewMap),
-                        showNoRouteImage = previewMap.status == RoutePreviewMapStatus.NO_ROUTE,
-                        modifier =
-                            Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(EumSpacing.medium),
-                    )
+            if (shouldShowRouteMapMessageCard(selectedRoute = selectedRoute, previewMap = previewMap)) {
+                RouteMapMessageCard(
+                    title = routePreviewFallbackTitle(previewMap.status),
+                    description = routePreviewFallbackDescription(previewMap),
+                    showNoRouteImage = previewMap.status == RoutePreviewMapStatus.NO_ROUTE,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(EumSpacing.medium),
+                )
             }
 
             val mapControlsModifier =
@@ -3023,6 +3039,13 @@ private fun RouteMapStage(
     }
 }
 
+private fun shouldShowRouteMapMessageCard(
+    selectedRoute: RouteSelectedRouteUiState?,
+    previewMap: RoutePreviewMapUiState,
+): Boolean =
+    previewMap.status != RoutePreviewMapStatus.NO_DESTINATION &&
+        (selectedRoute == null || !previewMap.isDisplayable)
+
 @Composable
 private fun RouteMapMessageCard(
     title: String,
@@ -3043,10 +3066,9 @@ private fun RouteMapMessageCard(
             horizontalAlignment = if (showNoRouteImage) Alignment.CenterHorizontally else Alignment.Start,
         ) {
             if (showNoRouteImage) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_status_warning),
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
+                RouteNoRouteIllustration(
+                    visualOffsetY = RouteMapMessageIllustrationVisualOffset,
+                    modifier = Modifier.size(RouteMapMessageIllustrationSize),
                 )
             }
             Text(
@@ -3421,39 +3443,46 @@ private fun RouteUnsupportedAreaScreen(
         modifier = modifier,
         color = MaterialTheme.colorScheme.background,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_status_warning),
-                contentDescription = null,
-                modifier = Modifier.size(72.dp),
-            )
-            Spacer(modifier = Modifier.height(EumSpacing.large))
-            Text(
-                text = stringResource(id = R.string.route_setting_unsupported_area_title),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.height(EumSpacing.small))
-            Text(
-                text = stringResource(id = R.string.route_setting_unsupported_area_description),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.height(EumSpacing.large))
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = EumSpacing.large)
+                        .offset(y = -RouteFailureScreenContentOffset),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                RouteNoRouteIllustration(
+                    visualOffsetY = RouteFailureIllustrationVisualOffset,
+                    modifier = Modifier.size(RouteUnsupportedAreaIllustrationSize),
+                )
+                Spacer(modifier = Modifier.height(RouteFailureImageToTextGap))
+                Text(
+                    text = stringResource(id = R.string.route_setting_unsupported_area_title),
+                    style = routeFailureTitleTextStyle(),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(EumSpacing.small))
+                Text(
+                    text = stringResource(id = R.string.route_setting_unsupported_area_description),
+                    style = routeFailureDescriptionTextStyle(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Button(
                 onClick = onSelectPlaceClick,
                 modifier =
                     Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(
+                            start = RouteSettingBottomBarHorizontalPadding,
+                            end = RouteSettingBottomBarHorizontalPadding,
+                            bottom = RouteSettingBottomBarBottomGap,
+                        )
                         .fillMaxWidth()
                         .heightIn(min = RouteSettingBottomBarButtonHeight),
                 shape = RoundedCornerShape(RouteStandardCardCornerRadius),
@@ -3501,19 +3530,19 @@ private fun RouteFailureScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge),
+                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge)
+                    .offset(y = -RouteFailureScreenContentOffset),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_status_warning),
-                contentDescription = null,
-                modifier = Modifier.size(72.dp),
+            RouteNoRouteIllustration(
+                visualOffsetY = RouteFailureIllustrationVisualOffset,
+                modifier = Modifier.size(RouteFailureScreenIllustrationSize),
             )
-            Spacer(modifier = Modifier.height(EumSpacing.large))
+            Spacer(modifier = Modifier.height(RouteFailureImageToTextGap))
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall,
+                style = routeFailureTitleTextStyle(),
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -3521,7 +3550,7 @@ private fun RouteFailureScreen(
             Spacer(modifier = Modifier.height(EumSpacing.small))
             Text(
                 text = description,
-                style = MaterialTheme.typography.bodyLarge,
+                style = routeFailureDescriptionTextStyle(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
@@ -3566,15 +3595,42 @@ private fun RouteFailureFallbackState(
         borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.32f),
         actionLabel = stringResource(id = R.string.route_setting_duribal_call_prompt_call),
         onActionClick = onDuribalCallClick,
+        useCompactFailureTextStyle = true,
         leadingContent = {
-            Image(
-                painter = painterResource(id = R.drawable.ic_status_warning),
-                contentDescription = null,
-                modifier = Modifier.size(56.dp),
+            RouteNoRouteIllustration(
+                visualOffsetY = RouteFailureFallbackIllustrationVisualOffset,
+                modifier = Modifier.size(RouteFailureFallbackIllustrationSize),
             )
         },
     )
 }
+
+@Composable
+private fun RouteNoRouteIllustration(
+    visualOffsetY: Dp = 0.dp,
+    modifier: Modifier = Modifier,
+) {
+    Image(
+        painter = painterResource(id = R.drawable.route_no_route_error_illustration),
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = modifier.offset(y = visualOffsetY),
+    )
+}
+
+@Composable
+private fun routeFailureTitleTextStyle() =
+    MaterialTheme.typography.titleLarge.copy(
+        fontSize = RouteFailureTitleFontSize,
+        lineHeight = RouteFailureTitleLineHeight,
+    )
+
+@Composable
+private fun routeFailureDescriptionTextStyle() =
+    MaterialTheme.typography.bodyMedium.copy(
+        fontSize = RouteFailureDescriptionFontSize,
+        lineHeight = RouteFailureDescriptionLineHeight,
+    )
 
 @Composable
 private fun RouteDuribalCallPromptCard(
@@ -4226,6 +4282,7 @@ private fun RouteSettingBottomBar(
     supportingText: String?,
     selectedRoute: RouteSelectedRouteUiState?,
     onStartClick: () -> Unit,
+    onDisabledStartClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     showRefreshAction: Boolean = false,
     isRefreshInProgress: Boolean = false,
@@ -4257,6 +4314,7 @@ private fun RouteSettingBottomBar(
                 verticalGap = EumSpacing.small,
                 compactSupportingText = false,
                 onStartClick = onStartClick,
+                onDisabledStartClick = onDisabledStartClick,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (showRefreshAction) {
@@ -4327,6 +4385,7 @@ private fun RouteSettingCtaContent(
     verticalGap: Dp,
     compactSupportingText: Boolean,
     onStartClick: () -> Unit,
+    onDisabledStartClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ctaContentDescription =
@@ -4354,6 +4413,8 @@ private fun RouteSettingCtaContent(
         } else {
             supportingText ?: stringResource(id = R.string.route_setting_cta_state_disabled)
         }
+    val interactionSource = remember { MutableInteractionSource() }
+    val buttonShape = RoundedCornerShape(RouteButtonCornerRadius)
 
     Column(
         modifier = modifier,
@@ -4373,9 +4434,7 @@ private fun RouteSettingCtaContent(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Button(
-            onClick = onStartClick,
-            enabled = enabled,
+        Surface(
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -4383,26 +4442,38 @@ private fun RouteSettingCtaContent(
                     .semantics {
                         contentDescription = ctaContentDescription
                         stateDescription = ctaStateDescription
-                    },
-            shape = RoundedCornerShape(RouteButtonCornerRadius),
-            elevation =
-                ButtonDefaults.buttonElevation(
-                    defaultElevation = 0.dp,
-                    pressedElevation = 0.dp,
-                    focusedElevation = 0.dp,
-                    hoveredElevation = 0.dp,
-                    disabledElevation = 0.dp,
-                ),
+                    }
+                    .clip(buttonShape)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.Button,
+                        onClick = if (enabled) onStartClick else onDisabledStartClick,
+                    ),
+            shape = buttonShape,
+            color = routeSettingCtaContainerColor(enabled = enabled),
+            contentColor = routeSettingCtaContentColor(enabled = enabled),
+            border =
+                if (enabled) {
+                    null
+                } else {
+                    BorderStroke(1.dp, EumBorderSubtle)
+                },
+            shadowElevation = 0.dp,
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = EumSpacing.medium),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onPrimary,
+                    tint = routeSettingCtaContentColor(enabled = enabled),
                 )
                 Text(
                     text = buttonLabel,
@@ -4414,6 +4485,22 @@ private fun RouteSettingCtaContent(
         }
     }
 }
+
+@Composable
+private fun routeSettingCtaContainerColor(enabled: Boolean): Color =
+    if (enabled) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        EumSurfaceMuted
+    }
+
+@Composable
+private fun routeSettingCtaContentColor(enabled: Boolean): Color =
+    if (enabled) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        EumTextTertiary
+    }
 
 @Composable
 private fun RouteMapBackdrop(
@@ -4652,6 +4739,7 @@ private fun RouteStateCard(
     actionLabel: String? = null,
     onActionClick: (() -> Unit)? = null,
     leadingContent: (@Composable () -> Unit)? = null,
+    useCompactFailureTextStyle: Boolean = false,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -4668,14 +4756,24 @@ private fun RouteStateCard(
             leadingContent?.invoke()
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
+                style =
+                    if (useCompactFailureTextStyle) {
+                        routeFailureTitleTextStyle()
+                    } else {
+                        MaterialTheme.typography.titleMedium
+                    },
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = if (leadingContent != null) TextAlign.Center else TextAlign.Start,
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
                 text = description,
-                style = MaterialTheme.typography.bodyLarge,
+                style =
+                    if (useCompactFailureTextStyle) {
+                        routeFailureDescriptionTextStyle()
+                    } else {
+                        MaterialTheme.typography.bodyLarge
+                    },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = if (leadingContent != null) TextAlign.Center else TextAlign.Start,
                 modifier = Modifier.fillMaxWidth(),
@@ -5235,6 +5333,19 @@ private val RouteFloatingControlCornerRadius = 24.dp
 private val RouteOverlayCardElevation = 6.dp
 private val RouteFloatingControlElevation = 6.dp
 private val RouteBottomSheetElevation = 6.dp
+private val RouteMapMessageIllustrationSize = 144.dp
+private val RouteMapMessageIllustrationVisualOffset = 10.dp
+private val RouteUnsupportedAreaIllustrationSize = 280.dp
+private val RouteFailureScreenIllustrationSize = 280.dp
+private val RouteFailureFallbackIllustrationSize = 160.dp
+private val RouteFailureScreenContentOffset = 48.dp
+private val RouteFailureImageToTextGap = 4.dp
+private val RouteFailureIllustrationVisualOffset = 24.dp
+private val RouteFailureFallbackIllustrationVisualOffset = 14.dp
+private val RouteFailureTitleFontSize = 19.sp
+private val RouteFailureTitleLineHeight = 25.sp
+private val RouteFailureDescriptionFontSize = 13.sp
+private val RouteFailureDescriptionLineHeight = 18.sp
 private val RouteAccessibilityLabelCornerRadius = 10.dp
 private val RouteAccessibilityLabelMinHeight = 24.dp
 private val RouteAccessibilityLabelHorizontalPadding = 4.dp

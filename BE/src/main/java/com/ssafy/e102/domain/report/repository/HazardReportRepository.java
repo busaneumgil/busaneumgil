@@ -83,6 +83,8 @@ public interface HazardReportRepository extends JpaRepository<HazardReport, Long
 	@Query("""
 			update HazardReport hazardReport
 			set hazardReport.status = :nextStatus,
+				hazardReport.processedByUserId = :processedByUserId,
+				hazardReport.processedAt = :processedAt,
 				hazardReport.updatedAt = current_timestamp
 			where hazardReport.reportId = :reportId
 				and hazardReport.status = :currentStatus
@@ -93,7 +95,11 @@ public interface HazardReportRepository extends JpaRepository<HazardReport, Long
 		@Param("currentStatus")
 		ReportStatus currentStatus,
 		@Param("nextStatus")
-		ReportStatus nextStatus);
+		ReportStatus nextStatus,
+		@Param("processedByUserId")
+		UUID processedByUserId,
+		@Param("processedAt")
+		LocalDateTime processedAt);
 
 	@Modifying(flushAutomatically = true)
 	@Query("""

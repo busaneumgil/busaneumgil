@@ -433,6 +433,37 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `search preview reflects existing bookmark state from local repository`() =
+        runTest {
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(bookmarkedPlaceIds = mutableSetOf("preview-1")),
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-1",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            destinationPreviewRepository.requestPreview(destination = destination)
+            advanceUntilIdle()
+
+            val sheetState = viewModel.uiState.value.facilityDetailSheetState
+            assertTrue(sheetState.isBookmarked)
+            assertTrue(requireNotNull(sheetState.mapTapDetail).isBookmarked)
+        }
+
+    @Test
     fun `search preview keeps preview camera when map route restarts with current location available`() =
         runTest {
             val initialLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)
@@ -2271,12 +2302,19 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `recent destinations are limited to three entries`() =
+    fun `recent destinations keep up to ten entries for the expandable sheet`() =
         runTest {
             val searchRepository =
                 FakeSearchRepository(
                     recentDestinations =
                         listOf(
+                            recentDestination(placeId = "place-11", searchedAtMillis = 11_000L),
+                            recentDestination(placeId = "place-10", searchedAtMillis = 10_000L),
+                            recentDestination(placeId = "place-9", searchedAtMillis = 9_000L),
+                            recentDestination(placeId = "place-8", searchedAtMillis = 8_000L),
+                            recentDestination(placeId = "place-7", searchedAtMillis = 7_000L),
+                            recentDestination(placeId = "place-6", searchedAtMillis = 6_000L),
+                            recentDestination(placeId = "place-5", searchedAtMillis = 5_000L),
                             recentDestination(placeId = "place-4", searchedAtMillis = 4_000L),
                             recentDestination(placeId = "place-3", searchedAtMillis = 3_000L),
                             recentDestination(placeId = "place-2", searchedAtMillis = 2_000L),
@@ -2297,7 +2335,18 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                listOf("place-4", "place-3", "place-2"),
+                listOf(
+                    "place-11",
+                    "place-10",
+                    "place-9",
+                    "place-8",
+                    "place-7",
+                    "place-6",
+                    "place-5",
+                    "place-4",
+                    "place-3",
+                    "place-2",
+                ),
                 viewModel.uiState.value.recentDestinations.map { recentDestination -> recentDestination.placeId },
             )
         }

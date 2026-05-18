@@ -11,18 +11,23 @@ class RecentDestinationBottomSheetShellPolicyTest {
             .readText()
 
     @Test
-    fun `recent destination sheet header keeps a compact title and emphasized view all action`() {
+    fun `recent destination sheet header keeps a compact title and emphasized expand action`() {
         assertTrue(
             "Recent destination header title should use a more compact typography level than titleLarge.",
             source.contains("style = MaterialTheme.typography.titleMedium"),
         )
         assertTrue(
             "View-all CTA should keep the requested Korean label.",
-            source.contains("text = \"전체보기\""),
+            source.contains("map_recent_destination_expand"),
         )
         assertTrue(
             "View-all CTA should include a chevron-like greater-than marker.",
             source.contains("text = \">\""),
+        )
+        assertTrue(
+            "Expanded recent destination sheet should expose a collapse action.",
+            source.contains("map_recent_destination_collapse") &&
+                source.contains("text = \"^\""),
         )
         assertTrue(
             "View-all CTA should use the design convention blue accent token.",
@@ -49,8 +54,8 @@ class RecentDestinationBottomSheetShellPolicyTest {
             source.contains("AnimatedVisibility("),
         )
         assertTrue(
-            "View-all navigation action should suppress ripple because it opens the saved-route screen.",
-            source.contains("private fun RecentDestinationViewAllAction(") &&
+            "Sheet expand/collapse action should suppress ripple because it changes the sheet state in place.",
+            source.contains("private fun RecentDestinationSheetToggleAction(") &&
                 source.contains("indication = null"),
         )
         assertTrue(
@@ -81,6 +86,25 @@ class RecentDestinationBottomSheetShellPolicyTest {
             "Recent destination tag text should not wrap vertically on narrow devices.",
             source.contains("maxLines = 1") &&
                 source.contains("softWrap = false"),
+        )
+    }
+
+    @Test
+    fun `recent destination sheet expands in place and scrolls up to ten items`() {
+        assertTrue(
+            "Collapsed home sheet should keep the compact three-item preview.",
+            source.contains("private const val RecentDestinationCollapsedItemCount = 3") &&
+                source.contains("state.items.take(RecentDestinationCollapsedItemCount)"),
+        )
+        assertTrue(
+            "Expanded sheet should cap the full recent destination list at ten entries.",
+            source.contains("private const val RecentDestinationExpandedItemLimit = 10") &&
+                source.contains("state.items.take(RecentDestinationExpandedItemLimit)"),
+        )
+        assertTrue(
+            "Expanded sheet should take roughly two thirds of the viewport and scroll internally.",
+            source.contains("private const val RecentDestinationExpandedSheetMaxHeightFraction = 0.65f") &&
+                source.contains(".verticalScroll(listScrollState)"),
         )
     }
 }

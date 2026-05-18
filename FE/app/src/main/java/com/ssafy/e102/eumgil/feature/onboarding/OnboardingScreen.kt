@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.onboarding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -633,6 +635,7 @@ private fun LocationTermsAllAgreementRow(
 ) {
     val selectedStateDescription = stringResource(id = R.string.a11y_option_selected)
     val unselectedStateDescription = stringResource(id = R.string.a11y_option_unselected)
+    val interactionSource = remember { MutableInteractionSource() }
 
     Surface(
         modifier = modifier
@@ -648,8 +651,10 @@ private fun LocationTermsAllAgreementRow(
             }
             .toggleable(
                 value = checked,
-                onValueChange = onCheckedChange,
+                interactionSource = interactionSource,
+                indication = null,
                 role = Role.Checkbox,
+                onValueChange = onCheckedChange,
             ),
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(EumRadius.scaleM),
@@ -700,6 +705,7 @@ private fun LocationTermsAgreementRow(
     val unselectedStateDescription = stringResource(id = R.string.a11y_option_unselected)
     val showDetailDisclosure = item != LocationTermsItem.OVER_FOURTEEN
     val detailContentDescription = stringResource(id = R.string.a11y_terms_detail_open)
+    val interactionSource = remember { MutableInteractionSource() }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -738,8 +744,10 @@ private fun LocationTermsAgreementRow(
                     }
                     .toggleable(
                         value = checked,
-                        onValueChange = onCheckedChange,
+                        interactionSource = interactionSource,
+                        indication = null,
                         role = Role.Checkbox,
+                        onValueChange = onCheckedChange,
                     ),
                 horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
                 verticalAlignment = Alignment.CenterVertically,

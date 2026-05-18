@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 fun NavigationRoute(
     onNavigateBack: () -> Unit,
     onNavigateToRouteDetail: (RouteOption) -> Unit = {},
+    onNavigateToReport: () -> Unit = {},
     onNavigateToMap: () -> Unit,
     onNavigateToSavedRoute: () -> Unit,
     onNavigateToArrival: () -> Unit,
@@ -44,20 +45,29 @@ fun NavigationRoute(
     val currentLocationManager = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.currentLocationManager
     }
+    val currentHeadingManager = remember(appContext) {
+        (appContext as BusanEumgilApp).appContainer.currentHeadingManager
+    }
+    val locationPermissionManager = remember(appContext) {
+        (appContext as BusanEumgilApp).appContainer.locationPermissionManager
+    }
     val bookmarkRepository = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.bookmarkRepository
     }
     val routeRepository = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.routeRepository
     }
-    val viewModelFactory = remember(currentLocationManager, bookmarkRepository, routeRepository) {
-        NavigationViewModel.provideFactory(
-            currentLocationManager = currentLocationManager,
-            bookmarkRepository = bookmarkRepository,
-            routeRepository = routeRepository,
-            isLowVisionMode = useLowVisionUi,
-        )
-    }
+    val viewModelFactory =
+        remember(currentLocationManager, currentHeadingManager, locationPermissionManager, bookmarkRepository, routeRepository) {
+            NavigationViewModel.provideFactory(
+                currentLocationManager = currentLocationManager,
+                currentHeadingManager = currentHeadingManager,
+                locationPermissionManager = locationPermissionManager,
+                bookmarkRepository = bookmarkRepository,
+                routeRepository = routeRepository,
+                isLowVisionMode = useLowVisionUi,
+            )
+        }
     val viewModel =
         remember(activity, viewModelFactory) {
             val owner = checkNotNull(activity) { "NavigationRoute requires a ComponentActivity host." }
@@ -89,6 +99,7 @@ fun NavigationRoute(
         useLowVisionUi,
         onNavigateBack,
         onNavigateToRouteDetail,
+        onNavigateToReport,
         onNavigateToMap,
         onNavigateToSavedRoute,
         onNavigateToArrival,
@@ -99,6 +110,7 @@ fun NavigationRoute(
                 when (event) {
                     NavigationUiEvent.NavigateBack -> onNavigateBack()
                     is NavigationUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
+                    NavigationUiEvent.NavigateToReport -> onNavigateToReport()
                     NavigationUiEvent.NavigateToMap -> onNavigateToMap()
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
                     NavigationUiEvent.NavigateToArrival -> onNavigateToArrival()

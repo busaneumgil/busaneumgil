@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
@@ -77,6 +78,8 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.cos
 
 @Composable
 internal fun KakaoMapViewport(
@@ -293,6 +296,7 @@ private class KakaoMapViewportController {
     private var lastRenderedPointOverlayMarkers: List<KakaoOverlayMarkerRenderState> = emptyList()
     private var lastRenderedArrowOverlayMarkers: List<KakaoOverlayMarkerRenderState> = emptyList()
     private var lastRenderedRouteLines: List<KakaoRouteLineRenderState> = emptyList()
+    private var consecutiveEmptyRouteLineFrameCount: Int = 0
     private var lastDispatchedMapTapCoordinate: MapCoordinate? = null
     private var lastDispatchedMapTapUptimeMillis: Long = 0L
     private var lastDispatchedMarkerTapId: String? = null
@@ -783,10 +787,23 @@ private class KakaoMapViewportController {
         lastRenderedRouteCameraSignature = null
         if (lastRenderedCameraRequestId == cameraState.requestId) return
         val cameraUpdate =
-            CameraUpdateFactory.newCenterPosition(
-                LatLng.from(cameraState.latitude, cameraState.longitude),
-                cameraState.zoomLevel,
-            )
+            if (cameraState.bearingDegrees != null) {
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.from(
+                        cameraState.latitude,
+                        cameraState.longitude,
+                        cameraState.zoomLevel,
+                        0.0,
+                        kakaoCameraRotationRadians(cameraState.bearingDegrees),
+                        0.0,
+                    ),
+                )
+            } else {
+                CameraUpdateFactory.newCenterPosition(
+                    LatLng.from(cameraState.latitude, cameraState.longitude),
+                    cameraState.zoomLevel,
+                )
+            }
         if (shouldAnimateKakaoCameraTransition(previousTarget = lastRenderedCameraTarget, nextTarget = currentTarget)) {
             readyMap.moveCamera(
                 cameraUpdate,
@@ -808,6 +825,20 @@ private class KakaoMapViewportController {
         state: MapViewportUiState,
     ) {
         val routeLineStates = createKakaoRouteLineRenderStates(state.overlayState.polylines)
+        if (routeLineStates.isEmpty() && lastRenderedRouteLines.isNotEmpty() && consecutiveEmptyRouteLineFrameCount == 0) {
+            consecutiveEmptyRouteLineFrameCount += 1
+            Log.d(
+                KAKAO_MAP_LOG_TAG,
+                "Preserving previous route lines for one empty frame previousCount=${lastRenderedRouteLines.size}",
+            )
+            return
+        }
+        consecutiveEmptyRouteLineFrameCount =
+            if (routeLineStates.isEmpty()) {
+                consecutiveEmptyRouteLineFrameCount + 1
+            } else {
+                0
+            }
         if (lastRenderedRouteLines == routeLineStates) return
 
         val routeLineManager = readyMap.routeLineManager ?: return
@@ -1635,6 +1666,8 @@ private fun MapProjectedMarkerOverlay(
             }
             .size(markerSize)
             .then(clickableModifier)
+    val translationDistancePx = with(density) { overlay.translationDistanceDp.dp.toPx() }
+    val rotationRadians = Math.toRadians(overlay.rotationDegrees.toDouble())
 
     if (overlay.kind == KakaoProjectedMarkerKind.ROUTE_SEGMENT_JUNCTION) {
         val fillColor = Color(overlay.fillColorArgb ?: 0xFF2A7BFF.toInt())
@@ -1662,7 +1695,12 @@ private fun MapProjectedMarkerOverlay(
     Image(
         painter = painterResource(id = overlay.iconResId),
         contentDescription = contentDescription,
-        modifier = markerModifier,
+        modifier =
+            markerModifier.graphicsLayer {
+                rotationZ = overlay.rotationDegrees
+                translationX = (sin(rotationRadians) * translationDistancePx).toFloat()
+                translationY = (-cos(rotationRadians) * translationDistancePx).toFloat()
+            },
     )
 }
 
@@ -1673,6 +1711,9 @@ private fun KakaoProjectedMarkerOverlay.resolveContentDescription(
     when (kind) {
         KakaoProjectedMarkerKind.CURRENT_LOCATION ->
             stringResource(id = R.string.navigation_map_marker_current)
+
+        KakaoProjectedMarkerKind.CURRENT_LOCATION_DIRECTION ->
+            null
 
         KakaoProjectedMarkerKind.SELECTED_DESTINATION ->
             selectedDestinationName

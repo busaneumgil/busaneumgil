@@ -281,6 +281,7 @@ internal fun String?.toCurrentTopLevelRoute(): String? =
         this == TopLevelRoute.Map.route -> TopLevelRoute.Map.route
         this == TopLevelRoute.SavedRoute.route -> TopLevelRoute.SavedRoute.route
         this == ReportRoute.Report.route -> ReportRoute.Report.route
+        this == ReportRoute.Guidance.route -> null
         this == TopLevelRoute.MyPage.route -> TopLevelRoute.MyPage.route
         this?.startsWith("${TopLevelRoute.MyPage.route}/") == true -> TopLevelRoute.MyPage.route
         this == SearchRoute.Entry.route -> TopLevelRoute.Map.route

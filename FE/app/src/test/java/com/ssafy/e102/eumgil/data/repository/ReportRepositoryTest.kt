@@ -70,6 +70,7 @@ class ReportRepositoryTest {
                         HazardReportDetailDto(
                             reportId = 7L,
                             reportType = "SIDEWALK_MISSING",
+                            status = "APPROVED",
                             description = "인도 통행이 어렵습니다.",
                             reportPoint = HazardReportPointDto(lat = 35.1796, lng = 129.0756),
                             createdAt = "2026-04-28T17:00:00",
@@ -87,9 +88,36 @@ class ReportRepositoryTest {
             val detail = repository.getReportHistoryDetail("server:7")
 
             assertEquals("SIDEWALK_MISSING", detail?.reportCategory)
+            assertEquals(ReportProcessingStatus.APPROVED, detail?.processingStatus)
             assertEquals("인도 통행이 어렵습니다.", detail?.description)
             assertEquals(listOf("https://example.com/7-1.jpg"), detail?.imageRefs)
             assertEquals(7L, detail?.serverReportId)
+        }
+
+    @Test
+    fun `processing counts include pending and approved but exclude rejected`() =
+        runTest {
+            val remoteDataSource =
+                FakeHazardReportsRemoteDataSource(
+                    listItems =
+                        listOf(
+                            hazardReportListItem(reportId = 7L, reportType = "STAIRS_STEP", status = "PENDING"),
+                            hazardReportListItem(reportId = 8L, reportType = "OTHER_OBSTACLE", status = "APPROVED"),
+                            hazardReportListItem(reportId = 9L, reportType = "RAMP", status = "REJECTED"),
+                        ),
+                )
+            val repository =
+                DefaultReportRepository(
+                    reportDraftDao = FakeReportDraftDao(),
+                    reportOutboxDao = FakeReportOutboxDao(),
+                    hazardReportsRemoteDataSource = remoteDataSource,
+                    accessTokenProvider = { "access-token" },
+                )
+
+            val counts = repository.observeReportProcessingCounts().first()
+
+            assertEquals(1, counts.pending)
+            assertEquals(1, counts.approved)
         }
 }
 
@@ -211,10 +239,12 @@ private fun reportOutboxEntity(
 private fun hazardReportListItem(
     reportId: Long,
     reportType: String,
+    status: String = "PENDING",
 ): HazardReportListItemDto =
     HazardReportListItemDto(
         reportId = reportId,
         reportType = reportType,
+        status = status,
         reportPoint = HazardReportPointDto(lat = 35.1796, lng = 129.0756),
         createdAt = "2026-04-28T17:00:00",
         representativeImageUrl = null,

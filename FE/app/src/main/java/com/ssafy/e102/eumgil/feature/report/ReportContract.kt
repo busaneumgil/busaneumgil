@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.feature.report
 
+import com.ssafy.e102.eumgil.data.repository.ReportProcessingCounts
+
 object ReportFormLimits {
     const val DESCRIPTION_MAX_LENGTH = 300
     const val ADDRESS_MAX_LENGTH = 120
@@ -9,7 +11,8 @@ object ReportFormLimits {
 
 data class ReportUiState(
     val screenState: ReportScreenState = ReportScreenState.Editing,
-    val currentStep: ReportStep = ReportStep.TypeSelection,
+    val currentStep: ReportStep = ReportStep.Home,
+    val entryPoint: ReportEntryPoint = ReportEntryPoint.TopLevel,
     val draftId: String? = null,
     val hasExistingDraft: Boolean = false,
     val reportType: ReportTypeInput = ReportTypeInput(),
@@ -19,6 +22,8 @@ data class ReportUiState(
     val draftSaveState: ReportDraftSaveState = ReportDraftSaveState.Idle,
     val outboxState: ReportOutboxState = ReportOutboxState.NotSaved,
     val submitState: ReportSubmitState = ReportSubmitState.Idle,
+    val processingCounts: ReportProcessingCounts = ReportProcessingCounts(),
+    val recentReports: List<ReportRecentUiModel> = emptyList(),
     val submittedAtMillis: Long? = null,
     // Task 4.1 — 단말 네트워크 연결성. 오프라인이면 서버 제출 자체를 막아 무의미한 retry를 피한다.
     // 기본값 true: 정보가 없을 때는 사용자가 시도할 수 있게 두는 게 더 자연스럽다.
@@ -47,11 +52,26 @@ data class ReportUiState(
 }
 
 enum class ReportStep {
+    Home,
     TypeSelection,
     LocationConfirm,
     DetailInput,
     Complete,
 }
+
+enum class ReportEntryPoint {
+    TopLevel,
+    NavigationGuidance,
+}
+
+data class ReportRecentUiModel(
+    val historyId: String,
+    val title: String,
+    val address: String,
+    val submittedAtText: String,
+    val statusLabel: String,
+    val isApproved: Boolean,
+)
 
 data class ReportTypeInput(
     val value: ReportType? = null,
@@ -184,6 +204,10 @@ sealed interface ReportSubmitState {
 }
 
 sealed interface ReportUiAction {
+    data class RouteEntered(
+        val entryPoint: ReportEntryPoint,
+    ) : ReportUiAction
+
     data object BackClicked : ReportUiAction
 
     data object DraftResumeClicked : ReportUiAction
@@ -258,6 +282,10 @@ sealed interface ReportUiAction {
 
     data object ReportHistoryClicked : ReportUiAction
 
+    data class RecentReportClicked(
+        val historyId: String,
+    ) : ReportUiAction
+
     data object StartNewReportClicked : ReportUiAction
 
     data object BackToMapClicked : ReportUiAction
@@ -269,7 +297,7 @@ sealed interface ReportUiEvent {
     data object NavigateBack : ReportUiEvent
 
     /**
-     * 임시저장된 draft가 있는 상태에서 사용자가 새 유형을 선택했을 때 emit된다.
+     * 저장된 draft가 있는 상태에서 사용자가 새 유형을 선택했을 때 emit된다.
      * Route는 [pendingType]을 보관해 두었다가 다이얼로그 응답에 따라
      * [ReportUiAction.DiscardDraftAndStartNew] 또는 [ReportUiAction.ResumeDraftFromDialog]를 dispatch한다.
      */
@@ -287,7 +315,9 @@ sealed interface ReportUiEvent {
         val message: String,
     ) : ReportUiEvent
 
-    data object NavigateToReportHistory : ReportUiEvent
+    data class NavigateToReportHistory(
+        val historyId: String? = null,
+    ) : ReportUiEvent
 
     data object NavigateToMap : ReportUiEvent
 }

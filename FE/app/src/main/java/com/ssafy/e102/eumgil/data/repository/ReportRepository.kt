@@ -31,6 +31,9 @@ interface ReportRepository {
             outboxItems.map(ReportOutboxData::toLocalHistoryData)
         }
 
+    fun observeReportProcessingCounts(): Flow<ReportProcessingCounts> =
+        observeReportHistoryEntries().map(::countReportProcessingStatus)
+
     suspend fun getReportHistoryDetail(historyId: String): ReportHistoryDetailData? = null
 
     suspend fun getLatestDraft(): ReportDraftData?
@@ -127,9 +130,21 @@ enum class ReportHistorySource {
     LocalOutbox,
 }
 
+enum class ReportProcessingStatus {
+    PENDING,
+    APPROVED,
+    REJECTED,
+}
+
+data class ReportProcessingCounts(
+    val pending: Int = 0,
+    val approved: Int = 0,
+)
+
 data class ReportHistoryData(
     val historyId: String,
     val reportCategory: String,
+    val processingStatus: ReportProcessingStatus?,
     val description: String?,
     val address: String?,
     val latitude: Double,
@@ -145,6 +160,7 @@ data class ReportHistoryData(
 data class ReportHistoryDetailData(
     val historyId: String,
     val reportCategory: String,
+    val processingStatus: ReportProcessingStatus?,
     val description: String?,
     val address: String?,
     val latitude: Double,
@@ -521,6 +537,7 @@ class DefaultReportRepository(
         return ReportHistoryData(
             historyId = "$SERVER_HISTORY_PREFIX$reportId",
             reportCategory = reportType,
+            processingStatus = status.toReportProcessingStatusOrNull(),
             // Task 5.7 — BE list 응답의 description/address 그대로 노출 (mypage 카드용).
             description = description,
             address = address,
@@ -540,6 +557,7 @@ class DefaultReportRepository(
         return ReportHistoryDetailData(
             historyId = "$SERVER_HISTORY_PREFIX$reportId",
             reportCategory = reportType,
+            processingStatus = status.toReportProcessingStatusOrNull(),
             description = description,
             address = null,
             latitude = reportPoint.lat,
@@ -822,6 +840,7 @@ private fun ReportOutboxData.toLocalHistoryData(): ReportHistoryData =
     ReportHistoryData(
         historyId = "$LOCAL_HISTORY_PREFIX$outboxId",
         reportCategory = reportCategory,
+        processingStatus = null,
         description = description.takeIf(String::isNotBlank),
         address = address,
         latitude = latitude,
@@ -838,6 +857,7 @@ private fun ReportOutboxData.toDetailData(): ReportHistoryDetailData =
     ReportHistoryDetailData(
         historyId = "$LOCAL_HISTORY_PREFIX$outboxId",
         reportCategory = reportCategory,
+        processingStatus = null,
         description = description.takeIf(String::isNotBlank),
         address = address,
         latitude = latitude,
@@ -850,6 +870,15 @@ private fun ReportOutboxData.toDetailData(): ReportHistoryDetailData =
 
 private fun String.removePrefixOrNull(prefix: String): String? =
     takeIf { it.startsWith(prefix) }?.removePrefix(prefix)
+
+private fun String.toReportProcessingStatusOrNull(): ReportProcessingStatus? =
+    runCatching { ReportProcessingStatus.valueOf(this) }.getOrNull()
+
+private fun countReportProcessingStatus(reports: List<ReportHistoryData>): ReportProcessingCounts =
+    ReportProcessingCounts(
+        pending = reports.count { it.processingStatus == ReportProcessingStatus.PENDING },
+        approved = reports.count { it.processingStatus == ReportProcessingStatus.APPROVED },
+    )
 
 private const val SERVER_HISTORY_PREFIX = "server:"
 private const val LOCAL_HISTORY_PREFIX = "outbox:"

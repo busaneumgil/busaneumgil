@@ -46,6 +46,7 @@ import com.ssafy.e102.domain.report.exception.HazardReportErrorCode;
 import com.ssafy.e102.domain.report.exception.HazardReportException;
 import com.ssafy.e102.domain.report.repository.HazardReportImageRepository;
 import com.ssafy.e102.domain.report.repository.HazardReportRepository;
+import com.ssafy.e102.domain.report.type.ReportStatus;
 import com.ssafy.e102.domain.report.type.ReportType;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.repository.UserRepository;
@@ -339,6 +340,7 @@ class HazardReportServiceTest {
 		assertThat(response.content()).hasSize(1);
 		assertThat(response.content().get(0).reportId()).isEqualTo(1L);
 		assertThat(response.content().get(0).reportType()).isEqualTo(ReportType.SIDEWALK_MISSING);
+		assertThat(response.content().get(0).status()).isEqualTo(ReportStatus.PENDING);
 		assertThat(response.content().get(0).address()).isEqualTo("부산 부산진구 시민공원로 73");
 		assertThat(response.content().get(0).description())
 			.isEqualTo("가".repeat(80) + "...");
@@ -381,6 +383,7 @@ class HazardReportServiceTest {
 		HazardReportDetailResponse response = hazardReportService.getMyHazardReportDetail(userId, 1L);
 
 		assertThat(response.reportId()).isEqualTo(1L);
+		assertThat(response.status()).isEqualTo(ReportStatus.PENDING);
 		assertThat(response.imageUrls()).containsExactly(
 			"https://storage.example.com/read?key=image-1",
 			"https://storage.example.com/read?key=image-2");

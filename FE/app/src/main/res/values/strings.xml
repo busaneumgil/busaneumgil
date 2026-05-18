@@ -289,6 +289,8 @@
     <string name="map_route_selection_destination_empty">미선택</string>
     <string name="map_route_selection_status_a11y">출발 %1$s. 도착 %2$s.</string>
     <string name="map_recent_destination_sheet_restore">최근 목적지 다시 펼치기</string>
+    <string name="map_recent_destination_expand">전체보기</string>
+    <string name="map_recent_destination_collapse">접기</string>
     <string name="map_facility_detail_sheet_toggle">장소 상세 접기/펼치기</string>
     <string name="map_facility_detail_close">장소 선택 닫기</string>
     <string name="map_facility_detail_action_supporting">실제 route setting 연결은 다음 스레드에서 마무리하고, 추가 CTA 슬롯도 이 영역에 확장합니다.</string>
@@ -306,6 +308,7 @@
     <string name="report_complete_cta_history">제보 내역 확인하기</string>
     <string name="report_complete_cta_new_report">다른 제보하기</string>
     <string name="report_complete_cta_back_to_map">지도로 돌아가기</string>
+    <string name="report_complete_cta_back_to_navigation">길안내로 돌아가기</string>
     <string name="report_complete_photo_attached">%1$d장 첨부됨</string>
     <string name="saved_route_address_empty">주소 정보 없음</string>
     <string name="saved_route_edit">편집</string>
@@ -717,6 +720,7 @@
     <string name="navigation_map_control_zoom_in">+</string>
     <string name="navigation_map_control_zoom_out">-</string>
     <string name="navigation_map_control_recenter">위치</string>
+    <string name="navigation_map_control_report">제보하기</string>
     <string name="navigation_summary_eta_title">도착까지</string>
     <string name="navigation_summary_distance_title">남은거리</string>
     <string name="navigation_detail_button_label">상세 정보</string>

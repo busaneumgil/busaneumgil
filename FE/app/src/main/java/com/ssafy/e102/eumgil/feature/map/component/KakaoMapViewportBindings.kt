@@ -1,8 +1,10 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
+import android.util.Log
 import androidx.annotation.DrawableRes
 import com.kakao.vectormap.label.TransformMethod
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.BuildConfig
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.PlaceMarkerKind
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
@@ -33,6 +35,7 @@ internal data class KakaoCameraRenderState(
     val latitude: Double,
     val longitude: Double,
     val zoomLevel: Int,
+    val bearingDegrees: Double?,
     val requestId: Long,
 )
 
@@ -41,8 +44,12 @@ internal fun createKakaoCameraRenderState(cameraTarget: MapCameraTarget): KakaoC
         latitude = cameraTarget.center.latitude,
         longitude = cameraTarget.center.longitude,
         zoomLevel = cameraTarget.resolvedZoomLevel(),
+        bearingDegrees = cameraTarget.bearingDegrees,
         requestId = cameraTarget.requestId,
     )
+
+internal fun kakaoCameraRotationRadians(bearingDegrees: Double?): Double =
+    bearingDegrees?.let(Math::toRadians) ?: 0.0
 
 internal fun createKakaoCameraDebugSummary(cameraTarget: MapCameraTarget): String {
     val cameraState = createKakaoCameraRenderState(cameraTarget)
@@ -57,6 +64,10 @@ internal fun createKakaoCameraDebugSummary(cameraTarget: MapCameraTarget): Strin
         append(cameraState.longitude.toLogCoordinate())
         append(" zoom=")
         append(cameraState.zoomLevel)
+        cameraState.bearingDegrees?.let { bearingDegrees ->
+            append(" bearing=")
+            append(bearingDegrees)
+        }
     }
 }
 
@@ -69,7 +80,8 @@ internal fun shouldAnimateKakaoCameraTransition(
     if (previousTarget.requestId == nextTarget.requestId) return false
     if (previousTarget.source != nextTarget.source) return false
     return previousTarget.center != nextTarget.center ||
-        previousTarget.resolvedZoomLevel() != nextTarget.resolvedZoomLevel()
+        previousTarget.resolvedZoomLevel() != nextTarget.resolvedZoomLevel() ||
+        previousTarget.bearingDegrees != nextTarget.bearingDegrees
 }
 
 internal fun syncRenderedKakaoCameraTarget(
@@ -117,6 +129,7 @@ internal fun isKakaoScreenPointInsideViewport(
 
 internal enum class KakaoProjectedMarkerKind {
     CURRENT_LOCATION,
+    CURRENT_LOCATION_DIRECTION,
     SELECTED_DESTINATION,
     SELECTED_MAP_PIN,
     ROUTE_ORIGIN,
@@ -144,6 +157,8 @@ internal data class KakaoProjectedMarkerRenderState(
     val fillColorArgb: Int? = null,
     val strokeColorArgb: Int? = null,
     val clickTargetId: String? = null,
+    val rotationDegrees: Float = 0f,
+    val translationDistanceDp: Int = 0,
 )
 
 internal data class KakaoOverlayMarkerRenderState(
@@ -199,6 +214,8 @@ internal data class KakaoProjectedMarkerOverlay(
     val fillColorArgb: Int? = null,
     val strokeColorArgb: Int? = null,
     val clickTargetId: String? = null,
+    val rotationDegrees: Float = 0f,
+    val translationDistanceDp: Int = 0,
 )
 
 internal data class KakaoProjectedMarkerProjectionResult(
@@ -372,6 +389,7 @@ internal fun createKakaoProjectedMarkerRenderStates(
                     anchorPointY = 0.5f,
                     sizeDp = 28,
                     zIndex = 2f,
+                    rotationDegrees = 0f,
                 ),
             )
         }
@@ -632,6 +650,8 @@ internal fun createKakaoProjectedMarkerOverlays(
                 fillColorArgb = marker.fillColorArgb,
                 strokeColorArgb = marker.strokeColorArgb,
                 clickTargetId = marker.clickTargetId,
+                rotationDegrees = marker.rotationDegrees,
+                translationDistanceDp = marker.translationDistanceDp,
             )
         }
     }
@@ -939,6 +959,19 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
                     null
                 }
 
+            MapViewportPointKind.CURRENT_LOCATION_HEADING ->
+                if (includeCurrentLocation) {
+                    KakaoOverlayPointMarkerSpec(
+                        kind = KakaoProjectedMarkerKind.CURRENT_LOCATION_DIRECTION,
+                        iconResId = R.drawable.ic_map_current_location_direction_arrow,
+                        sizeDp = 18,
+                        anchorPointY = 0.5f,
+                        zIndex = 3.2f,
+                    )
+                } else {
+                    null
+                }
+
             MapViewportPointKind.SEGMENT_JUNCTION,
             MapViewportPointKind.TRANSIT_BUS_STOP,
             MapViewportPointKind.TRANSIT_SUBWAY_STATION,
@@ -963,6 +996,8 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
         fillColorArgb = markerSpec.fillColorArgb,
         strokeColorArgb = markerSpec.strokeColorArgb,
         clickTargetId = clickTargetId,
+        rotationDegrees = headingDegrees?.toFloat() ?: 0f,
+        translationDistanceDp = if (kind == MapViewportPointKind.CURRENT_LOCATION_HEADING) 18 else 0,
     )
 }
 
@@ -1420,10 +1455,13 @@ private var lastProjectedSegmentMarkerDebugSummary: String? = null
 private fun logProjectedSegmentMarkerDebugSummary(
     projectedMarkers: List<KakaoProjectedMarkerRenderState>,
 ) {
+    if (!BuildConfig.DEBUG) return
     val summary = createProjectedSegmentMarkerDebugSummary(projectedMarkers)
     if (summary == lastProjectedSegmentMarkerDebugSummary) return
     lastProjectedSegmentMarkerDebugSummary = summary
-    println("SegmentMarkerTrace[KakaoProjectedMarkers] $summary")
+    runCatching {
+        Log.d("KakaoMapViewport", "SegmentMarkerTrace[KakaoProjectedMarkers] $summary")
+    }
 }
 
 private fun MapCoordinate.toDebugCoordinate(): String =

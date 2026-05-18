@@ -29,11 +29,12 @@ import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
 import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.feature.arrival.ArrivalRoute as ArrivalScreenRoute
 import com.ssafy.e102.eumgil.feature.map.MapRoute
-import com.ssafy.e102.eumgil.feature.mypage.MyPageReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as NavigationGuidanceViewModel
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
+import com.ssafy.e102.eumgil.feature.report.ReportEntryPoint
+import com.ssafy.e102.eumgil.feature.report.ReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
 import com.ssafy.e102.eumgil.feature.route.RouteDetailEntryRoute
 import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
@@ -46,6 +47,8 @@ import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
 import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
+
+private const val REPORT_START_NEW_REQUEST_KEY = "report_start_new_request"
 
 fun NavGraphBuilder.mainNavGraph(
     navController: NavHostController,
@@ -145,9 +148,6 @@ fun NavGraphBuilder.mainNavGraph(
                         inclusive = true
                     }
                 }
-            },
-            onNavigateToReportHistory = {
-                navController.navigate(MyPageSubRoute.ReportHistory.route)
             },
             onNavigateToGuide = {
                 navController.navigate(resolveMyPageGuideRoute())
@@ -519,41 +519,62 @@ fun NavGraphBuilder.mainNavGraph(
         )
     }
 
-    composable(route = ReportRoute.Report.route) {
+    composable(route = ReportRoute.Report.route) { backStackEntry ->
+        val startNewRequest by
+            backStackEntry.savedStateHandle
+                .getStateFlow(REPORT_START_NEW_REQUEST_KEY, false)
+                .collectAsStateWithLifecycle()
         ReportScreenRoute(
             onNavigateBack = {
                 navController.popBackStack()
             },
-            onNavigateToReportHistory = {
-                // ReportHistory는 마이페이지의 하위 경로이므로, 제보 탭 stack에 push하지 않고
-                // 먼저 마이페이지 탭으로 switch한 다음 그 위에 push한다.
-                // 이렇게 해야 사용자가 다시 제보 탭을 눌렀을 때 ReportHistory가 따라오지 않고
-                // 깨끗한 제보 폼(6 grid)으로 돌아간다.
-                navController.navigateToTopLevel(TopLevelDestination.MyPage)
-                navController.navigate(MyPageSubRoute.ReportHistory.route)
+            onNavigateToReportHistory = { historyId ->
+                navController.navigate(ReportRoute.History.createRoute(historyId))
             },
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
             },
+            startNewRequest = startNewRequest,
+            onStartNewRequestConsumed = {
+                backStackEntry.savedStateHandle[REPORT_START_NEW_REQUEST_KEY] = false
+            },
         )
     }
 
-    composable(route = MyPageSubRoute.ReportHistory.route) {
-        MyPageReportHistoryRoute(
+    composable(route = ReportRoute.Guidance.route) {
+        ReportScreenRoute(
             onNavigateBack = {
-                val didPopToMyPage =
-                    navController.popBackStack(
-                        route = TopLevelRoute.MyPage.route,
-                        inclusive = false,
-                    )
-                if (!didPopToMyPage) {
-                    navController.navigateToTopLevel(TopLevelDestination.MyPage)
-                }
+                navController.navigateBackToNavigationGuidance()
+            },
+            onNavigateToReportHistory = { historyId ->
+                navController.navigate(ReportRoute.History.createRoute(historyId))
+            },
+            onNavigateToMap = {
+                navController.navigateBackToNavigationGuidance()
+            },
+            entryPoint = ReportEntryPoint.NavigationGuidance,
+            startNewRequest = true,
+        )
+    }
+
+    composable(
+        route = ReportRoute.History.route,
+        arguments =
+            listOf(
+                navArgument(ReportRoute.History.ARG_HISTORY_ID) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+    ) { backStackEntry ->
+        ReportHistoryRoute(
+            initialHistoryId = backStackEntry.arguments?.getString(ReportRoute.History.ARG_HISTORY_ID),
+            onNavigateBack = {
+                navController.popBackStack()
             },
             onNavigateToReport = {
-                // 제보 작성은 제보 탭의 top-level destination이므로 마이페이지 stack에 push하지 말고
-                // 정상적으로 제보 탭으로 switch한다.
-                navController.navigateToTopLevel(TopLevelDestination.Report)
+                navController.navigateToReportStartNew()
             },
         )
     }
@@ -623,6 +644,11 @@ fun NavGraphBuilder.mainNavGraph(
             },
             onNavigateToRouteDetail = { routeOption ->
                 navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption, fromNavigation = true))
+            },
+            onNavigateToReport = {
+                navController.navigate(ReportRoute.Guidance.route) {
+                    launchSingleTop = true
+                }
             },
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
@@ -700,6 +726,33 @@ fun NavController.navigateToTopLevel(destination: TopLevelDestination) {
         restoreState = DefaultTopLevelNavigationPolicy.restoreState
         popUpTo(graph.findStartDestination().id) {
             saveState = DefaultTopLevelNavigationPolicy.saveState
+        }
+    }
+}
+
+private fun NavController.navigateToReportStartNew() {
+    val didPopToReport =
+        popBackStack(
+            route = ReportRoute.Report.route,
+            inclusive = false,
+        )
+    if (!didPopToReport) {
+        navigate(ReportRoute.Report.route) {
+            launchSingleTop = true
+        }
+    }
+    getBackStackEntry(ReportRoute.Report.route).savedStateHandle[REPORT_START_NEW_REQUEST_KEY] = true
+}
+
+private fun NavController.navigateBackToNavigationGuidance() {
+    val didReturnToGuidance =
+        popBackStack(
+            route = NavigationRoute.Guidance.route,
+            inclusive = false,
+        )
+    if (!didReturnToGuidance) {
+        navigate(NavigationRoute.Guidance.route) {
+            launchSingleTop = true
         }
     }
 }

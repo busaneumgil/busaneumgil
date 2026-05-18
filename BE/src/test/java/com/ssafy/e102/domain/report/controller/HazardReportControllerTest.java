@@ -36,6 +36,7 @@ import com.ssafy.e102.domain.report.dto.response.HazardReportListResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportSummaryResponse;
 import com.ssafy.e102.domain.report.service.HazardReportImageUploadService;
 import com.ssafy.e102.domain.report.service.HazardReportService;
+import com.ssafy.e102.domain.report.type.ReportStatus;
 import com.ssafy.e102.domain.report.type.ReportType;
 import com.ssafy.e102.global.geo.dto.GeoPointResponse;
 import com.ssafy.e102.global.security.principal.AuthPrincipal;
@@ -157,6 +158,7 @@ class HazardReportControllerTest {
 				List.of(new HazardReportSummaryResponse(
 					1L,
 					ReportType.SIDEWALK_MISSING,
+					ReportStatus.PENDING,
 					"부산 부산진구 시민공원로 73",
 					"보행 가능한 인도가 없습니다.",
 					new GeoPointResponse(35.1686, 129.0576),
@@ -172,6 +174,7 @@ class HazardReportControllerTest {
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.content[0].reportId").value(1))
 			.andExpect(jsonPath("$.data.content[0].reportType").value("SIDEWALK_MISSING"))
+			.andExpect(jsonPath("$.data.content[0].status").value("PENDING"))
 			.andExpect(jsonPath("$.data.content[0].address").value("부산 부산진구 시민공원로 73"))
 			.andExpect(jsonPath("$.data.content[0].description").value("보행 가능한 인도가 없습니다."))
 			.andExpect(jsonPath("$.data.content[0].reportPoint.lat").value(35.1686))
@@ -194,6 +197,7 @@ class HazardReportControllerTest {
 				List.of(new HazardReportSummaryResponse(
 					3L,
 					ReportType.RAMP,
+					ReportStatus.APPROVED,
 					null,
 					null,
 					new GeoPointResponse(35.1686, 129.0576),
@@ -225,6 +229,7 @@ class HazardReportControllerTest {
 			.thenReturn(new HazardReportDetailResponse(
 				1L,
 				ReportType.SIDEWALK_MISSING,
+				ReportStatus.PENDING,
 				"보행 가능한 인도가 없습니다.",
 				new GeoPointResponse(35.1686, 129.0576),
 				LocalDateTime.of(2026, 4, 28, 17, 0),
@@ -237,6 +242,7 @@ class HazardReportControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("S2000"))
 			.andExpect(jsonPath("$.data.reportId").value(1))
+			.andExpect(jsonPath("$.data.status").value("PENDING"))
 			.andExpect(jsonPath("$.data.imageUrls[0]").value("https://example.com/reports/1/image-1.jpg"))
 			.andExpect(jsonPath("$.data.imageUrls[1]").value("https://example.com/reports/1/image-2.jpg"));
 

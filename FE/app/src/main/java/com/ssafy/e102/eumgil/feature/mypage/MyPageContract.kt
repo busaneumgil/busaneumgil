@@ -26,7 +26,6 @@ enum class MyPageMobilitySubtype {
 
 enum class MyPageMenuItem {
     NOTICE,
-    REPORT_HISTORY,
     APP_HELP,
     PRIVACY_POLICY,
     SERVICE_TERMS,
@@ -48,8 +47,6 @@ sealed interface MyPageUiEvent {
     data object NavigateToUserTypePrimary : MyPageUiEvent
 
     data object NavigateToLogin : MyPageUiEvent
-
-    data object NavigateToReportHistory : MyPageUiEvent
 
     data object NavigateToGuide : MyPageUiEvent
 

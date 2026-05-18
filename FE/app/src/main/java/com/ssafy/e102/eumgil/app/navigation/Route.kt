@@ -323,6 +323,10 @@ sealed interface ReportRoute : AppRoute {
         override val route: String = "report"
     }
 
+    data object Guidance : ReportRoute {
+        override val route: String = "report/navigation_guidance"
+    }
+
     data object History : ReportRoute {
         const val ARG_HISTORY_ID: String = "historyId"
         private const val BASE_ROUTE: String = "report/history"

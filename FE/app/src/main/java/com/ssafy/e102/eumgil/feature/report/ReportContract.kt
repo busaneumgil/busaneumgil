@@ -12,6 +12,7 @@ object ReportFormLimits {
 data class ReportUiState(
     val screenState: ReportScreenState = ReportScreenState.Editing,
     val currentStep: ReportStep = ReportStep.Home,
+    val entryPoint: ReportEntryPoint = ReportEntryPoint.TopLevel,
     val draftId: String? = null,
     val hasExistingDraft: Boolean = false,
     val reportType: ReportTypeInput = ReportTypeInput(),
@@ -56,6 +57,11 @@ enum class ReportStep {
     LocationConfirm,
     DetailInput,
     Complete,
+}
+
+enum class ReportEntryPoint {
+    TopLevel,
+    NavigationGuidance,
 }
 
 data class ReportRecentUiModel(
@@ -198,6 +204,10 @@ sealed interface ReportSubmitState {
 }
 
 sealed interface ReportUiAction {
+    data class RouteEntered(
+        val entryPoint: ReportEntryPoint,
+    ) : ReportUiAction
+
     data object BackClicked : ReportUiAction
 
     data object DraftResumeClicked : ReportUiAction

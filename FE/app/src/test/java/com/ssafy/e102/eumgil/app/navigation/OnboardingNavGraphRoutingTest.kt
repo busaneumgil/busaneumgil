@@ -51,10 +51,6 @@ class OnboardingNavGraphRoutingTest {
             "https://www.notion.so/ryuwon-project/350a58d49be68063bbd1f633be85badb?source=copy_link",
             resolveLocationTermsDetailUrl(LocationTermsItem.PERSONAL_LOCATION_INFO),
         )
-        assertEquals(
-            "https://www.notion.so/ryuwon-project/350a58d49be68063bbd1f633be85badb?source=copy_link",
-            resolveLocationTermsDetailUrl(LocationTermsItem.PRIVACY_POLICY_CONFIRMATION),
-        )
     }
 
     @Test

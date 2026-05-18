@@ -144,6 +144,7 @@ dependencies {
     implementation("com.kakao.maps.open:android:2.13.1")
     implementation("com.kakao.sdk:v2-user:2.23.4")
     implementation("com.google.android.gms:play-services-auth:21.5.1")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("com.navercorp.nid:oauth:5.9.1")
     // Coil: 제보 첨부 사진 / 마이페이지 내역 카드 썸네일 렌더링. Compose 통합 라이브러리.
     // 2.7.0은 Compose BOM 2024.02.x와 호환된 안정 버전.

@@ -490,7 +490,8 @@ class NavigationScreenPolicyTest {
                 .substringAfter("private fun RouteNavigationRequest.toMapOverlayUiState(")
                 .substringBefore("private fun RouteCandidate.toFallbackWalkingLegMapSegments")
 
-        assertTrue(navigationOverlaySection.contains("fitToProjection = mapOverlay.mapFocusMode != NavigationMapFocusMode.FOCUSED"))
+        assertTrue(navigationOverlaySection.contains("fitToProjection = !useActiveCurrentFollow"))
+        assertTrue(navigationOverlaySection.contains("toFocusedFallbackCamera()"))
         assertTrue(mapOverlayBuilderSection.contains("shouldAnimateCameraTransition = true"))
         assertFalse(mapOverlayBuilderSection.contains("IMMEDIATE_GUIDANCE_CAMERA_DISTANCE_THRESHOLD_METERS"))
     }

@@ -5,8 +5,10 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.location.AndroidAddressSearchResolver
+import com.ssafy.e102.eumgil.core.location.AndroidCurrentHeadingManager
 import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
+import com.ssafy.e102.eumgil.core.location.CurrentHeadingManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.model.resolveAccountScopeKey
@@ -231,6 +233,7 @@ class AppContainer(
             authSessionRepository = authSessionRepository,
             bookmarkDao = localDatabase.bookmarkDao(),
             favoriteRouteDao = localDatabase.favoriteRouteDao(),
+            reportOutboxDao = localDatabase.reportOutboxDao(),
             placesLocalDataSource = placesLocalDataSource,
             destinationSelectionRepository = destinationSelectionRepository,
             destinationPreviewRepository = destinationPreviewRepository,
@@ -351,6 +354,10 @@ class AppContainer(
 
     val currentLocationManager: CurrentLocationManager by lazy(LazyThreadSafetyMode.NONE) {
         AndroidCurrentLocationManager(context = appContext)
+    }
+
+    val currentHeadingManager: CurrentHeadingManager by lazy(LazyThreadSafetyMode.NONE) {
+        AndroidCurrentHeadingManager(context = appContext)
     }
 
     // Task 4.1 — 단말 네트워크 가용성을 관찰해 ReportViewModel이 오프라인 시 제출 버튼을 자동 비활성화하도록 한다.

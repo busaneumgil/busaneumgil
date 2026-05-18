@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.data.repository
 
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
+import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.datasource.UserApiException
@@ -35,6 +36,7 @@ fun provideAccountWithdrawalRepository(
     initSettingsRepository: InitSettingsRepository,
     bookmarkDao: BookmarkDao,
     favoriteRouteDao: FavoriteRouteDao,
+    reportOutboxDao: ReportOutboxDao,
     isMockMode: Boolean,
 ): AccountWithdrawalRepository {
     val accountScopedLocalCacheCleaner =
@@ -42,6 +44,7 @@ fun provideAccountWithdrawalRepository(
             authSessionRepository = authSessionRepository,
             bookmarkDao = bookmarkDao,
             favoriteRouteDao = favoriteRouteDao,
+            reportOutboxDao = reportOutboxDao,
         )
     val localDataCleaner =
         DefaultAccountWithdrawalLocalDataCleaner(

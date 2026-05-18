@@ -124,60 +124,72 @@ fun ReportScreen(
             )
         },
     ) { innerPadding ->
-        // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
-        // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.
-        // scrollState는 ReportRoute에서 hoist하여 ScrollToFirstError 이벤트로 외부 제어 가능.
-        val isFlexStep = uiState.currentStep == ReportStep.TypeSelection
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .then(
-                        if (isFlexStep) {
-                            Modifier
-                        } else {
-                            Modifier.verticalScroll(scrollState)
-                        },
-                    )
-                    .padding(
-                        start = EumSpacing.medium,
-                        top = EumSpacing.medium,
-                        end = EumSpacing.medium,
-                        bottom =
-                            if (uiState.currentStep == ReportStep.Home) {
-                                0.dp
+        if (uiState.currentStep == ReportStep.Complete) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.medium),
+                contentAlignment = Alignment.Center,
+            ) {
+                ReportCompleteStep(uiState = uiState, onAction = onAction)
+            }
+        } else {
+            // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
+            // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.
+            // scrollState는 ReportRoute에서 hoist하여 ScrollToFirstError 이벤트로 외부 제어 가능.
+            val isFlexStep = uiState.currentStep == ReportStep.TypeSelection
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .then(
+                            if (isFlexStep) {
+                                Modifier
                             } else {
-                                EumSpacing.medium
+                                Modifier.verticalScroll(scrollState)
                             },
-                    ),
-            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
-        ) {
-            when (uiState.currentStep) {
-                ReportStep.Home ->
-                    ReportHomeStep(
-                        uiState = uiState,
-                        onAction = onAction,
-                    )
-                ReportStep.TypeSelection ->
-                    ReportTypeStep(
-                        input = uiState.reportType,
-                        onAction = onAction,
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                    )
-                ReportStep.LocationConfirm ->
-                    ReportLocationStep(
-                        input = uiState.location,
-                        selectedType = uiState.reportType.value,
-                        onAction = onAction,
-                    )
-                ReportStep.DetailInput ->
-                    ReportDetailStep(
-                        uiState = uiState,
-                        onAction = onAction,
-                    )
-                ReportStep.Complete ->
-                    ReportCompleteStep(uiState = uiState, onAction = onAction)
+                        )
+                        .padding(
+                            start = EumSpacing.medium,
+                            top = EumSpacing.medium,
+                            end = EumSpacing.medium,
+                            bottom =
+                                if (uiState.currentStep == ReportStep.Home) {
+                                    0.dp
+                                } else {
+                                    EumSpacing.medium
+                                },
+                        ),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            ) {
+                when (uiState.currentStep) {
+                    ReportStep.Home ->
+                        ReportHomeStep(
+                            uiState = uiState,
+                            onAction = onAction,
+                        )
+                    ReportStep.TypeSelection ->
+                        ReportTypeStep(
+                            input = uiState.reportType,
+                            onAction = onAction,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                        )
+                    ReportStep.LocationConfirm ->
+                        ReportLocationStep(
+                            input = uiState.location,
+                            selectedType = uiState.reportType.value,
+                            onAction = onAction,
+                        )
+                    ReportStep.DetailInput ->
+                        ReportDetailStep(
+                            uiState = uiState,
+                            onAction = onAction,
+                        )
+                    ReportStep.Complete -> Unit
+                }
             }
         }
     }
@@ -231,12 +243,11 @@ private fun ReportBottomBar(
             )
         ReportStep.DetailInput -> {
             val submitting = uiState.submitState is ReportSubmitState.Submitting
-            ReportStepActionBar(
-                primaryLabel = if (submitting) "제출 중" else "제보 접수하기",
+            ReportPrimaryActionBar(
+                label = if (submitting) "접수 중" else "접수하기",
                 enabled = uiState.isSubmitEnabled,
-                onPrimaryClick = { onAction(ReportUiAction.SubmitClicked) },
-                secondaryLabel = "이전",
-                onSecondaryClick = { onAction(ReportUiAction.BackClicked) },
+                onClick = { onAction(ReportUiAction.SubmitClicked) },
+                suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
             )
         }
         ReportStep.Complete -> Unit
@@ -257,31 +268,45 @@ private fun ReportPrimaryActionBar(
         modifier = Modifier.fillMaxWidth(),
         shadowElevation = 0.dp,
     ) {
-        if (suppressRipple) {
-            NoRippleReportPrimaryActionButton(
-                onClick = onClick,
-                enabled = enabled,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(EumSpacing.medium),
-                contentPadding = PaddingValues(vertical = EumSpacing.small),
-            ) {
-                Text(text = label)
-            }
-        } else {
-            Button(
-                onClick = onClick,
-                enabled = enabled,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(EumSpacing.medium),
-                shape = RoundedCornerShape(EumRadius.small),
-                contentPadding = PaddingValues(vertical = EumSpacing.small),
-            ) {
-                Text(text = label)
-            }
+        ReportPrimaryActionButton(
+            label = label,
+            enabled = enabled,
+            onClick = onClick,
+            suppressRipple = suppressRipple,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(EumSpacing.medium),
+        )
+    }
+}
+
+@Composable
+private fun ReportPrimaryActionButton(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    suppressRipple: Boolean = false,
+) {
+    if (suppressRipple) {
+        NoRippleReportPrimaryActionButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier,
+            contentPadding = PaddingValues(vertical = EumSpacing.small),
+        ) {
+            Text(text = label)
+        }
+    } else {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier,
+            shape = RoundedCornerShape(EumRadius.small),
+            contentPadding = PaddingValues(vertical = EumSpacing.small),
+        ) {
+            Text(text = label)
         }
     }
 }
@@ -1615,38 +1640,48 @@ private fun ReportCompleteStep(
     ) {
         ReportCompleteHero()
         ReportCompleteSummaryCard(uiState = uiState)
-        ReportCompleteCtaSection(onAction = onAction)
+        ReportCompleteCtaSection(
+            entryPoint = uiState.entryPoint,
+            onAction = onAction,
+        )
     }
 }
 
 @Composable
 private fun ReportCompleteCtaSection(
+    entryPoint: ReportEntryPoint,
     onAction: (ReportUiAction) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
     ) {
-        Button(
+        ReportPrimaryActionButton(
+            label = stringResource(id = R.string.report_complete_cta_history),
+            enabled = true,
             onClick = { onAction(ReportUiAction.ReportHistoryClicked) },
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(text = stringResource(id = R.string.report_complete_cta_history))
-        }
-        OutlinedButton(
+        )
+        ReportPrimaryActionButton(
+            label = stringResource(id = R.string.report_complete_cta_new_report),
+            enabled = true,
             onClick = { onAction(ReportUiAction.StartNewReportClicked) },
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(text = stringResource(id = R.string.report_complete_cta_new_report))
-        }
-        OutlinedButton(
+        )
+        ReportPrimaryActionButton(
+            label = stringResource(id = entryPoint.completeReturnLabelRes()),
+            enabled = true,
             onClick = { onAction(ReportUiAction.BackToMapClicked) },
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(text = stringResource(id = R.string.report_complete_cta_back_to_map))
-        }
+        )
     }
 }
+
+private fun ReportEntryPoint.completeReturnLabelRes(): Int =
+    when (this) {
+        ReportEntryPoint.TopLevel -> R.string.report_complete_cta_back_to_map
+        ReportEntryPoint.NavigationGuidance -> R.string.report_complete_cta_back_to_navigation
+    }
 
 @Composable
 private fun ReportCompleteHero() {

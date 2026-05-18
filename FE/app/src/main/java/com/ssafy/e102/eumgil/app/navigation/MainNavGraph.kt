@@ -33,6 +33,7 @@ import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationRoute as NavigationScreenRoute
 import com.ssafy.e102.eumgil.feature.navigation.NavigationViewModel as NavigationGuidanceViewModel
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
+import com.ssafy.e102.eumgil.feature.report.ReportEntryPoint
 import com.ssafy.e102.eumgil.feature.report.ReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
 import com.ssafy.e102.eumgil.feature.route.RouteDetailEntryRoute
@@ -540,6 +541,22 @@ fun NavGraphBuilder.mainNavGraph(
         )
     }
 
+    composable(route = ReportRoute.Guidance.route) {
+        ReportScreenRoute(
+            onNavigateBack = {
+                navController.navigateBackToNavigationGuidance()
+            },
+            onNavigateToReportHistory = { historyId ->
+                navController.navigate(ReportRoute.History.createRoute(historyId))
+            },
+            onNavigateToMap = {
+                navController.navigateBackToNavigationGuidance()
+            },
+            entryPoint = ReportEntryPoint.NavigationGuidance,
+            startNewRequest = true,
+        )
+    }
+
     composable(
         route = ReportRoute.History.route,
         arguments =
@@ -627,6 +644,11 @@ fun NavGraphBuilder.mainNavGraph(
             },
             onNavigateToRouteDetail = { routeOption ->
                 navController.navigate(RouteSettingRoute.Detail.createRoute(routeOption, fromNavigation = true))
+            },
+            onNavigateToReport = {
+                navController.navigate(ReportRoute.Guidance.route) {
+                    launchSingleTop = true
+                }
             },
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()
@@ -720,6 +742,19 @@ private fun NavController.navigateToReportStartNew() {
         }
     }
     getBackStackEntry(ReportRoute.Report.route).savedStateHandle[REPORT_START_NEW_REQUEST_KEY] = true
+}
+
+private fun NavController.navigateBackToNavigationGuidance() {
+    val didReturnToGuidance =
+        popBackStack(
+            route = NavigationRoute.Guidance.route,
+            inclusive = false,
+        )
+    if (!didReturnToGuidance) {
+        navigate(NavigationRoute.Guidance.route) {
+            launchSingleTop = true
+        }
+    }
 }
 
 internal fun NavController.navigateToTopLevelMapForHomeEntry() {

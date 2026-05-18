@@ -26,6 +26,7 @@ import com.ssafy.e102.eumgil.feature.onboarding.PermissionRoute
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserTypeRoute
 import com.ssafy.e102.eumgil.feature.onboarding.MobilityTypeSecondaryRoute
+import com.ssafy.e102.eumgil.feature.onboarding.MobilityTypeSecondaryTermsRoute
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideRoute
 import com.ssafy.e102.eumgil.feature.terms.TermsGuideStep
 import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
@@ -96,12 +97,25 @@ fun NavGraphBuilder.onboardingNavGraph(
 
     composable(route = OnboardingRoute.MobilityTypeSecondary.route) {
         val coroutineScope = rememberCoroutineScope()
+        val context = LocalContext.current
 
-        MobilityTypeSecondaryRoute(
-            onNavigateNext = { mobilitySubtype ->
+        MobilityTypeSecondaryTermsRoute(
+            onRequestDetails = { item ->
+                openLocationTermsDetails(context = context, item = item)
+            },
+            onConsentCompleted = { mobilitySubtype, agreement ->
                 coroutineScope.launch {
-                    settingsRepository.saveMobilitySubtype(mobilitySubtype.routeValue)
-                    navController.navigate(OnboardingRoute.Terms.route)
+                    completeLocationTermsAndNavigate(
+                        navController = navController,
+                        context = context,
+                        settingsRepository = settingsRepository,
+                        authSignupRepository = authSignupRepository,
+                        agreement = agreement,
+                        popUpToRoute = OnboardingRoute.MobilityTypeSecondary.route,
+                        beforeSaveTerms = {
+                            settingsRepository.saveMobilitySubtype(mobilitySubtype.routeValue)
+                        },
+                    )
                 }
             },
         )
@@ -136,57 +150,19 @@ fun NavGraphBuilder.onboardingNavGraph(
 
         LocationTermsRoute(
             initialLocationTermsChecked = initSettings.isLocationTermsAgreed,
-            initialPrivacyPolicyChecked = initSettings.isPrivacyPolicyAgreed,
             onRequestDetails = { item ->
-                val intent = createLocationTermsDetailIntent(item) ?: return@LocationTermsRoute
-                runCatching { context.startActivity(intent) }.onFailure {
-                    Toast
-                        .makeText(
-                            context,
-                            DEFAULT_TERMS_DETAIL_OPEN_FAILURE_MESSAGE,
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                }
+                openLocationTermsDetails(context = context, item = item)
             },
             onConsentCompleted = { agreement ->
                 coroutineScope.launch {
-                    runCatching {
-                        settingsRepository.saveLocationTermsAgreement(
-                            isLocationTermsAgreed = agreement.isLocationTermsAgreed,
-                            isPrivacyPolicyAgreed = agreement.isPrivacyPolicyAgreed,
-                        )
-                        val completedSettings = settingsRepository.getInitSettings()
-                        val nextRoute = resolveOnboardingTermsCompletedRoute(completedSettings.selectedPrimaryUserType)
-                        val shouldCompleteSignupBeforeTutorial =
-                            shouldCompletePendingSignupBeforeOnboardingTutorial(
-                                completedSettings.selectedPrimaryUserType,
-                            )
-                        if (shouldCompleteSignupBeforeTutorial || nextRoute != TutorialRoute.Onboarding.route) {
-                            authSignupRepository.completePendingSignup(
-                                requiredTermsAccepted = agreement.isLocationTermsAgreed,
-                            )
-                        }
-                        navController.navigate(
-                            OnboardingRoute.Permission.createRoute(
-                                nextRoute,
-                            ),
-                        ) {
-                            launchSingleTop = true
-                            popUpTo(OnboardingRoute.Terms.route) {
-                                inclusive = true
-                            }
-                        }
-                    }.onFailure { throwable ->
-                        Toast
-                            .makeText(
-                                context,
-                                throwable.message ?: DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE,
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        if (throwable is PendingSignupTokenExpiredException) {
-                            navController.navigateToLoginAfterAuthenticationFailure()
-                        }
-                    }
+                    completeLocationTermsAndNavigate(
+                        navController = navController,
+                        context = context,
+                        settingsRepository = settingsRepository,
+                        authSignupRepository = authSignupRepository,
+                        agreement = agreement,
+                        popUpToRoute = OnboardingRoute.Terms.route,
+                    )
                 }
             },
         )
@@ -408,6 +384,70 @@ private suspend fun completeProfileEditAndNavigate(
     }
 }
 
+private suspend fun completeLocationTermsAndNavigate(
+    navController: NavHostController,
+    context: android.content.Context,
+    settingsRepository: SettingsRepository,
+    authSignupRepository: AuthSignupRepository,
+    agreement: com.ssafy.e102.eumgil.feature.onboarding.LocationTermsAgreement,
+    popUpToRoute: String,
+    beforeSaveTerms: suspend () -> Unit = {},
+) {
+    runCatching {
+        beforeSaveTerms()
+        settingsRepository.saveLocationTermsAgreement(
+            isLocationTermsAgreed = agreement.isLocationTermsAgreed,
+            isPrivacyPolicyAgreed = agreement.isPrivacyPolicyAgreed,
+        )
+        val completedSettings = settingsRepository.getInitSettings()
+        val nextRoute = resolveOnboardingTermsCompletedRoute(completedSettings.selectedPrimaryUserType)
+        val shouldCompleteSignupBeforeTutorial =
+            shouldCompletePendingSignupBeforeOnboardingTutorial(
+                completedSettings.selectedPrimaryUserType,
+            )
+        if (shouldCompleteSignupBeforeTutorial || nextRoute != TutorialRoute.Onboarding.route) {
+            authSignupRepository.completePendingSignup(
+                requiredTermsAccepted = agreement.isLocationTermsAgreed,
+            )
+        }
+        navController.navigate(
+            OnboardingRoute.Permission.createRoute(
+                nextRoute,
+            ),
+        ) {
+            launchSingleTop = true
+            popUpTo(popUpToRoute) {
+                inclusive = true
+            }
+        }
+    }.onFailure { throwable ->
+        Toast
+            .makeText(
+                context,
+                throwable.message ?: DEFAULT_ONBOARDING_COMPLETION_ERROR_MESSAGE,
+                Toast.LENGTH_SHORT,
+            ).show()
+        if (throwable is PendingSignupTokenExpiredException) {
+            navController.navigateToLoginAfterAuthenticationFailure()
+        }
+    }
+}
+
+private fun openLocationTermsDetails(
+    context: android.content.Context,
+    item: LocationTermsItem,
+) {
+    val intent = createLocationTermsDetailIntent(item) ?: return
+    runCatching { context.startActivity(intent) }.onFailure {
+        Toast
+            .makeText(
+                context,
+                DEFAULT_TERMS_DETAIL_OPEN_FAILURE_MESSAGE,
+                Toast.LENGTH_SHORT,
+            ).show()
+    }
+}
+
 private fun NavHostController.navigateToLoginAfterAuthenticationFailure() {
     navigate(AuthRoute.Login.route) {
         launchSingleTop = true
@@ -442,7 +482,6 @@ internal fun resolveLocationTermsDetailUrl(item: LocationTermsItem): String? =
         LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE -> SERVICE_AND_LOCATION_TERMS_URL
         LocationTermsItem.SENSITIVE_INFO -> SENSITIVE_INFO_TERMS_URL
         LocationTermsItem.PERSONAL_LOCATION_INFO -> PERSONAL_LOCATION_INFO_TERMS_URL
-        LocationTermsItem.PRIVACY_POLICY_CONFIRMATION -> PERSONAL_LOCATION_INFO_TERMS_URL
         LocationTermsItem.OVER_FOURTEEN -> null
     }
 

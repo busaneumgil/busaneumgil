@@ -582,6 +582,27 @@ class ReportViewModelTest {
         }
 
     @Test
+    fun `back click on guidance report type step returns to navigation`() =
+        runTest {
+            val repository = FakeReportRepository()
+            val viewModel = createReportViewModel(repository)
+            val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
+
+            viewModel.onAction(ReportUiAction.RouteEntered(ReportEntryPoint.NavigationGuidance))
+            viewModel.onAction(ReportUiAction.StartNewReportClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportEntryPoint.NavigationGuidance, viewModel.uiState.value.entryPoint)
+            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+
+            viewModel.onAction(ReportUiAction.BackClicked)
+            advanceUntilIdle()
+
+            assertEquals(ReportUiEvent.NavigateBack, event.await())
+            assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+        }
+
+    @Test
     fun `successful submit sets current step to Complete`() =
         runTest {
             val repository = FakeReportRepository()

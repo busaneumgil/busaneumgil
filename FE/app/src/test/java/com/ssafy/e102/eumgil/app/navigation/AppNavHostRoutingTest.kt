@@ -126,9 +126,16 @@ class AppNavHostRoutingTest {
     @Test
     fun `guidance and route setting routes hide top level tab`() {
         assertNull(NavigationRoute.Guidance.route.toCurrentTopLevelRoute())
+        assertNull(ReportRoute.Guidance.route.toCurrentTopLevelRoute())
         assertNull(RouteSettingRoute.Setting.route.toCurrentTopLevelRoute())
         assertNull(RouteSettingRoute.PermissionGate.route.toCurrentTopLevelRoute())
         assertNull(RouteSettingRoute.Detail.createRoute(RouteOption.SAFE).toCurrentTopLevelRoute())
+    }
+
+    @Test
+    fun `guidance report route starts outside report top level tab`() {
+        assertEquals("report/navigation_guidance", ReportRoute.Guidance.route)
+        assertNull(ReportRoute.Guidance.route.toCurrentTopLevelRoute())
     }
 
     @Test

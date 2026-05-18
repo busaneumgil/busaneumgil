@@ -1,7 +1,10 @@
 package com.ssafy.e102.eumgil.feature.navigation
 
+import com.ssafy.e102.eumgil.core.location.CurrentHeadingManager
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
+import com.ssafy.e102.eumgil.core.location.HeadingSnapshot
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.location.LocationUpdateProfile
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteGuidanceDirection
@@ -307,6 +310,90 @@ class NavigationViewModelTest {
                 MapCoordinate(latitude = OFF_ROUTE_POINT.latitude, longitude = OFF_ROUTE_POINT.longitude),
                 overlayState.fallbackCamera.center,
             )
+        }
+
+    @Test
+    fun `navigation binding requests dense navigation location profile`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+
+            assertEquals(LocationUpdateProfile.NAVIGATION, locationManager.lastStartedProfile)
+        }
+
+    @Test
+    fun `navigation entered restarts dense location and heading updates`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val headingManager = FakeCurrentHeadingManager()
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    headingManager = headingManager,
+                )
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.stopLocationUpdates()
+            headingManager.stopHeadingUpdates()
+            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            advanceUntilIdle()
+
+            assertTrue(locationManager.isUpdating)
+            assertTrue(headingManager.isUpdating)
+            assertEquals(LocationUpdateProfile.NAVIGATION, locationManager.lastStartedProfile)
+        }
+
+    @Test
+    fun `navigation pose uses device heading when gps bearing is unavailable`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val headingManager = FakeCurrentHeadingManager()
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    headingManager = headingManager,
+                )
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            headingManager.emitHeading(37.0)
+            locationManager.emitLocation(
+                OFF_ROUTE_POINT.toLocationSnapshot(
+                    recordedAtEpochMillis = 1_000L,
+                    speedMetersPerSecond = 0.1f,
+                    bearingDegrees = 92f,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(37.0, viewModel.uiState.value.mapOverlay.headingDegrees ?: -1.0, 0.0)
+            assertEquals(
+                OFF_ROUTE_POINT,
+                viewModel.uiState.value.mapOverlay.currentLocation?.coordinate,
+            )
+        }
+
+    @Test
+    fun `manual camera keeps current location marker subscribed to device heading`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val headingManager = FakeCurrentHeadingManager()
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    headingManager = headingManager,
+                )
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(OFF_ROUTE_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            viewModel.onAction(NavigationUiAction.MapCameraMovedByUser)
+            headingManager.emitHeading(124.0)
+            advanceUntilIdle()
+
+            assertEquals(NavigationTrackingMode.IDLE, viewModel.uiState.value.mapOverlay.trackingMode)
+            assertEquals(124.0, viewModel.uiState.value.mapOverlay.headingDegrees ?: -1.0, 0.0)
         }
 
     @Test
@@ -1804,12 +1891,14 @@ class NavigationViewModelTest {
 
 private fun createViewModel(
     locationManager: FakeCurrentLocationManager = FakeCurrentLocationManager(),
+    headingManager: CurrentHeadingManager = FakeCurrentHeadingManager(),
     bookmarkRepository: BookmarkRepository = FakeBookmarkRepository(),
     routeRepository: RouteRepository = FakeRouteRepository(),
     initialLowVisionMode: Boolean = false,
 ): NavigationViewModel =
     NavigationViewModel(
         currentLocationManager = locationManager,
+        currentHeadingManager = headingManager,
         bookmarkRepository = bookmarkRepository,
         routeRepository = routeRepository,
         initialLowVisionMode = initialLowVisionMode,
@@ -1867,6 +1956,9 @@ private class FakeCurrentLocationManager(
     var refreshLatestLocationCallCount: Int = 0
         private set
 
+    var lastStartedProfile: LocationUpdateProfile? = null
+        private set
+
     override fun refreshLatestLocation() {
         refreshLatestLocationCallCount += 1
         refreshSnapshot?.let { snapshot ->
@@ -1876,6 +1968,12 @@ private class FakeCurrentLocationManager(
 
     override fun startLocationUpdates() {
         isUpdating = true
+        lastStartedProfile = LocationUpdateProfile.DEFAULT
+    }
+
+    override fun startLocationUpdates(profile: LocationUpdateProfile) {
+        isUpdating = true
+        lastStartedProfile = profile
     }
 
     override fun stopLocationUpdates() {
@@ -1884,6 +1982,31 @@ private class FakeCurrentLocationManager(
 
     fun emitLocation(snapshot: LocationSnapshot) {
         mutableLatestLocation.value = snapshot
+    }
+}
+
+private class FakeCurrentHeadingManager : CurrentHeadingManager {
+    private val mutableLatestHeading = MutableStateFlow<HeadingSnapshot?>(null)
+
+    override val latestHeading: StateFlow<HeadingSnapshot?> = mutableLatestHeading
+
+    var isUpdating: Boolean = false
+        private set
+
+    override fun startHeadingUpdates() {
+        isUpdating = true
+    }
+
+    override fun stopHeadingUpdates() {
+        isUpdating = false
+    }
+
+    fun emitHeading(azimuthDegrees: Double) {
+        mutableLatestHeading.value =
+            HeadingSnapshot(
+                azimuthDegrees = azimuthDegrees,
+                recordedAtEpochMillis = 1_000L,
+            )
     }
 }
 

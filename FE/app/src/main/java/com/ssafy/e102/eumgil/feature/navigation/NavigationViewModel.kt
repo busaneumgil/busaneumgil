@@ -11,6 +11,7 @@ import com.ssafy.e102.eumgil.core.location.HeadingSnapshot
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.location.LocationUpdateProfile
 import com.ssafy.e102.eumgil.core.location.NoOpCurrentHeadingManager
 import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.core.location.normalizeHeadingDegrees
@@ -123,6 +124,7 @@ class NavigationViewModel(
     private var routeJoinStableUpdateCount: Int = 0
     private var routeJoinStableSinceEpochMillis: Long? = null
     private var latestLocationCoordinate: GeoCoordinate? = null
+    private var latestNavigationPose: NavigationPose? = null
     private var latestHeadingDegrees: Double? = null
     private var latestGpsBearingDegrees: Double? = null
     private var trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING
@@ -195,6 +197,7 @@ class NavigationViewModel(
         routeJoinStableUpdateCount = 0
         routeJoinStableSinceEpochMillis = null
         latestLocationCoordinate = null
+        latestNavigationPose = null
         latestHeadingDegrees = null
         latestGpsBearingDegrees = null
         trackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING
@@ -283,7 +286,10 @@ class NavigationViewModel(
 
     fun onAction(action: NavigationUiAction) {
         when (action) {
-            NavigationUiAction.NavigationEntered -> requestInitialBriefingIfNeeded()
+            NavigationUiAction.NavigationEntered -> {
+                requestCurrentLocationRefresh()
+                requestInitialBriefingIfNeeded()
+            }
             NavigationUiAction.BackClicked -> requestExitNavigationConfirmation()
             NavigationUiAction.RouteDetailClicked -> {
                 uiState.value.selectedRouteOption?.let { routeOption ->
@@ -374,7 +380,7 @@ class NavigationViewModel(
     private fun requestCurrentLocationRefresh(): Boolean {
         val permissionManager = locationPermissionManager
         if (permissionManager == null) {
-            currentLocationManager.startLocationUpdates()
+            currentLocationManager.startLocationUpdates(LocationUpdateProfile.NAVIGATION)
             currentHeadingManager.startHeadingUpdates()
             currentLocationManager.refreshLatestLocation()
             return true
@@ -382,7 +388,7 @@ class NavigationViewModel(
 
         permissionManager.refreshPermissionState()
         return if (permissionManager.permissionState.value is LocationPermissionState.Granted) {
-            currentLocationManager.startLocationUpdates()
+            currentLocationManager.startLocationUpdates(LocationUpdateProfile.NAVIGATION)
             currentHeadingManager.startHeadingUpdates()
             currentLocationManager.refreshLatestLocation()
             true
@@ -413,7 +419,15 @@ class NavigationViewModel(
 
     private fun onHeadingUpdated(snapshot: HeadingSnapshot) {
         latestHeadingDegrees = snapshot.azimuthDegrees
-        if (trackingMode == NavigationTrackingMode.FOLLOW_WITH_HEADING) {
+        latestNavigationPose =
+            latestNavigationPose?.withHeading(
+                resolveNavigationHeading(
+                    gpsBearingDegrees = latestGpsBearingDegrees,
+                    sensorHeadingDegrees = latestHeadingDegrees,
+                    routeFallbackDegrees = null,
+                ),
+            )
+        if (navigationRequest != null) {
             publishNavigationState()
         }
     }
@@ -847,6 +861,18 @@ class NavigationViewModel(
         val currentCoordinate = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude)
         latestLocationCoordinate = currentCoordinate
         latestGpsBearingDegrees = snapshot.toUsableNavigationBearingDegrees()
+        latestNavigationPose =
+            NavigationPose(
+                rawLocation = currentCoordinate,
+                displayLocation = currentCoordinate,
+                heading =
+                    resolveNavigationHeading(
+                        gpsBearingDegrees = latestGpsBearingDegrees,
+                        sensorHeadingDegrees = latestHeadingDegrees,
+                        routeFallbackDegrees = null,
+                    ),
+                recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
+            )
         lastProcessedLocationEpochMillis = snapshot.recordedAtEpochMillis
         return currentCoordinate
     }
@@ -894,13 +920,12 @@ class NavigationViewModel(
         val briefingText = stepCard.toNavigationBriefingText()
         val mapOverlay =
             runtimeRequest.toMapOverlayUiState(
-                currentLocationCoordinate = latestLocationCoordinate,
+                currentLocationCoordinate = latestNavigationPose?.displayLocation ?: latestLocationCoordinate,
                 activeSegmentIndex = activeSegmentIndex,
                 focusedSegmentIndex = focusedSegmentIndex,
                 mapFocusMode = mapFocusMode,
                 trackingMode = trackingMode,
-                headingDegrees = latestHeadingDegrees,
-                gpsBearingDegrees = latestGpsBearingDegrees,
+                headingDegrees = latestNavigationPose?.heading?.degrees ?: latestHeadingDegrees,
             )
         logSegmentMarkerDebugSummary(mapOverlay)
 
@@ -2179,7 +2204,6 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
     mapFocusMode: NavigationMapFocusMode,
     trackingMode: NavigationTrackingMode,
     headingDegrees: Double?,
-    gpsBearingDegrees: Double?,
 ): NavigationMapOverlayUiState {
     val selectedRoutePolyline = selectedRoute.previewPolyline.points
     val activeSegment =
@@ -2269,10 +2293,55 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         routeSegments = routeSegments,
         mapFocusMode = mapFocusMode,
         trackingMode = trackingMode,
-        headingDegrees = gpsBearingDegrees ?: headingDegrees,
+        headingDegrees = headingDegrees,
         shouldAnimateCameraTransition = true,
     )
 }
+
+private data class NavigationPose(
+    val rawLocation: GeoCoordinate,
+    val displayLocation: GeoCoordinate,
+    val heading: NavigationHeadingSelection,
+    val recordedAtEpochMillis: Long,
+)
+
+private fun NavigationPose.withHeading(heading: NavigationHeadingSelection): NavigationPose =
+    copy(heading = heading)
+
+private data class NavigationHeadingSelection(
+    val degrees: Double?,
+    val source: NavigationHeadingSource?,
+)
+
+private enum class NavigationHeadingSource {
+    GPS_BEARING,
+    DEVICE_SENSOR,
+    ROUTE_FALLBACK,
+}
+
+private fun resolveNavigationHeading(
+    gpsBearingDegrees: Double?,
+    sensorHeadingDegrees: Double?,
+    routeFallbackDegrees: Double?,
+): NavigationHeadingSelection =
+    when {
+        gpsBearingDegrees != null ->
+            NavigationHeadingSelection(
+                degrees = normalizeHeadingDegrees(gpsBearingDegrees),
+                source = NavigationHeadingSource.GPS_BEARING,
+            )
+        sensorHeadingDegrees != null ->
+            NavigationHeadingSelection(
+                degrees = normalizeHeadingDegrees(sensorHeadingDegrees),
+                source = NavigationHeadingSource.DEVICE_SENSOR,
+            )
+        routeFallbackDegrees != null ->
+            NavigationHeadingSelection(
+                degrees = normalizeHeadingDegrees(routeFallbackDegrees),
+                source = NavigationHeadingSource.ROUTE_FALLBACK,
+            )
+        else -> NavigationHeadingSelection(degrees = null, source = null)
+    }
 
 private fun LocationSnapshot.toUsableNavigationBearingDegrees(): Double? {
     val bearing = bearingDegrees ?: return null

@@ -98,4 +98,22 @@ class AndroidCurrentLocationManagerTest {
 
         assertNull(resolved)
     }
+
+    @Test
+    fun `navigation profile requests denser walking location updates`() {
+        val config = LocationUpdateProfile.NAVIGATION.toLocationRequestConfig()
+
+        assertEquals(1_000L, config.intervalMillis)
+        assertEquals(500L, config.fastestIntervalMillis)
+        assertEquals(1f, config.minDistanceMeters)
+    }
+
+    @Test
+    fun `default profile keeps existing location update cadence`() {
+        val config = LocationUpdateProfile.DEFAULT.toLocationRequestConfig()
+
+        assertEquals(2_000L, config.intervalMillis)
+        assertEquals(1_000L, config.fastestIntervalMillis)
+        assertEquals(5f, config.minDistanceMeters)
+    }
 }

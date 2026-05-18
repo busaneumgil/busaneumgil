@@ -926,19 +926,34 @@ internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel 
     val currentLocationManager = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.currentLocationManager
     }
+    val currentHeadingManager = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.currentHeadingManager
+    }
+    val locationPermissionManager = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.locationPermissionManager
+    }
     val bookmarkRepository = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.bookmarkRepository
     }
     val routeRepository = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.routeRepository
     }
-    val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository, routeRepository) {
-        NavigationGuidanceViewModel.provideFactory(
-            currentLocationManager = currentLocationManager,
-            bookmarkRepository = bookmarkRepository,
-            routeRepository = routeRepository,
-        )
-    }
+    val navigationViewModelFactory =
+        remember(
+            currentLocationManager,
+            currentHeadingManager,
+            locationPermissionManager,
+            bookmarkRepository,
+            routeRepository,
+        ) {
+            NavigationGuidanceViewModel.provideFactory(
+                currentLocationManager = currentLocationManager,
+                currentHeadingManager = currentHeadingManager,
+                locationPermissionManager = locationPermissionManager,
+                bookmarkRepository = bookmarkRepository,
+                routeRepository = routeRepository,
+            )
+        }
 
     return remember(activity, navigationViewModelFactory) {
         val owner = checkNotNull(activity) { "RouteSettingRoute requires a ComponentActivity host." }

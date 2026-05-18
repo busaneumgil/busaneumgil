@@ -169,6 +169,33 @@ class MainNavGraphTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun `my page text size destination is registered as a my page child route`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
+                .readText()
+        val myPageDestination =
+            source
+                .substringAfter("composable(route = TopLevelRoute.MyPage.route)")
+                .substringBefore("composable(route = MyPageChildRoute.TextSize.route)")
+        val textSizeDestination =
+            source
+                .substringAfter("composable(route = MyPageChildRoute.TextSize.route)")
+                .substringBefore("composable(")
+
+        assertTrue(
+            "MyPageRoute should pass the text-size navigation event into the my_page/text_size child route.",
+            myPageDestination.contains("onNavigateToTextSizeSetting = {") &&
+                myPageDestination.contains("navController.navigate(MyPageChildRoute.TextSize.route)"),
+        )
+        assertTrue(
+            "The main graph should reuse the common TextSizeSettingRoute instead of creating a duplicate screen.",
+            textSizeDestination.contains("TextSizeSettingRoute(") &&
+                textSizeDestination.contains("onNavigateBack = {") &&
+                textSizeDestination.contains("navController.popBackStack()"),
+        )
+    }
+
+    @Test
     fun `map home reentry reset excludes bookmark while keeping other visible non-map routes`() {
         assertTrue(
             shouldNavigateToTopLevelMapForHomeEntry(

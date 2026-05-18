@@ -8,5 +8,6 @@ interface VoiceAnalyzeRemoteDataSource {
         text: String,
         mode: String,
         history: List<VoiceAnalyzeHistoryDto>,
+        currentRoute: String? = null,
     ): VoiceAnalyzeResponseDto
 }

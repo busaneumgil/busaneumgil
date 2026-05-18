@@ -9,6 +9,7 @@ import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeHistoryItem
 import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeIntent
 import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeMode
 import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeResult
+import com.ssafy.e102.eumgil.core.model.toJsonString
 import com.ssafy.e102.eumgil.core.stt.AudioRecorder
 import com.ssafy.e102.eumgil.core.stt.SherpaManager
 import com.ssafy.e102.eumgil.core.stt.SttManager
@@ -24,7 +25,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 
 sealed interface LowVisionVoiceInputEvent {
     /** VAD + STT 파이프라인 완료: [query]를 검색어로 결과 화면으로 이동. */
@@ -35,6 +35,14 @@ sealed interface LowVisionVoiceInputEvent {
 
     /** TTS "말씀해 주세요" 재생 요청 — Route가 TTS 완료 후 [beginRecording]을 호출한다. */
     data object ReadyToRecord : LowVisionVoiceInputEvent
+
+    data class CategorySearchCompleted(val category: String) : LowVisionVoiceInputEvent
+    data class BookmarkAddCompleted(val placeName: String) : LowVisionVoiceInputEvent
+    data class BookmarkDeleteCompleted(val placeName: String) : LowVisionVoiceInputEvent
+    data class NavigateCompleted(val departure: String, val destination: String) : LowVisionVoiceInputEvent
+    data object ShowBookmarksCompleted : LowVisionVoiceInputEvent
+    data object ShowFavoriteRoutesCompleted : LowVisionVoiceInputEvent
+    data object LogoutCompleted : LowVisionVoiceInputEvent
 }
 
 /**
@@ -51,7 +59,8 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
 
     companion object {
         private const val TAG = "LowVisionVoiceInputVM"
-        private const val SILENCE_FRAMES_FOR_STOP = 20 // before: 30
+        private const val SILENCE_FRAMES_FOR_STOP = 30    // 발화 후 무음 끊김 기준 (30 × 32ms = 960ms)
+        private const val NO_SPEECH_TIMEOUT_FRAMES = 300  // 발화 없음 타임아웃 (300 × 32ms = 9.6초)
         private const val ROLE_USER = "user"
         private const val ROLE_ASSISTANT = "assistant"
     }
@@ -73,6 +82,9 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
 
     /** 멀티턴 대화 히스토리 (user/assistant 교번 구조). */
     private val conversationHistory = mutableListOf<VoiceAnalyzeHistoryItem>()
+
+    /** 현재 화면 route — AI 서버 context 전달용. Route에서 업데이트된다. */
+    private var currentRoute: String? = null
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -104,6 +116,14 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
         viewModelScope.launch {
             _uiEvent.send(LowVisionVoiceInputEvent.RecordingCancelled)
         }
+    }
+
+    /**
+     * 현재 화면 route를 업데이트한다.
+     * LowVisionVoiceInputRoute에서 navController의 currentRoute 변경 시 호출된다.
+     */
+    fun updateCurrentRoute(route: String?) {
+        currentRoute = route
     }
 
     /**
@@ -162,7 +182,7 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
                             Log.d(TAG, "=== 무음 지속 → STT 준비 ===")
                             audioRecorder.stop()
                         }
-                        !voiceDetectedEver && silenceFrameCount >= SILENCE_FRAMES_FOR_STOP * 2 -> {
+                        !voiceDetectedEver && silenceFrameCount >= NO_SPEECH_TIMEOUT_FRAMES -> {
                             Log.d(TAG, "=== 발화 없음 타임아웃 → 취소 ===")
                             skipStt = true
                             audioRecorder.stop()
@@ -208,15 +228,19 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
      * - confirmed == false / intent == UNKNOWN → 히스토리 초기화 후 재녹음
      */
     private suspend fun handleSttResult(sttText: String) {
+        // 현재 발화 추가 전 snapshot 저장 — AI 서버에서 text와 history 중복 방지
+        val historySnapshot = conversationHistory.toList()
+
         // 사용자 발화를 히스토리에 추가
         conversationHistory.add(VoiceAnalyzeHistoryItem(role = ROLE_USER, content = sttText))
 
         try {
-            Log.d(TAG, "=== 음성 분석 요청 (history=${conversationHistory.size}턴): '$sttText' ===")
+            Log.d(TAG, "=== 음성 분석 요청 (history=${historySnapshot.size}턴): '$sttText' ===")
             val result = voiceAnalyzeRepository.analyze(
                 text = sttText,
                 mode = VoiceAnalyzeMode.LOW_VISION,
-                history = conversationHistory.toList(),
+                history = historySnapshot,
+                currentRoute = currentRoute,
             )
             Log.d(TAG, "=== 음성 분석 완료: intent=${result.intent}, confirmed=${result.confirmed}, placeName=${result.placeName} ===")
 
@@ -229,51 +253,61 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
             )
 
             when {
-                result.intent == VoiceAnalyzeIntent.PLACE_SEARCH && result.confirmed == true -> {
-                    // 사용자 확인 완료 → 검색 결과 화면으로
-                    val placeName = result.placeName.orEmpty()
-                    Log.d(TAG, "=== 확인 완료 → '$placeName' 검색 ===")
-                    _uiEvent.send(LowVisionVoiceInputEvent.RecordingCompleted(query = placeName))
-                }
-
-                result.intent == VoiceAnalyzeIntent.PLACE_SEARCH && result.confirmed == null && !result.confirmationMessage.isNullOrBlank() -> {
-                    // AI 확인 요청 → TTS 메시지 표시 후 다음 발화 대기
-                    Log.d(TAG, "=== 확인 요청: '${result.confirmationMessage}' ===")
+                result.intent == VoiceAnalyzeIntent.ASK -> {
+                    Log.d(TAG, "=== ASK → TTS 출력 후 재녹음 ===")
                     _uiState.value = _uiState.value.copy(
                         confirmationMessage = result.confirmationMessage,
                         ttsNonce = _uiState.value.ttsNonce + 1,
                     )
-                    startRecording()
                 }
 
-                result.intent == VoiceAnalyzeIntent.PLACE_SEARCH && result.confirmed == false -> {
-                    // 장소 부정 → 새 장소로 전환, history 유지 + TTS 대기 (confirmed=null 브랜치와 동일)
-                    Log.d(TAG, "=== 장소 부정 → 새 장소 탐색 (confirmationMessage=${result.confirmationMessage}) ===")
-                    _uiState.value = _uiState.value.copy(
-                        confirmationMessage = result.confirmationMessage,
-                        ttsNonce = _uiState.value.ttsNonce + 1,
-                    )
-                    startRecording()
-                }
-
-                result.intent == VoiceAnalyzeIntent.UNKNOWN -> {
-                    // confirmed 값 무관 — 의도 파악 실패 → 히스토리 초기화 후 재녹음
-                    Log.d(TAG, "=== 의도 미인식 → 히스토리 초기화 후 재녹음 ===")
+                result.confirmed == false -> {
+                    Log.d(TAG, "=== 부정 응답 → 히스토리 초기화 후 재녹음 ===")
                     conversationHistory.clear()
-                    if (!result.confirmationMessage.isNullOrBlank()) {
-                        _uiState.value = _uiState.value.copy(
-                            confirmationMessage = result.confirmationMessage,
-                            ttsNonce = _uiState.value.ttsNonce + 1,
-                        )
-                    } else {
-                        _uiState.value = _uiState.value.copy(confirmationMessage = null)
-                    }
+                    _uiState.value = _uiState.value.copy(confirmationMessage = null)
                     startRecording()
+                }
+
+                result.confirmed == null && result.intent != VoiceAnalyzeIntent.UNKNOWN -> {
+                    Log.d(TAG, "=== 확인 요청 단계: '${result.confirmationMessage}' ===")
+                    _uiState.value = _uiState.value.copy(
+                        confirmationMessage = result.confirmationMessage,
+                        ttsNonce = _uiState.value.ttsNonce + 1,
+                    )
+                }
+
+                result.confirmed == true -> {
+                    Log.d(TAG, "=== 확인 완료: intent=${result.intent} ===")
+                    when (result.intent) {
+                        VoiceAnalyzeIntent.PLACE_SEARCH ->
+                            _uiEvent.send(LowVisionVoiceInputEvent.RecordingCompleted(result.placeName.orEmpty()))
+                        VoiceAnalyzeIntent.CATEGORY_SEARCH ->
+                            _uiEvent.send(LowVisionVoiceInputEvent.CategorySearchCompleted(result.category.orEmpty()))
+                        VoiceAnalyzeIntent.BOOKMARK_ADD ->
+                            _uiEvent.send(LowVisionVoiceInputEvent.BookmarkAddCompleted(result.placeName.orEmpty()))
+                        VoiceAnalyzeIntent.BOOKMARK_DELETE ->
+                            _uiEvent.send(LowVisionVoiceInputEvent.BookmarkDeleteCompleted(result.placeName.orEmpty()))
+                        VoiceAnalyzeIntent.NAVIGATE ->
+                            _uiEvent.send(LowVisionVoiceInputEvent.NavigateCompleted(
+                                departure = result.departure.orEmpty(),
+                                destination = result.destination.orEmpty()
+                            ))
+                        VoiceAnalyzeIntent.SHOW_BOOKMARKS ->
+                            _uiEvent.send(LowVisionVoiceInputEvent.ShowBookmarksCompleted)
+                        VoiceAnalyzeIntent.SHOW_FAVORITE_ROUTES ->
+                            _uiEvent.send(LowVisionVoiceInputEvent.ShowFavoriteRoutesCompleted)
+                        VoiceAnalyzeIntent.LOGOUT ->
+                            _uiEvent.send(LowVisionVoiceInputEvent.LogoutCompleted)
+                        else -> {
+                            Log.d(TAG, "=== confirmed=true 미처리 intent → 히스토리 초기화 후 재녹음 ===")
+                            conversationHistory.clear()
+                            startRecording()
+                        }
+                    }
                 }
 
                 else -> {
-                    // 예외 케이스 → 재녹음
-                    Log.d(TAG, "=== 예외 케이스 → 재녹음 ===")
+                    Log.d(TAG, "=== 예외 케이스(UNKNOWN 포함) → 히스토리 초기화 후 재녹음 ===")
                     conversationHistory.clear()
                     _uiState.value = _uiState.value.copy(confirmationMessage = null)
                     startRecording()
@@ -287,15 +321,6 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
             withContext(Dispatchers.Main) { startRecording() }
         }
     }
-
-    /** [VoiceAnalyzeResult]를 히스토리용 JSON 문자열로 직렬화한다. */
-    private fun VoiceAnalyzeResult.toJsonString(): String =
-        JSONObject().apply {
-            put("intent", intent.name)
-            if (placeName != null) put("placeName", placeName) else put("placeName", JSONObject.NULL)
-            if (confirmed != null) put("confirmed", confirmed) else put("confirmed", JSONObject.NULL)
-            if (confirmationMessage != null) put("confirmationMessage", confirmationMessage) else put("confirmationMessage", JSONObject.NULL)
-        }.toString()
 
     override fun onCleared() {
         super.onCleared()

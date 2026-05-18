@@ -23,7 +23,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import java.net.URLDecoder
@@ -94,8 +93,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
 
         // VoiceInput — KWS 제외 (STT AudioRecorder가 마이크 점유)
         lowVisionComposable(route = LowVisionRoute.VoiceInput.route) {
-            val currentBackStackEntry by navController.currentBackStackEntryAsState()
-            val currentRoute = currentBackStackEntry?.destination?.route
+            val currentRoute = navController.previousBackStackEntry?.destination?.route
 
             LowVisionVoiceInputRoute(
                 onCancelRecording = {
@@ -247,8 +245,12 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             )
         }
 
-        // Guidance — KWS 제외 (음성 안내가 실행 중일 수 있음)
-        lowVisionComposable(route = LowVisionRoute.Guidance.route) {
+        // Guidance — KWS 활성화 (길 안내 중 음성 에이전트 호출 가능)
+        lowVisionComposable(route = LowVisionRoute.Guidance.route) { backStackEntry ->
+            LowVisionKwsNavEffect(
+                navController = navController,
+                backStackEntry = backStackEntry,
+            )
             LowVisionNavigationRoute(
                 onNavigateToComplete = {
                     navController.navigate(resolveLowVisionNavigationExitRoute()) {

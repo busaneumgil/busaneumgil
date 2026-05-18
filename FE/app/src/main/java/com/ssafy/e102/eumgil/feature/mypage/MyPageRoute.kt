@@ -29,6 +29,7 @@ fun MyPageRoute(
     onNavigateToUserTypePrimary: () -> Unit,
     onNavigateToLogin: () -> Unit,
     onNavigateToGuide: () -> Unit,
+    onNavigateToTextSizeSetting: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -88,6 +89,8 @@ fun MyPageRoute(
                 MyPageUiEvent.NavigateToUserTypePrimary -> onNavigateToUserTypePrimary()
                 MyPageUiEvent.NavigateToLogin -> onNavigateToLogin()
                 MyPageUiEvent.NavigateToGuide -> onNavigateToGuide()
+                MyPageUiEvent.NavigateToTextSizeSetting ->
+                    onNavigateToTextSizeSetting?.invoke() ?: showSnackbar(preparingMessage)
                 MyPageUiEvent.OpenPrivacyPolicy -> context.startActivity(createPrivacyPolicyIntent())
                 MyPageUiEvent.OpenServiceTerms -> context.startActivity(createServiceTermsIntent())
                 MyPageUiEvent.ShowPreparingMessage -> showSnackbar(preparingMessage)

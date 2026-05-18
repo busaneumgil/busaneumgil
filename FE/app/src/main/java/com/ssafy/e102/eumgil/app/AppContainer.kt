@@ -58,6 +58,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.data.repository.TextSizePreferenceRepository
 import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
 import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
@@ -277,6 +278,12 @@ class AppContainer(
         RepositoryModule.provideSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
             authSessionRepository = authSessionRepository,
+        )
+    }
+
+    val textSizePreferenceRepository: TextSizePreferenceRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideTextSizePreferenceRepository(
+            appSettingDao = localDatabase.appSettingDao(),
         )
     }
 

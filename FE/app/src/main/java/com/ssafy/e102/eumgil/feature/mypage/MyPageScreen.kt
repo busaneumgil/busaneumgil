@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -110,26 +112,34 @@ fun MyPageScreen(
                     ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ProfileOverviewCard(
-                uiState = uiState,
-                onUserTypeChangeClick = {
-                    onAction(MyPageUiAction.UserTypeChangeClicked)
-                },
-            )
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ProfileOverviewCard(
+                    uiState = uiState,
+                    onUserTypeChangeClick = {
+                        onAction(MyPageUiAction.UserTypeChangeClicked)
+                    },
+                )
 
-            QuickActionGrid(
-                onDuribalCallClick = onDuribalCallClick,
-                onGuideClick = {
-                    onAction(MyPageUiAction.MainMenuClicked(MyPageMenuItem.APP_HELP))
-                },
-            )
+                QuickActionGrid(
+                    onDuribalCallClick = onDuribalCallClick,
+                    onGuideClick = {
+                        onAction(MyPageUiAction.MainMenuClicked(MyPageMenuItem.APP_HELP))
+                    },
+                )
 
-            MainMenuCard(
-                onMenuClick = { menuItem ->
-                    onAction(MyPageUiAction.MainMenuClicked(menuItem = menuItem))
-                },
-                modifier = Modifier.weight(1f, fill = false),
-            )
+                MainMenuCard(
+                    onMenuClick = { menuItem ->
+                        onAction(MyPageUiAction.MainMenuClicked(menuItem = menuItem))
+                    },
+                )
+            }
 
             MyPageFooter(
                 isLogoutLoading = uiState.isLogoutLoading,
@@ -518,6 +528,13 @@ private fun MainMenuCard(
             )
             MyPageMenuDivider()
             MyPageMenuRow(
+                menuItem = MyPageMenuItem.TEXT_SIZE,
+                titleRes = R.string.my_page_menu_text_size,
+                iconRes = R.drawable.ic_terms_document,
+                onClick = onMenuClick,
+            )
+            MyPageMenuDivider()
+            MyPageMenuRow(
                 menuItem = MyPageMenuItem.PRIVACY_POLICY,
                 titleRes = R.string.my_page_app_info_privacy_policy,
                 iconRes = R.drawable.ic_terms_privacy,
@@ -831,7 +848,8 @@ private fun CircleChevron() {
 }
 
 internal fun shouldSuppressMyPageMenuRipple(menuItem: MyPageMenuItem): Boolean =
-    menuItem == MyPageMenuItem.APP_HELP ||
+    menuItem == MyPageMenuItem.TEXT_SIZE ||
+        menuItem == MyPageMenuItem.APP_HELP ||
         menuItem == MyPageMenuItem.PRIVACY_POLICY ||
         menuItem == MyPageMenuItem.SERVICE_TERMS
 

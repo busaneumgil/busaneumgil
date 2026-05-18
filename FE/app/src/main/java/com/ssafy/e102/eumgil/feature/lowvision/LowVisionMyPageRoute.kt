@@ -8,13 +8,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.data.repository.provideAccountWithdrawalRepository
+import kotlinx.coroutines.launch
 
 @Composable
 fun LowVisionMyPageRoute(
@@ -70,6 +74,7 @@ fun LowVisionMyPageRoute(
 fun LowVisionAppInfoRoute(
     onTabSelected: (LowVisionBottomTab) -> Unit,
     onNavigateToLogin: () -> Unit,
+    onNavigateToTextSizeSetting: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -103,6 +108,8 @@ fun LowVisionAppInfoRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val preparingMessage = stringResource(id = R.string.my_page_preparing_message)
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(viewModel, snackbarHostState, onNavigateToLogin) {
         viewModel.uiEvent.collect { event ->
@@ -117,6 +124,10 @@ fun LowVisionAppInfoRoute(
         LowVisionAppInfoScreen(
             isWithdrawLoading = uiState.isWithdrawLoading,
             snackbarHostState = snackbarHostState,
+            onTextSizeClick = {
+                onNavigateToTextSizeSetting?.invoke()
+                    ?: coroutineScope.launch { snackbarHostState.showSnackbar(preparingMessage) }
+            },
             onWithdrawClick = viewModel::onWithdrawClick,
             onTabSelected = onTabSelected,
             modifier = modifier,

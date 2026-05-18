@@ -3043,7 +3043,10 @@ private fun RouteMapMessageCard(
             horizontalAlignment = if (showNoRouteImage) Alignment.CenterHorizontally else Alignment.Start,
         ) {
             if (showNoRouteImage) {
-                RouteNoRouteIllustration(modifier = Modifier.size(RouteMapMessageIllustrationSize))
+                RouteNoRouteIllustration(
+                    visualOffsetY = RouteMapMessageIllustrationVisualOffset,
+                    modifier = Modifier.size(RouteMapMessageIllustrationSize),
+                )
             }
             Text(
                 text = title,
@@ -3426,7 +3429,10 @@ private fun RouteUnsupportedAreaScreen(
                         .offset(y = -RouteFailureScreenContentOffset),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                RouteNoRouteIllustration(modifier = Modifier.size(RouteUnsupportedAreaIllustrationSize))
+                RouteNoRouteIllustration(
+                    visualOffsetY = RouteFailureIllustrationVisualOffset,
+                    modifier = Modifier.size(RouteUnsupportedAreaIllustrationSize),
+                )
                 Spacer(modifier = Modifier.height(RouteFailureImageToTextGap))
                 Text(
                     text = stringResource(id = R.string.route_setting_unsupported_area_title),
@@ -3506,7 +3512,10 @@ private fun RouteFailureScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            RouteNoRouteIllustration(modifier = Modifier.size(RouteFailureScreenIllustrationSize))
+            RouteNoRouteIllustration(
+                visualOffsetY = RouteFailureIllustrationVisualOffset,
+                modifier = Modifier.size(RouteFailureScreenIllustrationSize),
+            )
             Spacer(modifier = Modifier.height(RouteFailureImageToTextGap))
             Text(
                 text = title,
@@ -3565,20 +3574,24 @@ private fun RouteFailureFallbackState(
         onActionClick = onDuribalCallClick,
         useCompactFailureTextStyle = true,
         leadingContent = {
-            RouteNoRouteIllustration(modifier = Modifier.size(RouteFailureFallbackIllustrationSize))
+            RouteNoRouteIllustration(
+                visualOffsetY = RouteFailureFallbackIllustrationVisualOffset,
+                modifier = Modifier.size(RouteFailureFallbackIllustrationSize),
+            )
         },
     )
 }
 
 @Composable
 private fun RouteNoRouteIllustration(
+    visualOffsetY: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     Image(
         painter = painterResource(id = R.drawable.route_no_route_error_illustration),
         contentDescription = null,
         contentScale = ContentScale.Fit,
-        modifier = modifier,
+        modifier = modifier.offset(y = visualOffsetY),
     )
 }
 
@@ -5267,13 +5280,16 @@ private val RouteOverlayCardElevation = 6.dp
 private val RouteFloatingControlElevation = 6.dp
 private val RouteBottomSheetElevation = 6.dp
 private val RouteMapMessageIllustrationSize = 144.dp
+private val RouteMapMessageIllustrationVisualOffset = 10.dp
 private val RouteUnsupportedAreaIllustrationSize = 280.dp
 private val RouteFailureScreenIllustrationSize = 280.dp
 private val RouteFailureFallbackIllustrationSize = 160.dp
-private val RouteFailureScreenContentOffset = 20.dp
-private val RouteFailureImageToTextGap = 8.dp
-private val RouteFailureTitleFontSize = 18.sp
-private val RouteFailureTitleLineHeight = 24.sp
+private val RouteFailureScreenContentOffset = 48.dp
+private val RouteFailureImageToTextGap = 4.dp
+private val RouteFailureIllustrationVisualOffset = 24.dp
+private val RouteFailureFallbackIllustrationVisualOffset = 14.dp
+private val RouteFailureTitleFontSize = 19.sp
+private val RouteFailureTitleLineHeight = 25.sp
 private val RouteFailureDescriptionFontSize = 13.sp
 private val RouteFailureDescriptionLineHeight = 18.sp
 private val RouteAccessibilityLabelCornerRadius = 10.dp

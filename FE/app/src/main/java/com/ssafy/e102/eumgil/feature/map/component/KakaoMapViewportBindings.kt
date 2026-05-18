@@ -1302,6 +1302,14 @@ private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineSt
                 strokeColor = palette.casingColor,
             )
 
+        MapViewportPolylineStyle.ROUTE_CONNECTOR ->
+            KakaoRouteLineStyleSpec(
+                lineWidth = 7f,
+                lineColor = 0xFF64748B.toInt(),
+                strokeWidth = 0f,
+                strokeColor = 0xFF64748B.toInt(),
+            )
+
         MapViewportPolylineStyle.ROUTE_BASELINE ->
             KakaoRouteLineStyleSpec(
                 lineWidth = 18f,

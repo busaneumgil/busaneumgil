@@ -344,6 +344,34 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
+    fun `route preview marks current-location origin and draws connector to route start`() {
+        val overlayState =
+            createRoutePreviewViewportOverlayState(
+                previewMap =
+                    RoutePreviewMapUiState(
+                        status = RoutePreviewMapStatus.READY,
+                        originCoordinate = GeoCoordinate(latitude = 35.1700, longitude = 129.0500),
+                        destinationCoordinate = GeoCoordinate(latitude = 35.1800, longitude = 129.0700),
+                        polyline =
+                            listOf(
+                                GeoCoordinate(latitude = 35.1710, longitude = 129.0520),
+                                GeoCoordinate(latitude = 35.1750, longitude = 129.0600),
+                                GeoCoordinate(latitude = 35.1800, longitude = 129.0700),
+                            ),
+                    ),
+                originIsCurrentLocation = true,
+            )
+
+        assertEquals(MapViewportPointKind.CURRENT_LOCATION, overlayState.points.first().kind)
+        assertEquals("출발", overlayState.points.first().label)
+        assertEquals("현재 위치 출발", overlayState.points.first().contentDescription)
+        assertTrue(overlayState.polylines.first().overlayId.startsWith("route-origin-connector-"))
+        assertEquals(MapViewportPolylineStyle.ROUTE_CONNECTOR, overlayState.polylines.first().style)
+        assertFalse(overlayState.polylines.first().showDirectionArrows)
+        assertEquals(MapViewportPolylineStyle.ROUTE_PREVIEW, overlayState.polylines.last().style)
+    }
+
+    @Test
     fun `route preview binding can render transit detail walk and transit polylines separately`() {
         val detailPolylines =
             listOf(

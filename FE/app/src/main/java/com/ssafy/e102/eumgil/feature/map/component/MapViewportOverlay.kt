@@ -104,6 +104,7 @@ internal data class MapViewportPolylineOverlay(
 
 internal enum class MapViewportPolylineStyle {
     ROUTE_PREVIEW,
+    ROUTE_CONNECTOR,
     ROUTE_BASELINE,
     ACTIVE_SEGMENT,
     FOCUSED_SEGMENT,
@@ -179,6 +180,7 @@ internal fun createRoutePreviewViewportOverlayState(
     routeTone: MapViewportOverlayTone = previewMap.routeOption.toViewportOverlayTone(),
     routePolylineOverlays: List<MapViewportPolylineOverlay> = emptyList(),
     guidanceMarkers: List<MapViewportPointOverlay> = emptyList(),
+    originIsCurrentLocation: Boolean = false,
     focusSelectedGuidanceMarker: Boolean = false,
     showDetailedRouteOverlay: Boolean = true,
 ): MapViewportOverlayState {
@@ -198,9 +200,22 @@ internal fun createRoutePreviewViewportOverlayState(
             buildList {
                 previewMap.originCoordinate?.toOverlayPoint(
                     overlayId = "route-origin",
-                    kind = MapViewportPointKind.ORIGIN,
+                    kind =
+                        if (originIsCurrentLocation) {
+                            MapViewportPointKind.CURRENT_LOCATION
+                        } else {
+                            MapViewportPointKind.ORIGIN
+                        },
                     label = "출발",
-                )?.copy(includeInProjection = !focusSelectedGuidanceMarker)?.let(::add)
+                )?.copy(
+                    contentDescription =
+                        if (originIsCurrentLocation) {
+                            "현재 위치 출발"
+                        } else {
+                            null
+                        },
+                    includeInProjection = !focusSelectedGuidanceMarker,
+                )?.let(::add)
                 previewMap.destinationCoordinate?.toOverlayPoint(
                     overlayId = "route-destination",
                     kind = MapViewportPointKind.DESTINATION,
@@ -232,7 +247,7 @@ internal fun createRoutePreviewViewportOverlayState(
             },
         polylines =
             routePolylineOverlays.ifEmpty {
-                listOf(
+                createRoutePreviewOriginConnectorPolylines(previewMap) +
                     MapViewportPolylineOverlay(
                         overlayId = "route-preview",
                         points = previewMap.polyline.map(GeoCoordinate::toMapCoordinate),
@@ -240,9 +255,55 @@ internal fun createRoutePreviewViewportOverlayState(
                         tone = routeTone,
                         includeInProjection = !focusSelectedGuidanceMarker,
                         showDirectionArrows = showDetailedRouteOverlay,
-                    ),
-                )
+                    )
             }.filter(MapViewportPolylineOverlay::isRenderable),
+    )
+}
+
+private fun createRoutePreviewOriginConnectorPolylines(
+    previewMap: RoutePreviewMapUiState,
+): List<MapViewportPolylineOverlay> {
+    val origin = previewMap.originCoordinate ?: return emptyList()
+    val routeStart = previewMap.polyline.firstOrNull() ?: return emptyList()
+    val distanceMeters = haversineDistanceMeters(origin, routeStart)
+    if (distanceMeters <= ROUTE_PREVIEW_ORIGIN_CONNECTOR_MIN_DISTANCE_METERS) return emptyList()
+
+    val overlays = mutableListOf<MapViewportPolylineOverlay>()
+    var dashStartMeters = 0.0
+    var dashIndex = 0
+    while (dashStartMeters < distanceMeters) {
+        val dashEndMeters = (dashStartMeters + ROUTE_PREVIEW_ORIGIN_CONNECTOR_DASH_METERS).coerceAtMost(distanceMeters)
+        if (dashEndMeters - dashStartMeters >= ROUTE_PREVIEW_ORIGIN_CONNECTOR_MIN_DASH_METERS) {
+            overlays +=
+                MapViewportPolylineOverlay(
+                    overlayId = "route-origin-connector-$dashIndex",
+                    points =
+                        listOf(
+                            origin.interpolateTo(routeStart, dashStartMeters / distanceMeters).toMapCoordinate(),
+                            origin.interpolateTo(routeStart, dashEndMeters / distanceMeters).toMapCoordinate(),
+                        ),
+                    style = MapViewportPolylineStyle.ROUTE_CONNECTOR,
+                    tone = MapViewportOverlayTone.NEUTRAL,
+                    includeInProjection = true,
+                    showDirectionArrows = false,
+                )
+            dashIndex += 1
+        }
+        dashStartMeters +=
+            ROUTE_PREVIEW_ORIGIN_CONNECTOR_DASH_METERS +
+                ROUTE_PREVIEW_ORIGIN_CONNECTOR_GAP_METERS
+    }
+    return overlays
+}
+
+private fun GeoCoordinate.interpolateTo(
+    target: GeoCoordinate,
+    ratio: Double,
+): GeoCoordinate {
+    val boundedRatio = ratio.coerceIn(0.0, 1.0)
+    return GeoCoordinate(
+        latitude = latitude + (target.latitude - latitude) * boundedRatio,
+        longitude = longitude + (target.longitude - longitude) * boundedRatio,
     )
 }
 
@@ -906,6 +967,10 @@ private const val COORDINATE_DEDUPLICATION_SCALE = 1_000_000.0
 private const val NAVIGATION_MARKER_CURRENT_LOCATION_HIDE_RADIUS_METERS = 8.0
 private const val NAVIGATION_MARKER_EARTH_RADIUS_METERS = 6_371_000.0
 private const val NAVIGATION_FOLLOW_LOOKAHEAD_METERS = 12.0
+private const val ROUTE_PREVIEW_ORIGIN_CONNECTOR_MIN_DISTANCE_METERS = 2.0
+private const val ROUTE_PREVIEW_ORIGIN_CONNECTOR_DASH_METERS = 8.0
+private const val ROUTE_PREVIEW_ORIGIN_CONNECTOR_GAP_METERS = 6.0
+private const val ROUTE_PREVIEW_ORIGIN_CONNECTOR_MIN_DASH_METERS = 1.5
 
 private var lastSegmentJunctionOverlayDebugSummary: String? = null
 

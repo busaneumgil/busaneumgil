@@ -110,7 +110,8 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(
             "Route selection should render the start CTA as a floating overlay aligned to the bottom.",
             screenSection.contains("RouteSettingBottomBar(") &&
-                screenSection.contains("modifier = Modifier.align(Alignment.BottomCenter)"),
+                screenSection.contains(".align(Alignment.BottomCenter)") &&
+                screenSection.contains(".zIndex(RouteSettingBottomBarZIndex)"),
         )
         assertTrue(
             "Route selection should reuse the shared bottom bar component.",
@@ -391,7 +392,20 @@ class RouteSettingLayoutPolicyTest {
             "Walk preview cards should use the same navigation-bar inset basis as the shared bottom CTA.",
             mapStageSection.contains("WindowInsets.navigationBars.getBottom(this).toDp()") &&
                 mapStageSection.contains("val walkPreviewBottomPadding = routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset)") &&
+                mapStageSection.contains("val walkPreviewMapBottomClearance = routeWalkPreviewMapBottomClearance(navigationBarBottomInset)") &&
                 source.contains("RouteWalkPreviewToStartButtonGap = 22.dp"),
+        )
+        assertTrue(
+            "Walk preview map should stop above the route cards so origin and destination labels are not projected behind bottom controls.",
+            mapStageSection.contains(".padding(bottom = walkPreviewMapBottomClearance)") &&
+                mapStageSection.contains(".clipToBounds()") &&
+                source.contains("RouteWalkPreviewMapToCardGap = 16.dp"),
+        )
+        assertTrue(
+            "Walk preview layers should keep the cards and bottom CTA above the map backdrop.",
+            mapStageSection.contains(".zIndex(RouteMapBackdropZIndex)") &&
+                mapStageSection.contains(".zIndex(RouteWalkPreviewCarouselZIndex)") &&
+                source.contains(".zIndex(RouteSettingBottomBarZIndex)"),
         )
         assertTrue(
             "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
@@ -437,6 +451,8 @@ class RouteSettingLayoutPolicyTest {
 
         assertEquals(102.dp, routeWalkPreviewCarouselBottomPadding(0.dp))
         assertEquals(150.dp, routeWalkPreviewCarouselBottomPadding(48.dp))
+        assertEquals(234.dp, routeWalkPreviewMapBottomClearance(0.dp))
+        assertEquals(282.dp, routeWalkPreviewMapBottomClearance(48.dp))
         assertEquals(288.dp, routeWalkMapControlsBottomPadding(0.dp))
         assertEquals(336.dp, routeWalkMapControlsBottomPadding(48.dp))
         assertTrue(
@@ -478,6 +494,30 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(mapControlsSection.contains("onZoomInClick = onZoomInClick"))
         assertTrue(mapControlsSection.contains("onZoomOutClick = onZoomOutClick"))
         assertTrue(routeMapBackdropSection.contains("controlState = controlState"))
+        assertTrue(routeMapBackdropSection.contains("originIsCurrentLocation = originIsCurrentLocation"))
+        assertTrue(mapStageSection.contains("originIsCurrentLocation = uiState.originState == RouteOriginState.CURRENT_LOCATION_RESOLVED"))
+        assertTrue(mapControlsSection.contains("iconRes = R.drawable.ic_route_start_navigation_button"))
+        assertFalse(
+            "Route preview should not draw a separate current-location marker that competes with the origin marker.",
+            routeMapBackdropSection.contains("currentLocation = currentLocationCoordinate") ||
+                mapStageSection.contains("currentLocationCoordinate = uiState.currentLocationCoordinate"),
+        )
+    }
+
+    @Test
+    fun `route preview labels use revised shortest copy without drawing duplicate current position marker`() {
+        val viewModelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingViewModel.kt")
+                .readText()
+        val overlaySource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlay.kt")
+                .readText()
+
+        assertTrue(viewModelSource.contains("OPTION_TITLE_SHORTEST = \"최단 경로\""))
+        assertFalse(viewModelSource.contains("OPTION_TITLE_SHORTEST = \"최단거리\""))
+        assertFalse(overlaySource.contains("overlayId = \"route-current-location\""))
+        assertTrue(overlaySource.contains("originIsCurrentLocation: Boolean = false"))
+        assertTrue(overlaySource.contains("MapViewportPolylineStyle.ROUTE_CONNECTOR"))
     }
 
     @Test

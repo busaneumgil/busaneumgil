@@ -52,9 +52,70 @@ fun MobilityTypeSecondaryRoute(
 }
 
 @Composable
+fun MobilityTypeSecondaryTermsRoute(
+    onConsentCompleted: (MobilitySubtype, LocationTermsAgreement) -> Unit,
+    onRequestDetails: (LocationTermsItem) -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    var selectedMobilitySubtypeRoute by rememberSaveable {
+        mutableStateOf<String?>(null)
+    }
+    var isTermsSheetVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+    var isServiceTermsChecked by rememberSaveable { mutableStateOf(false) }
+    var isSensitiveInfoTermsChecked by rememberSaveable { mutableStateOf(false) }
+    var isPersonalLocationInfoTermsChecked by rememberSaveable { mutableStateOf(false) }
+    var isOverFourteenChecked by rememberSaveable { mutableStateOf(false) }
+
+    val selectedMobilitySubtype = MobilitySubtype.fromRouteValue(selectedMobilitySubtypeRoute)
+    val termsUiState =
+        LocationTermsUiState(
+            isServiceTermsChecked = isServiceTermsChecked,
+            isSensitiveInfoTermsChecked = isSensitiveInfoTermsChecked,
+            isPersonalLocationInfoTermsChecked = isPersonalLocationInfoTermsChecked,
+            isOverFourteenChecked = isOverFourteenChecked,
+        )
+
+    MobilitySubtypeScreen(
+        uiState =
+            MobilitySubtypeUiState(
+                selectedMobilitySubtype = selectedMobilitySubtype,
+            ),
+        onSubtypeClick = { mobilitySubtype ->
+            selectedMobilitySubtypeRoute = mobilitySubtype.routeValue
+            isTermsSheetVisible = true
+        },
+        modifier = modifier,
+    )
+
+    if (isTermsSheetVisible && selectedMobilitySubtype != null) {
+        LocationTermsBottomSheet(
+            uiState = termsUiState,
+            onDismissRequest = { isTermsSheetVisible = false },
+            onAllTermsCheckedChange = { shouldCheckAll ->
+                isServiceTermsChecked = shouldCheckAll
+                isSensitiveInfoTermsChecked = shouldCheckAll
+                isPersonalLocationInfoTermsChecked = shouldCheckAll
+                isOverFourteenChecked = shouldCheckAll
+            },
+            onServiceTermsCheckedChange = { isServiceTermsChecked = it },
+            onSensitiveInfoTermsCheckedChange = { isSensitiveInfoTermsChecked = it },
+            onPersonalLocationInfoTermsCheckedChange = { isPersonalLocationInfoTermsChecked = it },
+            onOverFourteenCheckedChange = { isOverFourteenChecked = it },
+            onPrimaryActionClick = {
+                if (termsUiState.canProceed) {
+                    onConsentCompleted(selectedMobilitySubtype, termsUiState.toAgreement())
+                }
+            },
+            onRequestDetails = onRequestDetails,
+        )
+    }
+}
+
+@Composable
 fun LocationTermsRoute(
     initialLocationTermsChecked: Boolean = false,
-    initialPrivacyPolicyChecked: Boolean = false,
     onConsentCompleted: (LocationTermsAgreement) -> Unit,
     onRequestDetails: (LocationTermsItem) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -71,9 +132,6 @@ fun LocationTermsRoute(
     var isOverFourteenChecked by rememberSaveable(initialLocationTermsChecked) {
         mutableStateOf(initialLocationTermsChecked)
     }
-    var isPrivacyPolicyChecked by rememberSaveable(initialPrivacyPolicyChecked) {
-        mutableStateOf(initialPrivacyPolicyChecked)
-    }
     var hasRestrictionNotice by rememberSaveable { mutableStateOf(false) }
 
     val uiState =
@@ -82,7 +140,6 @@ fun LocationTermsRoute(
             isSensitiveInfoTermsChecked = isSensitiveInfoTermsChecked,
             isPersonalLocationInfoTermsChecked = isPersonalLocationInfoTermsChecked,
             isOverFourteenChecked = isOverFourteenChecked,
-            isPrivacyPolicyChecked = isPrivacyPolicyChecked,
             hasRestrictionNotice = hasRestrictionNotice,
         )
 
@@ -93,7 +150,6 @@ fun LocationTermsRoute(
             isSensitiveInfoTermsChecked = shouldCheckAll
             isPersonalLocationInfoTermsChecked = shouldCheckAll
             isOverFourteenChecked = shouldCheckAll
-            isPrivacyPolicyChecked = shouldCheckAll
             hasRestrictionNotice = false
         },
         onServiceTermsCheckedChange = { isChecked ->
@@ -110,10 +166,6 @@ fun LocationTermsRoute(
         },
         onOverFourteenCheckedChange = { isChecked ->
             isOverFourteenChecked = isChecked
-            hasRestrictionNotice = false
-        },
-        onPrivacyPolicyCheckedChange = { isChecked ->
-            isPrivacyPolicyChecked = isChecked
             hasRestrictionNotice = false
         },
         onPrimaryActionClick = {

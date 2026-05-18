@@ -2,26 +2,36 @@ package com.ssafy.e102.eumgil.feature.onboarding
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +47,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,11 +55,14 @@ import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceMuted
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextPrimary
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextTertiary
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
 import com.ssafy.e102.eumgil.feature.onboarding.component.onboardingBodyLineBreak
 import com.ssafy.e102.eumgil.feature.onboarding.component.onboardingHeadingLineBreak
 import com.ssafy.e102.eumgil.feature.onboarding.component.stabilizeOnboardingWrap
 import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingSelectionFrame
-import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingStepAction
 import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingStepHeaderStyle
 import com.ssafy.e102.eumgil.feature.onboarding.component.OnboardingStepScaffold
 
@@ -59,7 +73,7 @@ fun PrimaryUserTypeScreen(
 ) {
     OnboardingSelectionFrame(
         currentStep = 1,
-        totalSteps = 5,
+        totalSteps = 2,
         title = stringResource(id = R.string.onboarding_primary_user_type_screen_title),
         description = "",
         modifier = modifier,
@@ -187,8 +201,8 @@ fun MobilitySubtypeScreen(
     modifier: Modifier = Modifier,
 ) {
     OnboardingSelectionFrame(
-        currentStep = 3,
-        totalSteps = 5,
+        currentStep = 2,
+        totalSteps = 2,
         title = stringResource(id = R.string.onboarding_mobility_subtype_screen_title),
         description = stringResource(id = R.string.onboarding_mobility_subtype_screen_supporting),
         modifier = modifier,
@@ -249,12 +263,17 @@ private fun MobilitySubtypeButton(
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                painter = painterResource(id = mobilitySubtype.iconRes),
-                contentDescription = null,
-                modifier = Modifier.size(mobilitySubtype.iconSizeDp.dp),
-                tint = style.iconTint,
-            )
+            Box(
+                modifier = Modifier.size(MobilitySubtypeIconSlotSize),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = mobilitySubtype.iconRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(mobilitySubtype.iconSizeDp.dp),
+                    tint = style.iconTint,
+                )
+            }
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -294,7 +313,6 @@ fun LocationTermsScreen(
     onSensitiveInfoTermsCheckedChange: (Boolean) -> Unit,
     onPersonalLocationInfoTermsCheckedChange: (Boolean) -> Unit,
     onOverFourteenCheckedChange: (Boolean) -> Unit,
-    onPrivacyPolicyCheckedChange: (Boolean) -> Unit,
     onPrimaryActionClick: () -> Unit,
     onRequestDetails: (LocationTermsItem) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -325,7 +343,6 @@ fun LocationTermsScreen(
                         LocationTermsItem.SENSITIVE_INFO -> uiState.isSensitiveInfoTermsChecked
                         LocationTermsItem.PERSONAL_LOCATION_INFO -> uiState.isPersonalLocationInfoTermsChecked
                         LocationTermsItem.OVER_FOURTEEN -> uiState.isOverFourteenChecked
-                        LocationTermsItem.PRIVACY_POLICY_CONFIRMATION -> uiState.isPrivacyPolicyChecked
                     }
                 val onCheckedChange =
                     when (locationTermsItem) {
@@ -333,7 +350,6 @@ fun LocationTermsScreen(
                         LocationTermsItem.SENSITIVE_INFO -> onSensitiveInfoTermsCheckedChange
                         LocationTermsItem.PERSONAL_LOCATION_INFO -> onPersonalLocationInfoTermsCheckedChange
                         LocationTermsItem.OVER_FOURTEEN -> onOverFourteenCheckedChange
-                        LocationTermsItem.PRIVACY_POLICY_CONFIRMATION -> onPrivacyPolicyCheckedChange
                     }
 
                 LocationTermsAgreementRow(
@@ -358,6 +374,253 @@ fun LocationTermsScreen(
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LocationTermsBottomSheet(
+    uiState: LocationTermsUiState,
+    onDismissRequest: () -> Unit,
+    onAllTermsCheckedChange: (Boolean) -> Unit,
+    onServiceTermsCheckedChange: (Boolean) -> Unit,
+    onSensitiveInfoTermsCheckedChange: (Boolean) -> Unit,
+    onPersonalLocationInfoTermsCheckedChange: (Boolean) -> Unit,
+    onOverFourteenCheckedChange: (Boolean) -> Unit,
+    onPrimaryActionClick: () -> Unit,
+    onRequestDetails: (LocationTermsItem) -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        dragHandle = null,
+        shape =
+            RoundedCornerShape(
+                topStart = 28.dp,
+                topEnd = 28.dp,
+            ),
+        containerColor = EumWhite,
+        scrimColor = Color.Black.copy(alpha = 0.54f),
+        windowInsets = WindowInsets(0, 0, 0, 0),
+    ) {
+        LocationTermsBottomSheetContent(
+            uiState = uiState,
+            onAllTermsCheckedChange = onAllTermsCheckedChange,
+            onServiceTermsCheckedChange = onServiceTermsCheckedChange,
+            onSensitiveInfoTermsCheckedChange = onSensitiveInfoTermsCheckedChange,
+            onPersonalLocationInfoTermsCheckedChange = onPersonalLocationInfoTermsCheckedChange,
+            onOverFourteenCheckedChange = onOverFourteenCheckedChange,
+            onPrimaryActionClick = onPrimaryActionClick,
+            onRequestDetails = onRequestDetails,
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 28.dp),
+        )
+    }
+}
+
+@Composable
+private fun LocationTermsBottomSheetContent(
+    uiState: LocationTermsUiState,
+    onAllTermsCheckedChange: (Boolean) -> Unit,
+    onServiceTermsCheckedChange: (Boolean) -> Unit,
+    onSensitiveInfoTermsCheckedChange: (Boolean) -> Unit,
+    onPersonalLocationInfoTermsCheckedChange: (Boolean) -> Unit,
+    onOverFourteenCheckedChange: (Boolean) -> Unit,
+    onPrimaryActionClick: () -> Unit,
+    onRequestDetails: (LocationTermsItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(22.dp),
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(id = R.string.onboarding_terms_sheet_title).stabilizeOnboardingWrap(),
+                style = MaterialTheme.typography.headlineSmall.onboardingHeadingLineBreak(),
+                fontWeight = FontWeight.SemiBold,
+                color = EumTextPrimary,
+            )
+            Text(
+                text = stringResource(id = R.string.onboarding_terms_sheet_description).stabilizeOnboardingWrap(),
+                style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
+                color = EumTextTertiary,
+            )
+        }
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            LocationTermsSheetAllAgreementRow(
+                checked = uiState.isAllTermsChecked,
+                onCheckedChange = onAllTermsCheckedChange,
+            )
+
+            LocationTermsItem.entries.forEach { item ->
+                val checked =
+                    when (item) {
+                        LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE -> uiState.isServiceTermsChecked
+                        LocationTermsItem.SENSITIVE_INFO -> uiState.isSensitiveInfoTermsChecked
+                        LocationTermsItem.PERSONAL_LOCATION_INFO -> uiState.isPersonalLocationInfoTermsChecked
+                        LocationTermsItem.OVER_FOURTEEN -> uiState.isOverFourteenChecked
+                    }
+                val onCheckedChange =
+                    when (item) {
+                        LocationTermsItem.SERVICE_AND_LOCATION_BASED_SERVICE -> onServiceTermsCheckedChange
+                        LocationTermsItem.SENSITIVE_INFO -> onSensitiveInfoTermsCheckedChange
+                        LocationTermsItem.PERSONAL_LOCATION_INFO -> onPersonalLocationInfoTermsCheckedChange
+                        LocationTermsItem.OVER_FOURTEEN -> onOverFourteenCheckedChange
+                    }
+
+                LocationTermsSheetAgreementRow(
+                    item = item,
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                    onRequestDetails = { onRequestDetails(item) },
+                )
+            }
+        }
+
+        Button(
+            onClick = onPrimaryActionClick,
+            enabled = uiState.canProceed,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(EumRadius.scaleM),
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = EumPrimary600,
+                    contentColor = EumWhite,
+                    disabledContainerColor = Color(0xFFBDBDBD),
+                    disabledContentColor = EumWhite,
+                ),
+        ) {
+            Text(
+                text = stringResource(id = R.string.action_start),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LocationTermsSheetAllAgreementRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selectedStateDescription = stringResource(id = R.string.a11y_option_selected)
+    val unselectedStateDescription = stringResource(id = R.string.a11y_option_unselected)
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                role = Role.Checkbox
+                stateDescription = if (checked) selectedStateDescription else unselectedStateDescription
+            }
+            .toggleable(
+                value = checked,
+                onValueChange = onCheckedChange,
+                role = Role.Checkbox,
+            ),
+        color = EumSurfaceMuted,
+        shape = RoundedCornerShape(EumRadius.scaleM),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 64.dp)
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(id = R.string.onboarding_terms_all_agreement_title).stabilizeOnboardingWrap(),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium.onboardingBodyLineBreak(),
+                fontWeight = FontWeight.SemiBold,
+                color = EumTextPrimary,
+            )
+            LocationTermsSheetCheckIcon(checked = checked)
+        }
+    }
+}
+
+@Composable
+private fun LocationTermsSheetAgreementRow(
+    item: LocationTermsItem,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onRequestDetails: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selectedStateDescription = stringResource(id = R.string.a11y_option_selected)
+    val unselectedStateDescription = stringResource(id = R.string.a11y_option_unselected)
+    val canOpenDetails = item != LocationTermsItem.OVER_FOURTEEN
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 58.dp),
+        horizontalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(id = item.titleRes).stabilizeOnboardingWrap(),
+            modifier = Modifier
+                .weight(1f)
+                .clickable(enabled = canOpenDetails, onClick = onRequestDetails),
+            style = MaterialTheme.typography.bodyLarge.onboardingBodyLineBreak(),
+            fontWeight = FontWeight.SemiBold,
+            color = EumTextTertiary,
+            textDecoration = if (canOpenDetails) TextDecoration.Underline else TextDecoration.None,
+        )
+
+        IconButton(
+            onClick = { onCheckedChange(!checked) },
+            modifier = Modifier
+                .size(48.dp)
+                .semantics {
+                    role = Role.Checkbox
+                    stateDescription = if (checked) selectedStateDescription else unselectedStateDescription
+                },
+        ) {
+            LocationTermsSheetCheckIcon(checked = checked)
+        }
+    }
+}
+
+@Composable
+private fun LocationTermsSheetCheckIcon(
+    checked: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.size(32.dp),
+        color = if (checked) EumPrimary600 else Color(0xFFE5E7EB),
+        shape = CircleShape,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (checked) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_check_mark),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = EumWhite,
+                )
+            }
         }
     }
 }
@@ -546,3 +809,5 @@ private fun locationTermsCheckboxColors() =
         disabledCheckedColor = EumPrimary600,
         disabledUncheckedColor = MaterialTheme.colorScheme.outline,
     )
+
+private val MobilitySubtypeIconSlotSize = 96.dp

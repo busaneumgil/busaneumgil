@@ -181,7 +181,7 @@ class SearchScreenPolicyTest {
         assertTrue(
             "The no-result illustration should use the dedicated larger empty-state size.",
             emptyStateSection.contains("illustrationSize = SearchEmptyResultIllustrationSize") &&
-                source.contains("private val SearchEmptyResultIllustrationSize: Dp = 260.dp"),
+                source.contains("private val SearchEmptyResultIllustrationSize: Dp = 300.dp"),
         )
         assertTrue(
             "The no-result illustration and title block should be nudged upward from the centered baseline.",
@@ -242,7 +242,7 @@ class SearchScreenPolicyTest {
         )
         assertTrue(
             "Search empty and error copy should use explicit line breaks requested for the empty/error states.",
-            stringsSource.contains("<string name=\"search_screen_empty_result_title\">검색 결과가\\n존재하지 않습니다.</string>") &&
+            stringsSource.contains("<string name=\"search_screen_empty_result_title\">검색 결과가\\n존재하지 않습니다</string>") &&
                 stringsSource.contains("<string name=\"search_screen_error_title\">검색 결과를\\n불러오지 못했습니다</string>"),
         )
     }

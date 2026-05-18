@@ -509,7 +509,7 @@
     <string name="search_screen_result_summary">도착지 검색 결과 %1$d건</string>
     <string name="search_screen_sort_relevance">관련도순</string>
     <string name="search_screen_sort_distance">거리순</string>
-    <string name="search_screen_empty_result_title">검색 결과가\n존재하지 않습니다.</string>
+    <string name="search_screen_empty_result_title">검색 결과가\n존재하지 않습니다</string>
     <string name="search_screen_empty_result_description">다른 장소명이나 주소로 다시 검색해 주세요.</string>
     <string name="search_screen_error_title">검색 결과를\n불러오지 못했습니다</string>
     <string name="search_screen_error_description">잠시 후 다시 시도해 주세요.</string>

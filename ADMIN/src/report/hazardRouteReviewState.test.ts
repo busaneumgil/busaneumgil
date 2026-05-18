@@ -5,6 +5,7 @@ import {
   completeHazardRouteReview,
   deriveHazardDisplayStatus,
   hazardRouteReviewIntentLabel,
+  hydrateHazardRouteReviewRecord,
   loadStoredHazardRouteReview,
   startHazardRouteReview,
   storeHazardRouteReview,
@@ -105,5 +106,56 @@ describe("hazard route review workflow state", () => {
     expect(canStartHazardApprove("APPROVED")).toBe(false);
     expect(canStartHazardApprove("REJECTED", review)).toBe(false);
     expect(canStartHazardApprove("REJECTED", completeHazardRouteReview(review, "2026-05-18T03:55:00.000Z"))).toBe(false);
+  });
+
+  it("hydrates latest server route review into local workflow state", () => {
+    const review = hydrateHazardRouteReviewRecord({
+      reviewId: 21,
+      reportId: 12,
+      intent: "RESTORE",
+      stage: "IN_PROGRESS",
+      reportStatus: "APPROVED",
+      reviewerUserId: "admin-8",
+      gu: "부산진구",
+      dong: "부전동",
+      selectedSegmentEdgeId: 41231,
+      startedAt: "2026-05-18T10:00:00",
+      updatedAt: "2026-05-18T10:05:00",
+      completedAt: null,
+      segmentDrafts: [
+        {
+          edgeId: 41231,
+          walkAccess: "NO",
+          brailleBlockState: "UNKNOWN",
+          audioSignalState: "UNKNOWN",
+          widthState: "NARROW",
+          surfaceState: null,
+          stairsState: "YES",
+          signalState: "UNKNOWN",
+        },
+      ],
+    });
+
+    expect(review).toEqual({
+      reportId: 12,
+      intent: "restore",
+      stage: "IN_PROGRESS",
+      reviewerUserId: "admin-8",
+      startedAt: "2026-05-18T10:00:00",
+      updatedAt: "2026-05-18T10:05:00",
+      completedAt: null,
+      selectedSegmentEdgeId: "41231",
+      segmentDrafts: {
+        "41231": {
+          walkAccess: "NO",
+          brailleBlockState: "UNKNOWN",
+          audioSignalState: "UNKNOWN",
+          widthState: "NARROW",
+          surfaceState: null,
+          stairsState: "YES",
+          signalState: "UNKNOWN",
+        },
+      },
+    });
   });
 });

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
@@ -124,6 +125,26 @@ class AdminHazardRouteReviewServiceTest {
 
 		assertThat(response.intent()).isEqualTo(HazardRouteReviewIntent.RESTORE);
 		assertThat(response.reportStatus()).isEqualTo(ReportStatus.APPROVED);
+	}
+
+	@Test
+	@DisplayName("동시에 같은 제보 검수를 시작해 unique 제약이 나면 경로 검수 충돌로 변환한다")
+	void startRouteReviewMapsUniqueConstraintConflict() {
+		UUID userId = UUID.randomUUID();
+		HazardReport hazardReport = pendingHazardReport(1L);
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
+		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdOrderByReviewIdDesc(1L))
+			.thenReturn(Optional.empty());
+		when(hazardReportRouteReviewRepository.save(org.mockito.ArgumentMatchers.any(HazardReportRouteReview.class)))
+			.thenThrow(new DataIntegrityViolationException("uk_hazard_report_route_reviews_in_progress"));
+
+		assertThatThrownBy(() -> adminHazardRouteReviewService.startRouteReview(
+			userId,
+			1L,
+			new StartHazardRouteReviewRequest(HazardRouteReviewIntent.APPROVE, "부산진구", "부전동")))
+			.isInstanceOf(HazardReportException.class)
+			.extracting("errorCode")
+			.isEqualTo(HazardReportErrorCode.HAZARD_ROUTE_REVIEW_CONFLICT);
 	}
 
 	@Test

@@ -563,10 +563,11 @@ internal fun createNavigationViewportOverlayState(
 
 private fun NavigationMapOverlayUiState.createRoutePreviewStartOverlayStateOrNull(): MapViewportOverlayState? {
     if (!shouldUseRoutePreviewStartOverlay()) return null
+    val connectorStartCoordinate = currentLocation?.coordinate ?: origin?.coordinate
     val previewMap =
         RoutePreviewMapUiState(
             status = RoutePreviewMapStatus.READY,
-            originCoordinate = origin?.coordinate,
+            originCoordinate = connectorStartCoordinate,
             destinationCoordinate = destination?.coordinate,
             polyline = selectedRoutePolyline,
         )

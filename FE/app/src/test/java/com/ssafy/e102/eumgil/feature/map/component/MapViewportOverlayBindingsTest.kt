@@ -273,7 +273,7 @@ class MapViewportOverlayBindingsTest {
         assertFalse(connectorPolylines.any { polyline -> polyline.includeInProjection })
         assertFalse(overlayState.polylines.any { polyline -> polyline.overlayId.startsWith("navigation-start-connector") })
         assertEquals(
-            MapCoordinate(latitude = origin.latitude, longitude = origin.longitude),
+            MapCoordinate(latitude = current.latitude, longitude = current.longitude),
             connectorPolylines.first().points.first(),
         )
         assertEquals(
@@ -335,6 +335,11 @@ class MapViewportOverlayBindingsTest {
                 .filter { polyline -> polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR }
                 .any { polyline -> polyline.includeInProjection },
         )
+        val connector =
+            overlayState.polylines.first { polyline ->
+                polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR
+            }
+        assertEquals(MapCoordinate(latitude = current.latitude, longitude = current.longitude), connector.points.first())
         assertEquals(MapCoordinate(latitude = current.latitude, longitude = current.longitude), overlayState.fallbackCamera.center)
         assertEquals(30.0, overlayState.fallbackCamera.bearingDegrees ?: -1.0, 0.0)
     }

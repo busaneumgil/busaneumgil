@@ -64,10 +64,14 @@ private const val NavigationOriginHeroTitle = "\uCD9C\uBC1C"
 private const val NavigationOriginHeroDescription =
     "\uD604\uC7AC \uC704\uCE58\uC5D0\uC11C \uC120\uD0DD\uD55C \uACBD\uB85C \uC548\uB0B4\uB97C \uC2DC\uC791\uD569\uB2C8\uB2E4."
 private const val NAVIGATION_GUIDANCE_ENTER_RADIUS_METERS = 5
-private const val NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS = 25.0
+private const val NAVIGATION_ROUTE_START_JOIN_RADIUS_METERS = 8.0
+private const val NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS = 15.0
 private const val NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS = 40.0
 private const val NAVIGATION_ROUTE_JOIN_STABLE_UPDATE_COUNT = 2
 private const val NAVIGATION_ROUTE_JOIN_STABLE_DURATION_MILLIS = 3_000L
+private const val NAVIGATION_DESTINATION_AUTO_ARRIVAL_RADIUS_METERS = 15.0
+private const val NAVIGATION_DESTINATION_AUTO_ARRIVAL_STABLE_UPDATE_COUNT = 2
+private const val NAVIGATION_DESTINATION_AUTO_ARRIVAL_STABLE_DURATION_MILLIS = 3_000L
 private const val NAVIGATION_AUTO_TTS_NEAR_DISTANCE_METERS = 10
 private const val NAVIGATION_GPS_BEARING_MIN_SPEED_METERS_PER_SECOND = 0.5f
 private const val NAVIGATION_LIVE_GUIDANCE_TARGET_AHEAD_TOLERANCE_METERS = 1.0
@@ -123,6 +127,9 @@ class NavigationViewModel(
     private var guidanceMode: NavigationGuidanceMode = NavigationGuidanceMode.RouteDetail
     private var routeJoinStableUpdateCount: Int = 0
     private var routeJoinStableSinceEpochMillis: Long? = null
+    private var hasJoinedRealtimeRouteLine: Boolean = false
+    private var destinationArrivalStableUpdateCount: Int = 0
+    private var destinationArrivalStableSinceEpochMillis: Long? = null
     private var latestLocationCoordinate: GeoCoordinate? = null
     private var latestNavigationPose: NavigationPose? = null
     private var latestHeadingDegrees: Double? = null
@@ -196,6 +203,8 @@ class NavigationViewModel(
         guidanceMode = NavigationGuidanceMode.RouteDetail
         routeJoinStableUpdateCount = 0
         routeJoinStableSinceEpochMillis = null
+        hasJoinedRealtimeRouteLine = false
+        resetDestinationArrivalStability()
         latestLocationCoordinate = null
         latestNavigationPose = null
         latestHeadingDegrees = null
@@ -446,6 +455,7 @@ class NavigationViewModel(
                 resolveGuidanceMode(
                     route = currentSession.route,
                     progress = progress,
+                    origin = navigationRequest?.origin?.coordinate,
                     recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
                 )
             if (nextGuidanceMode == NavigationGuidanceMode.RouteDetail) {
@@ -482,9 +492,16 @@ class NavigationViewModel(
                 maybeRefreshTransit(currentSession, progress, snapshot)
                 maybeRequestReroute(currentSession, progress, snapshot)
             }
+            maybeCompleteNavigationAtDestination(
+                current = currentCoordinate,
+                destination = destinationCoordinate,
+                progress = progress,
+                recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
+            )
         } else {
             guidanceMode = NavigationGuidanceMode.RouteDetail
             resetRouteJoinStability()
+            resetDestinationArrivalStability()
             resetLiveGuidancePresentation()
             applyRouteDetailGuidance(currentSession)
         }
@@ -503,9 +520,43 @@ class NavigationViewModel(
         maybeSpeakRealtimeGuidanceAutomatically()
     }
 
+    private fun maybeCompleteNavigationAtDestination(
+        current: GeoCoordinate,
+        destination: GeoCoordinate,
+        progress: NavigationProgressSnapshot,
+        recordedAtEpochMillis: Long,
+    ) {
+        if (isEndNavigationInFlight) return
+        val currentSession = routeSession ?: return
+        if (!currentSession.route.isNearFinalRouteProgress(progress)) {
+            resetDestinationArrivalStability()
+            return
+        }
+        val distanceToDestinationMeters = haversineDistanceMeters(current, destination)
+        if (distanceToDestinationMeters > NAVIGATION_DESTINATION_AUTO_ARRIVAL_RADIUS_METERS) {
+            resetDestinationArrivalStability()
+            return
+        }
+
+        destinationArrivalStableUpdateCount += 1
+        val stableSince =
+            destinationArrivalStableSinceEpochMillis
+                ?: recordedAtEpochMillis.also { firstStableEpochMillis ->
+                    destinationArrivalStableSinceEpochMillis = firstStableEpochMillis
+                }
+        val isStableEnough =
+            destinationArrivalStableUpdateCount >= NAVIGATION_DESTINATION_AUTO_ARRIVAL_STABLE_UPDATE_COUNT ||
+                recordedAtEpochMillis - stableSince >= NAVIGATION_DESTINATION_AUTO_ARRIVAL_STABLE_DURATION_MILLIS
+        if (!isStableEnough) return
+
+        resetDestinationArrivalStability()
+        finishNavigation(NavigationUiEvent.NavigateToArrival)
+    }
+
     private fun resolveGuidanceMode(
         route: RouteCandidate,
         progress: NavigationProgressSnapshot,
+        origin: GeoCoordinate?,
         recordedAtEpochMillis: Long,
     ): NavigationGuidanceMode {
         val isInsideRealtimeEntryDistance =
@@ -513,6 +564,12 @@ class NavigationViewModel(
         val isOutsideRouteDetailDistance =
             progress.distanceToRouteMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS
         val hasRenderableRealtimeProgress = route.hasRenderableRealtimeProgress(progress)
+        val isWaitingForInitialRouteStart =
+            !hasJoinedRealtimeRouteLine &&
+                route.shouldWaitForInitialRouteStartJoin(
+                    origin = origin,
+                    current = progress.coordinate,
+                )
 
         return when (guidanceMode) {
             NavigationGuidanceMode.Realtime -> {
@@ -525,7 +582,9 @@ class NavigationViewModel(
                 guidanceMode
             }
             NavigationGuidanceMode.RouteDetail -> {
-                if (isInsideRealtimeEntryDistance && hasRenderableRealtimeProgress) {
+                if (isWaitingForInitialRouteStart) {
+                    resetRouteJoinStability()
+                } else if (isInsideRealtimeEntryDistance && hasRenderableRealtimeProgress) {
                     routeJoinStableUpdateCount += 1
                     val stableSince =
                         routeJoinStableSinceEpochMillis
@@ -537,6 +596,7 @@ class NavigationViewModel(
                             recordedAtEpochMillis - stableSince >= NAVIGATION_ROUTE_JOIN_STABLE_DURATION_MILLIS
                     if (isStableEnough) {
                         guidanceMode = NavigationGuidanceMode.Realtime
+                        hasJoinedRealtimeRouteLine = true
                         resetRouteJoinStability()
                     }
                 } else if (isOutsideRouteDetailDistance) {
@@ -552,6 +612,11 @@ class NavigationViewModel(
     private fun resetRouteJoinStability() {
         routeJoinStableUpdateCount = 0
         routeJoinStableSinceEpochMillis = null
+    }
+
+    private fun resetDestinationArrivalStability() {
+        destinationArrivalStableUpdateCount = 0
+        destinationArrivalStableSinceEpochMillis = null
     }
 
     private fun updateLiveGuidancePresentation(
@@ -854,6 +919,8 @@ class NavigationViewModel(
         focusedSegmentIndex = activeSegmentIndex
         isInspectingSegments = false
         hasPendingActiveChange = false
+        currentHeadingManager.startHeadingUpdates()
+        trackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING
         publishNavigationState()
     }
 
@@ -2832,6 +2899,22 @@ private fun RouteCandidate.hasRenderableRealtimeProgress(progress: NavigationPro
     if (projectOntoPolylineMeters(current = progress.coordinate, polyline = routePoints) == null) return false
     return true
 }
+
+private fun RouteCandidate.shouldWaitForInitialRouteStartJoin(
+    origin: GeoCoordinate?,
+    current: GeoCoordinate,
+): Boolean {
+    val routeStart = navigationPolylinePoints().firstOrNull() ?: return false
+    if (origin == null) return false
+    val hasDetachedOrigin =
+        haversineDistanceMeters(origin, routeStart) > NAVIGATION_ROUTE_START_JOIN_RADIUS_METERS
+    if (!hasDetachedOrigin) return false
+    return haversineDistanceMeters(current, routeStart) > NAVIGATION_ROUTE_START_JOIN_RADIUS_METERS
+}
+
+private fun RouteCandidate.isNearFinalRouteProgress(progress: NavigationProgressSnapshot): Boolean =
+    progress.activeSegmentIndex >= segments.lastIndex.coerceAtLeast(0) ||
+        progress.remainingRouteDistanceMeters <= NAVIGATION_DESTINATION_AUTO_ARRIVAL_RADIUS_METERS.roundToInt()
 
 private fun Int.toLiveGuidanceDisplayDistanceMeters(): Int =
     when {

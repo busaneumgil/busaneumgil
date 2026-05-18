@@ -2,9 +2,15 @@ package com.ssafy.e102.domain.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,7 +25,9 @@ import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDetailResponse;
+import com.ssafy.e102.domain.report.dto.response.AdminHazardRouteReviewResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportListResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportStatusResponse;
 import com.ssafy.e102.domain.report.entity.HazardReport;
@@ -46,18 +54,29 @@ class AdminHazardReportServiceTest {
 	@Mock
 	private HazardReportImageUploadService hazardReportImageUploadService;
 
+	@Mock
+	private AdminHazardRouteReviewService adminHazardRouteReviewService;
+
+	@Mock
+	private AdminAuditLogService adminAuditLogService;
+
 	private AdminHazardReportService adminHazardReportService;
 	private GeoPointConverter geoPointConverter;
+	private Clock clock;
 
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
 		geoPointConverter = new GeoPointConverter();
+		clock = Clock.fixed(Instant.parse("2026-05-18T05:00:00Z"), ZoneOffset.UTC);
 		adminHazardReportService = new AdminHazardReportService(
 			hazardReportRepository,
 			hazardReportImageRepository,
 			geoPointConverter,
-			hazardReportImageUploadService);
+			hazardReportImageUploadService,
+			adminHazardRouteReviewService,
+			adminAuditLogService,
+			clock);
 	}
 
 	@Test
@@ -104,6 +123,21 @@ class AdminHazardReportServiceTest {
 			.thenReturn("https://storage.example.com/read?key=image-1");
 		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-2.jpg"))
 			.thenReturn("https://storage.example.com/read?key=image-2");
+		when(adminHazardRouteReviewService.getLatestRouteReview(1L, ReportStatus.PENDING))
+			.thenReturn(new AdminHazardRouteReviewResponse(
+				11L,
+				1L,
+				null,
+				null,
+				ReportStatus.PENDING,
+				null,
+				"부산진구",
+				"부전동",
+				null,
+				LocalDateTime.of(2026, 5, 18, 13, 0),
+				LocalDateTime.of(2026, 5, 18, 13, 10),
+				null,
+				List.of()));
 
 		AdminHazardReportDetailResponse response = adminHazardReportService.getHazardReportDetail(1L);
 
@@ -111,6 +145,8 @@ class AdminHazardReportServiceTest {
 		assertThat(response.reporterUserId()).isEqualTo(reporterUserId);
 		assertThat(response.address()).isEqualTo("부산 부산진구 시민공원로 73");
 		assertThat(response.status()).isEqualTo(ReportStatus.PENDING);
+		assertThat(response.latestRouteReview()).isNotNull();
+		assertThat(response.latestRouteReview().reviewId()).isEqualTo(11L);
 		assertThat(response.imageUrls()).containsExactly(
 			"https://storage.example.com/read?key=image-1",
 			"https://storage.example.com/read?key=image-2");
@@ -119,42 +155,45 @@ class AdminHazardReportServiceTest {
 	@Test
 	@DisplayName("관리자 제보 승인은 PENDING 제보를 APPROVED로 변경한다")
 	void approveHazardReport() {
-		when(hazardReportRepository.updateStatusIfCurrentStatus(
-			1L,
-			ReportStatus.PENDING,
-			ReportStatus.APPROVED))
-			.thenReturn(1);
+		HazardReport hazardReport = hazardReport(user(UUID.randomUUID()), 1L, List.of());
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
 
 		AdminHazardReportStatusResponse response = adminHazardReportService.approveHazardReport(1L);
 
 		assertThat(response.reportId()).isEqualTo(1L);
 		assertThat(response.status()).isEqualTo(ReportStatus.APPROVED);
+		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.APPROVED);
+		verify(adminAuditLogService).record(
+			eq(null),
+			eq("HAZARD_REPORT_STATUS_UPDATE"),
+			eq("HAZARD_REPORT"),
+			eq("1"),
+			eq(null),
+			eq(null),
+			eq("제보 승인 처리 reportId=1"),
+			eq(ReportStatus.PENDING),
+			eq(ReportStatus.APPROVED));
 	}
 
 	@Test
 	@DisplayName("관리자 제보 반려는 PENDING 제보를 REJECTED로 변경한다")
 	void rejectHazardReport() {
-		when(hazardReportRepository.updateStatusIfCurrentStatus(
-			1L,
-			ReportStatus.PENDING,
-			ReportStatus.REJECTED))
-			.thenReturn(1);
+		HazardReport hazardReport = hazardReport(user(UUID.randomUUID()), 1L, List.of());
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
 
 		AdminHazardReportStatusResponse response = adminHazardReportService.rejectHazardReport(1L);
 
 		assertThat(response.reportId()).isEqualTo(1L);
 		assertThat(response.status()).isEqualTo(ReportStatus.REJECTED);
+		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.REJECTED);
 	}
 
 	@Test
 	@DisplayName("이미 처리된 제보는 다시 승인할 수 없다")
 	void rejectAlreadyProcessedReport() {
-		when(hazardReportRepository.updateStatusIfCurrentStatus(
-			1L,
-			ReportStatus.PENDING,
-			ReportStatus.APPROVED))
-			.thenReturn(0);
-		when(hazardReportRepository.existsById(1L)).thenReturn(true);
+		HazardReport hazardReport = hazardReport(user(UUID.randomUUID()), 1L, List.of());
+		hazardReport.approve(UUID.randomUUID(), LocalDateTime.of(2026, 5, 18, 12, 0));
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
 
 		assertThatThrownBy(() -> adminHazardReportService.approveHazardReport(1L))
 			.isInstanceOf(HazardReportException.class)
@@ -165,17 +204,25 @@ class AdminHazardReportServiceTest {
 	@Test
 	@DisplayName("존재하지 않는 제보는 승인할 수 없다")
 	void rejectUnknownReportStatusUpdate() {
-		when(hazardReportRepository.updateStatusIfCurrentStatus(
-			1L,
-			ReportStatus.PENDING,
-			ReportStatus.APPROVED))
-			.thenReturn(0);
-		when(hazardReportRepository.existsById(1L)).thenReturn(false);
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> adminHazardReportService.approveHazardReport(1L))
 			.isInstanceOf(HazardReportException.class)
 			.extracting("errorCode")
 			.isEqualTo(HazardReportErrorCode.HAZARD_REPORT_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("반려된 제보는 다시 승인할 수 있다")
+	void approveRejectedHazardReport() {
+		HazardReport hazardReport = hazardReport(user(UUID.randomUUID()), 1L, List.of());
+		hazardReport.reject();
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
+
+		AdminHazardReportStatusResponse response = adminHazardReportService.approveHazardReport(1L, UUID.randomUUID());
+
+		assertThat(response.status()).isEqualTo(ReportStatus.APPROVED);
+		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.APPROVED);
 	}
 
 	private HazardReport hazardReport(User user, Long reportId, List<String> imageObjectKeys) {

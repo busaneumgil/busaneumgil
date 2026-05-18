@@ -176,9 +176,9 @@ wait_for_status_with_body "GET" "http://127.0.0.1:${AI_PORT}/health" "AI health"
   '"providers"[[:space:]]*:' \
   '"POST /voice/analyze"'
 wait_for_status_with_body "POST" "http://127.0.0.1:${AI_PORT}/voice/analyze" "AI voice analyze" "400" '{}' \
-  '"success"[[:space:]]*:[[:space:]]*false' \
-  '"intent"[[:space:]]*:[[:space:]]*"unknown"' \
-  '"error"[[:space:]]*:'
+  '"status"[[:space:]]*:[[:space:]]*"C4000"' \
+  '"message"[[:space:]]*:[[:space:]]*"잘못된 입력입니다\."' \
+  '"data"[[:space:]]*:[[:space:]]*null'
 wait_for_url "http://127.0.0.1:${SERVER_PORT}/v3/api-docs" "Backend"
 if [ "$SMOKE_ADMIN" = "true" ]; then
   wait_for_status_with_body "GET" "http://127.0.0.1:${ADMIN_PORT}/health" "ADMIN health" "200" "" \

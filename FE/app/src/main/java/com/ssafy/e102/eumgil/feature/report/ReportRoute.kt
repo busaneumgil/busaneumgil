@@ -38,6 +38,7 @@ fun ReportRoute(
     onNavigateBack: () -> Unit,
     onNavigateToReportHistory: (String?) -> Unit,
     onNavigateToMap: () -> Unit,
+    entryPoint: ReportEntryPoint = ReportEntryPoint.TopLevel,
     startNewRequest: Boolean = false,
     onStartNewRequestConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -98,6 +99,10 @@ fun ReportRoute(
                 onPhotoSelected = { photo -> viewModel.onAction(ReportUiAction.PhotoSelected(photo)) },
             )
         }
+
+    LaunchedEffect(entryPoint, viewModel) {
+        viewModel.onAction(ReportUiAction.RouteEntered(entryPoint))
+    }
 
     LaunchedEffect(viewModel) {
         // 탭 재진입 시 완료 화면이면 자동으로 새 제보 시작 상태로 초기화 (T10).

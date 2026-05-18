@@ -1905,7 +1905,7 @@ class MapViewModel(
             )
         private const val LOCATION_LOOKUP_TIMEOUT_MILLIS = 5_000L
         private const val MAP_BROWSE_RADIUS_METERS = 1_000
-        private const val MAX_MAP_HOME_RECENT_DESTINATIONS = 3
+        private const val MAX_MAP_HOME_RECENT_DESTINATIONS = 10
         private const val BOOKMARK_LOAD_ERROR_MESSAGE = "북마크 상태를 확인하지 못했습니다."
         private const val BOOKMARK_DELETE_SUCCESS_MESSAGE = "북마크를 해제했습니다."
         private const val BOOKMARK_SAVE_FAILURE_MESSAGE = "북마크 저장에 실패했습니다. 다시 시도해 주세요."

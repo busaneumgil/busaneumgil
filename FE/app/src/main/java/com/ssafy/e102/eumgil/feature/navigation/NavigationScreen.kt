@@ -153,6 +153,9 @@ fun NavigationScreen(
                         onSegmentTapped = { index ->
                             onAction(NavigationUiAction.SegmentTapped(index = index))
                         },
+                        onReportClick = {
+                            onAction(NavigationUiAction.ReportClicked)
+                        },
                         onCurrentLocationClick = {
                             onAction(NavigationUiAction.CurrentLocationClicked)
                         },
@@ -906,6 +909,7 @@ private fun NavigationVoiceControl(
 private fun NavigationMapStage(
     uiState: NavigationUiState,
     onSegmentTapped: (Int) -> Unit,
+    onReportClick: () -> Unit,
     onCurrentLocationClick: () -> Unit,
     onUserCameraGesture: () -> Unit,
     modifier: Modifier = Modifier,
@@ -946,6 +950,7 @@ private fun NavigationMapStage(
             )
         }
         NavigationMapControls(
+            onReportClick = onReportClick,
             onActionClick = onCurrentLocationClick,
             onZoomInClick = { mapControlState.zoomIn() },
             onZoomOutClick = { mapControlState.zoomOut() },
@@ -1037,6 +1042,7 @@ private fun NavigationMapMessageCard(
 
 @Composable
 private fun NavigationMapControls(
+    onReportClick: () -> Unit = {},
     onActionClick: () -> Unit = {},
     onZoomInClick: () -> Unit = {},
     onZoomOutClick: () -> Unit = {},
@@ -1051,6 +1057,15 @@ private fun NavigationMapControls(
                 enabled = true,
             ),
         onActionClick = onActionClick,
+        topActionButtonState =
+            EumMapFloatingActionButtonState(
+                iconRes = R.drawable.ic_nav_report,
+                tint = Color.Black,
+                iconSize = 24.dp,
+                contentDescription = stringResource(id = R.string.navigation_map_control_report),
+                enabled = true,
+            ),
+        onTopActionClick = onReportClick,
         modifier = modifier,
         onZoomInClick = onZoomInClick,
         onZoomOutClick = onZoomOutClick,

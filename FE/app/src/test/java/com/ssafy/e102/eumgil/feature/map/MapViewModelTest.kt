@@ -2302,12 +2302,19 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `recent destinations are limited to three entries`() =
+    fun `recent destinations keep up to ten entries for the expandable sheet`() =
         runTest {
             val searchRepository =
                 FakeSearchRepository(
                     recentDestinations =
                         listOf(
+                            recentDestination(placeId = "place-11", searchedAtMillis = 11_000L),
+                            recentDestination(placeId = "place-10", searchedAtMillis = 10_000L),
+                            recentDestination(placeId = "place-9", searchedAtMillis = 9_000L),
+                            recentDestination(placeId = "place-8", searchedAtMillis = 8_000L),
+                            recentDestination(placeId = "place-7", searchedAtMillis = 7_000L),
+                            recentDestination(placeId = "place-6", searchedAtMillis = 6_000L),
+                            recentDestination(placeId = "place-5", searchedAtMillis = 5_000L),
                             recentDestination(placeId = "place-4", searchedAtMillis = 4_000L),
                             recentDestination(placeId = "place-3", searchedAtMillis = 3_000L),
                             recentDestination(placeId = "place-2", searchedAtMillis = 2_000L),
@@ -2328,7 +2335,18 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                listOf("place-4", "place-3", "place-2"),
+                listOf(
+                    "place-11",
+                    "place-10",
+                    "place-9",
+                    "place-8",
+                    "place-7",
+                    "place-6",
+                    "place-5",
+                    "place-4",
+                    "place-3",
+                    "place-2",
+                ),
                 viewModel.uiState.value.recentDestinations.map { recentDestination -> recentDestination.placeId },
             )
         }

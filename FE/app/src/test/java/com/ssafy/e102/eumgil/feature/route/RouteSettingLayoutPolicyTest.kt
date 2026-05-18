@@ -408,10 +408,19 @@ class RouteSettingLayoutPolicyTest {
                 source.contains(".zIndex(RouteSettingBottomBarZIndex)"),
         )
         assertTrue(
-            "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
+            "Walk preview cards should use a compact fixed minimum height.",
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
                 source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
                 !source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp"),
+        )
+        assertTrue(
+            "Walk preview should not compose the floating recenter action, so the circular button cannot sit behind route cards.",
+                mapStageSection.contains("val showsWalkPreviewCards = uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()") &&
+                mapStageSection.contains("if (showsWalkPreviewCards)") &&
+                mapStageSection.contains("RouteMapZoomControls(") &&
+                mapStageSection.contains("RouteMapControls(") &&
+                !mapStageSection.contains("showActionButton") &&
+                source.contains("private fun RouteMapZoomControls("),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",

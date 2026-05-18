@@ -330,6 +330,41 @@ class NavigationViewModelTest {
         }
 
     @Test
+    fun `first route node arrival speaks guidance even when current origin is off network`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+            val spokenBriefings = mutableListOf<String>()
+            val collector =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.collect { event ->
+                        if (event is NavigationUiEvent.SpeakBriefing) {
+                            spokenBriefings += event.text
+                        }
+                    }
+                }
+
+            viewModel.bindNavigationRequest(
+                testWalkNavigationRequest().copy(
+                    origin =
+                        RouteWaypoint(
+                            name = "현재 위치",
+                            coordinate = OFF_ROUTE_POINT,
+                        ),
+                ),
+            )
+            viewModel.enableReadyTts()
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(1, spokenBriefings.size)
+            assertEquals(expectedSpeechText(viewModel.uiState.value.stepCard), spokenBriefings.single())
+            collector.cancel()
+        }
+
+    @Test
     fun `realtime guidance speaks near threshold once and suppresses arrival duplicate`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
@@ -699,6 +734,7 @@ class NavigationViewModelTest {
 
             assertEquals(NavigationMapFocusMode.ACTIVE, viewModel.uiState.value.mapOverlay.mapFocusMode)
             assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.currentLocation?.coordinate)
+            assertEquals("현재 위치", viewModel.uiState.value.mapOverlay.currentLocation?.label)
             assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.focusCoordinate)
         }
 

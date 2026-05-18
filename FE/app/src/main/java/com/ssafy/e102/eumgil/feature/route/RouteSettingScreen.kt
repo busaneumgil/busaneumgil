@@ -2993,8 +2993,9 @@ private fun RouteMapStage(
                     )
             }
 
+            val showsWalkPreviewCards = uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()
             val mapControlsModifier =
-                if (uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()) {
+                if (showsWalkPreviewCards) {
                     Modifier
                         .align(Alignment.BottomEnd)
                         .padding(
@@ -3006,17 +3007,25 @@ private fun RouteMapStage(
                         .align(Alignment.CenterEnd)
                         .padding(end = EumSpacing.small)
                 }
-            RouteMapControls(
-                onActionClick = {
-                    onCurrentLocationClick()
-                    mapControlState.recenterToCurrentLocationOrRoute(uiState.currentLocationRecenterCoordinate)
-                },
-                onZoomInClick = { mapControlState.zoomIn() },
-                onZoomOutClick = { mapControlState.zoomOut() },
-                modifier = mapControlsModifier.zIndex(RouteMapControlsZIndex),
-            )
+            if (showsWalkPreviewCards) {
+                RouteMapZoomControls(
+                    onZoomInClick = { mapControlState.zoomIn() },
+                    onZoomOutClick = { mapControlState.zoomOut() },
+                    modifier = mapControlsModifier.zIndex(RouteMapControlsZIndex),
+                )
+            } else {
+                RouteMapControls(
+                    onActionClick = {
+                        onCurrentLocationClick()
+                        mapControlState.recenterToCurrentLocationOrRoute(uiState.currentLocationRecenterCoordinate)
+                    },
+                    onZoomInClick = { mapControlState.zoomIn() },
+                    onZoomOutClick = { mapControlState.zoomOut() },
+                    modifier = mapControlsModifier.zIndex(RouteMapControlsZIndex),
+                )
+            }
 
-            if (uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()) {
+            if (showsWalkPreviewCards) {
                 RouteWalkPreviewCarousel(
                     optionCards = uiState.optionCards,
                     onOptionClick = onOptionClick,
@@ -3278,6 +3287,63 @@ private fun RouteMapControls(
         onZoomInClick = onZoomInClick,
         onZoomOutClick = onZoomOutClick,
     )
+}
+
+@Composable
+private fun RouteMapZoomControls(
+    onZoomInClick: () -> Unit,
+    onZoomOutClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.width(48.dp),
+        shape = RoundedCornerShape(EumRadius.scaleS),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+        shadowElevation = 6.dp,
+    ) {
+        Column {
+            RouteMapZoomControlButton(
+                label = "+",
+                onClick = onZoomInClick,
+            )
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
+            )
+            RouteMapZoomControlButton(
+                label = "-",
+                onClick = onZoomOutClick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteMapZoomControlButton(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .clickable(
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style =
+                MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 24.sp,
+                ),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
 
 @Composable

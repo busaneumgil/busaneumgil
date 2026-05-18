@@ -216,6 +216,84 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
+    fun `navigation overlay reuses route preview polylines before live guidance`() {
+        val current = GeoCoordinate(latitude = 35.1788, longitude = 129.0750)
+        val origin = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
+        val previewRouteStart = GeoCoordinate(latitude = 35.1796, longitude = 129.07565)
+        val segmentRouteStart = GeoCoordinate(latitude = 35.1750, longitude = 129.0756)
+        val overlayState =
+            createNavigationViewportOverlayState(
+                mapOverlay =
+                    NavigationMapOverlayUiState(
+                        isDisplayable = true,
+                        currentLocation =
+                            NavigationMapPointUiState(
+                                label = "현재 위치",
+                                coordinate = current,
+                            ),
+                        origin =
+                            NavigationMapPointUiState(
+                                label = "출발",
+                                coordinate = origin,
+                            ),
+                        destination =
+                            NavigationMapPointUiState(
+                                label = "도착",
+                                coordinate = GeoCoordinate(latitude = 35.1796, longitude = 129.0790),
+                            ),
+                        routeSegments =
+                            listOf(
+                                NavigationMapSegmentUiState(
+                                    sequence = 1,
+                                    polyline =
+                                        listOf(
+                                            segmentRouteStart,
+                                            GeoCoordinate(latitude = 35.1755, longitude = 129.0756),
+                                        ),
+                                    segmentStartCoordinate = segmentRouteStart,
+                                    distanceMeters = 160,
+                                    riskLevel = RouteRiskLevel.LOW,
+                                    guidanceMessage = "Start walking",
+                                    travelKind = NavigationSegmentTravelKind.WALK,
+                                ),
+                            ),
+                        selectedRoutePolyline =
+                            listOf(
+                                previewRouteStart,
+                                GeoCoordinate(latitude = 35.1796, longitude = 129.0790),
+                            ),
+                        trackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING,
+                        mapFocusMode = NavigationMapFocusMode.ACTIVE,
+                    ),
+            )
+
+        val connectorPolylines =
+            overlayState.polylines.filter { polyline ->
+                polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR
+            }
+
+        assertTrue(connectorPolylines.isNotEmpty())
+        assertTrue(connectorPolylines.all { polyline -> polyline.overlayId.startsWith("route-origin-connector") })
+        assertFalse(connectorPolylines.any { polyline -> polyline.showDirectionArrows })
+        assertTrue(connectorPolylines.all { polyline -> polyline.includeInProjection })
+        assertFalse(overlayState.polylines.any { polyline -> polyline.overlayId.startsWith("navigation-start-connector") })
+        assertEquals(
+            MapCoordinate(latitude = origin.latitude, longitude = origin.longitude),
+            connectorPolylines.first().points.first(),
+        )
+        assertEquals(
+            MapCoordinate(latitude = previewRouteStart.latitude, longitude = previewRouteStart.longitude),
+            connectorPolylines.first().points.last(),
+        )
+        assertTrue(
+            overlayState.polylines
+                .filter { polyline -> polyline.style == MapViewportPolylineStyle.ROUTE_PREVIEW }
+                .all { polyline -> polyline.includeInProjection },
+        )
+        assertTrue(overlayState.points.any { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION })
+    }
+
+    @Test
     fun `active navigation overlay falls back to route bearing when phone heading is unavailable`() {
         val current = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
         val overlayState =

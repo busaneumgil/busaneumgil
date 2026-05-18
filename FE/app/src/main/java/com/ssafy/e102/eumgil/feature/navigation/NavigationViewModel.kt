@@ -2239,7 +2239,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         currentLocation =
             currentLocationCoordinate?.let { coordinate ->
                 NavigationMapPointUiState(
-                    label = originPoint.label,
+                    label = "현재 위치",
                     coordinate = coordinate,
                 )
             },

@@ -1389,6 +1389,12 @@ private class KakaoMapViewportController {
         readyMap: KakaoMap,
         state: MapViewportUiState?,
     ) {
+        val cameraBearingDegrees =
+            readyMap
+                .getCameraPosition()
+                ?.toResolvedCameraPosition(source = KAKAO_CAMERA_BEARING_SOURCE_SYNC_SNAPSHOT)
+                ?.bearingDegrees
+                ?: 0.0
         val projectedMarkers =
             createKakaoProjectedMarkerRenderStates(
                 currentLocation = state?.currentLocation,
@@ -1396,6 +1402,7 @@ private class KakaoMapViewportController {
                 selectedDestinationCoordinate = state?.selectedDestinationCoordinate,
                 selectedMapPinCoordinate = state?.selectedMapPinCoordinate,
                 overlayPoints = state?.overlayState?.points.orEmpty(),
+                cameraBearingDegrees = cameraBearingDegrees,
             )
         val projectionResult =
             createKakaoProjectedMarkerProjectionResult(projectedMarkers) { coordinate ->

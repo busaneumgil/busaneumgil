@@ -375,6 +375,7 @@ internal fun createKakaoProjectedMarkerRenderStates(
     selectedDestinationCoordinate: MapCoordinate?,
     selectedMapPinCoordinate: MapCoordinate?,
     overlayPoints: List<MapViewportPointOverlay> = emptyList(),
+    cameraBearingDegrees: Double = 0.0,
 ): List<KakaoProjectedMarkerRenderState> {
     val projectedMarkers =
         buildList {
@@ -397,6 +398,7 @@ internal fun createKakaoProjectedMarkerRenderStates(
             overlayPoints.mapNotNull { point ->
                 point.toProjectedMarkerRenderState(
                     includeCurrentLocation = currentLocation == null,
+                    cameraBearingDegrees = cameraBearingDegrees,
                 )
             },
         )
@@ -925,6 +927,7 @@ private data class KakaoOverlayPointMarkerSpec(
 
 private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
     includeCurrentLocation: Boolean,
+    cameraBearingDegrees: Double,
 ): KakaoProjectedMarkerRenderState? {
     val markerSpec =
         when (kind) {
@@ -948,29 +951,25 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
 
             MapViewportPointKind.CURRENT_LOCATION ->
                 if (includeCurrentLocation) {
+                    val hasHeading = headingDegrees != null
                     KakaoOverlayPointMarkerSpec(
                         kind = KakaoProjectedMarkerKind.CURRENT_LOCATION,
-                        iconResId = R.drawable.ic_map_current_location,
-                        sizeDp = 28,
+                        iconResId =
+                            if (hasHeading) {
+                                R.drawable.ic_map_current_location_heading
+                            } else {
+                                R.drawable.ic_map_current_location
+                            },
+                        sizeDp = if (hasHeading) 34 else 28,
                         anchorPointY = 0.5f,
-                        zIndex = 3f,
+                        zIndex = if (hasHeading) 6.2f else 6f,
                     )
                 } else {
                     null
                 }
 
             MapViewportPointKind.CURRENT_LOCATION_HEADING ->
-                if (includeCurrentLocation) {
-                    KakaoOverlayPointMarkerSpec(
-                        kind = KakaoProjectedMarkerKind.CURRENT_LOCATION_DIRECTION,
-                        iconResId = R.drawable.ic_map_current_location_direction_arrow,
-                        sizeDp = 18,
-                        anchorPointY = 0.5f,
-                        zIndex = 3.2f,
-                    )
-                } else {
-                    null
-                }
+                null
 
             MapViewportPointKind.SEGMENT_JUNCTION,
             MapViewportPointKind.TRANSIT_BUS_STOP,
@@ -996,8 +995,13 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
         fillColorArgb = markerSpec.fillColorArgb,
         strokeColorArgb = markerSpec.strokeColorArgb,
         clickTargetId = clickTargetId,
-        rotationDegrees = headingDegrees?.toFloat() ?: 0f,
-        translationDistanceDp = if (kind == MapViewportPointKind.CURRENT_LOCATION_HEADING) 18 else 0,
+        rotationDegrees =
+            headingDegrees
+                ?.let { headingDegrees ->
+                    normalizeKakaoRouteDirectionArrowRotationDegrees(headingDegrees - cameraBearingDegrees).toFloat()
+                }
+                ?: 0f,
+        translationDistanceDp = 0,
     )
 }
 
@@ -1304,7 +1308,7 @@ private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineSt
 
         MapViewportPolylineStyle.ROUTE_CONNECTOR ->
             KakaoRouteLineStyleSpec(
-                lineWidth = 7f,
+                lineWidth = 18f,
                 lineColor = 0xFF64748B.toInt(),
                 strokeWidth = 0f,
                 strokeColor = 0xFF64748B.toInt(),

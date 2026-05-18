@@ -39,9 +39,10 @@ class AndroidCurrentLocationManager(
         fusedLocationClient.lastLocation
             .addOnSuccessListener { location ->
                 mutableLatestLocation.value =
-                    location
-                        ?.toSnapshot()
-                        ?.takeIf { snapshot -> snapshot.isFreshCurrentLocation() }
+                    resolveCurrentLocationRefreshSnapshot(
+                        previous = mutableLatestLocation.value,
+                        candidate = location?.toSnapshot(),
+                    )
             }
     }
 
@@ -88,3 +89,12 @@ class AndroidCurrentLocationManager(
         const val LOCATION_UPDATE_MIN_DISTANCE_METERS = 5f
     }
 }
+
+internal fun resolveCurrentLocationRefreshSnapshot(
+    previous: LocationSnapshot?,
+    candidate: LocationSnapshot?,
+    nowEpochMillis: Long = System.currentTimeMillis(),
+): LocationSnapshot? =
+    candidate
+        ?.takeIf { snapshot -> snapshot.isFreshCurrentLocation(nowEpochMillis = nowEpochMillis) }
+        ?: previous?.takeIf { snapshot -> snapshot.isFreshCurrentLocation(nowEpochMillis = nowEpochMillis) }

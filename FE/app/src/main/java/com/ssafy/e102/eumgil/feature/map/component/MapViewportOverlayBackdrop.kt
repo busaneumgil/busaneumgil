@@ -210,7 +210,7 @@ private fun DrawScope.drawViewportPolyline(
                 color = Color(0xFF64748B),
                 style =
                     Stroke(
-                        width = 7.dp.toPx(),
+                        width = 18.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),

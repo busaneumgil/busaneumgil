@@ -243,7 +243,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `overlay current location with heading adds separate direction arrow marker`() {
+    fun `overlay current location with heading renders one combined marker`() {
         val markerStates =
             createKakaoProjectedMarkerRenderStates(
                 currentLocation = null,
@@ -255,22 +255,41 @@ class KakaoMapViewportBindingsTest {
                             overlayId = "navigation-current",
                             coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
                             kind = MapViewportPointKind.CURRENT_LOCATION,
-                        ),
-                        MapViewportPointOverlay(
-                            overlayId = "navigation-current-heading",
-                            coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
-                            kind = MapViewportPointKind.CURRENT_LOCATION_HEADING,
                             headingDegrees = 135.0,
                         ),
                     ),
             )
 
-        assertEquals(2, markerStates.size)
-        assertEquals(R.drawable.ic_map_current_location, markerStates.first().iconResId)
-        assertEquals(0f, markerStates.first().rotationDegrees)
-        assertEquals(R.drawable.ic_map_current_location_direction_arrow, markerStates.last().iconResId)
-        assertEquals(135f, markerStates.last().rotationDegrees)
-        assertEquals(18, markerStates.last().translationDistanceDp)
+        assertEquals(1, markerStates.size)
+        assertEquals(R.drawable.ic_map_current_location_heading, markerStates.first().iconResId)
+        assertEquals(34, markerStates.first().sizeDp)
+        assertEquals(6.2f, markerStates.first().zIndex)
+        assertEquals(135f, markerStates.first().rotationDegrees)
+        assertEquals(0, markerStates.first().translationDistanceDp)
+    }
+
+    @Test
+    fun `overlay current location heading is screen relative to camera bearing`() {
+        val markerStates =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+                overlayPoints =
+                    listOf(
+                        MapViewportPointOverlay(
+                            overlayId = "navigation-current",
+                            coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                            kind = MapViewportPointKind.CURRENT_LOCATION,
+                            headingDegrees = 135.0,
+                        ),
+                    ),
+                cameraBearingDegrees = 90.0,
+            )
+
+        assertEquals(1, markerStates.size)
+        assertEquals(R.drawable.ic_map_current_location_heading, markerStates.first().iconResId)
+        assertEquals(45f, markerStates.first().rotationDegrees)
     }
 
     @Test

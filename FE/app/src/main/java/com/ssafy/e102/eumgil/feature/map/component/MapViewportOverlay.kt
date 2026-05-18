@@ -277,42 +277,19 @@ private fun createConnectorPolylineOverlays(
     val distanceMeters = haversineDistanceMeters(connectorStart, connectorEnd)
     if (distanceMeters <= ROUTE_CONNECTOR_MIN_DISTANCE_METERS) return emptyList()
 
-    val overlays = mutableListOf<MapViewportPolylineOverlay>()
-    var dashStartMeters = 0.0
-    var dashIndex = 0
-    while (dashStartMeters < distanceMeters) {
-        val dashEndMeters = (dashStartMeters + ROUTE_CONNECTOR_DASH_METERS).coerceAtMost(distanceMeters)
-        if (dashEndMeters - dashStartMeters >= ROUTE_CONNECTOR_MIN_DASH_METERS) {
-            overlays +=
-                MapViewportPolylineOverlay(
-                    overlayId = "$overlayIdPrefix-$dashIndex",
-                    points =
-                        listOf(
-                            connectorStart.interpolateTo(connectorEnd, dashStartMeters / distanceMeters).toMapCoordinate(),
-                            connectorStart.interpolateTo(connectorEnd, dashEndMeters / distanceMeters).toMapCoordinate(),
-                        ),
-                    style = MapViewportPolylineStyle.ROUTE_CONNECTOR,
-                    tone = MapViewportOverlayTone.NEUTRAL,
-                    includeInProjection = includeInProjection,
-                    showDirectionArrows = false,
-                )
-            dashIndex += 1
-        }
-        dashStartMeters +=
-            ROUTE_CONNECTOR_DASH_METERS +
-                ROUTE_CONNECTOR_GAP_METERS
-    }
-    return overlays
-}
-
-private fun GeoCoordinate.interpolateTo(
-    target: GeoCoordinate,
-    ratio: Double,
-): GeoCoordinate {
-    val boundedRatio = ratio.coerceIn(0.0, 1.0)
-    return GeoCoordinate(
-        latitude = latitude + (target.latitude - latitude) * boundedRatio,
-        longitude = longitude + (target.longitude - longitude) * boundedRatio,
+    return listOf(
+        MapViewportPolylineOverlay(
+            overlayId = overlayIdPrefix,
+            points =
+                listOf(
+                    connectorStart.toMapCoordinate(),
+                    connectorEnd.toMapCoordinate(),
+                ),
+            style = MapViewportPolylineStyle.ROUTE_CONNECTOR,
+            tone = MapViewportOverlayTone.NEUTRAL,
+            includeInProjection = includeInProjection,
+            showDirectionArrows = false,
+        ),
     )
 }
 
@@ -352,16 +329,15 @@ internal fun createNavigationViewportOverlayState(
     val useActiveCurrentFollow =
         mapOverlay.mapFocusMode == NavigationMapFocusMode.ACTIVE &&
             mapOverlay.currentLocation != null &&
-            !useRoutePreviewStartOverlay &&
             mapOverlay.trackingMode != NavigationTrackingMode.IDLE
     val useActiveFocusFallbackProjection =
         mapOverlay.mapFocusMode == NavigationMapFocusMode.ACTIVE &&
             mapOverlay.currentLocation == null &&
             mapOverlay.focusCoordinate != null
     val currentLocationOverlapsOrigin =
-        mapOverlay.currentLocation.hasSameCoordinateAs(mapOverlay.origin)
+        mapOverlay.origin.isNearCurrentLocation(mapOverlay.currentLocation)
     val currentLocationOverlapsDestination =
-        mapOverlay.currentLocation.hasSameCoordinateAs(mapOverlay.destination)
+        mapOverlay.destination.isNearCurrentLocation(mapOverlay.currentLocation)
     val shouldShowCurrentLocation = mapOverlay.currentLocation != null
     val selectedRoutePoints = mapOverlay.selectedRoutePolyline.map(GeoCoordinate::toMapCoordinate)
     val activeSegmentPoints =
@@ -394,8 +370,13 @@ internal fun createNavigationViewportOverlayState(
             "navigation-active" -> activeSegmentPoints
             else -> emptyList()
         }
+    val shouldUseRoutePreviewOnly =
+        useRoutePreviewStartOverlay &&
+            activeSegmentPoints.isEmpty() &&
+            focusedSegmentPoints.isEmpty() &&
+            mapOverlay.routeSegments.none(NavigationMapSegmentUiState::isActive)
     val detailedBaselinePolylines =
-        if (useRoutePreviewStartOverlay) {
+        if (shouldUseRoutePreviewOnly) {
             emptyList()
         } else {
             mapOverlay.routeSegments.toBaselinePolylineOverlays(
@@ -409,7 +390,15 @@ internal fun createNavigationViewportOverlayState(
             focusedSegmentPoints.isNotEmpty() -> focusedSegmentPoints.first()
             else -> null
         }
-    val routePreviewStartPolylines = routePreviewStartOverlayState?.polylines.orEmpty()
+    val routePreviewStartPolylines =
+        routePreviewStartOverlayState
+            ?.polylines
+            .orEmpty()
+            .filter { polyline ->
+                shouldUseRoutePreviewOnly ||
+                    polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR
+            }
+            .map { polyline -> polyline.copy(includeInProjection = !useActiveCurrentFollow) }
     val activeFollowBearingDegrees =
         if (useActiveCurrentFollow) {
             val currentCoordinate = mapOverlay.currentLocation!!.coordinate.toMapCoordinate()
@@ -418,6 +407,14 @@ internal fun createNavigationViewportOverlayState(
                 ?: selectedRoutePoints.resolveLookaheadBearingDegrees(currentCoordinate)
         } else {
             null
+        }
+    val currentLocationMarkerHeadingDegrees =
+        mapOverlay.currentLocation?.let { currentLocation ->
+            val currentCoordinate = currentLocation.coordinate.toMapCoordinate()
+            mapOverlay.headingDegrees
+                ?: activeSegmentPoints.resolveLookaheadBearingDegrees(currentCoordinate)
+                ?: focusedSegmentPoints.resolveLookaheadBearingDegrees(currentCoordinate)
+                ?: selectedRoutePoints.resolveLookaheadBearingDegrees(currentCoordinate)
         }
 
     val overlayState =
@@ -449,11 +446,10 @@ internal fun createNavigationViewportOverlayState(
                         mapOverlay.currentLocation?.let { point ->
                             val currentLocationHeadingDegrees =
                                 when (mapOverlay.trackingMode) {
-                                    NavigationTrackingMode.FOLLOW_WITH_HEADING ->
-                                        activeFollowBearingDegrees?.let { 0.0 }
+                                    NavigationTrackingMode.FOLLOW_WITH_HEADING -> currentLocationMarkerHeadingDegrees
                                     NavigationTrackingMode.FOLLOW,
                                     NavigationTrackingMode.IDLE,
-                                        -> mapOverlay.headingDegrees
+                                        -> currentLocationMarkerHeadingDegrees
                                 }
                             add(
                                 point.coordinate.toOverlayPoint(
@@ -461,33 +457,25 @@ internal fun createNavigationViewportOverlayState(
                                     kind = MapViewportPointKind.CURRENT_LOCATION,
                                     label = "C",
                                     headingDegrees = currentLocationHeadingDegrees,
-                                    includeInProjection = useRoutePreviewStartOverlay,
+                                    includeInProjection = useRoutePreviewStartOverlay && !useActiveCurrentFollow,
                                 ),
                             )
-                            currentLocationHeadingDegrees?.let { headingDegrees ->
-                                add(
-                                    point.coordinate.toOverlayPoint(
-                                        overlayId = "navigation-current-heading",
-                                        kind = MapViewportPointKind.CURRENT_LOCATION_HEADING,
-                                        headingDegrees = headingDegrees,
-                                        includeInProjection = false,
-                                    ),
-                                )
-                            }
                         }
                     }
-                    mapOverlay.origin?.let { point ->
-                        add(
-                            point.coordinate.toOverlayPoint(
-                                overlayId = "navigation-origin",
-                                kind = MapViewportPointKind.ORIGIN,
-                                label = "O",
-                                clickTargetId = mapOverlay.routeSegments.firstOrNull()?.let { navigationSegmentMarkerId(0) },
-                                includeInProjection =
-                                    useRoutePreviewStartOverlay ||
-                                        (!useActiveCurrentFollow && currentLocationOverlapsOrigin),
-                            ),
-                        )
+                    if (!currentLocationOverlapsOrigin) {
+                        mapOverlay.origin?.let { point ->
+                            add(
+                                point.coordinate.toOverlayPoint(
+                                    overlayId = "navigation-origin",
+                                    kind = MapViewportPointKind.ORIGIN,
+                                    label = "O",
+                                    clickTargetId = mapOverlay.routeSegments.firstOrNull()?.let { navigationSegmentMarkerId(0) },
+                                    includeInProjection =
+                                        (useRoutePreviewStartOverlay && !useActiveCurrentFollow) ||
+                                            (!useActiveCurrentFollow && currentLocationOverlapsOrigin),
+                                ),
+                            )
+                        }
                     }
                     mapOverlay.destination?.let { point ->
                         add(
@@ -496,7 +484,7 @@ internal fun createNavigationViewportOverlayState(
                                 kind = MapViewportPointKind.DESTINATION,
                                 label = "D",
                                 includeInProjection =
-                                    useRoutePreviewStartOverlay ||
+                                    (useRoutePreviewStartOverlay && !useActiveCurrentFollow) ||
                                         (!useActiveCurrentFollow && currentLocationOverlapsDestination),
                             ),
                         )
@@ -531,7 +519,7 @@ internal fun createNavigationViewportOverlayState(
                 buildList<MapViewportPolylineOverlay> {
                     addAll(routePreviewStartPolylines)
                     addAll(detailedBaselinePolylines)
-                    if (!useRoutePreviewStartOverlay && this.none { overlay -> overlay.style == MapViewportPolylineStyle.ROUTE_BASELINE }) {
+                    if (!shouldUseRoutePreviewOnly && this.none { overlay -> overlay.style == MapViewportPolylineStyle.ROUTE_BASELINE }) {
                         add(
                             MapViewportPolylineOverlay(
                                 overlayId = "navigation-route",
@@ -543,7 +531,7 @@ internal fun createNavigationViewportOverlayState(
                             ),
                         )
                     }
-                    if (!useRoutePreviewStartOverlay && detailedBaselinePolylines.isEmpty() && mapOverlay.activeSegmentPolyline != mapOverlay.focusedSegmentPolyline) {
+                    if (!shouldUseRoutePreviewOnly && detailedBaselinePolylines.isEmpty() && mapOverlay.activeSegmentPolyline != mapOverlay.focusedSegmentPolyline) {
                         add(
                             MapViewportPolylineOverlay(
                                 overlayId = "navigation-active",
@@ -555,7 +543,7 @@ internal fun createNavigationViewportOverlayState(
                             ),
                         )
                     }
-                    if (!useRoutePreviewStartOverlay && detailedBaselinePolylines.isEmpty()) {
+                    if (!shouldUseRoutePreviewOnly && detailedBaselinePolylines.isEmpty()) {
                         add(
                             MapViewportPolylineOverlay(
                                 overlayId = "navigation-focused",
@@ -589,9 +577,7 @@ private fun NavigationMapOverlayUiState.shouldUseRoutePreviewStartOverlay(): Boo
     mapFocusMode == NavigationMapFocusMode.ACTIVE &&
         origin != null &&
         destination != null &&
-        selectedRoutePolyline.size >= 2 &&
-        activeSegmentPolyline.isEmpty() &&
-        routeSegments.none(NavigationMapSegmentUiState::isActive)
+        selectedRoutePolyline.size >= 2
 
 private fun defaultMapViewportFallbackCamera(): MapViewportFallbackCamera =
     MapViewportFallbackCamera(
@@ -768,8 +754,10 @@ private fun MapCoordinate.bearingDegreesTo(other: MapCoordinate): Double {
     return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
 }
 
-private fun NavigationMapPointUiState?.hasSameCoordinateAs(other: NavigationMapPointUiState?): Boolean =
-    this != null && other != null && coordinate == other.coordinate
+private fun NavigationMapPointUiState?.isNearCurrentLocation(currentLocation: NavigationMapPointUiState?): Boolean =
+    this != null &&
+        currentLocation != null &&
+        haversineDistanceMeters(coordinate, currentLocation.coordinate) <= NAVIGATION_MARKER_CURRENT_LOCATION_HIDE_RADIUS_METERS
 
 private fun List<NavigationMapSegmentUiState>.toSegmentMarkerOverlays(
     currentLocation: GeoCoordinate? = null,
@@ -1010,9 +998,6 @@ private const val NAVIGATION_MARKER_CURRENT_LOCATION_HIDE_RADIUS_METERS = 8.0
 private const val NAVIGATION_MARKER_EARTH_RADIUS_METERS = 6_371_000.0
 private const val NAVIGATION_FOLLOW_LOOKAHEAD_METERS = 12.0
 private const val ROUTE_CONNECTOR_MIN_DISTANCE_METERS = 2.0
-private const val ROUTE_CONNECTOR_DASH_METERS = 8.0
-private const val ROUTE_CONNECTOR_GAP_METERS = 6.0
-private const val ROUTE_CONNECTOR_MIN_DASH_METERS = 1.5
 
 private var lastSegmentJunctionOverlayDebugSummary: String? = null
 

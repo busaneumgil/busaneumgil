@@ -157,7 +157,7 @@ class NavigationViewModelTest {
             assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
             assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
             assertEquals(expectedSpeechText(viewModel.uiState.value.stepCard), viewModel.uiState.value.tts.briefingText)
-            assertEquals("목적지까지 약 15분", viewModel.uiState.value.stepCard.heroDescription)
+            assertEquals("경로 시작 지점까지 이동하세요", viewModel.uiState.value.stepCard.heroDescription)
         }
 
     @Test
@@ -255,7 +255,58 @@ class NavigationViewModelTest {
             assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
             assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
             assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
-            assertEquals("목적지까지 약 15분", viewModel.uiState.value.stepCard.heroDescription)
+            assertEquals("경로 시작 지점까지 이동하세요", viewModel.uiState.value.stepCard.heroDescription)
+        }
+
+    @Test
+    fun `navigation stays on route detail guide near origin until the route line is reached`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(
+                testWalkNavigationRequest().copy(
+                    origin =
+                        RouteWaypoint(
+                            name = "현재 위치",
+                            coordinate = OFF_ROUTE_POINT,
+                        ),
+                ),
+            )
+            locationManager.emitLocation(OFF_ROUTE_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(OFF_ROUTE_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("경로 시작 지점까지 이동하세요", viewModel.uiState.value.stepCard.heroDescription)
+        }
+
+    @Test
+    fun `navigation follow uses gps bearing before compass or route fallback`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            locationManager.emitLocation(
+                OFF_ROUTE_POINT.toLocationSnapshot(
+                    recordedAtEpochMillis = 1_000L,
+                    speedMetersPerSecond = 1.2f,
+                    bearingDegrees = 92f,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(92.0, viewModel.uiState.value.mapOverlay.headingDegrees ?: -1.0, 0.0)
+            val overlayState = createNavigationViewportOverlayState(viewModel.uiState.value.mapOverlay)
+            assertFalse(overlayState.fitToProjection)
+            assertEquals(92.0, overlayState.fallbackCamera.bearingDegrees ?: -1.0, 0.0)
+            assertEquals(
+                MapCoordinate(latitude = OFF_ROUTE_POINT.latitude, longitude = OFF_ROUTE_POINT.longitude),
+                overlayState.fallbackCamera.center,
+            )
         }
 
     @Test
@@ -296,7 +347,37 @@ class NavigationViewModelTest {
             assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
             assertEquals("1 / 2", viewModel.uiState.value.progressLabel)
             assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
-            assertEquals("목적지까지 약 15분", viewModel.uiState.value.stepCard.heroDescription)
+            assertEquals("경로 시작 지점까지 이동하세요", viewModel.uiState.value.stepCard.heroDescription)
+        }
+
+    @Test
+    fun `navigation returns to route start guide after leaving the route near origin`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(
+                testWalkNavigationRequest().copy(
+                    origin =
+                        RouteWaypoint(
+                            name = "현재 위치",
+                            coordinate = OFF_ROUTE_POINT,
+                        ),
+                ),
+            )
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+
+            locationManager.emitLocation(OFF_ROUTE_POINT.toLocationSnapshot(recordedAtEpochMillis = 4_000L))
+            advanceUntilIdle()
+
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
+            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("경로 시작 지점까지 이동하세요", viewModel.uiState.value.stepCard.heroDescription)
         }
 
     @Test
@@ -736,6 +817,102 @@ class NavigationViewModelTest {
             assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.currentLocation?.coordinate)
             assertEquals("현재 위치", viewModel.uiState.value.mapOverlay.currentLocation?.label)
             assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.focusCoordinate)
+        }
+
+    @Test
+    fun `navigation seeds current location marker from fresh cached gps before recenter click`() =
+        runTest {
+            val cachedLocation =
+                WALK_PRE_TURN_POINT.toLocationSnapshot(
+                    recordedAtEpochMillis = System.currentTimeMillis(),
+                    speedMetersPerSecond = 1.2f,
+                    bearingDegrees = 90f,
+                )
+            val locationManager = FakeCurrentLocationManager(initialSnapshot = cachedLocation)
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+
+            assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.currentLocation?.coordinate)
+            assertEquals("현재 위치", viewModel.uiState.value.mapOverlay.currentLocation?.label)
+            assertEquals(90.0, viewModel.uiState.value.mapOverlay.headingDegrees ?: -1.0, 0.0)
+        }
+
+    @Test
+    fun `current location button recenters without forcing another gps refresh when location is ready`() =
+        runTest {
+            val cachedLocation =
+                WALK_PRE_TURN_POINT.toLocationSnapshot(
+                    recordedAtEpochMillis = System.currentTimeMillis(),
+                    speedMetersPerSecond = 1.2f,
+                    bearingDegrees = 90f,
+                )
+            val locationManager = FakeCurrentLocationManager(initialSnapshot = cachedLocation)
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            val refreshCountBeforeClick = locationManager.refreshLatestLocationCallCount
+
+            viewModel.onAction(NavigationUiAction.CurrentLocationClicked)
+            advanceUntilIdle()
+
+            assertEquals(refreshCountBeforeClick, locationManager.refreshLatestLocationCallCount)
+            assertEquals(1L, viewModel.uiState.value.locationRecenterRequestId)
+            assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.currentLocation?.coordinate)
+        }
+
+    @Test
+    fun `manual map movement exits follow while keeping current location heading overlay state`() =
+        runTest {
+            val cachedLocation =
+                WALK_PRE_TURN_POINT.toLocationSnapshot(
+                    recordedAtEpochMillis = System.currentTimeMillis(),
+                    speedMetersPerSecond = 1.2f,
+                    bearingDegrees = 90f,
+                )
+            val locationManager = FakeCurrentLocationManager(initialSnapshot = cachedLocation)
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.MapCameraMovedByUser)
+            advanceUntilIdle()
+
+            assertEquals(WALK_PRE_TURN_POINT, viewModel.uiState.value.mapOverlay.currentLocation?.coordinate)
+            assertEquals(NavigationTrackingMode.IDLE, viewModel.uiState.value.mapOverlay.trackingMode)
+            assertEquals(90.0, viewModel.uiState.value.mapOverlay.headingDegrees ?: -1.0, 0.0)
+        }
+
+    @Test
+    fun `current location button returns from manual camera to heading follow`() =
+        runTest {
+            val cachedLocation =
+                WALK_PRE_TURN_POINT.toLocationSnapshot(
+                    recordedAtEpochMillis = System.currentTimeMillis(),
+                    speedMetersPerSecond = 1.2f,
+                    bearingDegrees = 90f,
+                )
+            val locationManager = FakeCurrentLocationManager(initialSnapshot = cachedLocation)
+            val viewModel = createViewModel(locationManager = locationManager)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.MapCameraMovedByUser)
+            advanceUntilIdle()
+            viewModel.onAction(NavigationUiAction.CurrentLocationClicked)
+            advanceUntilIdle()
+
+            assertEquals(NavigationTrackingMode.FOLLOW_WITH_HEADING, viewModel.uiState.value.mapOverlay.trackingMode)
+            assertEquals(90.0, viewModel.uiState.value.mapOverlay.headingDegrees ?: -1.0, 0.0)
+            assertEquals(1L, viewModel.uiState.value.locationRecenterRequestId)
+
+            val overlayState = createNavigationViewportOverlayState(viewModel.uiState.value.mapOverlay)
+            assertFalse(overlayState.fitToProjection)
+            assertEquals(90.0, overlayState.fallbackCamera.bearingDegrees ?: -1.0, 0.0)
         }
 
     @Test
@@ -1662,18 +1839,25 @@ private fun expectedSpeechText(focusedCard: NavigationFocusedSegmentCardUiState)
         .distinct()
         .joinToString(separator = " ")
 
-private fun GeoCoordinate.toLocationSnapshot(recordedAtEpochMillis: Long): LocationSnapshot =
+private fun GeoCoordinate.toLocationSnapshot(
+    recordedAtEpochMillis: Long,
+    speedMetersPerSecond: Float? = null,
+    bearingDegrees: Float? = null,
+): LocationSnapshot =
     LocationSnapshot(
         latitude = latitude,
         longitude = longitude,
         accuracyMeters = 5f,
         recordedAtEpochMillis = recordedAtEpochMillis,
+        speedMetersPerSecond = speedMetersPerSecond,
+        bearingDegrees = bearingDegrees,
     )
 
 private class FakeCurrentLocationManager(
+    initialSnapshot: LocationSnapshot? = null,
     private val refreshSnapshot: LocationSnapshot? = null,
 ) : CurrentLocationManager {
-    private val mutableLatestLocation = MutableStateFlow<LocationSnapshot?>(null)
+    private val mutableLatestLocation = MutableStateFlow<LocationSnapshot?>(initialSnapshot)
 
     override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation
 

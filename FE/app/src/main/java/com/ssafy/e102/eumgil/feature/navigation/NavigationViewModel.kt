@@ -12,6 +12,8 @@ import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.location.NoOpCurrentHeadingManager
+import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
+import com.ssafy.e102.eumgil.core.location.normalizeHeadingDegrees
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
@@ -66,6 +68,7 @@ private const val NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS = 40.0
 private const val NAVIGATION_ROUTE_JOIN_STABLE_UPDATE_COUNT = 2
 private const val NAVIGATION_ROUTE_JOIN_STABLE_DURATION_MILLIS = 3_000L
 private const val NAVIGATION_AUTO_TTS_NEAR_DISTANCE_METERS = 10
+private const val NAVIGATION_GPS_BEARING_MIN_SPEED_METERS_PER_SECOND = 0.5f
 private const val NAVIGATION_LIVE_GUIDANCE_TARGET_AHEAD_TOLERANCE_METERS = 1.0
 private const val NAVIGATION_LIVE_GUIDANCE_DISPLAY_THROTTLE_MILLIS = 3_000L
 private const val NAVIGATION_LIVE_GUIDANCE_SOON_DISTANCE_METERS = 10
@@ -73,6 +76,7 @@ private const val NAVIGATION_LIVE_GUIDANCE_NEAR_BUCKET_METERS = 5
 private const val NAVIGATION_LIVE_GUIDANCE_FAR_BUCKET_METERS = 10
 private const val NAVIGATION_LIVE_GUIDANCE_BUCKET_THRESHOLD_METERS = 50
 private const val NAVIGATION_LOCATION_DEBUG_TAG = "NavigationLocation"
+private const val NAVIGATION_ROUTE_START_GUIDANCE_TEXT = "경로 시작 지점까지 이동하세요"
 
 private enum class NavigationGuidanceMode {
     RouteDetail,
@@ -120,6 +124,7 @@ class NavigationViewModel(
     private var routeJoinStableSinceEpochMillis: Long? = null
     private var latestLocationCoordinate: GeoCoordinate? = null
     private var latestHeadingDegrees: Double? = null
+    private var latestGpsBearingDegrees: Double? = null
     private var trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING
     private var pendingCurrentLocationRecenter: Boolean = false
     private var locationRecenterRequestId: Long = 0L
@@ -191,10 +196,15 @@ class NavigationViewModel(
         routeJoinStableSinceEpochMillis = null
         latestLocationCoordinate = null
         latestHeadingDegrees = null
+        latestGpsBearingDegrees = null
         trackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING
         pendingCurrentLocationRecenter = false
         locationRecenterRequestId = 0L
-        latestProgress = routeSession?.route?.evaluateProgress(normalizedRequest.origin.coordinate)
+        currentLocationManager.latestLocation.value
+            ?.takeIf { snapshot -> snapshot.isFreshCurrentLocation() }
+            ?.let(::seedLatestLocationSnapshot)
+        val initialProgressCoordinate = latestLocationCoordinate ?: normalizedRequest.origin.coordinate
+        latestProgress = routeSession?.route?.evaluateProgress(initialProgressCoordinate)
         resetLiveGuidancePresentation()
         val initialRemainingMetrics =
             latestProgress?.let { progress ->
@@ -286,15 +296,17 @@ class NavigationViewModel(
                 emitUiEvent(NavigationUiEvent.NavigateToReport)
             }
             NavigationUiAction.CurrentLocationClicked -> {
-                val didRequestRefresh = requestCurrentLocationRefresh()
                 currentHeadingManager.startHeadingUpdates()
                 trackingMode = trackingMode.nextOnCurrentLocationClick()
                 if (latestLocationCoordinate != null) {
                     pendingCurrentLocationRecenter = false
                     locationRecenterRequestId += 1
                     publishNavigationState()
-                } else if (didRequestRefresh) {
-                    pendingCurrentLocationRecenter = true
+                } else {
+                    val didRequestRefresh = requestCurrentLocationRefresh()
+                    if (didRequestRefresh) {
+                        pendingCurrentLocationRecenter = true
+                    }
                 }
             }
             NavigationUiAction.MapCameraMovedByUser -> {
@@ -410,8 +422,7 @@ class NavigationViewModel(
         if (!shouldProcessLocation(snapshot)) return
         val currentSession = routeSession ?: return
 
-        val currentCoordinate = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude)
-        latestLocationCoordinate = currentCoordinate
+        val currentCoordinate = seedLatestLocationSnapshot(snapshot)
         latestProgress = currentSession.route.evaluateProgress(currentCoordinate)
         val destinationCoordinate = navigationRequest?.destination?.coordinate ?: currentCoordinate
 
@@ -420,7 +431,6 @@ class NavigationViewModel(
             val nextGuidanceMode =
                 resolveGuidanceMode(
                     route = currentSession.route,
-                    currentCoordinate = currentCoordinate,
                     progress = progress,
                     recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
                 )
@@ -481,22 +491,13 @@ class NavigationViewModel(
 
     private fun resolveGuidanceMode(
         route: RouteCandidate,
-        currentCoordinate: GeoCoordinate,
         progress: NavigationProgressSnapshot,
         recordedAtEpochMillis: Long,
     ): NavigationGuidanceMode {
-        val originDistanceMeters =
-            navigationRequest
-                ?.origin
-                ?.coordinate
-                ?.let { origin -> haversineDistanceMeters(currentCoordinate, origin) }
-                ?: Double.POSITIVE_INFINITY
         val isInsideRealtimeEntryDistance =
-            progress.distanceToRouteMeters <= NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS ||
-                originDistanceMeters <= NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS
+            progress.distanceToRouteMeters <= NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS
         val isOutsideRouteDetailDistance =
-            progress.distanceToRouteMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS &&
-                originDistanceMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS
+            progress.distanceToRouteMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS
         val hasRenderableRealtimeProgress = route.hasRenderableRealtimeProgress(progress)
 
         return when (guidanceMode) {
@@ -842,6 +843,14 @@ class NavigationViewModel(
         publishNavigationState()
     }
 
+    private fun seedLatestLocationSnapshot(snapshot: LocationSnapshot): GeoCoordinate {
+        val currentCoordinate = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude)
+        latestLocationCoordinate = currentCoordinate
+        latestGpsBearingDegrees = snapshot.toUsableNavigationBearingDegrees()
+        lastProcessedLocationEpochMillis = snapshot.recordedAtEpochMillis
+        return currentCoordinate
+    }
+
     private fun publishNavigationState() {
         val request = navigationRequest ?: return
         val runtimeRequest = request.withSelectedRoute(routeSession?.route ?: request.selectedRoute)
@@ -891,6 +900,7 @@ class NavigationViewModel(
                 mapFocusMode = mapFocusMode,
                 trackingMode = trackingMode,
                 headingDegrees = latestHeadingDegrees,
+                gpsBearingDegrees = latestGpsBearingDegrees,
             )
         logSegmentMarkerDebugSummary(mapOverlay)
 
@@ -2169,6 +2179,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
     mapFocusMode: NavigationMapFocusMode,
     trackingMode: NavigationTrackingMode,
     headingDegrees: Double?,
+    gpsBearingDegrees: Double?,
 ): NavigationMapOverlayUiState {
     val selectedRoutePolyline = selectedRoute.previewPolyline.points
     val activeSegment =
@@ -2258,14 +2269,21 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         routeSegments = routeSegments,
         mapFocusMode = mapFocusMode,
         trackingMode = trackingMode,
-        headingDegrees = headingDegrees,
+        headingDegrees = gpsBearingDegrees ?: headingDegrees,
         shouldAnimateCameraTransition = true,
     )
 }
 
+private fun LocationSnapshot.toUsableNavigationBearingDegrees(): Double? {
+    val bearing = bearingDegrees ?: return null
+    val speed = speedMetersPerSecond
+    if (speed != null && speed < NAVIGATION_GPS_BEARING_MIN_SPEED_METERS_PER_SECOND) return null
+    return normalizeHeadingDegrees(bearing.toDouble())
+}
+
 private fun NavigationTrackingMode.nextOnCurrentLocationClick(): NavigationTrackingMode =
     when (this) {
-        NavigationTrackingMode.IDLE -> NavigationTrackingMode.FOLLOW
+        NavigationTrackingMode.IDLE -> NavigationTrackingMode.FOLLOW_WITH_HEADING
         NavigationTrackingMode.FOLLOW -> NavigationTrackingMode.FOLLOW_WITH_HEADING
         NavigationTrackingMode.FOLLOW_WITH_HEADING -> NavigationTrackingMode.FOLLOW_WITH_HEADING
     }
@@ -3010,8 +3028,8 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
             emphasisLabel = selectedRoute.summary.riskLevel.toRiskLabel(),
             distanceLabel = remainingTimeLabel,
             heroTitle = NavigationOriginHeroTitle,
-            heroDescription = remainingTimeLabel,
-            instruction = NavigationOriginHeroDescription,
+            heroDescription = NAVIGATION_ROUTE_START_GUIDANCE_TEXT,
+            instruction = NAVIGATION_ROUTE_START_GUIDANCE_TEXT,
             supportingText = selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption),
             guidanceAction = NavigationGuidanceAction.START,
             transitInfo = null,

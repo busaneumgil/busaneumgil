@@ -190,6 +190,11 @@ internal class MapOverlayViewportControlState {
             )
     }
 
+    fun clearManualCamera() {
+        manualCameraTarget = null
+        latestObservedCamera = null
+    }
+
     fun recenterToCurrentLocation(currentLocation: MapCoordinate) {
         val baseTarget = baseCameraTarget ?: MapCameraTarget.DefaultBusan
         val observedCamera = latestObservedCamera

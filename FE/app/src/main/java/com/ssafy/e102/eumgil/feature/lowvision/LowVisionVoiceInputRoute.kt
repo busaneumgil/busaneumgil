@@ -37,6 +37,7 @@ fun LowVisionVoiceInputRoute(
     onShowBookmarksCompleted: () -> Unit = {},
     onShowFavoriteRoutesCompleted: () -> Unit = {},
     onLogoutCompleted: () -> Unit = {},
+    currentRoute: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -58,6 +59,11 @@ fun LowVisionVoiceInputRoute(
                 // 비프음 실패해도 녹음 계속 진행
             }
         }
+    }
+
+    // currentRoute 변경 시 ViewModel에 전달
+    LaunchedEffect(currentRoute) {
+        viewModel.updateCurrentRoute(currentRoute)
     }
 
     // -1: 아직 speak()를 한 번도 호출하지 않은 상태.

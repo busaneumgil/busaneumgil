@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -49,11 +50,19 @@ fun RouteSettingEntryRoute(
     val activity = remember(context) { context.findComponentActivity() }
     val viewModel = rememberRouteSettingViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     var initialRouteOptionApplied by rememberSaveable(initialRouteOption) { mutableStateOf(false) }
     var isDuribalConfirmDialogVisible by rememberSaveable { mutableStateOf(false) }
     var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
     var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
+
+    fun showRouteSnackbar(message: String) {
+        coroutineScope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(message)
+        }
+    }
 
     LaunchedEffect(viewModel, onNavigateBack, onNavigateToMap, onNavigateToSearch, onNavigateToRouteDetail, onStartNavigation) {
         viewModel.uiEvent.collect { event ->
@@ -65,6 +74,7 @@ fun RouteSettingEntryRoute(
                 is RouteSettingUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget, event.selectionMode)
                 is RouteSettingUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
+                is RouteSettingUiEvent.ShowSnackbar -> showRouteSnackbar(event.message)
             }
         }
     }
@@ -99,6 +109,10 @@ fun RouteSettingEntryRoute(
     RouteSettingScreen(
         uiState = uiState,
         onAction = viewModel::onAction,
+        snackbarHostState = snackbarHostState,
+        onDisabledStartClick = {
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+        },
         isDuribalConfirmDialogVisible = isDuribalConfirmDialogVisible,
         onDuribalCallClick = { isDuribalConfirmDialogVisible = true },
         onDuribalConfirmDismiss = { isDuribalConfirmDialogVisible = false },
@@ -181,6 +195,7 @@ fun RouteDetailEntryRoute(
                 is RouteSettingUiEvent.NavigateToSearch -> Unit
                 is RouteSettingUiEvent.NavigateToRouteDetail -> Unit
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
+                is RouteSettingUiEvent.ShowSnackbar -> Unit
             }
         }
     }

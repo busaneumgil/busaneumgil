@@ -335,6 +335,10 @@ sealed interface RouteSettingUiEvent {
     data class StartNavigationRequested(
         val request: RouteNavigationRequest,
     ) : RouteSettingUiEvent
+
+    data class ShowSnackbar(
+        val message: String,
+    ) : RouteSettingUiEvent
 }
 
 data class RouteNavigationRequest(

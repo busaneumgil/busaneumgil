@@ -56,6 +56,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -103,10 +105,13 @@ import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallCo
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingActionButtonState
 import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingControls
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceMuted
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextPrimary
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumTextTertiary
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
@@ -150,17 +155,14 @@ fun RouteSettingScreen(
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit = {},
     onLowFloorReservationDismiss: () -> Unit = {},
     onLowFloorReservationConfirm: () -> Unit = {},
+    snackbarHostState: SnackbarHostState? = null,
+    onDisabledStartClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val showsRouteLoadingScreen = uiState.shouldShowRouteLoadingScreen()
     val showsRouteUnsupportedAreaScreen = uiState.shouldShowRouteUnsupportedAreaScreen()
     val showsRouteFailureScreen = uiState.shouldShowRouteFailureScreen()
-    val ctaSupportingText =
-        if (uiState.cta.isEnabled) {
-            null
-        } else {
-            uiState.cta.supportingText
-        }
+    val ctaSupportingText: String? = null
     val disablesDefaultWindowInsets = routeSettingUsesEmptyWindowInsets()
     var isDuribalPromptDismissed by remember(
         uiState.selectedTravelMode,
@@ -262,11 +264,26 @@ fun RouteSettingScreen(
                         showRefreshAction = uiState.selectedRoute != null,
                         isRefreshInProgress = uiState.isRouteRefreshing,
                         onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
+                        onDisabledStartClick = onDisabledStartClick,
                         onRefreshClick = { onAction(RouteSettingUiAction.RouteRefreshClicked) },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
             }
+        }
+        snackbarHostState?.let { hostState ->
+            SnackbarHost(
+                hostState = hostState,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .wrapContentWidth()
+                        .padding(
+                            start = EumSpacing.medium,
+                            end = EumSpacing.medium,
+                            bottom = routeSettingBottomBarOverlayClearance(extraSpacing = EumSpacing.small),
+                        ),
+            )
         }
         if (uiState.isLoading && uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
             RouteSearchFullscreenLoadingOverlay(modifier = Modifier.matchParentSize())
@@ -2968,17 +2985,16 @@ private fun RouteMapStage(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            when {
-                selectedRoute == null || !previewMap.isDisplayable ->
-                    RouteMapMessageCard(
-                        title = routePreviewFallbackTitle(previewMap.status),
-                        description = routePreviewFallbackDescription(previewMap),
-                        showNoRouteImage = previewMap.status == RoutePreviewMapStatus.NO_ROUTE,
-                        modifier =
-                            Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(EumSpacing.medium),
-                    )
+            if (shouldShowRouteMapMessageCard(selectedRoute = selectedRoute, previewMap = previewMap)) {
+                RouteMapMessageCard(
+                    title = routePreviewFallbackTitle(previewMap.status),
+                    description = routePreviewFallbackDescription(previewMap),
+                    showNoRouteImage = previewMap.status == RoutePreviewMapStatus.NO_ROUTE,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(EumSpacing.medium),
+                )
             }
 
             val mapControlsModifier =
@@ -3022,6 +3038,13 @@ private fun RouteMapStage(
         }
     }
 }
+
+private fun shouldShowRouteMapMessageCard(
+    selectedRoute: RouteSelectedRouteUiState?,
+    previewMap: RoutePreviewMapUiState,
+): Boolean =
+    previewMap.status != RoutePreviewMapStatus.NO_DESTINATION &&
+        (selectedRoute == null || !previewMap.isDisplayable)
 
 @Composable
 private fun RouteMapMessageCard(
@@ -4259,6 +4282,7 @@ private fun RouteSettingBottomBar(
     supportingText: String?,
     selectedRoute: RouteSelectedRouteUiState?,
     onStartClick: () -> Unit,
+    onDisabledStartClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     showRefreshAction: Boolean = false,
     isRefreshInProgress: Boolean = false,
@@ -4290,6 +4314,7 @@ private fun RouteSettingBottomBar(
                 verticalGap = EumSpacing.small,
                 compactSupportingText = false,
                 onStartClick = onStartClick,
+                onDisabledStartClick = onDisabledStartClick,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (showRefreshAction) {
@@ -4360,6 +4385,7 @@ private fun RouteSettingCtaContent(
     verticalGap: Dp,
     compactSupportingText: Boolean,
     onStartClick: () -> Unit,
+    onDisabledStartClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ctaContentDescription =
@@ -4387,6 +4413,8 @@ private fun RouteSettingCtaContent(
         } else {
             supportingText ?: stringResource(id = R.string.route_setting_cta_state_disabled)
         }
+    val interactionSource = remember { MutableInteractionSource() }
+    val buttonShape = RoundedCornerShape(RouteButtonCornerRadius)
 
     Column(
         modifier = modifier,
@@ -4406,9 +4434,7 @@ private fun RouteSettingCtaContent(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Button(
-            onClick = onStartClick,
-            enabled = enabled,
+        Surface(
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -4416,26 +4442,38 @@ private fun RouteSettingCtaContent(
                     .semantics {
                         contentDescription = ctaContentDescription
                         stateDescription = ctaStateDescription
-                    },
-            shape = RoundedCornerShape(RouteButtonCornerRadius),
-            elevation =
-                ButtonDefaults.buttonElevation(
-                    defaultElevation = 0.dp,
-                    pressedElevation = 0.dp,
-                    focusedElevation = 0.dp,
-                    hoveredElevation = 0.dp,
-                    disabledElevation = 0.dp,
-                ),
+                    }
+                    .clip(buttonShape)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.Button,
+                        onClick = if (enabled) onStartClick else onDisabledStartClick,
+                    ),
+            shape = buttonShape,
+            color = routeSettingCtaContainerColor(enabled = enabled),
+            contentColor = routeSettingCtaContentColor(enabled = enabled),
+            border =
+                if (enabled) {
+                    null
+                } else {
+                    BorderStroke(1.dp, EumBorderSubtle)
+                },
+            shadowElevation = 0.dp,
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = EumSpacing.medium),
+                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_route_start_navigation_button),
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onPrimary,
+                    tint = routeSettingCtaContentColor(enabled = enabled),
                 )
                 Text(
                     text = buttonLabel,
@@ -4447,6 +4485,22 @@ private fun RouteSettingCtaContent(
         }
     }
 }
+
+@Composable
+private fun routeSettingCtaContainerColor(enabled: Boolean): Color =
+    if (enabled) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        EumSurfaceMuted
+    }
+
+@Composable
+private fun routeSettingCtaContentColor(enabled: Boolean): Color =
+    if (enabled) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        EumTextTertiary
+    }
 
 @Composable
 private fun RouteMapBackdrop(

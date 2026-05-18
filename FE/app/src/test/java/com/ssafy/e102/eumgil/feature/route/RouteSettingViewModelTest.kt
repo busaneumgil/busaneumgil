@@ -227,6 +227,29 @@ class RouteSettingViewModelTest {
         }
 
     @Test
+    fun `start action without destination emits destination required snackbar instead of navigation`() =
+        runTest {
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+            runCurrent()
+
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+            advanceUntilIdle()
+
+            val event = uiEvent.await()
+            assertTrue(event is RouteSettingUiEvent.ShowSnackbar)
+            assertEquals("도착지를 설정해 주세요.", (event as RouteSettingUiEvent.ShowSnackbar).message)
+            assertFalse(viewModel.uiState.value.ctaAcknowledged)
+            assertFalse(viewModel.uiState.value.isStartEnabled)
+        }
+
+    @Test
     fun `destination outside Gangseo shows unsupported area state without requesting route`() =
         runTest {
             val routeRepository = CountingRouteRepository()

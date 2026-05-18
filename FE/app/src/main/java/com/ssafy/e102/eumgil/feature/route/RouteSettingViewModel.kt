@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.route
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
@@ -1024,7 +1025,7 @@ class RouteSettingViewModel(
             return
         }
         if (mutableUiState.value.destinationHandoffState != RouteDestinationHandoffState.DIRECT) {
-            emitUiEvent(RouteSettingUiEvent.ShowSnackbar(START_SNACKBAR_DESTINATION_REQUIRED))
+            emitUiEvent(RouteSettingUiEvent.ShowSnackbar(R.string.route_setting_start_destination_required_snackbar))
             return
         }
         val selectedDestination = destinationSelectionRepository.selectedDestination.value ?: return
@@ -3180,7 +3181,6 @@ private const val CTA_SUPPORTING_INVALID_HANDOFF = "목적지 좌표를 다시 �
 private const val CTA_SUPPORTING_ERROR = "경로 정보를 다시 불러오면 시작 CTA를 활성화할 수 있습니다."
 private const val CTA_SUPPORTING_LOADING = "경로 요약을 불러오는 동안 CTA를 잠시 비활성화합니다."
 private const val CTA_SUPPORTING_EMPTY = "표시할 경로가 준비되면 시작 CTA를 활성화합니다."
-private const val START_SNACKBAR_DESTINATION_REQUIRED = "도착지를 설정해 주세요."
 private const val DESTINATION_FALLBACK_EMPTY_MESSAGE = "검색 handoff 전에는 기본 도착지를 유지합니다."
 private const val DESTINATION_FALLBACK_INVALID_COORDINATE_MESSAGE = "선택한 목적지 좌표를 확인할 수 없어 기본 도착지로 대체했습니다."
 private const val SUMMARY_VALUE_PENDING = "확인 중"

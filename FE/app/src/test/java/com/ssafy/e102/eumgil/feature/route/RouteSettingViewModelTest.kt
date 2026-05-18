@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.route
 
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
@@ -244,7 +245,10 @@ class RouteSettingViewModelTest {
 
             val event = uiEvent.await()
             assertTrue(event is RouteSettingUiEvent.ShowSnackbar)
-            assertEquals("도착지를 설정해 주세요.", (event as RouteSettingUiEvent.ShowSnackbar).message)
+            assertEquals(
+                R.string.route_setting_start_destination_required_snackbar,
+                (event as RouteSettingUiEvent.ShowSnackbar).messageResId,
+            )
             assertFalse(viewModel.uiState.value.ctaAcknowledged)
             assertFalse(viewModel.uiState.value.isStartEnabled)
         }

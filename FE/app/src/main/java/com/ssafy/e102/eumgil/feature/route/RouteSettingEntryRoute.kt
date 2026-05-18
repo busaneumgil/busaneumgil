@@ -74,7 +74,7 @@ fun RouteSettingEntryRoute(
                 is RouteSettingUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget, event.selectionMode)
                 is RouteSettingUiEvent.NavigateToRouteDetail -> onNavigateToRouteDetail(event.routeOption)
                 is RouteSettingUiEvent.StartNavigationRequested -> onStartNavigation(event.request)
-                is RouteSettingUiEvent.ShowSnackbar -> showRouteSnackbar(event.message)
+                is RouteSettingUiEvent.ShowSnackbar -> showRouteSnackbar(context.getString(event.messageResId))
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.route
 
+import androidx.annotation.StringRes
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
@@ -337,7 +338,7 @@ sealed interface RouteSettingUiEvent {
     ) : RouteSettingUiEvent
 
     data class ShowSnackbar(
-        val message: String,
+        @StringRes val messageResId: Int,
     ) : RouteSettingUiEvent
 }
 

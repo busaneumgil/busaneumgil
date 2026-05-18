@@ -1663,7 +1663,7 @@ private val SearchStateIllustrationMinHeight: Dp = 360.dp
 private val SearchStateIllustrationSize: Dp = 128.dp
 private val SearchEmptyResultIllustrationSize: Dp = 260.dp
 private val SearchEmptyResultContentOffsetY: Dp = (-32).dp
-private val SearchEmptyResultTitleTopPadding: Dp = 8.dp
+private val SearchEmptyResultTitleTopPadding: Dp = 0.dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
 private val SearchVoiceInputBottomSheetWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)

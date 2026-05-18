@@ -191,7 +191,7 @@ class SearchScreenPolicyTest {
         assertTrue(
             "The no-result title should sit closer to the illustration than the default centered states.",
             emptyStateSection.contains("titleTopPadding = SearchEmptyResultTitleTopPadding") &&
-                source.contains("private val SearchEmptyResultTitleTopPadding: Dp = 8.dp"),
+                source.contains("private val SearchEmptyResultTitleTopPadding: Dp = 0.dp"),
         )
         assertTrue(
             "The dedicated no-result illustration PNG should be checked into drawable-nodpi.",

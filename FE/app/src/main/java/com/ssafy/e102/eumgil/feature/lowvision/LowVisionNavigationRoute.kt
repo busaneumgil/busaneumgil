@@ -32,6 +32,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+internal const val LOW_VISION_NAVIGATION_LOCATION_REQUIRED_MESSAGE: String =
+    "현재 위치를 확인한 뒤 길 안내를 시작할게요."
+
 @Composable
 fun LowVisionNavigationRoute(
     onNavigateToComplete: () -> Unit,
@@ -126,18 +129,22 @@ fun LowVisionNavigationRoute(
             awaitLowVisionOriginSnapshot(
                 currentLocationManager = appContainer.currentLocationManager,
                 immediateSnapshot = currentLocationSnapshot,
-            ).toLowVisionRouteOriginWaypoint()
-        val request =
-            appContainer.routeRepository
-                .buildLowVisionNavigationRequest(
-                    destinationSelectionRepository = appContainer.destinationSelectionRepository,
-                    origin = origin,
-                )
-        if (request == null) {
-            loadErrorMessage = LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE
+            ).toLowVisionRouteOriginWaypointOrNull()
+        if (origin == null) {
+            loadErrorMessage = LOW_VISION_NAVIGATION_LOCATION_REQUIRED_MESSAGE
         } else {
-            viewModel.bindNavigationRequest(request)
-            viewModel.onAction(NavigationUiAction.NavigationEntered)
+            val request =
+                appContainer.routeRepository
+                    .buildLowVisionNavigationRequest(
+                        destinationSelectionRepository = appContainer.destinationSelectionRepository,
+                        origin = origin,
+                    )
+            if (request == null) {
+                loadErrorMessage = LOW_VISION_NAVIGATION_LOAD_ERROR_MESSAGE
+            } else {
+                viewModel.bindNavigationRequest(request)
+                viewModel.onAction(NavigationUiAction.NavigationEntered)
+            }
         }
     }
 

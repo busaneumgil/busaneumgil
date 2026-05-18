@@ -55,7 +55,7 @@ class MyPageScreenTest {
     @Test
     fun `profile card avatar falls back to my page icon when mobility subtype is unavailable`() {
         assertEquals(
-            R.drawable.ic_nav_mypage,
+            R.drawable.ic_mypage_sf3_person_circle,
             resolveProfileAvatarRes(
                 MyPageUiState(
                     userMode = MyPageUserMode.LOW_VISION,
@@ -140,6 +140,165 @@ class MyPageScreenTest {
             source.contains(".weight(1f)") &&
                 source.contains(".verticalScroll(rememberScrollState())") &&
                 source.indexOf("MainMenuCard(") < source.indexOf("MyPageFooter("),
+        )
+    }
+
+    @Test
+    fun `my page uses target icon resources`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+
+        assertTrue(
+            "My reports stat should use an SF Symbols 3 exclamation bubble style icon.",
+            source.contains("iconRes = R.drawable.ic_mypage_sf3_exclamation_bubble,"),
+        )
+        assertTrue(
+            "Bookmark stat should use an SF Symbols 3 bookmark style icon.",
+            source.contains("iconRes = R.drawable.ic_mypage_sf3_bookmark,"),
+        )
+        assertTrue(
+            "Recent navigation stat should use an SF Symbols 3 location.north.line style icon.",
+            source.contains("iconRes = R.drawable.ic_mypage_sf3_location_north_line,"),
+        )
+        assertTrue(
+            "Guide quick action and service terms row should share an SF Symbols 3 doc.text style icon.",
+            source.contains("iconRes = R.drawable.ic_mypage_sf3_doc_text,") &&
+                source.indexOf("iconRes = R.drawable.ic_mypage_sf3_doc_text,") !=
+                source.lastIndexOf("iconRes = R.drawable.ic_mypage_sf3_doc_text,"),
+        )
+        assertTrue(
+            "Notice and privacy rows should use SF Symbols 3 bell and shield style icons.",
+            source.contains("iconRes = R.drawable.ic_mypage_sf3_bell,") &&
+                source.contains("iconRes = R.drawable.ic_mypage_sf3_shield,"),
+        )
+        assertTrue(
+            "My page row affordances should use an SF Symbols 3 chevron.right style icon without rotating dropdown assets.",
+            source.contains("R.drawable.ic_mypage_sf3_chevron_right") &&
+                !source.contains(".rotate(-90f)"),
+        )
+        assertFalse(
+            "My page should not keep replaced screen-local PNG icon resources after SF Symbols 3 unification.",
+            listOf(
+                "ic_mypage_notice",
+                "ic_mypage_privacy_policy",
+                "ic_mypage_terms_guide",
+                "ic_mypage_recent_navigation",
+            ).any(source::contains),
+        )
+    }
+
+    @Test
+    fun `my page duribal quick action uses supplied vehicle image asset`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+        val duribalAsset =
+            File("src/main/res/drawable-nodpi/ic_mypage_duribal_call_vehicle.png")
+
+        assertTrue(
+            "Duribal quick action should use the supplied vehicle PNG asset again.",
+            source.contains("iconRes = R.drawable.ic_mypage_duribal_call_vehicle,"),
+        )
+        assertTrue(
+            "Duribal quick action should preserve the supplied image colors instead of tinting it blue.",
+            source.contains("iconTint = Color.Unspecified"),
+        )
+        assertTrue("Duribal vehicle PNG asset should exist.", duribalAsset.exists())
+    }
+
+    @Test
+    fun `my page SF Symbols 3 icon strokes use light weights`() {
+        val drawableDir = File("src/main/res/drawable")
+        val sf3IconFiles =
+            drawableDir
+                .listFiles { _, name ->
+                    name.startsWith("ic_mypage_sf3_") && name.endsWith(".xml")
+                }
+                .orEmpty()
+                .associateBy { it.name }
+
+        val chevronFile = sf3IconFiles.getValue("ic_mypage_sf3_chevron_right.xml")
+        val standardIconFiles = sf3IconFiles.values - chevronFile
+        val strokeWidthRegex = Regex("""android:strokeWidth="([^"]+)"""")
+
+        assertTrue("My page should have SF Symbols 3 icon resources.", sf3IconFiles.isNotEmpty())
+        standardIconFiles.forEach { file ->
+            val strokeWidths =
+                strokeWidthRegex
+                    .findAll(file.readText())
+                    .map { it.groupValues[1] }
+                    .toList()
+
+            assertTrue("${file.name} should declare vector stroke widths.", strokeWidths.isNotEmpty())
+            assertTrue(
+                "${file.name} should use 1.5dp stroke widths for the lighter SF Symbols 3 style.",
+                strokeWidths.all { it == "1.5" },
+            )
+        }
+
+        val chevronStrokeWidths =
+            strokeWidthRegex
+                .findAll(chevronFile.readText())
+                .map { it.groupValues[1] }
+                .toList()
+
+        assertTrue("Chevron icon should declare vector stroke widths.", chevronStrokeWidths.isNotEmpty())
+        assertTrue(
+            "Chevron should use a slightly stronger 1.8dp stroke to keep the navigation affordance visible.",
+            chevronStrokeWidths.all { it == "1.8" },
+        )
+    }
+
+    @Test
+    fun `my page stat icons use compact visual size`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+
+        assertTrue(
+            "My page stat icons should be slightly smaller than the previous 30dp treatment.",
+            source.contains("modifier = Modifier.size(28.dp),"),
+        )
+        assertFalse(
+            "My page stat icons should not keep the old 30dp size.",
+            source.contains("modifier = Modifier.size(30.dp),"),
+        )
+    }
+
+    @Test
+    fun `my page quick action icons use compact visual size`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+
+        assertTrue(
+            "My page quick action icons should be slightly smaller than the previous 36dp treatment.",
+            source.contains("iconSize: Dp = 34.dp,"),
+        )
+        assertFalse(
+            "My page quick action icons should not keep the old 36dp size.",
+            source.contains("modifier = Modifier.size(36.dp),"),
+        )
+    }
+
+    @Test
+    fun `my page guide quick action icon is smaller than duribal icon`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+
+        assertTrue(
+            "Duribal quick action should keep the 34dp base icon size.",
+            source.contains("iconSize = 34.dp,"),
+        )
+        assertTrue(
+            "Guide quick action should use a smaller 30dp icon size.",
+            source.contains("iconSize = 30.dp,"),
+        )
+        assertTrue(
+            "QuickActionCard should apply the per-action icon size.",
+            source.contains("modifier = Modifier.size(iconSize),"),
         )
     }
 

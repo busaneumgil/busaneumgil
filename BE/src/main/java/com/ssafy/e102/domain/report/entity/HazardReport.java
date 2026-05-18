@@ -79,6 +79,12 @@ public class HazardReport extends BaseEntity {
 	@Column(nullable = false, length = 30)
 	private ReportStatus status;
 
+	@Column(name = "processed_by_user_id")
+	private UUID processedByUserId;
+
+	@Column(name = "processed_at")
+	private LocalDateTime processedAt;
+
 	@OrderBy("displayOrder ASC")
 	@OneToMany(mappedBy = "hazardReport", cascade = CascadeType.ALL, orphanRemoval = true)
 	private List<HazardReportImage> images = new ArrayList<>();
@@ -137,19 +143,44 @@ public class HazardReport extends BaseEntity {
 	}
 
 	public void approve() {
-		validatePendingStatus();
+		approve(null, null);
+	}
+
+	public void approve(UUID processedByUserId, LocalDateTime processedAt) {
+		validateApprovableStatus();
 		status = ReportStatus.APPROVED;
+		recordProcessing(processedByUserId, processedAt);
 	}
 
 	public void reject() {
+		reject(null, null);
+	}
+
+	public void reject(UUID processedByUserId, LocalDateTime processedAt) {
 		validatePendingStatus();
 		status = ReportStatus.REJECTED;
+		recordProcessing(processedByUserId, processedAt);
+	}
+
+	public void markProcessed(UUID processedByUserId, LocalDateTime processedAt) {
+		recordProcessing(processedByUserId, processedAt);
 	}
 
 	private void validatePendingStatus() {
 		if (status != ReportStatus.PENDING) {
 			throw new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED);
 		}
+	}
+
+	private void validateApprovableStatus() {
+		if (status != ReportStatus.PENDING && status != ReportStatus.REJECTED) {
+			throw new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED);
+		}
+	}
+
+	private void recordProcessing(UUID processedByUserId, LocalDateTime processedAt) {
+		this.processedByUserId = processedByUserId;
+		this.processedAt = processedAt;
 	}
 
 	private void addImages(List<String> imageObjectKeys) {

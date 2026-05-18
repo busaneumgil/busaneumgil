@@ -3,6 +3,7 @@ package com.ssafy.e102.eumgil.feature.route
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
@@ -1024,6 +1025,7 @@ class RouteSettingViewModel(
             return
         }
         if (mutableUiState.value.destinationHandoffState != RouteDestinationHandoffState.DIRECT) {
+            emitUiEvent(RouteSettingUiEvent.ShowSnackbar(R.string.route_setting_start_destination_required_snackbar))
             return
         }
         val selectedDestination = destinationSelectionRepository.selectedDestination.value ?: return

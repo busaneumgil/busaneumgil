@@ -1,7 +1,10 @@
 package com.ssafy.e102.domain.report.service;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
@@ -10,6 +13,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportListResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportStatusResponse;
@@ -33,16 +37,25 @@ public class AdminHazardReportService {
 	private final HazardReportImageRepository hazardReportImageRepository;
 	private final GeoPointConverter geoPointConverter;
 	private final HazardReportImageUploadService hazardReportImageUploadService;
+	private final AdminHazardRouteReviewService adminHazardRouteReviewService;
+	private final AdminAuditLogService adminAuditLogService;
+	private final Clock clock;
 
 	public AdminHazardReportService(
 		HazardReportRepository hazardReportRepository,
 		HazardReportImageRepository hazardReportImageRepository,
 		GeoPointConverter geoPointConverter,
-		HazardReportImageUploadService hazardReportImageUploadService) {
+		HazardReportImageUploadService hazardReportImageUploadService,
+		AdminHazardRouteReviewService adminHazardRouteReviewService,
+		AdminAuditLogService adminAuditLogService,
+		Clock clock) {
 		this.hazardReportRepository = hazardReportRepository;
 		this.hazardReportImageRepository = hazardReportImageRepository;
 		this.geoPointConverter = geoPointConverter;
 		this.hazardReportImageUploadService = hazardReportImageUploadService;
+		this.adminHazardRouteReviewService = adminHazardRouteReviewService;
+		this.adminAuditLogService = adminAuditLogService;
+		this.clock = clock;
 	}
 
 	public AdminHazardReportListResponse getHazardReports(
@@ -64,17 +77,74 @@ public class AdminHazardReportService {
 		return AdminHazardReportDetailResponse.of(
 			hazardReport,
 			geoPointConverter,
-			createImageReadUrls(hazardReport));
+			createImageReadUrls(hazardReport),
+			adminHazardRouteReviewService.getLatestRouteReview(reportId, hazardReport.getStatus()));
 	}
 
 	@Transactional
 	public AdminHazardReportStatusResponse approveHazardReport(Long reportId) {
-		return updateHazardReportStatus(reportId, ReportStatus.APPROVED);
+		return approveHazardReport(reportId, null);
+	}
+
+	@Transactional
+	public AdminHazardReportStatusResponse approveHazardReport(Long reportId, UUID actorUserId) {
+		LocalDateTime now = LocalDateTime.now(clock);
+		updateHazardReportStatus(reportId, ReportStatus.PENDING, ReportStatus.APPROVED, actorUserId, now);
+		adminAuditLogService.record(
+			actorUserId,
+			"HAZARD_REPORT_STATUS_UPDATE",
+			"HAZARD_REPORT",
+			String.valueOf(reportId),
+			null,
+			null,
+			"제보 승인 처리 reportId=" + reportId,
+			ReportStatus.PENDING,
+			ReportStatus.APPROVED);
+		return new AdminHazardReportStatusResponse(reportId, ReportStatus.APPROVED);
 	}
 
 	@Transactional
 	public AdminHazardReportStatusResponse rejectHazardReport(Long reportId) {
-		return updateHazardReportStatus(reportId, ReportStatus.REJECTED);
+		return rejectHazardReport(reportId, null);
+	}
+
+	@Transactional
+	public AdminHazardReportStatusResponse rejectHazardReport(Long reportId, UUID actorUserId) {
+		LocalDateTime now = LocalDateTime.now(clock);
+		updateHazardReportStatus(reportId, ReportStatus.PENDING, ReportStatus.REJECTED, actorUserId, now);
+		adminAuditLogService.record(
+			actorUserId,
+			"HAZARD_REPORT_STATUS_UPDATE",
+			"HAZARD_REPORT",
+			String.valueOf(reportId),
+			null,
+			null,
+			"제보 반려 처리 reportId=" + reportId,
+			ReportStatus.PENDING,
+			ReportStatus.REJECTED);
+		return new AdminHazardReportStatusResponse(reportId, ReportStatus.REJECTED);
+	}
+
+	private void updateHazardReportStatus(
+		Long reportId,
+		ReportStatus currentStatus,
+		ReportStatus nextStatus,
+		UUID actorUserId,
+		LocalDateTime processedAt) {
+		int updated = hazardReportRepository.updateStatusIfCurrentStatus(
+			reportId,
+			currentStatus,
+			nextStatus,
+			actorUserId,
+			processedAt);
+		if (updated > 0) {
+			return;
+		}
+
+		HazardReport hazardReport = getHazardReport(reportId);
+		throw new HazardReportException(
+			HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED,
+			"현재 상태(" + hazardReport.getStatus() + ")에서는 해당 제보를 처리할 수 없습니다.");
 	}
 
 	private Slice<HazardReport> findHazardReports(ReportStatus status, Long cursor, PageRequest pageRequest) {
@@ -117,23 +187,5 @@ public class AdminHazardReportService {
 	private HazardReport getHazardReport(Long reportId) {
 		return hazardReportRepository.findWithImagesAndUserByReportId(reportId)
 			.orElseThrow(() -> new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_NOT_FOUND));
-	}
-
-	private AdminHazardReportStatusResponse updateHazardReportStatus(Long reportId, ReportStatus nextStatus) {
-		int updatedCount = hazardReportRepository.updateStatusIfCurrentStatus(
-			reportId,
-			ReportStatus.PENDING,
-			nextStatus);
-		if (updatedCount == 0) {
-			throw getStatusUpdateFailure(reportId);
-		}
-		return new AdminHazardReportStatusResponse(reportId, nextStatus);
-	}
-
-	private HazardReportException getStatusUpdateFailure(Long reportId) {
-		if (!hazardReportRepository.existsById(reportId)) {
-			return new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_NOT_FOUND);
-		}
-		return new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED);
 	}
 }

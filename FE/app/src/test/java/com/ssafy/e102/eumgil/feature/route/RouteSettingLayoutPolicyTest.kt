@@ -237,6 +237,51 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route setting no destination state keeps map clear and uses non modal snackbar feedback`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val entryRouteSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingEntryRoute.kt")
+                .readText()
+        val mapStageSection =
+            source
+                .substringAfter("private fun RouteMapStage(")
+                .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
+        val ctaContentSection =
+            source
+                .substringAfter("private fun RouteSettingCtaContent(")
+                .substringBefore("@Composable\nprivate fun RouteMapBackdrop")
+
+        assertTrue(
+            "No-destination copy should not cover the map; disabled-start guidance moves to snackbar feedback.",
+            mapStageSection.contains("shouldShowRouteMapMessageCard(") &&
+                source.contains("private fun shouldShowRouteMapMessageCard(") &&
+                source.contains("previewMap.status != RoutePreviewMapStatus.NO_DESTINATION"),
+        )
+        assertTrue(
+            "Disabled CTA taps should use the existing muted button token style while keeping the snackbar tap target active.",
+            ctaContentSection.contains("onDisabledStartClick") &&
+                ctaContentSection.contains("Surface(") &&
+                ctaContentSection.contains("indication = null") &&
+                ctaContentSection.contains("onClick = if (enabled) onStartClick else onDisabledStartClick") &&
+                ctaContentSection.contains("routeSettingCtaContainerColor(enabled = enabled)") &&
+                ctaContentSection.contains("routeSettingCtaContentColor(enabled = enabled)") &&
+                source.contains("EumSurfaceMuted") &&
+                source.contains("EumTextTertiary") &&
+                !source.contains("RouteStartButtonDisabledContainerColor") &&
+                !source.contains("RouteStartButtonDisabledContentColor") &&
+                !ctaContentSection.contains("enabled = enabled,"),
+        )
+        assertTrue(
+            "Route snackbars should dismiss the current item instead of queueing and should not install a full-screen touch blocker.",
+            entryRouteSource.contains("snackbarHostState.currentSnackbarData?.dismiss()") &&
+                source.contains("SnackbarHost(") &&
+                !source.contains("SnackbarHost(\n            hostState = snackbarHostState,\n            modifier = Modifier.fillMaxSize()"),
+        )
+    }
+
+    @Test
     fun `route loading replaces the map so search transitions do not flicker kakao tiles`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")

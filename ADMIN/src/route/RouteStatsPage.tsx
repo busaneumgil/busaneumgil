@@ -15,15 +15,19 @@ const decimalFormatter = new Intl.NumberFormat("ko-KR", {
 
 type RouteStatsPageData = RouteStatsResponse | AdminRouteStatsResponse;
 
+interface RouteStatsPageProps {
+  data?: RouteStatsPageData;
+  loading?: boolean;
+  error?: Error | null;
+  dataSourceMode?: string;
+  updatedAt?: number;
+}
+
 export function RouteStatsPage({
   data,
   loading = false,
   error,
-}: {
-  data?: RouteStatsPageData;
-  loading?: boolean;
-  error?: Error | null;
-}) {
+}: RouteStatsPageProps) {
   if (!data) {
     return (
       <section className="route-stats-page">

@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.core.model
 
+import org.json.JSONObject
+
 enum class VoiceAnalyzeMode {
     MOBILITY_IMPAIRED,
     LOW_VISION,
@@ -41,7 +43,7 @@ data class VoiceAnalyzeResult(
 )
 
 fun VoiceAnalyzeResult.toJsonString(): String {
-    fun s(v: String?) = if (v != null) "\"$v\"" else "null"
+    fun s(v: String?) = if (v != null) JSONObject.quote(v) else "null"
     return "{" +
         "\"intent\":\"$intent\"," +
         "\"placeName\":${s(placeName)}," +

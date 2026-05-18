@@ -83,6 +83,9 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
     /** 멀티턴 대화 히스토리 (user/assistant 교번 구조). */
     private val conversationHistory = mutableListOf<VoiceAnalyzeHistoryItem>()
 
+    /** 현재 화면 route — AI 서버 context 전달용. Route에서 업데이트된다. */
+    private var currentRoute: String? = null
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -113,6 +116,14 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
         viewModelScope.launch {
             _uiEvent.send(LowVisionVoiceInputEvent.RecordingCancelled)
         }
+    }
+
+    /**
+     * 현재 화면 route를 업데이트한다.
+     * LowVisionVoiceInputRoute에서 navController의 currentRoute 변경 시 호출된다.
+     */
+    fun updateCurrentRoute(route: String?) {
+        currentRoute = route
     }
 
     /**
@@ -217,15 +228,19 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
      * - confirmed == false / intent == UNKNOWN → 히스토리 초기화 후 재녹음
      */
     private suspend fun handleSttResult(sttText: String) {
+        // 현재 발화 추가 전 snapshot 저장 — AI 서버에서 text와 history 중복 방지
+        val historySnapshot = conversationHistory.toList()
+
         // 사용자 발화를 히스토리에 추가
         conversationHistory.add(VoiceAnalyzeHistoryItem(role = ROLE_USER, content = sttText))
 
         try {
-            Log.d(TAG, "=== 음성 분석 요청 (history=${conversationHistory.size}턴): '$sttText' ===")
+            Log.d(TAG, "=== 음성 분석 요청 (history=${historySnapshot.size}턴): '$sttText' ===")
             val result = voiceAnalyzeRepository.analyze(
                 text = sttText,
                 mode = VoiceAnalyzeMode.LOW_VISION,
-                history = conversationHistory.toList(),
+                history = historySnapshot,
+                currentRoute = currentRoute,
             )
             Log.d(TAG, "=== 음성 분석 완료: intent=${result.intent}, confirmed=${result.confirmed}, placeName=${result.placeName} ===")
 

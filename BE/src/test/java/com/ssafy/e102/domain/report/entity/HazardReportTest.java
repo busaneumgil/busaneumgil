@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.report.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -137,6 +138,26 @@ class HazardReportTest {
 			.isInstanceOf(HazardReportException.class)
 			.extracting("errorCode")
 			.isEqualTo(HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED);
+	}
+
+	@Test
+	@DisplayName("반려된 제보는 다시 승인 검수를 거쳐 APPROVED로 변경할 수 있다")
+	void approveRejectedReport() {
+		UUID reviewerUserId = UUID.randomUUID();
+		LocalDateTime processedAt = LocalDateTime.of(2026, 5, 18, 14, 0);
+		HazardReport hazardReport = HazardReport.create(
+			user(UUID.randomUUID()),
+			ReportType.SIDEWALK_MISSING,
+			null,
+			geoPointConverter.toPoint(new GeoPointRequest(35.1686, 129.0576)),
+			null);
+		hazardReport.reject();
+
+		hazardReport.approve(reviewerUserId, processedAt);
+
+		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.APPROVED);
+		assertThat(hazardReport.getProcessedByUserId()).isEqualTo(reviewerUserId);
+		assertThat(hazardReport.getProcessedAt()).isEqualTo(processedAt);
 	}
 
 	private User user(UUID userId) {

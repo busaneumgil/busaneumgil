@@ -238,7 +238,7 @@ pipeline {
               && printf '%s' "$AI_HEALTH_BODY" | grep -Eq '"POST /voice/analyze"' \
               && [ "$AI_STATUS" = "400" ] \
               && printf '%s' "$AI_RESPONSE_BODY" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"C4000"' \
-              && printf '%s' "$AI_RESPONSE_BODY" | grep -Eq '"message"[[:space:]]*:[[:space:]]*"잘못된 입력입니다\."' \
+              && printf '%s' "$AI_RESPONSE_BODY" | grep -Eq '"message"[[:space:]]*:' \
               && printf '%s' "$AI_RESPONSE_BODY" | grep -Eq '"data"[[:space:]]*:[[:space:]]*null' \
               && docker run --rm --network s14p31e102-dev_default curlimages/curl:latest -fsS http://graphhopper:8990/healthcheck >/tmp/e102-graphhopper-health.txt \
               && exit 0

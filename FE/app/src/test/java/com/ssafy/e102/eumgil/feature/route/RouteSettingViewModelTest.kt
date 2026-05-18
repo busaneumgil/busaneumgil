@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.route
 
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
@@ -224,6 +225,32 @@ class RouteSettingViewModelTest {
             assertFalse(uiState.routePreviewMap.isDisplayable)
             assertFalse(uiState.isStartEnabled)
             assertEquals("검색 또는 지도에서 목적지를 선택하면 안내 시작을 활성화합니다.", uiState.cta.supportingText)
+        }
+
+    @Test
+    fun `start action without destination emits destination required snackbar instead of navigation`() =
+        runTest {
+            val viewModel =
+                RouteSettingViewModel(
+                    routeRepository = testRouteRepository(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                )
+
+            advanceUntilIdle()
+            val uiEvent = async { viewModel.uiEvent.first() }
+            runCurrent()
+
+            viewModel.onAction(RouteSettingUiAction.StartNavigationClicked)
+            advanceUntilIdle()
+
+            val event = uiEvent.await()
+            assertTrue(event is RouteSettingUiEvent.ShowSnackbar)
+            assertEquals(
+                R.string.route_setting_start_destination_required_snackbar,
+                (event as RouteSettingUiEvent.ShowSnackbar).messageResId,
+            )
+            assertFalse(viewModel.uiState.value.ctaAcknowledged)
+            assertFalse(viewModel.uiState.value.isStartEnabled)
         }
 
     @Test

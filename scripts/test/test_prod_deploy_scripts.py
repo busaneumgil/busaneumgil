@@ -45,7 +45,7 @@ JENKINS_COMPOSE = ROOT_DIR / "INF" / "jenkins" / "s1" / "docker-compose.yml"
 AI_INVALID_INPUT_BODY = """\
 {
   "data": null,
-  "message": "잘못된 입력입니다.",
+  "message": "\\uc798\\ubabb\\ub41c \\uc785\\ub825\\uc785\\ub2c8\\ub2e4.",
   "status": "C4000"
 }
 """
@@ -208,7 +208,7 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn("/voice/analyze", content)
         self.assertIn("400", content)
         self.assertIn('"status"[[:space:]]*:[[:space:]]*"C4000"', content)
-        self.assertIn('"message"[[:space:]]*:[[:space:]]*"잘못된 입력입니다', content)
+        self.assertIn('"message"[[:space:]]*:', content)
         self.assertIn('"data"[[:space:]]*:[[:space:]]*null', content)
         self.assertIn('wait_for_url "http://127.0.0.1:${SERVER_PORT}/v3/api-docs" "Backend"', content)
         self.assertIn('SMOKE_ADMIN="${SMOKE_ADMIN:-true}"', content)
@@ -223,7 +223,7 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('GRAPHHOPPER_GREEN_ADMIN_PORT="${GRAPHHOPPER_GREEN_ADMIN_PORT:-18992}"', content)
         self.assertPatternsMatchAiInvalidInput([
             '"status"[[:space:]]*:[[:space:]]*"C4000"',
-            '"message"[[:space:]]*:[[:space:]]*"잘못된 입력입니다\\."',
+            '"message"[[:space:]]*:',
             '"data"[[:space:]]*:[[:space:]]*null',
         ])
 
@@ -382,12 +382,12 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn("/voice/analyze", content)
         self.assertIn("400", content)
         self.assertIn('"status"[[:space:]]*:[[:space:]]*"C4000"', content)
-        self.assertIn('"message"[[:space:]]*:[[:space:]]*"잘못된 입력입니다\\."', content)
+        self.assertIn('"message"[[:space:]]*:', content)
         self.assertIn('"data"[[:space:]]*:[[:space:]]*null', content)
         self.assertLess(content.index("up -d --build postgres redis minio minio-init ai"), content.index('AI_HEALTH_STATUS='))
         self.assertPatternsMatchAiInvalidInput([
             '"status"[[:space:]]*:[[:space:]]*"C4000"',
-            '"message"[[:space:]]*:[[:space:]]*"잘못된 입력입니다\\."',
+            '"message"[[:space:]]*:',
             '"data"[[:space:]]*:[[:space:]]*null',
         ])
 

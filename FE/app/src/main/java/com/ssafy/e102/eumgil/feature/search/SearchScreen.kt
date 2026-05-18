@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -628,7 +629,10 @@ private fun SearchResultsContent(
                 SearchResultStateBox {
                     SearchCenteredStateMessage(
                         title = stringResource(id = R.string.search_screen_empty_result_title),
-                        description = stringResource(id = copy.emptyResultDescriptionRes),
+                        description = null,
+                        illustrationRes = R.drawable.search_empty_result_illustration,
+                        illustrationSize = SearchEmptyResultIllustrationSize,
+                        contentOffsetY = SearchEmptyResultContentOffsetY,
                         useEmptyResultTypography = true,
                     )
                 }
@@ -1167,7 +1171,10 @@ private fun SearchResultSection(
             is SearchResultUiState.Empty ->
                 SearchCenteredStateMessage(
                     title = stringResource(id = R.string.search_screen_empty_result_title),
-                    description = stringResource(id = copy.emptyResultDescriptionRes),
+                    description = null,
+                    illustrationRes = R.drawable.search_empty_result_illustration,
+                    illustrationSize = SearchEmptyResultIllustrationSize,
+                    contentOffsetY = SearchEmptyResultContentOffsetY,
                     useEmptyResultTypography = true,
                 )
 
@@ -1652,6 +1659,8 @@ private val SearchResultPlaceIconContainerSize: Dp = 56.dp
 private val SearchResultPlaceIconSize: Dp = 32.dp
 private val SearchStateIllustrationMinHeight: Dp = 360.dp
 private val SearchStateIllustrationSize: Dp = 128.dp
+private val SearchEmptyResultIllustrationSize: Dp = 260.dp
+private val SearchEmptyResultContentOffsetY: Dp = (-32).dp
 private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 
 private val SearchVoiceInputBottomSheetWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
@@ -1661,11 +1670,14 @@ private val SearchEmptyResultTitleLineHeight = 34.sp
 @Composable
 private fun SearchCenteredStateMessage(
     title: String,
-    description: String,
+    description: String?,
     modifier: Modifier = Modifier,
     supportingText: String? = null,
     showIllustration: Boolean = true,
     showLoadingIndicator: Boolean = false,
+    @DrawableRes illustrationRes: Int = R.drawable.manual_galmaegi,
+    illustrationSize: Dp = SearchStateIllustrationSize,
+    contentOffsetY: Dp = 0.dp,
     useEmptyResultTypography: Boolean = false,
 ) {
     val titleStyle =
@@ -1689,10 +1701,17 @@ private fun SearchCenteredStateMessage(
         } else {
             MaterialTheme.typography.bodyLarge
         }
+    val titleColor =
+        if (useEmptyResultTypography) {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
 
     Column(
         modifier =
             modifier
+                .offset(y = contentOffsetY)
                 .fillMaxWidth()
                 .heightIn(min = SearchStateIllustrationMinHeight)
                 .padding(
@@ -1704,9 +1723,9 @@ private fun SearchCenteredStateMessage(
     ) {
         if (showIllustration) {
             Image(
-                painter = painterResource(id = R.drawable.manual_galmaegi),
+                painter = painterResource(id = illustrationRes),
                 contentDescription = null,
-                modifier = Modifier.size(SearchStateIllustrationSize),
+                modifier = Modifier.size(illustrationSize),
                 contentScale = ContentScale.Fit,
             )
         }
@@ -1723,16 +1742,18 @@ private fun SearchCenteredStateMessage(
             text = title,
             modifier = Modifier.padding(top = EumSpacing.medium),
             style = titleStyle,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = titleColor,
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = description,
-            modifier = Modifier.padding(top = descriptionTopPadding),
-            style = descriptionStyle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-            textAlign = TextAlign.Center,
-        )
+        if (!description.isNullOrBlank()) {
+            Text(
+                text = description,
+                modifier = Modifier.padding(top = descriptionTopPadding),
+                style = descriptionStyle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                textAlign = TextAlign.Center,
+            )
+        }
         if (!supportingText.isNullOrBlank()) {
             Text(
                 text = supportingText,

@@ -165,6 +165,36 @@ class SearchScreenPolicyTest {
     }
 
     @Test
+    fun `empty result state uses dedicated no result illustration`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val emptyStateSection =
+            source
+                .substringAfter("is SearchResultUiState.Empty ->")
+                .substringBefore("is SearchResultUiState.Error ->")
+
+        assertTrue(
+            "Empty search results should use the dedicated no-result illustration instead of the shared mobility image.",
+            emptyStateSection.contains("illustrationRes = R.drawable.search_empty_result_illustration"),
+        )
+        assertTrue(
+            "The no-result illustration should use the dedicated larger empty-state size.",
+            emptyStateSection.contains("illustrationSize = SearchEmptyResultIllustrationSize") &&
+                source.contains("private val SearchEmptyResultIllustrationSize: Dp = 260.dp"),
+        )
+        assertTrue(
+            "The no-result illustration and title block should be nudged upward from the centered baseline.",
+            emptyStateSection.contains("contentOffsetY = SearchEmptyResultContentOffsetY") &&
+                source.contains("private val SearchEmptyResultContentOffsetY: Dp = (-32).dp"),
+        )
+        assertTrue(
+            "The dedicated no-result illustration PNG should be checked into drawable-nodpi.",
+            File("src/main/res/drawable-nodpi/search_empty_result_illustration.png").exists(),
+        )
+    }
+
+    @Test
     fun `search result error state avoids card chrome`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
@@ -213,7 +243,7 @@ class SearchScreenPolicyTest {
     }
 
     @Test
-    fun `empty result state uses requested title and description typography`() {
+    fun `empty result state omits helper description and dims title`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
                 .readText()
@@ -237,10 +267,19 @@ class SearchScreenPolicyTest {
                 centeredStateSection.contains("fontWeight = FontWeight.Bold"),
         )
         assertTrue(
-            "Empty result description should be 16px regular with 16dp spacing from the title.",
-            centeredStateSection.contains("fontSize = 16.sp") &&
-                centeredStateSection.contains("fontWeight = FontWeight.Normal") &&
-                centeredStateSection.contains("val descriptionTopPadding = if (useEmptyResultTypography) 16.dp"),
+            "Empty result title should use the same subdued gray tone as the removed helper description.",
+            centeredStateSection.contains("val titleColor =") &&
+                centeredStateSection.contains("if (useEmptyResultTypography)") &&
+                centeredStateSection.contains("MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)") &&
+                centeredStateSection.contains("color = titleColor"),
+        )
+        assertTrue(
+            "Empty result state should intentionally omit the helper description below the title.",
+            emptyStateSection.contains("description = null"),
+        )
+        assertFalse(
+            "Empty result state should no longer render the retry helper copy.",
+            emptyStateSection.contains("description = stringResource(id = copy.emptyResultDescriptionRes)"),
         )
     }
 

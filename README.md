@@ -66,6 +66,7 @@
 
 - PRD: [Docs/PRD/2026-04-09_부산이음길_PRD.md](Docs/PRD/2026-04-09_부산이음길_PRD.md)
 - 프로젝트 기획서: [Docs/기획/2026-04-10 최종_프로젝트_기획서.md](<Docs/기획/2026-04-10 최종_프로젝트_기획서.md>)
+- Frontend README: [FE/README.md](FE/README.md)
 - 인프라 설계안: [Docs/인프라/2026-04-20_AWS_인프라_설계안.md](<Docs/인프라/2026-04-20_AWS_인프라_설계안.md>)
 - INF 기준: [INF/README.md](INF/README.md)
 
@@ -91,7 +92,7 @@
 
 ```text
 S14P31E102/
-├── FE/                    # Android 앱
+├── FE/                    # Android 앱, 상세는 FE/README.md 참고
 ├── BE/                    # Spring Boot API
 ├── AI/                    # Python 실험 코드, 데이터 가공, 인식 관련 작업
 ├── Docs/                  # 기획, PRD, API, 인프라, 회의록 등 설명 문서

@@ -170,11 +170,32 @@ fun MapRoute(
         viewModel.onAction(MapUiAction.RouteEndpointMapPickerDismissed)
     }
 
-    BackHandler(enabled = uiState.facilityDetailSheetState.isVisible && uiState.isVoiceSearchVisible.not()) {
+    BackHandler(
+        enabled =
+            uiState.approvedReportSheetState.isVisible &&
+                uiState.routeEndpointMapPickerState == null &&
+                uiState.isVoiceSearchVisible.not(),
+    ) {
+        viewModel.onAction(MapUiAction.ApprovedReportSheetDismissed)
+    }
+
+    BackHandler(
+        enabled =
+            uiState.facilityDetailSheetState.isVisible &&
+                uiState.approvedReportSheetState.isVisible.not() &&
+                uiState.routeEndpointMapPickerState == null &&
+                uiState.isVoiceSearchVisible.not(),
+    ) {
         viewModel.onAction(MapUiAction.FacilityDetailDismissed)
     }
 
-    BackHandler(enabled = uiState.facilityDetailSheetState.isVisible.not() && uiState.isVoiceSearchVisible.not()) {
+    BackHandler(
+        enabled =
+            uiState.facilityDetailSheetState.isVisible.not() &&
+                uiState.approvedReportSheetState.isVisible.not() &&
+                uiState.routeEndpointMapPickerState == null &&
+                uiState.isVoiceSearchVisible.not(),
+    ) {
         if (activity?.moveTaskToBack(true) == false) {
             activity.finish()
         }

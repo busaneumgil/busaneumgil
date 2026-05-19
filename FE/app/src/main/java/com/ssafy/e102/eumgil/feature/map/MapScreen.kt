@@ -69,6 +69,7 @@ import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceTransitArrival
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.map.component.ApprovedReportBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShellState
 import com.ssafy.e102.eumgil.feature.map.component.MapFloatingControls
@@ -83,9 +84,11 @@ import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationBottomSheetS
 import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationBottomSheetState
 import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationRowState
 import com.ssafy.e102.eumgil.feature.map.component.resolveMapIntegrationState
+import com.ssafy.e102.eumgil.feature.map.model.ApprovedReportSheetState
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
+import com.ssafy.e102.eumgil.feature.map.model.parseApprovedReportClickTargetId
 import kotlin.math.PI
 import kotlin.math.asin
 import kotlin.math.cos
@@ -113,8 +116,8 @@ fun MapScreen(
     val mapContent: @Composable () -> Unit = {
         MapViewport(
             state = viewportState,
-            onMarkerClick = { markerId ->
-                onAction(MapUiAction.MarkerTapped(markerId))
+            onMarkerClick = { clickTargetId ->
+                dispatchMapMarkerClick(clickTargetId, onAction)
             },
             onCameraMoveEnd = { center, zoomLevel, isUserGesture, isSelectedMapPinVisibleInViewport ->
                 onAction(
@@ -204,6 +207,7 @@ fun MapScreen(
                         recentDestinationSheetState.copy(
                             isVisible =
                                 recentDestinationSheetState.isVisible &&
+                                    uiState.approvedReportSheetState.isVisible.not() &&
                                     facilityDetailSheetUiState.isVisible.not() &&
                                     uiState.routeEndpointMapPickerState == null &&
                                     uiState.isVoiceSearchVisible.not(),
@@ -222,6 +226,7 @@ fun MapScreen(
                         facilityDetailSheetUiState.toShellState().copy(
                             isVisible =
                                 facilityDetailSheetUiState.isVisible &&
+                                    uiState.approvedReportSheetState.isVisible.not() &&
                                     uiState.isVoiceSearchVisible.not(),
                         ),
                     modifier = Modifier.fillMaxSize(),
@@ -335,6 +340,20 @@ fun MapScreen(
                             }
                         }
                     },
+                )
+
+                ApprovedReportBottomSheetShell(
+                    state =
+                        if (uiState.approvedReportSheetState.isVisible &&
+                            uiState.routeEndpointMapPickerState == null &&
+                            uiState.isVoiceSearchVisible.not()
+                        ) {
+                            uiState.approvedReportSheetState
+                        } else {
+                            ApprovedReportSheetState()
+                        },
+                    onDismissRequest = { onAction(MapUiAction.ApprovedReportSheetDismissed) },
+                    modifier = Modifier.fillMaxSize(),
                 )
                 },
             )
@@ -1621,6 +1640,7 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
                     currentLocationMarker?.let {
                         stringResource(id = R.string.navigation_map_marker_current)
                     },
+                approvedReportMarkers = uiState.approvedReportMarkerState.visibleReports,
             ),
         selectedMarkerId = uiState.selectedMarkerId,
         selectedMapPinCoordinate = uiState.selectedMapPinCoordinate,
@@ -2042,6 +2062,15 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
         PlaceCategory.OTHER -> R.drawable.ic_map_selected_pin_blue
         null -> R.drawable.ic_map_selected_pin_blue
     }
+
+private fun dispatchMapMarkerClick(
+    clickTargetId: String,
+    onAction: (MapUiAction) -> Unit,
+) {
+    parseApprovedReportClickTargetId(clickTargetId)?.let { reportId ->
+        onAction(MapUiAction.ApprovedReportMarkerTapped(reportId = reportId))
+    } ?: onAction(MapUiAction.MarkerTapped(clickTargetId))
+}
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEGREES_TO_RADIANS = PI / 180.0

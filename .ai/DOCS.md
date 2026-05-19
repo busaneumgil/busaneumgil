@@ -95,7 +95,7 @@
 
 ## Common conventions
 
-- 문서 작성 규칙: `Docs/2026-04-07_docs_작성_규칙.md`
+- 문서 작성 규칙: `Docs/컨벤션/2026-04-07_docs_작성_규칙.md`
 - Git/Jira/MR 규칙: `Docs/컨벤션/2026-04-09_Git_Jira_컨벤션.md`
 - API 응답 코드 규칙: `Docs/컨벤션/2026-04-14_API_응답_코드_컨벤션.md`
 - FE 코드 컨벤션: `FE/docs/2026-04-13_부산이음길_FE_코드_컨벤션.md`

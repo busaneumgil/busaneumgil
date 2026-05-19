@@ -10,6 +10,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -282,6 +283,17 @@ private fun ApprovedHazardMarkerImageViewer(
                             .background(Color.Black.copy(alpha = 0.58f)),
                 )
             }
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .testTag("approvedHazardViewerBackdrop")
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismiss,
+                        ),
+            )
 
             IconButton(
                 onClick = onDismiss,

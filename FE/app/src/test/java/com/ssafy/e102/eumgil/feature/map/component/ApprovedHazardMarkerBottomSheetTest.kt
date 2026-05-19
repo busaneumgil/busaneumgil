@@ -1,11 +1,14 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilTheme
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.data.repository.ApprovedHazardMarker
@@ -114,6 +117,31 @@ class ApprovedHazardMarkerBottomSheetTest {
     }
 
     @Test
+    fun `viewer backdrop tap dismisses fullscreen viewer`() {
+        composeRule.setContent {
+            BusanEumgilTheme {
+                ApprovedHazardMarkerBottomSheet(
+                    marker =
+                        marker(
+                            imageUrls = listOf("https://example.com/one.jpg", "https://example.com/two.jpg"),
+                        ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("approvedHazardThumbnail-0").performClick()
+        assertTrue(composeRule.onAllNodesWithText("1 / 2").fetchSemanticsNodes().isNotEmpty())
+
+        composeRule.onNodeWithTag("approvedHazardViewerBackdrop").performTouchInput {
+            click(Offset(8f, 8f))
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText("1 / 2").fetchSemanticsNodes().isEmpty()
+        }
+    }
+
+    @Test
     fun `viewer policy uses white foreground on the dark fullscreen surface`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/ApprovedHazardMarkerBottomSheet.kt")
@@ -139,6 +167,21 @@ class ApprovedHazardMarkerBottomSheetTest {
                 .substringBefore("val sheetMaxHeight")
 
         assertTrue(rootSection.contains("zIndex(ApprovedHazardMarkerOverlayZIndex)"))
+    }
+
+    @Test
+    fun `viewer backdrop installs a dedicated input barrier`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/ApprovedHazardMarkerBottomSheet.kt")
+                .readText()
+        val viewerSection =
+            source
+                .substringAfter("private fun ApprovedHazardMarkerImageViewer(")
+                .substringBefore("internal data class ApprovedHazardMarkerImageViewerState")
+
+        assertTrue(viewerSection.contains("approvedHazardViewerBackdrop"))
+        assertTrue(viewerSection.contains(".clickable("))
+        assertTrue(viewerSection.contains("onClick = onDismiss"))
     }
 
     private fun marker(imageUrls: List<String>) =

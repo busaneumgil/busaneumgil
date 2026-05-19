@@ -3189,8 +3189,8 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
     transitPresentation: NavigationTransitPresentation?,
 ): NavigationFocusedSegmentCardUiState? {
     val totalStepCount = selectedRoute.segments.size.coerceAtLeast(1)
-    val remainingTimeLabel = estimatedMinutes.toDestinationRemainingTimeLabel()
     if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
+        val remainingTimeLabel = estimatedMinutes.toDestinationRemainingTimeLabel()
         return NavigationFocusedSegmentCardUiState(
             sequenceLabel = "1 / $totalStepCount",
             instruction = NavigationOriginHeroTitle,
@@ -3205,6 +3205,12 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
 
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex) ?: return null
     val heroDetail = selectedRoute.toNavigationHeroDetail(focusedSegment)
+    val remainingTimeLabel =
+        selectedRoute
+            .remainingMinutesFromSegmentIndex(
+                segmentIndex = focusedSegmentIndex,
+                fallbackEstimatedMinutes = estimatedMinutes,
+            ).toDestinationRemainingTimeLabel()
 
     return NavigationFocusedSegmentCardUiState(
         sequenceLabel = "${focusedSegment.sequence} / $totalStepCount",
@@ -3217,6 +3223,46 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
         guidanceAction = heroDetail.guidanceAction,
         transitInfo = selectedRoute.resolveFocusedSegmentTransitInfo(focusedSegment, transitPresentation),
     )
+}
+
+private fun RouteCandidate.remainingMinutesFromSegmentIndex(
+    segmentIndex: Int,
+    fallbackEstimatedMinutes: Int?,
+): Int? {
+    if (segments.isEmpty()) return fallbackEstimatedMinutes
+    val boundedIndex = segmentIndex.coerceIn(0, segments.lastIndex)
+    val totalSeconds =
+        totalDurationSeconds().takeIf { seconds -> seconds > 0 }
+            ?: fallbackEstimatedMinutes?.takeIf { minutes -> minutes >= 0 }?.times(60)
+            ?: return fallbackEstimatedMinutes
+
+    segments
+        .getOrNull(boundedIndex)
+        ?.durationFromRouteStartSeconds
+        ?.takeIf { seconds -> seconds >= 0 }
+        ?.let { elapsedSeconds ->
+            return (totalSeconds - elapsedSeconds)
+                .coerceAtLeast(0)
+                .toEtaMinutes()
+        }
+
+    val totalSegmentDistance = segments.sumOf { segment -> segment.distanceMeters.coerceAtLeast(0) }
+    val routeDistance = totalSegmentDistance.takeIf { distance -> distance > 0 } ?: totalDistanceMeters()
+    if (routeDistance <= 0) return fallbackEstimatedMinutes
+
+    val elapsedDistance =
+        segments
+            .take(boundedIndex)
+            .sumOf { segment -> segment.distanceMeters.coerceAtLeast(0) }
+            .coerceAtMost(routeDistance)
+    val remainingRatio =
+        ((routeDistance - elapsedDistance).toDouble() / routeDistance.toDouble())
+            .coerceIn(0.0, 1.0)
+
+    return (totalSeconds * remainingRatio)
+        .roundToInt()
+        .coerceAtLeast(0)
+        .toEtaMinutes()
 }
 
 private fun RouteCandidate.resolveFocusedSegmentTransitInfo(

@@ -1213,8 +1213,8 @@ class NavigationViewModelTest {
             assertTrue(viewModel.uiState.value.segmentSync.isInspectingSegments)
             assertEquals("2 / 2", viewModel.uiState.value.focusedSegmentCard?.sequenceLabel)
             assertEquals("우회전", viewModel.uiState.value.focusedSegmentCard?.heroTitle)
-            assertEquals("목적지까지 약 15분", viewModel.uiState.value.focusedSegmentCard?.heroDescription)
-            assertEquals("목적지까지 약 15분", viewModel.uiState.value.focusedSegmentCard?.distanceLabel)
+            assertEquals("목적지까지 약 10분", viewModel.uiState.value.focusedSegmentCard?.heroDescription)
+            assertEquals("목적지까지 약 10분", viewModel.uiState.value.focusedSegmentCard?.distanceLabel)
 
             viewModel.onAction(NavigationUiAction.ReturnToActiveSegmentClicked)
             advanceUntilIdle()

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Rule
@@ -34,19 +35,17 @@ class TextSizeSettingViewModelTest {
         }
 
     @Test
-    fun `selecting a different option saves preference and emits saved message`() =
+    fun `selecting a different option saves preference without snackbar feedback`() =
         runTest {
             val repository = FakeTextSizePreferenceRepository(TextSizePreference.DEFAULT)
             val viewModel = TextSizeSettingViewModel(repository)
-            val event = async { viewModel.uiEvent.first() }
-            runCurrent()
 
             viewModel.onAction(TextSizeSettingUiAction.PreferenceSelected(TextSizePreference.EXTRA_LARGE))
             advanceUntilIdle()
 
             assertEquals(TextSizePreference.EXTRA_LARGE, repository.savedPreference)
             assertEquals(TextSizePreference.EXTRA_LARGE, viewModel.uiState.value.selectedPreference)
-            assertSame(TextSizeSettingUiEvent.ShowSavedMessage, event.await())
+            assertEquals(null, withTimeoutOrNull(1) { viewModel.uiEvent.first() })
         }
 
     @Test

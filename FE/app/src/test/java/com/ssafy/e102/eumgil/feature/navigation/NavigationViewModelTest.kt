@@ -227,7 +227,7 @@ class NavigationViewModelTest {
             assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
             assertEquals(null, viewModel.uiState.value.focusedSegmentCard)
             assertEquals("2 / 2", viewModel.uiState.value.progressLabel)
-            assertEquals("곧 우회전입니다", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("우회전", viewModel.uiState.value.stepCard.heroTitle)
             assertEquals("목적지까지 약 8분", viewModel.uiState.value.stepCard.heroDescription)
         }
 
@@ -323,7 +323,7 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, viewModel.uiState.value.segmentSync.activeSegmentIndex)
-            assertEquals("곧 우회전입니다", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("우회전", viewModel.uiState.value.stepCard.heroTitle)
             assertEquals("목적지까지 약 8분", viewModel.uiState.value.stepCard.heroDescription)
             assertTrue(spokenBriefings.isNotEmpty())
             collector.cancel()
@@ -565,7 +565,7 @@ class NavigationViewModelTest {
             assertEquals(1, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
             assertFalse(viewModel.uiState.value.segmentSync.isInspectingSegments)
             assertEquals("2 / 2", viewModel.uiState.value.progressLabel)
-            assertEquals("곧 우회전입니다", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("우회전", viewModel.uiState.value.stepCard.heroTitle)
         }
 
     @Test
@@ -594,7 +594,7 @@ class NavigationViewModelTest {
 
             assertEquals(0, viewModel.uiState.value.segmentSync.activeSegmentIndex)
             assertEquals(0, viewModel.uiState.value.segmentSync.focusedSegmentIndex)
-            assertEquals("220m 후 직진 이동입니다", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("220m 직진 이동", viewModel.uiState.value.stepCard.heroTitle)
         }
 
     @Test
@@ -759,7 +759,7 @@ class NavigationViewModelTest {
             locationManager.emitLocation(WALK_VERY_NEAR_TURN_POINT.toLocationSnapshot(recordedAtEpochMillis = 5_500L))
             advanceUntilIdle()
 
-            assertEquals(2, spokenBriefings.size)
+            assertEquals(3, spokenBriefings.size)
             collector.cancel()
         }
 
@@ -1891,7 +1891,7 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(listOf("목적지에 곧 도착합니다."), spokenBriefings)
-            assertEquals("목적지에 곧 도착합니다.", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("목적지까지 20m", viewModel.uiState.value.stepCard.heroTitle)
             collector.cancel()
         }
 
@@ -2363,12 +2363,15 @@ private fun NavigationViewModel.enableReadyTts() {
 }
 
 private fun expectedSpeechText(stepCard: NavigationStepCardUiState): String =
-    listOf(
-        stepCard.heroTitle.trim(),
-        stepCard.heroDescription.trim(),
-    ).filter(String::isNotEmpty)
-        .distinct()
-        .joinToString(separator = " ")
+    stepCard.speechText
+        .trim()
+        .takeIf(String::isNotEmpty)
+        ?: listOf(
+            stepCard.heroTitle.trim(),
+            stepCard.heroDescription.trim(),
+        ).filter(String::isNotEmpty)
+            .distinct()
+            .joinToString(separator = " ")
 
 private fun expectedSpeechText(focusedCard: NavigationFocusedSegmentCardUiState): String =
     listOf(

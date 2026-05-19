@@ -69,6 +69,7 @@ fun MapRoute(
                 authSessionRepository = appContainer.authSessionRepository,
                 searchRepository = appContainer.searchRepository,
                 placesRepository = appContainer.placesRepository,
+                approvedReportMapRepository = appContainer.approvedReportMapRepository,
             )
         }
     val viewModel =

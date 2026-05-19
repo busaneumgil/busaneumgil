@@ -31,6 +31,7 @@ import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthLogoutRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
+import com.ssafy.e102.eumgil.data.repository.ApprovedReportMapRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultAuthSessionRepository
@@ -48,6 +49,7 @@ import com.ssafy.e102.eumgil.data.repository.DefaultTextSizePreferenceRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
+import com.ssafy.e102.eumgil.data.repository.EmptyApprovedReportMapRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthLoginRepository
@@ -77,6 +79,9 @@ object RepositoryModule {
 
     fun provideDestinationPreviewRepository(): DestinationPreviewRepository =
         InMemoryDestinationPreviewRepository()
+
+    fun provideApprovedReportMapRepository(): ApprovedReportMapRepository =
+        EmptyApprovedReportMapRepository
 
     fun provideAuthSessionRepository(
         authSessionLocalDataSource: AuthSessionLocalDataSource,

@@ -8,6 +8,8 @@ import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRequest
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
+import com.ssafy.e102.eumgil.feature.map.model.ApprovedReportMarkerUiState
+import com.ssafy.e102.eumgil.feature.map.model.ApprovedReportSheetState
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
@@ -31,6 +33,8 @@ data class MapUiState(
     val isSearchHereVisible: Boolean = false,
     val recentDestinations: List<RecentDestination> = emptyList(),
     val facilityDetailSheetState: MapFacilityDetailSheetState = MapFacilityDetailSheetState(),
+    val approvedReportMarkerState: ApprovedReportMarkerUiState = ApprovedReportMarkerUiState(),
+    val approvedReportSheetState: ApprovedReportSheetState = ApprovedReportSheetState(),
     val routeEndpointMapPickerState: RouteEndpointMapPickerState? = null,
     val isVoiceSearchVisible: Boolean = false,
 )
@@ -92,6 +96,12 @@ sealed interface MapUiAction {
     data object ZoomOutClicked : MapUiAction
 
     data object FacilityDetailDismissed : MapUiAction
+
+    data class ApprovedReportMarkerTapped(
+        val reportId: Long,
+    ) : MapUiAction
+
+    data object ApprovedReportSheetDismissed : MapUiAction
 
     data class RouteEndpointMapPickerEntered(
         val editingTarget: RouteEditingTarget,

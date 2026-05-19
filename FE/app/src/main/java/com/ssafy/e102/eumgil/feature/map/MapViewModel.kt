@@ -13,6 +13,7 @@ import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
 import com.ssafy.e102.eumgil.core.model.FacilityBrowseData
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
 import com.ssafy.e102.eumgil.core.model.FacilityDetailSeed
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.MapPlaceClickType
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailRequest
@@ -21,12 +22,15 @@ import com.ssafy.e102.eumgil.core.model.PlaceDetail
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.toPlaceDestination
+import com.ssafy.e102.eumgil.data.repository.ApprovedReportMapQuery
+import com.ssafy.e102.eumgil.data.repository.ApprovedReportMapRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRequest
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
+import com.ssafy.e102.eumgil.data.repository.EmptyApprovedReportMapRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.NoOpDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
@@ -35,6 +39,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.observeAccountScopeKey
 import com.ssafy.e102.eumgil.data.repository.toBookmarkData
+import com.ssafy.e102.eumgil.feature.map.model.ApprovedReportSheetState
 import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MAX_ZOOM_LEVEL
 import com.ssafy.e102.eumgil.feature.map.model.KAKAO_MAP_MIN_ZOOM_LEVEL
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
@@ -50,6 +55,9 @@ import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
 import com.ssafy.e102.eumgil.feature.map.model.defaultZoomLevel
 import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
+import com.ssafy.e102.eumgil.feature.map.model.shouldShowApprovedReportMarkers
+import com.ssafy.e102.eumgil.feature.map.model.toApprovedReportMarkerDataOrNull
+import com.ssafy.e102.eumgil.feature.map.model.toApprovedReportSheetState
 import com.ssafy.e102.eumgil.feature.map.model.toMapCoordinate
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
@@ -75,6 +83,7 @@ class MapViewModel(
     private val authSessionRepository: AuthSessionRepository? = null,
     private val searchRepository: SearchRepository = NoOpSearchRepository,
     private val placesRepository: PlacesRepository? = null,
+    private val approvedReportMapRepository: ApprovedReportMapRepository = EmptyApprovedReportMapRepository,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = mutableUiState.asStateFlow()
@@ -109,6 +118,8 @@ class MapViewModel(
     private var lastPlacesBrowseAnchorSource: PlacesBrowseAnchorSource? = null
     private var placesBrowseRequestSequence: Long = 0L
     private var lastMarkerOverlayLogSnapshot: String? = null
+    private var lastApprovedReportQuery: ApprovedReportMapQuery? = null
+    private var approvedReportRequestSequence: Long = 0L
 
     init {
         mutableUiState.update { state ->
@@ -154,6 +165,7 @@ class MapViewModel(
 
         refreshRecentDestinations()
         renderUiState()
+        loadApprovedReportsForViewport(force = true)
     }
 
     fun onRouteStopped() {
@@ -212,6 +224,8 @@ class MapViewModel(
 
     fun onAction(action: MapUiAction) {
         when (action) {
+            is MapUiAction.ApprovedReportMarkerTapped -> handleApprovedReportMarkerTapped(action.reportId)
+            MapUiAction.ApprovedReportSheetDismissed -> dismissApprovedReportSheet()
             MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
             MapUiAction.FacilityPhoneClicked -> handleFacilityPhoneClicked()
@@ -395,6 +409,7 @@ class MapViewModel(
     }
 
     private fun handleMarkerTapped(markerId: String) {
+        dismissApprovedReportSheet()
         if (selectedMarkerId == markerId) {
             updateSelectedFacility(markerId = null)
             renderSelectedFacilityState()
@@ -426,6 +441,42 @@ class MapViewModel(
 
         updateSelectedFacility(markerId = markerId)
         renderSelectedFacilityState()
+    }
+
+    private fun handleApprovedReportMarkerTapped(reportId: Long) {
+        val state = mutableUiState.value
+        if (state.routeEndpointMapPickerState != null || state.isVoiceSearchVisible) return
+
+        clearSelectedFacilitySelection()
+
+        val selectedReportId = state.approvedReportMarkerState.selectedReportId
+        val nextSelectedReportId = reportId.takeIf { selectedReportId != reportId }
+        val nextSheetState =
+            toApprovedReportSheetState(
+                reports = state.approvedReportMarkerState.visibleReports,
+                selectedReportId = nextSelectedReportId,
+            )
+
+        mutableUiState.update { current ->
+            current.copy(
+                selectedMarkerId = null,
+                selectedMapPinCoordinate = null,
+                facilityDetailSheetState = MapFacilityDetailSheetState(),
+                approvedReportMarkerState =
+                    current.approvedReportMarkerState.copy(selectedReportId = nextSelectedReportId),
+                approvedReportSheetState = nextSheetState,
+            )
+        }
+    }
+
+    private fun dismissApprovedReportSheet() {
+        mutableUiState.update { state ->
+            state.copy(
+                approvedReportMarkerState =
+                    state.approvedReportMarkerState.copy(selectedReportId = null),
+                approvedReportSheetState = ApprovedReportSheetState(),
+            )
+        }
     }
 
     private fun handleMapTapped(payload: MapTapPayload) {
@@ -1197,6 +1248,7 @@ class MapViewModel(
     }
 
     private fun handleZoomAction(delta: Int) {
+        var nextZoomLevelForVisibility: Int? = null
         mutableUiState.update { state ->
             val currentZoomLevel = state.cameraTarget.resolvedZoomLevel()
             val nextZoomLevel =
@@ -1205,6 +1257,7 @@ class MapViewModel(
             if (nextZoomLevel == currentZoomLevel) {
                 state
             } else {
+                nextZoomLevelForVisibility = nextZoomLevel
                 state.copy(
                     cameraTarget =
                         state.cameraTarget.copy(
@@ -1214,6 +1267,7 @@ class MapViewModel(
                 )
             }
         }
+        nextZoomLevelForVisibility?.let(::updateApprovedReportVisibilityForZoom)
     }
 
     private fun handleViewportCameraChanged(
@@ -1223,6 +1277,7 @@ class MapViewModel(
         isSelectedMapPinVisibleInViewport: Boolean?,
     ) {
         var ignoredStaleProgrammaticCallback = false
+        var shouldLoadApprovedReportsForViewport = false
         val isRouteEndpointPickerActive = routeEndpointMapPickerState != null
         mutableUiState.update { state ->
             val currentTarget = state.cameraTarget
@@ -1240,6 +1295,7 @@ class MapViewModel(
             if (!hasCameraChanged) {
                 state
             } else {
+                shouldLoadApprovedReportsForViewport = isUserGesture && !isAlignedWithRequestedCenter
                 if (isUserGesture) {
                     isRecenterButtonActive = false
                 }
@@ -1261,6 +1317,10 @@ class MapViewModel(
             }
         }
         if (ignoredStaleProgrammaticCallback) return
+        updateApprovedReportVisibilityForZoom(zoomLevel)
+        if (shouldLoadApprovedReportsForViewport) {
+            loadApprovedReportsForViewport()
+        }
 
         if (routeEndpointMapPickerState != null) {
             updateRouteEndpointMapPickerCandidate(center)
@@ -1293,6 +1353,82 @@ class MapViewModel(
             syncCameraToCurrentLocation(
                 snapshot = snapshot,
                 incrementRequestId = mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION,
+            )
+        }
+    }
+
+    private fun loadApprovedReportsForViewport(force: Boolean = false) {
+        val cameraTarget = mutableUiState.value.cameraTarget
+        val query =
+            ApprovedReportMapQuery(
+                center = cameraTarget.center.toGeoCoordinate(),
+                radiusMeters = approvedReportQueryRadiusMeters(cameraTarget.resolvedZoomLevel()),
+            )
+        if (!force && query == lastApprovedReportQuery) return
+
+        lastApprovedReportQuery = query
+        val requestId = ++approvedReportRequestSequence
+
+        viewModelScope.launch {
+            val reports =
+                runCatching {
+                    approvedReportMapRepository.getApprovedReports(query)
+                }.getOrDefault(emptyList())
+                    .mapNotNull { entry -> entry.toApprovedReportMarkerDataOrNull() }
+
+            if (requestId != approvedReportRequestSequence) return@launch
+
+            mutableUiState.update { state ->
+                val visibleReports =
+                    if (shouldShowApprovedReportMarkers(state.cameraTarget.resolvedZoomLevel())) {
+                        reports
+                    } else {
+                        emptyList()
+                    }
+                val selectedReportId =
+                    state.approvedReportMarkerState.selectedReportId
+                        ?.takeIf { reportId -> visibleReports.any { report -> report.reportId == reportId } }
+
+                state.copy(
+                    approvedReportMarkerState =
+                        state.approvedReportMarkerState.copy(
+                            reports = reports,
+                            visibleReports = visibleReports,
+                            selectedReportId = selectedReportId,
+                        ),
+                    approvedReportSheetState =
+                        toApprovedReportSheetState(
+                            reports = visibleReports,
+                            selectedReportId = selectedReportId,
+                        ),
+                )
+            }
+        }
+    }
+
+    private fun updateApprovedReportVisibilityForZoom(zoomLevel: Int) {
+        mutableUiState.update { state ->
+            val visibleReports =
+                if (shouldShowApprovedReportMarkers(zoomLevel)) {
+                    state.approvedReportMarkerState.reports
+                } else {
+                    emptyList()
+                }
+            val selectedReportId =
+                state.approvedReportMarkerState.selectedReportId
+                    ?.takeIf { reportId -> visibleReports.any { report -> report.reportId == reportId } }
+
+            state.copy(
+                approvedReportMarkerState =
+                    state.approvedReportMarkerState.copy(
+                        visibleReports = visibleReports,
+                        selectedReportId = selectedReportId,
+                    ),
+                approvedReportSheetState =
+                    toApprovedReportSheetState(
+                        reports = visibleReports,
+                        selectedReportId = selectedReportId,
+                    ),
             )
         }
     }
@@ -1924,6 +2060,7 @@ class MapViewModel(
             authSessionRepository: AuthSessionRepository? = null,
             searchRepository: SearchRepository,
             placesRepository: PlacesRepository? = null,
+            approvedReportMapRepository: ApprovedReportMapRepository = EmptyApprovedReportMapRepository,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -1939,6 +2076,7 @@ class MapViewModel(
                             authSessionRepository = authSessionRepository,
                             searchRepository = searchRepository,
                             placesRepository = placesRepository,
+                            approvedReportMapRepository = approvedReportMapRepository,
                         ) as T
                     }
 
@@ -1949,6 +2087,16 @@ class MapViewModel(
 }
 
 private fun Double.toLogCoordinate(): String = String.format(Locale.US, "%.6f", this)
+
+private fun MapCoordinate.toGeoCoordinate(): GeoCoordinate =
+    GeoCoordinate(latitude = latitude, longitude = longitude)
+
+private fun approvedReportQueryRadiusMeters(zoomLevel: Int): Int =
+    when {
+        zoomLevel <= 12 -> 12_000
+        zoomLevel <= 15 -> 5_000
+        else -> 2_000
+    }
 
 private fun safeLogDebug(
     tag: String,

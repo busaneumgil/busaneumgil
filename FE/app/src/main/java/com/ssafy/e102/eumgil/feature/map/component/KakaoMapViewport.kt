@@ -86,6 +86,7 @@ internal fun KakaoMapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
     onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
+    onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
     onMapClick: (MapTapPayload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -195,6 +196,7 @@ internal fun KakaoMapViewport(
                         initialState = state,
                         onMarkerClick = onMarkerClick,
                         onCameraMoveEnd = onCameraMoveEnd,
+                        onViewportBoundsChanged = onViewportBoundsChanged,
                         onMapClick = onMapClick,
                     )
                 },
@@ -204,6 +206,7 @@ internal fun KakaoMapViewport(
                         state = state,
                         onMarkerClick = onMarkerClick,
                         onCameraMoveEnd = onCameraMoveEnd,
+                        onViewportBoundsChanged = onViewportBoundsChanged,
                         onMapClick = onMapClick,
                     )
                 },
@@ -273,6 +276,19 @@ internal fun KakaoMapViewport(
     }
 }
 
+internal fun createViewportBounds(
+    cornerCoordinates: List<MapCoordinate>,
+): MapViewportBounds? {
+    if (cornerCoordinates.isEmpty()) return null
+
+    return MapViewportBounds(
+        swLat = cornerCoordinates.minOf(MapCoordinate::latitude),
+        swLng = cornerCoordinates.minOf(MapCoordinate::longitude),
+        neLat = cornerCoordinates.maxOf(MapCoordinate::latitude),
+        neLng = cornerCoordinates.maxOf(MapCoordinate::longitude),
+    )
+}
+
 private class KakaoMapViewportController {
     var rendererStatus by mutableStateOf(KakaoRendererStatus.Initializing)
         private set
@@ -286,6 +302,7 @@ private class KakaoMapViewportController {
     private var latestState: MapViewportUiState? = null
     private var markerClickHandler: ((String) -> Unit)? = null
     private var cameraMoveEndHandler: ((MapCoordinate, Int, Boolean, Boolean?) -> Unit)? = null
+    private var viewportBoundsChangedHandler: ((MapViewportBounds?) -> Unit)? = null
     private var mapClickHandler: ((MapTapPayload) -> Unit)? = null
     private var facilityMarkerStyleCache: KakaoFacilityMarkerStyleCache? = null
     private var overlayMarkerStyleCache: KakaoOverlayMarkerStyleCache? = null
@@ -343,11 +360,13 @@ private class KakaoMapViewportController {
         initialState: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
         onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
+        onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
         onMapClick: (MapTapPayload) -> Unit,
     ): MapView {
         latestState = initialState
         markerClickHandler = onMarkerClick
         cameraMoveEndHandler = onCameraMoveEnd
+        viewportBoundsChangedHandler = onViewportBoundsChanged
         mapClickHandler = onMapClick
 
         return mapView ?: MapView(context).also { createdMapView ->
@@ -367,11 +386,13 @@ private class KakaoMapViewportController {
         state: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
         onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
+        onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
         onMapClick: (MapTapPayload) -> Unit,
     ) {
         latestState = state
         markerClickHandler = onMarkerClick
         cameraMoveEndHandler = onCameraMoveEnd
+        viewportBoundsChangedHandler = onViewportBoundsChanged
         mapClickHandler = onMapClick
         renderIntoMapIfReady()
     }
@@ -404,6 +425,7 @@ private class KakaoMapViewportController {
         rendererStatus = KakaoRendererStatus.Initializing
         rendererFailure = null
         projectedMarkerOverlays = emptyList()
+        viewportBoundsChangedHandler = null
         facilityMarkerStyleCache?.clear()
         facilityMarkerStyleCache = null
         overlayMarkerStyleCache?.clear()
@@ -607,6 +629,7 @@ private class KakaoMapViewportController {
                             gestureType.isUserDrivenCameraMove(),
                             selectedMapPinVisibleInViewport,
                         )
+                        dispatchViewportBounds(readyMap)
                         latestState?.let { state ->
                             syncMarkers(
                                 readyMap = readyMap,
@@ -651,6 +674,32 @@ private class KakaoMapViewportController {
         syncRouteLines(readyMap = readyMap, state = state)
         syncMarkers(readyMap = readyMap, state = state)
         updateProjectedMarkerOverlays(readyMap = readyMap, state = state)
+        dispatchViewportBounds(readyMap)
+    }
+
+    private fun dispatchViewportBounds(readyMap: KakaoMap) {
+        viewportBoundsChangedHandler?.invoke(readyMap.toViewportBounds())
+    }
+
+    private fun KakaoMap.toViewportBounds(): MapViewportBounds? {
+        val viewportRect = viewport
+        if (viewportRect.width() <= 0 || viewportRect.height() <= 0) return null
+
+        val viewportCornerCoordinates =
+            listOf(
+                viewportRect.left to viewportRect.bottom,
+                viewportRect.left to viewportRect.top,
+                viewportRect.right to viewportRect.bottom,
+                viewportRect.right to viewportRect.top,
+            ).map { (x, y) ->
+                val latLng = fromScreenPoint(x, y) ?: return null
+                MapCoordinate(
+                    latitude = latLng.latitude,
+                    longitude = latLng.longitude,
+                )
+            }
+
+        return createViewportBounds(viewportCornerCoordinates)
     }
 
     private fun syncLifecycleToMapView(reason: String) {
@@ -1709,6 +1758,9 @@ private fun KakaoProjectedMarkerOverlay.resolveContentDescription(
     selectedDestinationName: String?,
 ): String? =
     when (kind) {
+        KakaoProjectedMarkerKind.HAZARD ->
+            stringResource(id = R.string.approved_hazard_marker_sheet_title)
+
         KakaoProjectedMarkerKind.CURRENT_LOCATION ->
             stringResource(id = R.string.navigation_map_marker_current)
 

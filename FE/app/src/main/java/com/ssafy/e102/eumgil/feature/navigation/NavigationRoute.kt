@@ -18,6 +18,7 @@ import com.ssafy.e102.eumgil.app.BusanEumgilApp
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionNavigationScreen
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.collect
@@ -56,6 +57,9 @@ fun NavigationRoute(
     }
     val routeRepository = remember(appContext) {
         (appContext as BusanEumgilApp).appContainer.routeRepository
+    }
+    val reportRepository = remember(appContext) {
+        (appContext as BusanEumgilApp).appContainer.reportRepository
     }
     val viewModelFactory =
         remember(currentLocationManager, currentHeadingManager, locationPermissionManager, bookmarkRepository, routeRepository) {
@@ -144,6 +148,7 @@ fun NavigationRoute(
     } else {
         NavigationScreen(
             uiState = uiState,
+            reportRepository = reportRepository,
             onAction = viewModel::onAction,
             modifier = modifier,
         )

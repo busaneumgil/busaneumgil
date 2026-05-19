@@ -89,6 +89,7 @@ internal fun MapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit = {},
     onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit = { _, _, _, _ -> },
+    onViewportBoundsChanged: (MapViewportBounds?) -> Unit = {},
     onMapClick: (MapTapPayload) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -133,6 +134,7 @@ internal fun MapViewport(
                     state = state,
                     onMarkerClick = onMarkerClick,
                     onCameraMoveEnd = onCameraMoveEnd,
+                    onViewportBoundsChanged = onViewportBoundsChanged,
                     onMapClick = onMapClick,
                     modifier = modifier,
                 )
@@ -147,6 +149,7 @@ private fun MapContainer(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
     onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
+    onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
     onMapClick: (MapTapPayload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -156,6 +159,7 @@ private fun MapContainer(
                 state = state,
                 onMarkerClick = onMarkerClick,
                 onCameraMoveEnd = onCameraMoveEnd,
+                onViewportBoundsChanged = onViewportBoundsChanged,
                 onMapClick = onMapClick,
                 modifier = modifier,
             )

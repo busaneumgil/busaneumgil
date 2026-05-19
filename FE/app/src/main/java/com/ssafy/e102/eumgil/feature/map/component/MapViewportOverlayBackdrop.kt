@@ -357,6 +357,13 @@ private fun DrawScope.drawViewportPointHalo(
     val projectedPoint = bounds.project(overlay.coordinate).toCanvasOffset(canvasSize)
 
     when (overlay.kind) {
+        MapViewportPointKind.HAZARD ->
+            drawCircle(
+                color = palette.error.copy(alpha = 0.16f),
+                radius = 18.dp.toPx(),
+                center = projectedPoint,
+            )
+
         MapViewportPointKind.ORIGIN ->
             drawCircle(
                 color = palette.secondary.copy(alpha = 0.18f),
@@ -667,6 +674,15 @@ private fun String?.toFallbackSubwayLineShortLabel(): String =
 private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMarkerSpec? =
     when (kind) {
         MapViewportPointKind.FACILITY -> categoryType?.toFacilityMarkerSpec(isSelected)
+        MapViewportPointKind.HAZARD ->
+            ViewportPointMarkerSpec(
+                label = "!",
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError,
+                borderColor = MaterialTheme.colorScheme.surface,
+                size = if (isSelected) 42.dp else 38.dp,
+                fontSize = 16.sp,
+            )
         MapViewportPointKind.ORIGIN ->
             ViewportPointMarkerSpec(
                 label = label ?: "출발",

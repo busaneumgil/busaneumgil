@@ -66,3 +66,15 @@ data class HazardReportDetailDto(
     val createdAt: String,
     val imageUrls: List<String> = emptyList(),
 )
+
+data class HazardMarkersResponseDto(
+    val markers: List<HazardMarkerDto> = emptyList(),
+)
+
+data class HazardMarkerDto(
+    val reportId: Long,
+    val reportType: String,
+    val lat: Double,
+    val lng: Double,
+    val imageUrls: List<String> = emptyList(),
+)

@@ -26,6 +26,30 @@ public interface HazardReportRepository extends JpaRepository<HazardReport, Long
 	@EntityGraph(attributePaths = "images")
 	Optional<HazardReport> findWithImagesByReportId(Long reportId);
 
+	@Query(value = """
+		select *
+		from hazard_reports
+		where status = 'APPROVED'
+			and ST_Intersects(
+				report_point,
+				ST_MakeEnvelope(:swLng, :swLat, :neLng, :neLat, 4326)
+			)
+		order by report_id desc
+		""", nativeQuery = true)
+	List<HazardReport> findApprovedWithinBounds(
+		@Param("swLng")
+		double swLng,
+		@Param("swLat")
+		double swLat,
+		@Param("neLng")
+		double neLng,
+		@Param("neLat")
+		double neLat,
+		Pageable pageable);
+
+	@EntityGraph(attributePaths = "images")
+	List<HazardReport> findAllByReportIdIn(List<Long> reportIds);
+
 	Optional<HazardReport> findByUser_UserIdAndIdempotencyKey(UUID userId, String idempotencyKey);
 
 	@EntityGraph(attributePaths = "user")

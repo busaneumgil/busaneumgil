@@ -4,6 +4,8 @@ import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import com.ssafy.e102.eumgil.data.remote.dto.CreateHazardReportRequestDto
 import com.ssafy.e102.eumgil.data.remote.dto.CreateHazardReportResponseDto
+import com.ssafy.e102.eumgil.data.remote.dto.HazardMarkerDto
+import com.ssafy.e102.eumgil.data.remote.dto.HazardMarkersResponseDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPageDto
@@ -119,6 +121,33 @@ open class HazardReportsRemoteDataSource private constructor(
         return dataJson.toHazardReportDetailDto()
     }
 
+    open suspend fun getApprovedHazardMarkers(
+        swLat: Double,
+        swLng: Double,
+        neLat: Double,
+        neLng: Double,
+        accessToken: String? = null,
+    ): HazardMarkersResponseDto {
+        val response =
+            getExecutor(
+                "/hazard/markers/",
+                mapOf(
+                    "swLat" to swLat.toString(),
+                    "swLng" to swLng.toString(),
+                    "neLat" to neLat.toString(),
+                    "neLng" to neLng.toString(),
+                ),
+                buildMap {
+                    accessToken
+                        ?.takeIf(String::isNotBlank)
+                        ?.let { putAll(bearerHeader(it)) }
+                },
+            )
+        val responseJson = response.body.toJsonObjectOrNull()
+        val dataJson = response.requireDataJson(responseJson)
+        return dataJson.toHazardMarkersResponseDto()
+    }
+
     private fun bearerHeader(accessToken: String): Map<String, String> = mapOf("Authorization" to "Bearer $accessToken")
 
     private fun JSONObject.toHazardReportPageDto(): HazardReportPageDto {
@@ -156,6 +185,24 @@ open class HazardReportsRemoteDataSource private constructor(
             description = optNullableString("description"),
             reportPoint = requireReportPointDto("reportPoint"),
             createdAt = requireString("createdAt"),
+            imageUrls = optJSONArray("imageUrls")?.toStringList().orEmpty(),
+        )
+
+    private fun JSONObject.toHazardMarkersResponseDto(): HazardMarkersResponseDto {
+        val markersJson = optJSONArray("markers") ?: JSONArray()
+        val markers =
+            List(markersJson.length()) { index ->
+                markersJson.getJSONObject(index).toHazardMarkerDto()
+            }
+        return HazardMarkersResponseDto(markers = markers)
+    }
+
+    private fun JSONObject.toHazardMarkerDto(): HazardMarkerDto =
+        HazardMarkerDto(
+            reportId = requireLong("reportId"),
+            reportType = requireString("reportType"),
+            lat = optDouble("lat"),
+            lng = optDouble("lng"),
             imageUrls = optJSONArray("imageUrls")?.toStringList().orEmpty(),
         )
 

@@ -60,6 +60,7 @@ internal data class MapViewportPointOverlay(
 
 internal enum class MapViewportPointKind {
     FACILITY,
+    HAZARD,
     ORIGIN,
     DESTINATION,
     CURRENT_LOCATION,
@@ -447,19 +448,17 @@ internal fun createNavigationViewportOverlayState(
                 },
             polylines =
                 buildList<MapViewportPolylineOverlay> {
+                    add(
+                        MapViewportPolylineOverlay(
+                            overlayId = "navigation-route",
+                            points = selectedRoutePoints,
+                            style = MapViewportPolylineStyle.ROUTE_BASELINE,
+                            tone = MapViewportOverlayTone.PRIMARY,
+                            includeInProjection = false,
+                            showDirectionArrows = preferredArrowOverlayId == "navigation-route",
+                        ),
+                    )
                     addAll(detailedBaselinePolylines)
-                    if (this.none { overlay -> overlay.style == MapViewportPolylineStyle.ROUTE_BASELINE }) {
-                        add(
-                            MapViewportPolylineOverlay(
-                                overlayId = "navigation-route",
-                                points = selectedRoutePoints,
-                                style = MapViewportPolylineStyle.ROUTE_BASELINE,
-                                tone = MapViewportOverlayTone.PRIMARY,
-                                includeInProjection = false,
-                                showDirectionArrows = preferredArrowOverlayId == "navigation-route",
-                            ),
-                        )
-                    }
                     if (detailedBaselinePolylines.isEmpty() && mapOverlay.activeSegmentPolyline != mapOverlay.focusedSegmentPolyline) {
                         add(
                             MapViewportPolylineOverlay(

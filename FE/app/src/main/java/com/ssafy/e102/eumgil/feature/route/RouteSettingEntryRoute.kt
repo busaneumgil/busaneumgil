@@ -108,6 +108,7 @@ fun RouteSettingEntryRoute(
 
     RouteSettingScreen(
         uiState = uiState,
+        reportRepository = appContainer.reportRepository,
         onAction = viewModel::onAction,
         snackbarHostState = snackbarHostState,
         onDisabledStartClick = {
@@ -166,6 +167,10 @@ fun RouteDetailEntryRoute(
     val navigationViewModel = if (hydrateFromNavigation) rememberNavigationGuidanceViewModel() else null
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val appContainer =
+        remember(context.applicationContext) {
+            (context.applicationContext as BusanEumgilApp).appContainer
+        }
     val coroutineScope = rememberCoroutineScope()
     var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
     var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
@@ -202,6 +207,7 @@ fun RouteDetailEntryRoute(
 
     RouteDetailScreen(
         uiState = uiState,
+        reportRepository = appContainer.reportRepository,
         onBackClick = onNavigateBack,
         onCloseClick = onNavigateToMap,
         onStartClick = {

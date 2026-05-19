@@ -81,11 +81,16 @@ import com.ssafy.e102.eumgil.core.designsystem.component.map.EumMapFloatingContr
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelShell
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelStepRow
+import com.ssafy.e102.eumgil.feature.map.component.ApprovedHazardMarkerBottomSheet
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewportControlState
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportBounds
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointOverlay
 import com.ssafy.e102.eumgil.feature.map.component.createNavigationViewportOverlayState
+import com.ssafy.e102.eumgil.feature.map.component.rememberApprovedHazardMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.component.rememberMapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.navigation.component.NavigationSegmentRail
@@ -96,9 +101,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun NavigationScreen(
     uiState: NavigationUiState,
+    reportRepository: ReportRepository,
     onAction: (NavigationUiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hazardMarkerState = rememberApprovedHazardMarkerOverlayState(reportRepository = reportRepository)
     val screenPolicy = navigationScreenPolicy(uiState)
     val disablesDefaultWindowInsets = navigationUsesEmptyWindowInsets()
     val sidePanelPolicy = navigationSidePanelPolicy()
@@ -150,9 +157,12 @@ fun NavigationScreen(
                 ) {
                     NavigationMapStage(
                         uiState = uiState,
+                        hazardOverlayPoints = hazardMarkerState.overlayPoints,
                         onSegmentTapped = { index ->
                             onAction(NavigationUiAction.SegmentTapped(index = index))
                         },
+                        onHazardMarkerClick = hazardMarkerState::onMarkerClick,
+                        onViewportBoundsChanged = hazardMarkerState::onViewportBoundsChanged,
                         onReportClick = {
                             onAction(NavigationUiAction.ReportClicked)
                         },
@@ -162,6 +172,11 @@ fun NavigationScreen(
                         onUserCameraGesture = {
                             onAction(NavigationUiAction.MapCameraMovedByUser)
                         },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    ApprovedHazardMarkerBottomSheet(
+                        marker = hazardMarkerState.selectedMarker,
+                        onDismiss = hazardMarkerState::dismissSelection,
                         modifier = Modifier.fillMaxSize(),
                     )
                     if (screenPolicy.showSegmentRail) {
@@ -908,7 +923,10 @@ private fun NavigationVoiceControl(
 @Composable
 private fun NavigationMapStage(
     uiState: NavigationUiState,
+    hazardOverlayPoints: List<MapViewportPointOverlay>,
     onSegmentTapped: (Int) -> Unit,
+    onHazardMarkerClick: (String) -> Boolean,
+    onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
     onReportClick: () -> Unit,
     onCurrentLocationClick: () -> Unit,
     onUserCameraGesture: () -> Unit,
@@ -934,7 +952,10 @@ private fun NavigationMapStage(
     ) {
         NavigationMapBackdrop(
             mapOverlay = uiState.mapOverlay,
+            hazardOverlayPoints = hazardOverlayPoints,
             onSegmentTapped = onSegmentTapped,
+            onHazardMarkerClick = onHazardMarkerClick,
+            onViewportBoundsChanged = onViewportBoundsChanged,
             onUserCameraGesture = onUserCameraGesture,
             controlState = mapControlState,
             modifier = Modifier.fillMaxSize(),
@@ -965,21 +986,32 @@ private fun NavigationMapStage(
 @Composable
 private fun NavigationMapBackdrop(
     mapOverlay: NavigationMapOverlayUiState,
+    hazardOverlayPoints: List<MapViewportPointOverlay>,
     onSegmentTapped: (Int) -> Unit,
+    onHazardMarkerClick: (String) -> Boolean,
+    onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
     onUserCameraGesture: () -> Unit,
     controlState: MapOverlayViewportControlState? = null,
     modifier: Modifier = Modifier,
 ) {
     val mapDescription = stringResource(id = R.string.navigation_map_section_title)
+    val overlayState =
+        createNavigationViewportOverlayState(mapOverlay).let { baseOverlayState ->
+            baseOverlayState.copy(points = baseOverlayState.points + hazardOverlayPoints)
+        }
     MapOverlayViewport(
-        overlayState = createNavigationViewportOverlayState(mapOverlay),
+        overlayState = overlayState,
         modifier = modifier,
         contentDescription = mapDescription,
         onMarkerClick = { markerId ->
+            if (onHazardMarkerClick(markerId)) {
+                return@MapOverlayViewport
+            }
             markerId.toNavigationSegmentMarkerIndexOrNull()?.let { segmentIndex ->
                 onSegmentTapped(segmentIndex)
             }
         },
+        onViewportBoundsChanged = onViewportBoundsChanged,
         onUserCameraGesture = onUserCameraGesture,
         controlState = controlState,
     )

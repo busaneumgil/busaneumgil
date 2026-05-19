@@ -117,13 +117,16 @@ import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.LowFloorBusReservation
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.model.RouteRiskLevel
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelShell
 import com.ssafy.e102.eumgil.feature.guidance.component.GuideSidePanelStepRow
 import com.ssafy.e102.eumgil.feature.guidance.component.RouteStepScrubberItem
 import com.ssafy.e102.eumgil.feature.guidance.component.RouteStepScrubberRail
+import com.ssafy.e102.eumgil.feature.map.component.ApprovedHazardMarkerBottomSheet
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewport
 import com.ssafy.e102.eumgil.feature.map.component.MapOverlayViewportControlState
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportBounds
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportOverlayTone
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointKind
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointOverlay
@@ -133,6 +136,7 @@ import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarker
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarkerKind
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportTransitMarkerLeg
 import com.ssafy.e102.eumgil.feature.map.component.createRoutePreviewViewportOverlayState
+import com.ssafy.e102.eumgil.feature.map.component.rememberApprovedHazardMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.component.rememberMapOverlayViewportControlState
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.navigation.NavigationGuidanceAction
@@ -145,6 +149,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun RouteSettingScreen(
     uiState: RouteSettingUiState,
+    reportRepository: ReportRepository,
     onAction: (RouteSettingUiAction) -> Unit,
     isDuribalConfirmDialogVisible: Boolean = false,
     onDuribalCallClick: () -> Unit = {},
@@ -159,6 +164,7 @@ fun RouteSettingScreen(
     onDisabledStartClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val hazardMarkerState = rememberApprovedHazardMarkerOverlayState(reportRepository = reportRepository)
     val showsRouteLoadingScreen = uiState.shouldShowRouteLoadingScreen()
     val showsRouteUnsupportedAreaScreen = uiState.shouldShowRouteUnsupportedAreaScreen()
     val showsRouteFailureScreen = uiState.shouldShowRouteFailureScreen()
@@ -243,6 +249,11 @@ fun RouteSettingScreen(
                 } else {
                     RouteMapStage(
                         uiState = uiState,
+                        hazardOverlayPoints = hazardMarkerState.overlayPoints,
+                        selectedHazardMarker = hazardMarkerState.selectedMarker,
+                        onHazardMarkerClick = hazardMarkerState::onMarkerClick,
+                        onHazardMarkerDismiss = hazardMarkerState::dismissSelection,
+                        onViewportBoundsChanged = hazardMarkerState::onViewportBoundsChanged,
                         modifier = Modifier.fillMaxSize(),
                         onOptionClick = { routeOption ->
                             onAction(RouteSettingUiAction.RouteOptionSelected(routeOption))
@@ -310,6 +321,7 @@ fun RouteSettingScreen(
 @Composable
 fun RouteDetailScreen(
     uiState: RouteSettingUiState,
+    reportRepository: ReportRepository,
     onBackClick: () -> Unit,
     onCloseClick: () -> Unit = onBackClick,
     onStartClick: () -> Unit,
@@ -321,6 +333,7 @@ fun RouteDetailScreen(
     onLowFloorReservationConfirm: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val hazardMarkerState = rememberApprovedHazardMarkerOverlayState(reportRepository = reportRepository)
     val selectedRoute = uiState.selectedRoute
     val returnToRoutesLabel = stringResource(id = R.string.route_setting_detail_return_action)
     val ctaSupportingText =
@@ -372,15 +385,20 @@ fun RouteDetailScreen(
                     detailPolylines = selectedRoute?.detailPolylines.orEmpty(),
                     travelMode = selectedRoute?.routeOption.toRouteDetailTravelMode(),
                     guidanceMarkers = guidanceMarkers,
+                    hazardOverlayPoints = hazardMarkerState.overlayPoints,
                     controlState = mapControlState,
+                    onViewportBoundsChanged = hazardMarkerState::onViewportBoundsChanged,
                     onMarkerClick = { markerId ->
-                    focusedDetailStepIndex = markerId.routeDetailStepMarkerIndexOrNull()
-                    if (focusedDetailStepIndex != null) {
-                        isDetailSidePanelExpanded = false
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+                        if (hazardMarkerState.onMarkerClick(markerId)) {
+                            return@RouteMapBackdrop
+                        }
+                        focusedDetailStepIndex = markerId.routeDetailStepMarkerIndexOrNull()
+                        if (focusedDetailStepIndex != null) {
+                            isDetailSidePanelExpanded = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
 
             RouteMapControls(
                 onActionClick = {
@@ -393,6 +411,12 @@ fun RouteDetailScreen(
                     Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = EumSpacing.small),
+            )
+
+            ApprovedHazardMarkerBottomSheet(
+                marker = hazardMarkerState.selectedMarker,
+                onDismiss = hazardMarkerState::dismissSelection,
+                modifier = Modifier.fillMaxSize(),
             )
 
             if (isDetailSidePanelExpanded && selectedRoute != null) {
@@ -2946,6 +2970,11 @@ private fun MapOverlayViewportControlState.recenterToCurrentLocationOrRoute(curr
 @Composable
 private fun RouteMapStage(
     uiState: RouteSettingUiState,
+    hazardOverlayPoints: List<MapViewportPointOverlay>,
+    selectedHazardMarker: com.ssafy.e102.eumgil.data.repository.ApprovedHazardMarker?,
+    onHazardMarkerClick: (String) -> Boolean,
+    onHazardMarkerDismiss: () -> Unit,
+    onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
     modifier: Modifier = Modifier,
     onOptionClick: (RouteOption) -> Unit = {},
     onOptionDetailClick: (RouteOption) -> Unit = {},
@@ -2981,7 +3010,18 @@ private fun RouteMapStage(
                     } else {
                         emptyList()
                     },
+                hazardOverlayPoints = hazardOverlayPoints,
                 controlState = mapControlState,
+                onViewportBoundsChanged = onViewportBoundsChanged,
+                onMarkerClick = { markerId ->
+                    onHazardMarkerClick(markerId)
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            ApprovedHazardMarkerBottomSheet(
+                marker = selectedHazardMarker,
+                onDismiss = onHazardMarkerDismiss,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -4509,7 +4549,9 @@ private fun RouteMapBackdrop(
     detailPolylines: List<RouteDetailPolylineUiState> = emptyList(),
     travelMode: RouteTravelMode = RouteTravelMode.WALK,
     guidanceMarkers: List<MapViewportPointOverlay> = emptyList(),
+    hazardOverlayPoints: List<MapViewportPointOverlay> = emptyList(),
     controlState: MapOverlayViewportControlState? = null,
+    onViewportBoundsChanged: (MapViewportBounds?) -> Unit = {},
     onMarkerClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -4522,26 +4564,30 @@ private fun RouteMapBackdrop(
             travelMode = travelMode,
         )
     val shouldShowRouteDirectionArrows = routePolylineOverlays.isNotEmpty() || hasFocusedGuidanceMarker
+    val overlayState =
+        createRoutePreviewViewportOverlayState(
+            previewMap =
+                previewMap.copy(
+                    polyline =
+                        if (routePath.isNotEmpty()) {
+                            routePath
+                        } else {
+                            previewMap.polyline
+                        },
+                ),
+            routePolylineOverlays = routePolylineOverlays,
+            guidanceMarkers = guidanceMarkers,
+            focusSelectedGuidanceMarker = hasFocusedGuidanceMarker,
+            showDetailedRouteOverlay = shouldShowRouteDirectionArrows,
+        ).let { baseOverlayState ->
+            baseOverlayState.copy(points = baseOverlayState.points + hazardOverlayPoints)
+        }
     MapOverlayViewport(
-        overlayState =
-            createRoutePreviewViewportOverlayState(
-                previewMap =
-                    previewMap.copy(
-                        polyline =
-                            if (routePath.isNotEmpty()) {
-                                routePath
-                            } else {
-                                previewMap.polyline
-                            },
-                    ),
-                routePolylineOverlays = routePolylineOverlays,
-                guidanceMarkers = guidanceMarkers,
-                focusSelectedGuidanceMarker = hasFocusedGuidanceMarker,
-                showDetailedRouteOverlay = shouldShowRouteDirectionArrows,
-            ),
+        overlayState = overlayState,
         modifier = modifier,
         contentDescription = mapDescription,
         onMarkerClick = onMarkerClick,
+        onViewportBoundsChanged = onViewportBoundsChanged,
         controlState = controlState,
     )
 }

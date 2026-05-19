@@ -40,13 +40,10 @@ import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.model.TextSizePreference
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderInfo
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary200
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary600
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
-import com.ssafy.e102.eumgil.core.designsystem.theme.EumSurfaceInfo
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumWhite
 import com.ssafy.e102.eumgil.core.designsystem.theme.LocalAppTextSizeScale
 
@@ -88,7 +85,7 @@ private fun TextSizeSettingScaffold(
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = EumSurfaceInfo,
+        containerColor = MaterialTheme.colorScheme.background,
     ) { innerPadding ->
         Column(
             modifier =
@@ -99,12 +96,6 @@ private fun TextSizeSettingScaffold(
                     .padding(horizontal = EumSpacing.large, vertical = EumSpacing.large),
             verticalArrangement = Arrangement.spacedBy(EumSpacing.large),
         ) {
-            Text(
-                text = stringResource(id = R.string.text_size_setting_description),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-
             TextSizeOptionCard(
                 options = uiState.options,
                 selectedPreference = uiState.selectedPreference,
@@ -128,15 +119,15 @@ private fun TextSizeOptionCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, EumBorderSubtle),
-        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
+        shadowElevation = 0.dp,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             options.forEachIndexed { index, option ->
                 if (index > 0) {
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = EumSpacing.medium),
-                        color = EumBorderSubtle,
+                        color = EumBorderSubtle.copy(alpha = 0.65f),
                     )
                 }
 
@@ -227,8 +218,9 @@ private fun TextSizePreviewCard(selectedPreference: TextSizePreference) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
-        color = EumPrimary200.copy(alpha = 0.46f),
-        border = BorderStroke(1.dp, EumBorderInfo),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
+        shadowElevation = 0.dp,
     ) {
         CompositionLocalProvider(LocalDensity provides previewDensity) {
             Column(

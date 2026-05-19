@@ -87,8 +87,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -3481,31 +3483,42 @@ private fun RouteLoadingScreen(
         modifier = modifier,
         color = MaterialTheme.colorScheme.background,
     ) {
+        RouteSettingLoadingState(
+            title = stringResource(id = R.string.route_setting_summary_loading_title),
+            description = stringResource(id = R.string.route_setting_summary_loading_description),
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+@Composable
+private fun RouteSettingLoadingState(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .semantics { liveRegion = LiveRegionMode.Polite }
+                .padding(horizontal = EumSpacing.large, vertical = 36.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(44.dp),
-                strokeWidth = 4.dp,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(modifier = Modifier.height(EumSpacing.large))
+            CircularProgressIndicator()
             Text(
-                text = stringResource(id = R.string.route_setting_summary_loading_title),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )
-            Spacer(modifier = Modifier.height(EumSpacing.small))
             Text(
-                text = stringResource(id = R.string.route_setting_summary_loading_description),
-                style = MaterialTheme.typography.bodyLarge,
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
@@ -3937,30 +3950,11 @@ private fun RouteSearchFullscreenLoadingOverlay(modifier: Modifier = Modifier) {
         modifier = modifier.background(Color.White.copy(alpha = 0.72f)),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
-            shadowElevation = RouteOverlayCardElevation,
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = EumSpacing.large, vertical = EumSpacing.medium),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(32.dp),
-                    strokeWidth = 3.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "경로 탐색중",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
+        RouteSettingLoadingState(
+            title = stringResource(id = R.string.route_setting_summary_loading_title),
+            description = stringResource(id = R.string.route_setting_summary_loading_description),
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 
@@ -3973,27 +3967,11 @@ private fun RouteSearchLoadingState() {
                 .height(RouteSearchLoadingHeight),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.72f),
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = EumSpacing.large, vertical = EumSpacing.medium),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    strokeWidth = 3.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "경로 탐색 중",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        RouteSettingLoadingState(
+            title = stringResource(id = R.string.route_setting_summary_loading_title),
+            description = stringResource(id = R.string.route_setting_summary_loading_description),
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 

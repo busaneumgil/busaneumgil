@@ -304,10 +304,20 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "The loading replacement should be a stable non-map surface with progress and route loading copy.",
-            loadingScreen.contains("CircularProgressIndicator(") &&
+            source.contains("private fun RouteSettingLoadingState(") &&
+                loadingScreen.contains("RouteSettingLoadingState(") &&
                 loadingScreen.contains("route_setting_summary_loading_title") &&
                 loadingScreen.contains("route_setting_summary_loading_description") &&
                 loadingScreen.contains("MaterialTheme.colorScheme.background"),
+        )
+        assertTrue(
+            "Route loading should match the shared bookmark loading style without card chrome or custom spinner sizing.",
+            source.contains("LiveRegionMode.Polite") &&
+                source.contains("MaterialTheme.typography.titleMedium") &&
+                source.contains("MaterialTheme.typography.bodyMedium") &&
+                !loadingScreen.contains("headlineSmall") &&
+                !loadingScreen.contains("Modifier.size(44.dp)") &&
+                !loadingScreen.contains("strokeWidth = 4.dp"),
         )
     }
 
@@ -787,10 +797,11 @@ class RouteSettingLayoutPolicyTest {
                 failureScreen.contains("onClick = onDuribalCallClick"),
         )
         assertTrue(
-            "Transit loading should use a full-screen centered modal instead of a local result-list spinner.",
+            "Transit loading should use a full-screen centered overlay instead of a local result-list spinner.",
             screenSection.contains("RouteSearchFullscreenLoadingOverlay(") &&
                 source.contains("private fun RouteSearchFullscreenLoadingOverlay(") &&
                 source.contains("contentAlignment = Alignment.Center") &&
+                source.contains("RouteSettingLoadingState(") &&
                 routeOptionSection.contains("uiState.isLoading && uiState.optionCards.isEmpty() -> Unit"),
         )
     }

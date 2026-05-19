@@ -600,8 +600,8 @@
     <string name="route_setting_summary_section_title">경로 요약</string>
     <string name="route_setting_summary_section_supporting">아래 카드는 현재 선택된 옵션의 상세 경로 정보를 보여줍니다.</string>
     <string name="route_setting_summary_guidance_label">첫 안내</string>
-    <string name="route_setting_summary_loading_title">경로를 준비하고 있어요.</string>
-    <string name="route_setting_summary_loading_description">출발지와 도착지를 기준으로 경로 요약을 불러오고 있어요.</string>
+    <string name="route_setting_summary_loading_title">경로를 불러오는 중입니다</string>
+    <string name="route_setting_summary_loading_description">출발지와 도착지를 기준으로 이동 경로를 확인하고 있습니다.</string>
     <string name="route_setting_summary_error_title">경로 정보를 불러오지 못했습니다.</string>
     <string name="route_setting_unsupported_area_title">지원하지 않는 지역입니다</string>
     <string name="route_setting_unsupported_area_description">현재 길찾기는 부산 강서구 내 장소만 지원합니다. 강서구 내 출발지와 도착지를 선택해 주세요.</string>

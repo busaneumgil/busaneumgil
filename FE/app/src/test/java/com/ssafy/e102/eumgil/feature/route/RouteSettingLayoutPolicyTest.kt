@@ -788,7 +788,7 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "The full failure screen should show image and text, with Duribal limited to transit failures.",
-            failureScreen.contains("R.drawable.ic_status_warning") &&
+            failureScreen.contains("RouteNoRouteIllustration(") &&
                 failureScreen.contains("route_setting_no_route_result_title") &&
                 failureScreen.contains("route_setting_no_route_result_description") &&
                 failureScreen.contains("selectedTravelMode == RouteTravelMode.TRANSIT") &&
@@ -797,12 +797,13 @@ class RouteSettingLayoutPolicyTest {
                 failureScreen.contains("onClick = onDuribalCallClick"),
         )
         assertTrue(
-            "Transit loading should use a full-screen centered overlay instead of a local result-list spinner.",
-            screenSection.contains("RouteSearchFullscreenLoadingOverlay(") &&
-                source.contains("private fun RouteSearchFullscreenLoadingOverlay(") &&
-                source.contains("contentAlignment = Alignment.Center") &&
-                source.contains("RouteSettingLoadingState(") &&
-                routeOptionSection.contains("uiState.isLoading && uiState.optionCards.isEmpty() -> Unit"),
+            "Transit loading should stay in the empty result area instead of stacking a full-screen overlay.",
+            !screenSection.contains("RouteSearchFullscreenLoadingOverlay(") &&
+                !source.contains("private fun RouteSearchFullscreenLoadingOverlay(") &&
+                source.contains("private fun RouteSearchLoadingState()") &&
+                routeOptionSection.contains(
+                    "uiState.isLoading && uiState.optionCards.isEmpty() -> RouteSearchLoadingState()",
+                ),
         )
     }
 
@@ -1021,7 +1022,8 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "Route start CTA should tint the button icon white on the primary background.",
-            source.contains("tint = MaterialTheme.colorScheme.onPrimary"),
+            source.contains("tint = routeSettingCtaContentColor(enabled = enabled)") &&
+                source.contains("MaterialTheme.colorScheme.onPrimary"),
         )
         assertTrue("Route start CTA PNG icon should exist in drawable.", asset.exists())
     }
@@ -1660,9 +1662,12 @@ class RouteSettingLayoutPolicyTest {
 
         assertTrue(
             "Route start CTA should wrap the icon and label in a single row so the combined content stays centered inside the full-width button.",
-            ctaSection.contains(
-                "Row(\n                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),\n                verticalAlignment = Alignment.CenterVertically,\n            )",
-            ),
+            ctaSection.contains("Row(") &&
+                ctaSection.contains(".fillMaxSize()") &&
+                ctaSection.contains(
+                    "horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall, Alignment.CenterHorizontally)",
+                ) &&
+                ctaSection.contains("verticalAlignment = Alignment.CenterVertically"),
         )
         assertTrue(
             "Route start CTA should keep the navigation-start icon and labelLarge text together in that centered content row.",

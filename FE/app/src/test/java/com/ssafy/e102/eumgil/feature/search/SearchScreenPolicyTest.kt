@@ -23,8 +23,9 @@ class SearchScreenPolicyTest {
                 .readText()
 
         assertTrue(
-            "Apply-to-route search should show quick actions only in route assignment mode.",
-            source.contains("shouldShowRouteEndpointQuickActions(uiState.selectionMode)") &&
+            "Apply-to-route search should show quick actions only for destination route assignment mode.",
+            source.contains("shouldShowRouteEndpointQuickActions(uiState.selectionMode, uiState.editingTarget)") &&
+                source.contains("editingTarget == RouteEditingTarget.DESTINATION") &&
                 source.contains("RouteEndpointQuickActionSection("),
         )
         assertTrue(
@@ -174,7 +175,8 @@ class SearchScreenPolicyTest {
                 sortControlSection.contains("animateDpAsState(") &&
                 sortControlSection.contains("SearchSortOptionIndicatorOffset") &&
                 sortControlSection.contains("RoundedCornerShape(EumRadius.full)") &&
-                sortControlSection.contains("SearchSortOptionButtonGap"),
+                sortControlSection.contains("SearchSortOptionButtonGap") &&
+                !sortControlSection.contains("RoundedCornerShape(EumRadius.scaleM)"),
         )
         assertTrue(
             "Search sort buttons should be transparent hit targets over the moving selected indicator.",

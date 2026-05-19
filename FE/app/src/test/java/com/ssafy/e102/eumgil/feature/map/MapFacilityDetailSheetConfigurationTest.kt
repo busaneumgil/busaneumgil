@@ -304,10 +304,17 @@ class MapFacilityDetailSheetConfigurationTest {
 
         assertTrue(
             "Search-result previews should reuse their preview editing target so home destination previews show only the destination action.",
-            actionContentSection.contains("facilityDetailSheetUiState.routeEndpointPickerTarget") &&
-                actionContentSection.contains("?: facilityDetailSheetUiState.previewRouteEndpointTarget") &&
+            actionContentSection.contains("facilityDetailSheetUiState.previewRouteEndpointTarget") &&
+                actionContentSection.contains("?: facilityDetailSheetUiState.routeEndpointPickerTarget") &&
                 actionContentSection.indexOf("val pickerTarget =") <
                 actionContentSection.indexOf("if (pickerTarget != null)"),
+        )
+        assertTrue(
+            "Map preview sheets should pass the preview editing target even after their place detail has been hydrated.",
+            source.contains("previewRouteEndpointTarget = sheetState.destinationPreview?.editingTarget") &&
+                source.contains(
+                    "previewRouteEndpointTarget = uiState.facilityDetailSheetState.destinationPreview?.editingTarget",
+                ),
         )
     }
 

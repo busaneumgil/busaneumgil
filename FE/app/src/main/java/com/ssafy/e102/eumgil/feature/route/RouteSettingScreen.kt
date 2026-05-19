@@ -292,9 +292,6 @@ fun RouteSettingScreen(
                         ),
             )
         }
-        if (uiState.isLoading && uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
-            RouteSearchFullscreenLoadingOverlay(modifier = Modifier.matchParentSize())
-        }
     }
 
     if (isDuribalConfirmDialogVisible) {
@@ -3427,7 +3424,7 @@ private fun RouteOptionSection(
         verticalArrangement = Arrangement.spacedBy(RouteOptionCardGap),
     ) {
         when {
-            uiState.isLoading && uiState.optionCards.isEmpty() -> Unit
+            uiState.isLoading && uiState.optionCards.isEmpty() -> RouteSearchLoadingState()
 
             uiState.routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE ->
                 RouteFailureFallbackState(
@@ -3941,20 +3938,6 @@ private fun RouteCompactOptionCard(
                 onClick = onDetailClick,
             )
         }
-    }
-}
-
-@Composable
-private fun RouteSearchFullscreenLoadingOverlay(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.background(Color.White.copy(alpha = 0.72f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        RouteSettingLoadingState(
-            title = stringResource(id = R.string.route_setting_summary_loading_title),
-            description = stringResource(id = R.string.route_setting_summary_loading_description),
-            modifier = Modifier.fillMaxSize(),
-        )
     }
 }
 

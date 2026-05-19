@@ -198,9 +198,28 @@ class SearchScreenTest {
     }
 
     @Test
-    fun `route endpoint quick actions appear only in apply to route mode`() {
-        assertEquals(false, shouldShowRouteEndpointQuickActions(SearchSelectionMode.PREVIEW_ON_MAP))
-        assertEquals(true, shouldShowRouteEndpointQuickActions(SearchSelectionMode.APPLY_TO_ROUTE))
+    fun `route endpoint quick actions appear only for destination apply to route mode`() {
+        assertEquals(
+            false,
+            shouldShowRouteEndpointQuickActions(
+                selectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
+                editingTarget = RouteEditingTarget.DESTINATION,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldShowRouteEndpointQuickActions(
+                selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                editingTarget = RouteEditingTarget.ORIGIN,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldShowRouteEndpointQuickActions(
+                selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                editingTarget = RouteEditingTarget.DESTINATION,
+            ),
+        )
     }
 
     @Test

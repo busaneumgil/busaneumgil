@@ -184,16 +184,26 @@ class MapViewModel(
 
         routeEndpointMapPickerState = null
         val hadFacilitySelection = clearSelectedFacilitySelection()
+        val hadSelectedOrigin = selectedOrigin != null
         val hadSelectedDestination = selectedDestination != null
+        selectedOrigin = null
         selectedDestination = null
+        routeEditingTarget = RouteEditingTarget.DESTINATION
         mutableUiState.update { state ->
             state.copy(
+                selectedOrigin = null,
                 selectedDestination = null,
+                routeEditingTarget = RouteEditingTarget.DESTINATION,
             )
         }
+        if (hadSelectedOrigin) {
+            destinationSelectionRepository.clearSelectedOriginSilently()
+        }
+        destinationSelectionRepository.setEditingTarget(RouteEditingTarget.DESTINATION)
         if (hadSelectedDestination) {
             destinationSelectionRepository.clearSelectedDestination()
         }
+        destinationPreviewRepository.clearPreview()
         if (hadFacilitySelection) {
             renderSelectedFacilityState()
         }

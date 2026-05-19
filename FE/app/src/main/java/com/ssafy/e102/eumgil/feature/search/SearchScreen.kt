@@ -127,8 +127,12 @@ internal fun resolveSearchResultClickAction(
         SearchSelectionMode.APPLY_TO_ROUTE -> SearchUiAction.SearchResultClicked(result = result)
     }
 
-internal fun shouldShowRouteEndpointQuickActions(selectionMode: SearchSelectionMode): Boolean =
-    selectionMode == SearchSelectionMode.APPLY_TO_ROUTE
+internal fun shouldShowRouteEndpointQuickActions(
+    selectionMode: SearchSelectionMode,
+    editingTarget: RouteEditingTarget,
+): Boolean =
+    selectionMode == SearchSelectionMode.APPLY_TO_ROUTE &&
+        editingTarget == RouteEditingTarget.DESTINATION
 
 internal data class RouteEndpointQuickActionCopy(
     @StringRes val currentLocationActionRes: Int,
@@ -483,7 +487,7 @@ private fun SearchEntryContent(
             onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
             onSearch = { onAction(SearchUiAction.SearchSubmitted) },
         )
-        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode)) {
+        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode, uiState.editingTarget)) {
             RouteEndpointQuickActionSection(
                 editingTarget = uiState.editingTarget,
                 currentLocationState = uiState.currentLocationQuickActionState,
@@ -546,7 +550,7 @@ private fun SearchResultsContent(
             onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
             onSearch = { onAction(SearchUiAction.SearchSubmitted) },
         )
-        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode)) {
+        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode, uiState.editingTarget)) {
             RouteEndpointQuickActionSection(
                 editingTarget = uiState.editingTarget,
                 currentLocationState = uiState.currentLocationQuickActionState,
@@ -1204,7 +1208,7 @@ private fun SearchSortControl(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.scaleM),
+        shape = RoundedCornerShape(EumRadius.full),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {

@@ -246,8 +246,8 @@ fun MapScreen(
                             verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
                         ) {
                             val pickerTarget =
-                                facilityDetailSheetUiState.routeEndpointPickerTarget
-                                    ?: facilityDetailSheetUiState.previewRouteEndpointTarget
+                                facilityDetailSheetUiState.previewRouteEndpointTarget
+                                    ?: facilityDetailSheetUiState.routeEndpointPickerTarget
                             if (pickerTarget != null) {
                                 val actionLabelRes =
                                     when (pickerTarget) {
@@ -1340,6 +1340,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                 isBookmarkEnabled = true,
                 isRouteActionEnabled = mapTapDetail.hasValidCoordinate(),
                 routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
+                previewRouteEndpointTarget = sheetState.destinationPreview?.editingTarget,
                 bookmarkErrorMessage = sheetState.bookmarkErrorMessage,
             )
 
@@ -1436,6 +1437,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             isBookmarkEnabled = true,
             isRouteActionEnabled = mapTapDetail.hasValidCoordinate(),
             routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
+            previewRouteEndpointTarget = uiState.facilityDetailSheetState.destinationPreview?.editingTarget,
             bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage,
         )
     } else if (uiState.facilityDetailSheetState.isMapTapDetailLoading) {

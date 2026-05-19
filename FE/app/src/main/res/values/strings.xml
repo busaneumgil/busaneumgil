@@ -7,7 +7,7 @@
     <string name="map_route_endpoint_picker_resolving_label">주소 확인 중</string>
     <string name="map_route_endpoint_picker_select_action">선택</string>
     <string name="map_route_endpoint_picker_set_origin_action">이 위치를 출발지로 설정</string>
-    <string name="map_route_endpoint_picker_set_destination_action">이 위치를 도착지로 설정</string>
+    <string name="map_route_endpoint_picker_set_destination_action">도착지로 설정</string>
     <string name="search_screen_map_picker_action">지도에서 직접 선택</string>
     <string name="search_screen_current_location_origin_action">현위치</string>
     <string name="search_screen_current_location_destination_action">현위치</string>

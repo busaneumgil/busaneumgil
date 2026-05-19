@@ -110,6 +110,11 @@ class MainNavGraphTopLevelNavigationPolicyTest {
                 routeSettingDestination.contains("navController.navigateToTopLevelMapForHomeEntry()"),
         )
         assertTrue(
+            "Route setting back should also collapse the search stack and return to map home in one step.",
+            routeSettingDestination.contains("onNavigateBack = {") &&
+                routeSettingDestination.contains("navController.navigateToTopLevelMapForHomeEntry()"),
+        )
+        assertTrue(
             "Route detail close should also return to map home.",
             routeDetailDestination.contains("onNavigateToMap = {") &&
                 routeDetailDestination.contains("navController.navigateToTopLevelMapForHomeEntry()"),

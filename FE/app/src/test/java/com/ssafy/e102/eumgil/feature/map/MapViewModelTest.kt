@@ -976,6 +976,15 @@ class MapViewModelTest {
             val currentLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val selectedOrigin =
+                PlaceDestination(
+                    placeId = "origin-home-reset",
+                    name = "Busan City Hall",
+                    address = "1001 Jungang-daero, Busan",
+                    latitude = 35.1798,
+                    longitude = 129.0750,
+                    category = PlaceCategory.PUBLIC_OFFICE,
+                )
             val selectedDestination = testDestination()
             val previewDestination =
                 PlaceDestination(
@@ -986,7 +995,9 @@ class MapViewModelTest {
                     longitude = 129.0320,
                     category = PlaceCategory.TOURIST_SPOT,
                 )
+            destinationSelectionRepository.updateSelectedOrigin(selectedOrigin)
             destinationSelectionRepository.updateSelectedDestination(selectedDestination)
+            destinationSelectionRepository.setEditingTarget(RouteEditingTarget.ORIGIN)
             val viewModel =
                 MapViewModel(
                     locationPermissionManager =
@@ -1011,7 +1022,11 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertNull(destinationSelectionRepository.selectedOrigin.value)
+            assertEquals(RouteEditingTarget.DESTINATION, destinationSelectionRepository.editingTarget.value)
             assertNull(viewModel.uiState.value.selectedDestination)
+            assertNull(viewModel.uiState.value.selectedOrigin)
+            assertEquals(RouteEditingTarget.DESTINATION, viewModel.uiState.value.routeEditingTarget)
             assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
             assertNull(viewModel.uiState.value.facilityDetailSheetState.destinationPreview)
             assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
@@ -1047,7 +1062,9 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertNull(destinationSelectionRepository.selectedOrigin.value)
             assertNull(viewModel.uiState.value.selectedDestination)
+            assertNull(viewModel.uiState.value.selectedOrigin)
             assertEquals(0L, viewModel.uiState.value.rendererSessionKey)
             assertEquals(MapCameraSource.DEFAULT_BUSAN, viewModel.uiState.value.cameraTarget.source)
             assertEquals(MapDefaults.BUSAN_CENTER.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)

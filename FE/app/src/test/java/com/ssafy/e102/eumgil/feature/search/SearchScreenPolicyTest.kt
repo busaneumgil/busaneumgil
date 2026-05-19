@@ -91,6 +91,28 @@ class SearchScreenPolicyTest {
     }
 
     @Test
+    fun `recent search rows scroll inside the available entry space`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val recentVisitSection =
+            source
+                .substringAfter("private fun RecentVisitSection(")
+                .substringBefore("@Composable\nprivate fun RecentVisitItem")
+
+        assertTrue(
+            "Recent search rows should be rendered in a weighted LazyColumn so overflowing rows scroll instead of being clipped above the promo banner.",
+            recentVisitSection.contains("LazyColumn(") &&
+                recentVisitSection.contains(".weight(1f)") &&
+                recentVisitSection.contains("items("),
+        )
+        assertFalse(
+            "Recent search rows should not be appended directly to the parent Column because that clips the last row when the banner is visible.",
+            recentVisitSection.contains("recentSearches.forEach"),
+        )
+    }
+
+    @Test
     fun `results screen loading state uses spinner without illustration or placeholder card`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")

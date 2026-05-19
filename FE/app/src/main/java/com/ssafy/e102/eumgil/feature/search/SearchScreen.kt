@@ -1348,24 +1348,35 @@ private fun RecentVisitSection(
                 )
             }
         } else {
-            recentSearches.forEach { recentSearch ->
-                RecentVisitItem(
-                    keyword = recentSearch.keyword,
-                    onClick = {
-                        onAction(
-                            SearchUiAction.RecentSearchClicked(
-                                keyword = recentSearch.keyword,
-                            ),
-                        )
-                    },
-                    onDeleteClick = {
-                        onAction(
-                            SearchUiAction.RecentSearchDeleteClicked(
-                                keyword = recentSearch.keyword,
-                            ),
-                        )
-                    },
-                )
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            ) {
+                items(
+                    items = recentSearches,
+                    key = { recentSearch -> recentSearch.keyword },
+                ) { recentSearch ->
+                    RecentVisitItem(
+                        keyword = recentSearch.keyword,
+                        onClick = {
+                            onAction(
+                                SearchUiAction.RecentSearchClicked(
+                                    keyword = recentSearch.keyword,
+                                ),
+                            )
+                        },
+                        onDeleteClick = {
+                            onAction(
+                                SearchUiAction.RecentSearchDeleteClicked(
+                                    keyword = recentSearch.keyword,
+                                ),
+                            )
+                        },
+                    )
+                }
             }
         }
     }

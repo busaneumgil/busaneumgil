@@ -273,7 +273,7 @@ fun RecentDestinationBottomSheetShell(
                                                 if (isExpanded) {
                                                     -90f
                                                 } else {
-                                                    0f
+                                                    90f
                                                 },
                                             ),
                                     tint = MaterialTheme.colorScheme.secondary,

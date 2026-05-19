@@ -25,9 +25,10 @@ class RecentDestinationBottomSheetShellPolicyTest {
             source.contains("R.drawable.ic_route_card_chevron"),
         )
         assertTrue(
-            "Expanded recent destination sheet should expose a collapse action with the chevron rotated upward.",
+            "Recent destination sheet should use a downward chevron for view-all and rotate it upward for collapse.",
             source.contains("map_recent_destination_collapse") &&
                 source.contains(".rotate(") &&
+                source.contains("90f") &&
                 source.contains("-90f"),
         )
         assertTrue(

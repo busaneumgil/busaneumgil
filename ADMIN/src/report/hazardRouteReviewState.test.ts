@@ -168,6 +168,8 @@ describe("hazard route review workflow state", () => {
       intent: "restore",
       stage: "IN_PROGRESS",
       reviewerUserId: "admin-8",
+      gu: "부산진구",
+      dong: "부전동",
       startedAt: "2026-05-18T10:00:00",
       updatedAt: "2026-05-18T10:05:00",
       completedAt: null,

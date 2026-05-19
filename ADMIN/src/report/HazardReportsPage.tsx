@@ -77,6 +77,9 @@ const percentFormatter = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 1,
 });
 
+const HAZARD_ROUTE_REVIEW_RADIUS_METER = 200;
+const HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT = 1500;
+
 type PreviewHazardRecord = {
   summary: AdminHazardReportSummary;
   detail: AdminHazardReportDetail;
@@ -194,7 +197,7 @@ const previewHazardRecords: PreviewHazardRecord[] = [
     address: "금정구 중앙대로 1717",
     region: "부산광역시 금정구 부곡동",
     point: { lat: 35.229221, lng: 129.090612 },
-    description: "점자블록 훼손 구간으로 지도 반영 대기 상태입니다.",
+    description: "점자블록 훼손 구간으로 검수 완료 즉시 지도와 경로 탐색에 반영됩니다.",
     imageUrls: [previewStreetImageC, previewStreetImageA],
   }),
   createPreviewHazardRecord({
@@ -462,17 +465,11 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     mutationFn: ({
       reportId,
       intent,
-      gu,
-      dong,
     }: {
       reportId: number;
       intent: "approve" | "restore";
-      gu: string;
-      dong: string;
     }) => startAdminHazardRouteReview(reportId, {
       intent: toAdminHazardRouteReviewIntent(intent),
-      gu,
-      dong,
     }, accessToken),
     onSuccess: (response) => {
       const hydratedReview = hydrateHazardRouteReviewRecord(response);
@@ -554,15 +551,32 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const locationAddress = preview ? previewRecord?.address ?? null : resolveHazardDisplayAddress(locationQuery.data);
   const locationRegion = preview ? previewRecord?.region ?? "" : formatHazardRegionLabel(locationQuery.data);
   const areaScope = activeReport ? resolveHazardAreaScope(preview ? previewRecord?.region ?? null : null, preview ? null : locationQuery.data) : null;
+  const routeReviewAreaScope = activeReviewDraft?.gu && activeReviewDraft?.dong
+    ? { gu: activeReviewDraft.gu, dong: activeReviewDraft.dong }
+    : areaScope;
   const routeNetworkQuery = useQuery({
-    queryKey: ["admin-hazard-route-review-network", areaScope?.gu, areaScope?.dong, accessToken],
-    queryFn: () => fetchAdminRoadNetworkPayload({
-      gu: areaScope?.gu,
-      dong: areaScope?.dong,
+    queryKey: [
+      "admin-hazard-route-review-network",
+      routeReviewAreaScope?.gu,
+      routeReviewAreaScope?.dong,
+      reportPoint?.lat,
+      reportPoint?.lng,
       accessToken,
-      limit: 12000,
+    ],
+    queryFn: () => fetchAdminRoadNetworkPayload({
+      gu: routeReviewAreaScope?.gu,
+      dong: routeReviewAreaScope?.dong,
+      centerLat: reportPoint?.lat,
+      centerLng: reportPoint?.lng,
+      radiusMeter: HAZARD_ROUTE_REVIEW_RADIUS_METER,
+      accessToken,
+      limit: HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT,
     }),
-    enabled: !preview && hasToken && Boolean(areaScope?.gu && areaScope?.dong) && isHazardReviewActive(activeReviewDraft),
+    enabled: !preview
+      && hasToken
+      && reportPoint != null
+      && Boolean(routeReviewAreaScope?.gu && routeReviewAreaScope?.dong)
+      && isHazardReviewActive(activeReviewDraft),
     retry: false,
     staleTime: 300_000,
   });
@@ -572,7 +586,6 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     : null;
   const roadviewLink = roadviewPoint ? createKakaoRoadviewLink(roadviewPoint) : null;
   const displayStatus = activeReport ? deriveHazardDisplayStatus(activeReport.status, activeReviewDraft) : null;
-  const hasRouteReviewScope = preview || Boolean(areaScope?.gu && areaScope?.dong);
   const canStartApprove = Boolean(detail && canStartHazardApprove(detail.status, activeReviewDraft));
   const canReject = Boolean(
     detail
@@ -622,14 +635,9 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       return;
     }
     if (!preview) {
-      if (!areaScope?.gu || !areaScope?.dong) {
-        return;
-      }
       startRouteReviewMutation.mutate({
         reportId: activeReport.reportId,
         intent,
-        gu: areaScope.gu,
-        dong: areaScope.dong,
       });
       return;
     }
@@ -689,21 +697,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const approvedCount = reportSummary?.approvedReports ?? countReportsByStatus(reportListData?.content, "APPROVED");
   const rejectedCount = reportSummary?.rejectedReports ?? countReportsByStatus(reportListData?.content, "REJECTED");
   const restorePendingCount = countRestorePendingReports(reportListData?.content, routeReviewDrafts);
-  const dbSyncPendingCount = preview
-    ? previewSummary.dbSyncPendingCount
-    : Math.max(approvedCount - restorePendingCount, 0);
-  const totalSyncPendingCount = dbSyncPendingCount + restorePendingCount;
   const currentPage = cursorStack.length;
   const paginationItems = buildVisiblePageNumbers(currentPage, Boolean(reportListData?.hasNext));
   const detailTrackingId = activeReport ? formatHazardTrackingId(activeReport.createdAt, activeReport.reportId) : null;
   const detailHistory = activeReport ? buildHazardTimeline(activeReport, adminPrincipal.userId, activeReviewDraft) : [];
-  const hasDbSyncQueue = totalSyncPendingCount > 0;
-  const latestReportStamp = preview
-    ? previewSummary.latestSnapshotAt
-    : activeReport?.createdAt
-      ?? reportListData?.content[0]?.createdAt
-      ?? summaryQuery.data?.period.to
-      ?? "";
   const operationSnapshot = activeReport ? buildOperationSnapshot(activeReport.status, activeReviewDraft) : null;
   const activeSessionMeta = activeReport ? reportSessionMeta[activeReport.reportId] : undefined;
   const processedAt = activeSessionMeta?.handledAt
@@ -791,7 +788,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
           <div className="hazard-inline-banner">
             <HazardUiIcon name="info" />
-            <span>승인/반려/원상복구는 제보 별도 개별 처리됩니다. 처리한 항목은 DB 반영 대기 상태에서 일괄 반영할 수 있습니다.</span>
+            <span>승인 검수와 원상복구 검수는 제보별로 즉시 적용됩니다. 검수 완료 시 도로 속성과 경로 오버레이가 바로 갱신되고 필요하면 경로 엔진도 다시 불러옵니다.</span>
           </div>
 
           {reportsQuery.error instanceof Error && <p className="error-box">{reportsQuery.error.message}</p>}
@@ -882,15 +879,11 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
           </div>
 
-          <div className={`hazard-bulk-bar ${hasDbSyncQueue ? "" : "empty"}`}>
+          <div className="hazard-bulk-bar">
             <div className="hazard-bulk-bar__summary">
-              <strong>{hasDbSyncQueue ? `전체 DB 반영 대기 ${totalSyncPendingCount}건` : "지금 반영할 항목이 없습니다."}</strong>
-              <span>DB 반영 대기 {dbSyncPendingCount}건 · 원상복구 대기 {restorePendingCount}건</span>
-              <small>{latestReportStamp ? `마지막 집계 ${formatLongDateTime(latestReportStamp)}` : "마지막 집계 준비 중"}</small>
+              <strong>검수 완료 즉시 도로와 경로 탐색에 반영됩니다.</strong>
+              <span>원상복구 대기 {restorePendingCount}건은 승인 처리된 제보 중 복구 검수가 필요한 항목입니다.</span>
             </div>
-            <button type="button" className="hazard-bulk-bar__button" title="백엔드 연동 예정">
-              전체 DB 반영
-            </button>
           </div>
         </section>
 
@@ -947,7 +940,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   networkPayload={preview ? previewRouteReviewPayload : routeNetworkQuery.data}
                   networkLoading={preview ? false : routeNetworkQuery.isLoading}
                   networkError={preview ? null : routeNetworkQuery.error instanceof Error ? routeNetworkQuery.error : null}
-                  areaScopeLabel={areaScope ? `${areaScope.gu} ${areaScope.dong}` : null}
+                  areaScopeLabel={routeReviewAreaScope ? `${routeReviewAreaScope.gu} ${routeReviewAreaScope.dong}` : null}
                   onBack={() => setDetailPaneMode("detail")}
                   onReviewChange={handleRouteReviewChange}
                   onComplete={completeRouteReviewFlow}
@@ -1034,7 +1027,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                     <div className="hazard-operation-grid">
                       <OperationRow label="지도 반영 상태" status={operationSnapshot.mapSync} />
                       <OperationRow label="추천 경로 제외" status={operationSnapshot.routeExclusion} />
-                      <OperationRow label="DB 반영 상태" status={operationSnapshot.dbSync} />
+                      <OperationRow label="경로 반영 상태" status={operationSnapshot.dbSync} />
                       <OperationRow label="원상복구 상태" status={operationSnapshot.recovery} />
                     </div>
                   )}
@@ -1126,7 +1119,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   <button
                     type="button"
                     className="hazard-action-button approve"
-                    disabled={!canStartApprove || !hasRouteReviewScope || startRouteReviewMutation.isPending}
+                    disabled={!canStartApprove || startRouteReviewMutation.isPending}
                     onClick={() => startRouteReview("approve")}
                   >
                     <HazardUiIcon name="check" />
@@ -1148,7 +1141,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   <button
                     type="button"
                     className="hazard-action-button restore"
-                    disabled={!canRestore || activeReviewDraft?.stage === "IN_PROGRESS" || !hasRouteReviewScope || startRouteReviewMutation.isPending}
+                    disabled={!canRestore || activeReviewDraft?.stage === "IN_PROGRESS" || startRouteReviewMutation.isPending}
                     onClick={() => startRouteReview("restore")}
                   >
                     <HazardUiIcon name="refresh" />
@@ -1642,6 +1635,7 @@ function buildHazardTimeline(
   }
 
   if (review?.stage === "COMPLETED" && review.intent === "restore") {
+    const routeApply = summarizeDbSyncStatus(report.status, review);
     return [
       {
         time: report.status === "REJECTED" ? baseTime : "-",
@@ -1655,11 +1649,12 @@ function buildHazardTimeline(
         meta: reviewerLabel,
         tone: "purple" as HazardBadgeTone,
       },
-      { time: "-", label: "DB 반영 대기", meta: "(백엔드 연동 예정)", tone: "gray" as HazardBadgeTone },
+      { time: formatLongDateTime(review.completedAt ?? review.updatedAt), label: routeApply.label, meta: "(시스템)", tone: routeApply.tone },
     ];
   }
 
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
+    const routeApply = summarizeDbSyncStatus(report.status, review);
     return [
       { time: baseTime, label: "제보 접수", meta: "(사용자)", tone: "blue" as HazardBadgeTone },
       {
@@ -1674,13 +1669,14 @@ function buildHazardTimeline(
         meta: reviewerLabel,
         tone: "green" as HazardBadgeTone,
       },
+      { time: formatLongDateTime(review.completedAt ?? review.updatedAt), label: routeApply.label, meta: "(시스템)", tone: routeApply.tone },
     ];
   }
 
   if (report.status === "APPROVED") {
     return [
       { time: baseTime, label: "처리 완료", meta: reviewerLabel, tone: "green" as HazardBadgeTone },
-      { time: baseTime, label: "DB 반영 대기", meta: "(시스템)", tone: "orange" as HazardBadgeTone },
+      { time: baseTime, label: "즉시 반영 완료", meta: "(시스템)", tone: "green" as HazardBadgeTone },
       { time: "-", label: "원상복구 반영", meta: "-", tone: "purple" as HazardBadgeTone },
     ];
   }
@@ -1689,14 +1685,14 @@ function buildHazardTimeline(
     return [
       { time: baseTime, label: "반려", meta: reviewerLabel, tone: "red" as HazardBadgeTone },
       { time: "-", label: "후속 조치 없음", meta: "-", tone: "gray" as HazardBadgeTone },
-      { time: "-", label: "DB 반영", meta: "-", tone: "gray" as HazardBadgeTone },
+      { time: "-", label: "즉시 반영 없음", meta: "-", tone: "gray" as HazardBadgeTone },
     ];
   }
 
   return [
     { time: baseTime, label: "제보 접수", meta: "(사용자)", tone: "blue" as HazardBadgeTone },
     { time: "-", label: "승인 검수 대기", meta: "(Admin)", tone: "orange" as HazardBadgeTone },
-    { time: "-", label: "DB 반영", meta: "-", tone: "gray" as HazardBadgeTone },
+    { time: "-", label: "즉시 반영 대기", meta: "-", tone: "gray" as HazardBadgeTone },
   ];
 }
 
@@ -1714,18 +1710,36 @@ function summarizeDbSyncStatus(status: HazardReportStatus, review?: HazardRouteR
     return { label: review.intent === "restore" ? "복구 검수" : "검수중", tone: "blue" as HazardBadgeTone };
   }
   if (review?.stage === "COMPLETED" && review.intent === "restore") {
-    return { label: "복구 완료", tone: "purple" as HazardBadgeTone };
+    return summarizeImmediateApplyStatus(review.routingApplyStatus, "복구 완료");
   }
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
-    return { label: "DB 대기", tone: "orange" as HazardBadgeTone };
+    return summarizeImmediateApplyStatus(review.routingApplyStatus, "검수 완료");
   }
   if (status === "APPROVED") {
-    return { label: "DB 대기", tone: "orange" as HazardBadgeTone };
+    return { label: "즉시 반영 완료", tone: "green" as HazardBadgeTone };
   }
   if (status === "REJECTED") {
-    return { label: "-", tone: "gray" as HazardBadgeTone };
+    return { label: "즉시 반영 없음", tone: "gray" as HazardBadgeTone };
   }
-  return { label: "-", tone: "gray" as HazardBadgeTone };
+  return { label: "대기", tone: "gray" as HazardBadgeTone };
+}
+
+function summarizeImmediateApplyStatus(
+  routingApplyStatus: HazardRouteReviewRecord["routingApplyStatus"],
+  fallbackLabel: string,
+) {
+  switch (routingApplyStatus) {
+    case "APPLIED":
+      return { label: "즉시 반영 완료", tone: "green" as HazardBadgeTone };
+    case "APPLIED_WITH_WARNING":
+      return { label: "즉시 반영 경고", tone: "orange" as HazardBadgeTone };
+    case "FAILED":
+      return { label: "즉시 반영 실패", tone: "red" as HazardBadgeTone };
+    case "SKIPPED":
+      return { label: "즉시 반영 없음", tone: "gray" as HazardBadgeTone };
+    default:
+      return { label: fallbackLabel, tone: "green" as HazardBadgeTone };
+  }
 }
 
 function summarizeMapSyncStatus(status: HazardReportStatus, review?: HazardRouteReviewRecord | null) {
@@ -1736,10 +1750,10 @@ function summarizeMapSyncStatus(status: HazardReportStatus, review?: HazardRoute
     return { label: "복구 완료", tone: "purple" as HazardBadgeTone };
   }
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
-    return { label: "검수 완료", tone: "green" as HazardBadgeTone };
+    return { label: "즉시 반영 완료", tone: "green" as HazardBadgeTone };
   }
   if (status === "APPROVED") {
-    return { label: "검수 완료", tone: "green" as HazardBadgeTone };
+    return { label: "즉시 반영 완료", tone: "green" as HazardBadgeTone };
   }
   if (status === "REJECTED") {
     return { label: "검토 종료", tone: "gray" as HazardBadgeTone };
@@ -1755,10 +1769,10 @@ function summarizeRouteExclusionStatus(status: HazardReportStatus, review?: Haza
     return { label: "제외 해제", tone: "purple" as HazardBadgeTone };
   }
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
-    return { label: "제외 예정", tone: "orange" as HazardBadgeTone };
+    return { label: "제외 반영", tone: "orange" as HazardBadgeTone };
   }
   if (status === "APPROVED") {
-    return { label: "제외 예정", tone: "orange" as HazardBadgeTone };
+    return { label: "제외 반영", tone: "orange" as HazardBadgeTone };
   }
   if (status === "REJECTED") {
     return { label: "-", tone: "gray" as HazardBadgeTone };

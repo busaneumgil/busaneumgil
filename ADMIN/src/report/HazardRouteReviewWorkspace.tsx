@@ -228,7 +228,7 @@ export function HazardRouteReviewWorkspace({
       <div className="hazard-review-actionbar">
         <div className="hazard-review-actionbar__summary">
           <strong>{hazardRouteReviewIntentLabel(review.intent)}</strong>
-          <span>{canComplete ? `검수 세그먼트 ${reviewedSegmentCount}건이 저장되었습니다. 완료 후 전체 DB 반영 대기 목록에 포함됩니다.` : "최소 1개 세그먼트를 검수해야 완료할 수 있습니다."}</span>
+          <span>{canComplete ? `검수 세그먼트 ${reviewedSegmentCount}건이 저장되었습니다. 완료 즉시 지도와 경로 탐색에 반영됩니다.` : "최소 1개 세그먼트를 검수해야 완료할 수 있습니다."}</span>
         </div>
         <div className="hazard-review-actionbar__buttons">
           <button type="button" className="hazard-action-button secondary" onClick={onBack}>

@@ -64,4 +64,20 @@ public interface AdminAreaRepository extends JpaRepository<AdminArea, Long> {
 		String gu,
 		@Param("dong")
 		String dong);
+
+	@Query(value = """
+		select gu, dong
+		from admin_areas
+		where ST_Intersects(
+			geom,
+			ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)
+		)
+		order by ST_Area(geom::geography) asc
+		limit 1
+		""", nativeQuery = true)
+	java.util.Optional<Object[]> findAreaByPoint(
+		@Param("lng")
+		double lng,
+		@Param("lat")
+		double lat);
 }

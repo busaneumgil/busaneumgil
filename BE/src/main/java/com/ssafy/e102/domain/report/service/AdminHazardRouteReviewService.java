@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
 import com.ssafy.e102.domain.report.dto.request.AdminHazardRouteReviewSegmentDraftRequest;
@@ -41,6 +42,7 @@ public class AdminHazardRouteReviewService {
 	private final RoadSegmentRepository roadSegmentRepository;
 	private final AdminAuditLogService adminAuditLogService;
 	private final AdminMapService adminMapService;
+	private final AdminAreaRepository adminAreaRepository;
 	private final TransactionTemplate transactionTemplate;
 	private final Clock clock;
 
@@ -51,6 +53,7 @@ public class AdminHazardRouteReviewService {
 		RoadSegmentRepository roadSegmentRepository,
 		AdminAuditLogService adminAuditLogService,
 		AdminMapService adminMapService,
+		AdminAreaRepository adminAreaRepository,
 		PlatformTransactionManager transactionManager,
 		Clock clock) {
 		this.hazardReportRepository = hazardReportRepository;
@@ -58,6 +61,7 @@ public class AdminHazardRouteReviewService {
 		this.roadSegmentRepository = roadSegmentRepository;
 		this.adminAuditLogService = adminAuditLogService;
 		this.adminMapService = adminMapService;
+		this.adminAreaRepository = adminAreaRepository;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 		this.clock = clock;
 	}
@@ -76,13 +80,14 @@ public class AdminHazardRouteReviewService {
 			return AdminHazardRouteReviewResponse.from(latestReview, hazardReport.getStatus());
 		}
 
+		ResolvedReviewArea reviewArea = resolveReviewArea(hazardReport);
 		LocalDateTime now = LocalDateTime.now(clock);
 		HazardReportRouteReview review = HazardReportRouteReview.start(
 			hazardReport,
 			request.intent(),
 			userId,
-			request.gu(),
-			request.dong(),
+			reviewArea.gu(),
+			reviewArea.dong(),
 			now);
 		HazardReportRouteReview savedReview = saveRouteReview(review);
 		adminAuditLogService.record(
@@ -90,8 +95,8 @@ public class AdminHazardRouteReviewService {
 			"HAZARD_REPORT_ROUTE_REVIEW_START",
 			"HAZARD_REPORT",
 			String.valueOf(reportId),
-			request.gu(),
-			request.dong(),
+			reviewArea.gu(),
+			reviewArea.dong(),
 			"제보 경로 검수 시작 reportId=" + reportId + " intent=" + request.intent(),
 			null,
 			AdminHazardRouteReviewResponse.from(savedReview, hazardReport.getStatus()));
@@ -277,10 +282,23 @@ public class AdminHazardRouteReviewService {
 		}
 	}
 
+	private ResolvedReviewArea resolveReviewArea(HazardReport hazardReport) {
+		double lng = hazardReport.getReportPoint().getX();
+		double lat = hazardReport.getReportPoint().getY();
+		Object[] area = adminAreaRepository.findAreaByPoint(lng, lat)
+			.orElseThrow(() -> new HazardReportException(
+				HazardReportErrorCode.INVALID_HAZARD_ROUTE_REVIEW_REQUEST,
+				"제보 위치에 대응하는 검수 행정구역을 찾을 수 없습니다."));
+		return new ResolvedReviewArea((String)area[0], (String)area[1]);
+	}
+
 	private record RouteReviewCompletion(
 		HazardReportRouteReview review,
 		ReportStatus reportStatus,
 		AdminHazardRouteReviewResponse before,
 		boolean routingOverlayReloadRequired) {
+	}
+
+	private record ResolvedReviewArea(String gu, String dong) {
 	}
 }

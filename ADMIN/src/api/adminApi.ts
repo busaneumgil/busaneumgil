@@ -344,11 +344,17 @@ export async function updateAdminAreaAssignmentStatus(
 export async function fetchAdminRoadNetworkPayload({
   gu,
   dong,
+  centerLat,
+  centerLng,
+  radiusMeter,
   accessToken,
   limit = 10000,
 }: {
   gu?: string;
   dong?: string;
+  centerLat?: number;
+  centerLng?: number;
+  radiusMeter?: number;
   accessToken: string;
   limit?: number;
 }): Promise<SegmentPayload> {
@@ -356,6 +362,11 @@ export async function fetchAdminRoadNetworkPayload({
   if (gu && dong) {
     params.set("gu", gu);
     params.set("dong", dong);
+  }
+  if (typeof centerLat === "number" && typeof centerLng === "number" && typeof radiusMeter === "number") {
+    params.set("centerLat", String(centerLat));
+    params.set("centerLng", String(centerLng));
+    params.set("radiusMeter", String(radiusMeter));
   }
   return requestAdminJson<SegmentPayload>(`/admin/road-network/segments?${params.toString()}`, accessToken);
 }

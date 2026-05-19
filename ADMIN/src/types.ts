@@ -828,8 +828,6 @@ export interface AdminHazardRouteReview {
 
 export interface StartAdminHazardRouteReviewRequest {
   intent: AdminHazardRouteReviewIntent;
-  gu: string;
-  dong: string;
 }
 
 export interface UpdateAdminHazardRouteReviewRequest {

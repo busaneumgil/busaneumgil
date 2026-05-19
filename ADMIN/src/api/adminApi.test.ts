@@ -135,7 +135,7 @@ describe("admin hazard route review API", () => {
 
     await startAdminHazardRouteReview(
       1,
-      { intent: "APPROVE", gu: "부산진구", dong: "부전동" },
+      { intent: "APPROVE" },
       "token",
     );
     await updateAdminHazardRouteReview(
@@ -149,7 +149,10 @@ describe("admin hazard route review API", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining("/admin/hazard-reports/1/route-review/start"),
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ intent: "APPROVE" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,

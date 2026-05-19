@@ -5,6 +5,7 @@
     </style>
 
     <style name="Theme.BusanEumgil.Splash" parent="Theme.SplashScreen">
+        <item name="android:windowBackground">@drawable/splash_illustration</item>
         <item name="windowSplashScreenBackground">@color/splash_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_transparent_icon</item>
         <item name="postSplashScreenTheme">@style/Theme.BusanEumgil</item>

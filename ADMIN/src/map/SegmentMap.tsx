@@ -46,6 +46,7 @@ interface SegmentMapProps {
     point: GeoPoint;
     level?: number;
   } | null;
+  forceDetailedSegments?: boolean;
   toolbarMode?: "editor" | "roadSegmentLegend" | "segmentFeatureLegend" | "routeAttributeLegend";
   draftEditCount?: number;
   onUndoDraftEdit?: () => void;
@@ -60,6 +61,7 @@ export interface RoadviewDockState {
 
 const ROADVIEW_DEFAULT_MESSAGE = "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.";
 const DETAIL_SEGMENT_MAX_LEVEL = 4;
+const FORCED_DETAIL_SEGMENT_MAX_COUNT = 1500;
 const segmentFeatureTypes: SegmentFeatureType[] = ["CROSSWALK", "AUDIO_SIGNAL", "BRAILLE_BLOCK", "STAIRS"];
 const segmentFeatureLabels: Record<SegmentFeatureType, string> = {
   CROSSWALK: "횡단보도",
@@ -135,6 +137,7 @@ export function SegmentMap({
   routePoints,
   focusMarker = null,
   preferredView = null,
+  forceDetailedSegments = false,
   toolbarMode = "editor",
   draftEditCount = 0,
   onUndoDraftEdit,
@@ -203,7 +206,9 @@ export function SegmentMap({
     brailleBlock: true,
     stairs: true,
   });
-  const detailedSegmentsVisible = mapLevel <= DETAIL_SEGMENT_MAX_LEVEL;
+  const visibleSegmentCount = payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0;
+  const forceDetailedSegmentsBlocked = forceDetailedSegments && visibleSegmentCount > FORCED_DETAIL_SEGMENT_MAX_COUNT;
+  const detailedSegmentsVisible = (forceDetailedSegments && !forceDetailedSegmentsBlocked) || mapLevel <= DETAIL_SEGMENT_MAX_LEVEL;
 
   useEffect(() => {
     onDraftEditRef.current = onDraftEdit;
@@ -1011,8 +1016,10 @@ export function SegmentMap({
             : mapError
               ? `지도 오류: ${mapError}`
               : !detailedSegmentsVisible
-                ? `확대하면 보행 네트워크 segment가 표시됩니다. 현재 level ${mapLevel}, 표시 기준 ${DETAIL_SEGMENT_MAX_LEVEL} 이하`
-                : `${payload?.summary?.visibleSegmentCount ?? payload?.segments.features.length ?? 0} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · 영역 ${polygonPointCount}/5점` : ""}${snapMessage ? ` · ${snapMessage}` : ""}`}
+                ? forceDetailedSegmentsBlocked
+                  ? `세그먼트 ${visibleSegmentCount}건이 선택되어 상세 렌더링을 제한했습니다. 제보 주변 범위를 더 좁히거나 확대해서 확인해 주세요.`
+                  : `확대하면 보행 네트워크 segment가 표시됩니다. 현재 level ${mapLevel}, 표시 기준 ${DETAIL_SEGMENT_MAX_LEVEL} 이하`
+                : `${visibleSegmentCount} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · 영역 ${polygonPointCount}/5점` : ""}${snapMessage ? ` · ${snapMessage}` : ""}`}
       </div>
     </section>
   );
@@ -1093,8 +1100,13 @@ function createRoutePointOverlay(point: GeoPoint, label: string, type: "start" |
 function createFocusMarkerOverlay(point: GeoPoint, label: string, map: KakaoMap): KakaoOverlay | null {
   if (!window.kakao?.maps) return null;
   const marker = document.createElement("div");
-  marker.className = "route-point-marker report";
-  marker.textContent = label;
+  marker.className = "route-focus-marker";
+  marker.title = label;
+
+  const core = document.createElement("span");
+  core.className = "route-focus-marker__core";
+  marker.appendChild(core);
+
   return new window.kakao.maps.CustomOverlay({
     map,
     position: new window.kakao.maps.LatLng(point.lat, point.lng),

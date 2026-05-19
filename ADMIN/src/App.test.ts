@@ -24,4 +24,22 @@ describe("Admin dashboard navigation wiring", () => {
     expect(appSource).toContain("data={usesRealAdminApi ? routeStatsQuery.data : routeStatsMockResponse}");
     expect(appSource).toContain("data={usesRealAdminApi ? bottleneckMonitoringQuery.data : bottleneckMonitoringMockResponse}");
   });
+
+  it("binds dashboard period controls to summary and bottleneck queries", () => {
+    expect(appSource).toContain('queryKey: ["admin-dashboard-summary", accessToken, normalizedDashboardRange.from, normalizedDashboardRange.to]');
+    expect(appSource).toContain('queryKey: ["admin-dashboard-bottlenecks", accessToken, normalizedDashboardRange.from, normalizedDashboardRange.to]');
+    expect(appSource).toContain("fetchAdminDashboardSummary({");
+    expect(appSource).toContain("fetchAdminDashboardBottlenecks({");
+    expect(appSource).toContain("topbar-date-range-panel");
+    expect(appSource).toContain("최근 7일");
+    expect(appSource).toContain("최근 30일");
+  });
+
+  it("turns bottleneck map controls into a real heatmap or segment toggle", () => {
+    expect(appSource).toContain('const [viewMode, setViewMode] = useState<"heatmap" | "segment">("heatmap")');
+    expect(appSource).toContain('aria-label="지도 보기 전환"');
+    expect(appSource).toContain('onClick={() => setViewMode("segment")}');
+    expect(appSource).toContain('presentationMode={viewMode}');
+    expect(appSource).toContain("속도 기준 (m/s)");
+  });
 });

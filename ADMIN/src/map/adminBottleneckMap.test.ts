@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import mapComponentSource from "./AdminBottleneckKakaoMap.tsx?raw";
 import {
   bottleneckLayerMode,
   bottleneckFillColor,
@@ -81,5 +82,15 @@ describe("admin bottleneck map helpers", () => {
       sampleCount: 1560,
     });
     expect(clusters[0].averageSpeedMps).toBeCloseTo(0.33, 2);
+  });
+
+  it("re-renders the heatmap while the map is being dragged, not only after idle", () => {
+    expect(mapComponentSource).toContain("useLayoutEffect");
+    expect(mapComponentSource).toContain('const heatmapRafRef = useRef<number | null>(null);');
+    expect(mapComponentSource).toContain('window.kakao.maps.event.addListener(mapRef.current, "center_changed"');
+    expect(mapComponentSource).toContain('window.kakao.maps.event.addListener(mapRef.current, "drag"');
+    expect(mapComponentSource).toContain("const deltaX = currentOffset.x - heatCanvasBasePanRef.current.x;");
+    expect(mapComponentSource).toContain("const deltaY = currentOffset.y - heatCanvasBasePanRef.current.y;");
+    expect(mapComponentSource).toContain("resetHeatCanvasPanTransform();");
   });
 });

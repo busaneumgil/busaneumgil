@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import source from "./HazardRouteReviewWorkspace.tsx?raw";
 
 describe("HazardRouteReviewWorkspace copy", () => {
-  it("makes the completion action describe immediate route apply", () => {
-    expect(source).toContain("검수 완료 및 즉시 반영");
-    expect(source).toContain("사용자 재탐색부터 경로 계산에 반영됩니다");
+  it("keeps completion copy aligned with immediate route apply flow", () => {
+    expect(source).toContain("검수 완료");
+    expect(source).toContain("완료 즉시 지도와 경로 탐색에 반영됩니다");
+    expect(source).not.toContain("전체 DB 반영 대기 목록에 포함됩니다");
   });
 });

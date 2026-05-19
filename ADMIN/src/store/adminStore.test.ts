@@ -20,6 +20,16 @@ describe("adminStore role model", () => {
     expect(adminPageFromSearch("?page=bottleneckMonitoring")).toBe("bottleneckMonitoring");
   });
 
+  it("maps supported preview targets to their initial admin page", () => {
+    expect(adminPageFromSearch("?preview=hazards")).toBe("hazards");
+    expect(adminPageFromSearch("?preview=routeStats")).toBe("routeStats");
+    expect(adminPageFromSearch("?preview=bottleneckMonitoring")).toBe("bottleneckMonitoring");
+  });
+
+  it("keeps explicit page links ahead of preview hints", () => {
+    expect(adminPageFromSearch("?page=home&preview=hazards")).toBe("home");
+  });
+
   it("falls back to home for unknown deep-link targets", () => {
     expect(adminPageFromSearch("?page=does-not-exist")).toBe("home");
     expect(adminPageFromSearch("?page=movementPatternAnalysis")).toBe("home");

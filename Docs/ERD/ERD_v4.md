@@ -776,8 +776,7 @@ GraphHopper runtime overlay current-state 테이블이다. 원본 truth는 `road
 - 즉시 반영 요청이어도 overlay 대상 필드가 하나도 포함되지 않으면 기존 overlay row를 유지하고 GraphHopper reload를 생략한다.
 - migration은 신규 create뿐 아니라 기존 테이블의 `walk_access DROP NOT NULL`, `stairs_state`, `width_state`, `braille_block_state` `ADD COLUMN IF NOT EXISTS`를 포함한다.
 - GraphHopper custom model JSON은 계속 source of truth다. Runtime overlay는 final weight 보정이 아니라 delegate/custom model이 읽는 `EdgeIteratorState` effective EV를 프로필 정책에 맞게 바꿔치기한다.
-- 프로필별 overlay 해석: wheelchair 계열은 `walk_access`, `stairs_state`, `width_state`만 반영하고 `braille_block_state`는 무시한다. visual 계열은 `braille_block_state`만 반영하고 `walk_access`, `stairs_state`, `width_state`는 무시한다.
-- 현재 정책상 `walk_access=NO` overlay도 visual route에는 즉시 반영되지 않는다. 통행 불가를 모든 보행 프로필 공통으로 볼지 별도 검토가 필요하다.
+- 프로필별 overlay 해석은 GraphHopper custom model이 읽는 EV와 맞춘다. `pedestrian_*`, `visual_*`, `wheelchair_*`는 `walk_access`, `stairs_state`, `width_state`를 반영하고, `visual_*`는 추가로 `braille_block_state`를 반영한다.
 - Route calculation은 overlay effective EV를 반영하지만 GraphHopper response details/guidance가 base graph EV를 읽을 수 있다. 시연에서 배지/안내 문구까지 overlay와 일치해야 하면 별도 response detail overlay 설계가 필요하다.
 - 원천 feature 객체는 `source_features`에 저장하고, `road_segments`에는 최종 집계 상태값만 반영한다. `segment_features`는 라우팅/안내에 필요한 edge 매칭 결과만 저장한다.
 

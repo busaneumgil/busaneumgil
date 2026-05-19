@@ -32,7 +32,8 @@ public final class OverlayAwareWeightingTest {
 	public static void main(String[] args) {
 		OverlayAwareWeightingTest test = new OverlayAwareWeightingTest();
 		test.wheelchairProfileOverridesWalkStairsAndWidthOnly();
-		test.visualProfileOverridesBrailleOnly();
+		test.visualProfileOverridesAllCustomModelAccessibilityValues();
+		test.pedestrianProfileOverridesSharedCustomModelAccessibilityValues();
 		test.nullOverlayColumnsKeepBaseValues();
 	}
 
@@ -57,7 +58,7 @@ public final class OverlayAwareWeightingTest {
 		delegate.assertReverseSeen(YesNoUnknown.YES, YesNoUnknown.NO, WidthState.ADEQUATE_150, YesNoUnknown.NO);
 	}
 
-	void visualProfileOverridesBrailleOnly() {
+	void visualProfileOverridesAllCustomModelAccessibilityValues() {
 		CapturingWeighting delegate = new CapturingWeighting(walkAccess, stairsState, widthState, brailleBlockState);
 		OverlayAwareWeighting weighting = weighting(
 			"visual_safe",
@@ -73,9 +74,30 @@ public final class OverlayAwareWeightingTest {
 		weighting.calcEdgeWeight(baseEdge, false);
 		weighting.calcEdgeMillis(baseEdge, true);
 
-		delegate.assertWeightSeen(YesNoUnknown.NO, YesNoUnknown.YES, WidthState.NARROW, YesNoUnknown.YES);
-		delegate.assertMillisSeen(YesNoUnknown.NO, YesNoUnknown.YES, WidthState.NARROW, YesNoUnknown.YES);
-		delegate.assertReverseSeen(YesNoUnknown.NO, YesNoUnknown.YES, WidthState.NARROW, YesNoUnknown.YES);
+		delegate.assertWeightSeen(YesNoUnknown.YES, YesNoUnknown.NO, WidthState.ADEQUATE_150, YesNoUnknown.YES);
+		delegate.assertMillisSeen(YesNoUnknown.YES, YesNoUnknown.NO, WidthState.ADEQUATE_150, YesNoUnknown.YES);
+		delegate.assertReverseSeen(YesNoUnknown.YES, YesNoUnknown.NO, WidthState.ADEQUATE_150, YesNoUnknown.YES);
+	}
+
+	void pedestrianProfileOverridesSharedCustomModelAccessibilityValues() {
+		CapturingWeighting delegate = new CapturingWeighting(walkAccess, stairsState, widthState, brailleBlockState);
+		OverlayAwareWeighting weighting = weighting(
+			"pedestrian_safe",
+			delegate,
+			new RoutingSegmentOverrideSnapshot(YesNoUnknown.YES, YesNoUnknown.NO, WidthState.ADEQUATE_150, YesNoUnknown.YES));
+		EdgeIteratorState baseEdge = edge(
+			Map.of(
+				IeumEncodedValues.WALK_ACCESS, YesNoUnknown.NO,
+				IeumEncodedValues.STAIRS_STATE, YesNoUnknown.YES,
+				IeumEncodedValues.WIDTH_STATE, WidthState.NARROW,
+				IeumEncodedValues.BRAILLE_BLOCK_STATE, YesNoUnknown.NO));
+
+		weighting.calcEdgeWeight(baseEdge, false);
+		weighting.calcEdgeMillis(baseEdge, true);
+
+		delegate.assertWeightSeen(YesNoUnknown.YES, YesNoUnknown.NO, WidthState.ADEQUATE_150, YesNoUnknown.NO);
+		delegate.assertMillisSeen(YesNoUnknown.YES, YesNoUnknown.NO, WidthState.ADEQUATE_150, YesNoUnknown.NO);
+		delegate.assertReverseSeen(YesNoUnknown.YES, YesNoUnknown.NO, WidthState.ADEQUATE_150, YesNoUnknown.NO);
 	}
 
 	void nullOverlayColumnsKeepBaseValues() {

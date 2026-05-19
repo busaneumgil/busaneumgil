@@ -92,16 +92,17 @@ final class OverlayAwareWeighting implements Weighting {
 	}
 
 	private enum OverlayProfilePolicy {
-		WHEELCHAIR,
+		SHARED_ACCESSIBILITY,
 		VISUAL,
 		NONE;
 
 		private static OverlayProfilePolicy fromProfileName(String profileName) {
-			if (profileName != null && profileName.startsWith("wheelchair_")) {
-				return WHEELCHAIR;
-			}
 			if (profileName != null && profileName.startsWith("visual_")) {
 				return VISUAL;
+			}
+			if (profileName != null
+				&& (profileName.startsWith("wheelchair_") || profileName.startsWith("pedestrian_"))) {
+				return SHARED_ACCESSIBILITY;
 			}
 			return NONE;
 		}
@@ -334,7 +335,7 @@ final class OverlayAwareWeighting implements Weighting {
 		@SuppressWarnings("unchecked")
 		private <T extends Enum<?>> T effectiveEnumValue(EnumEncodedValue<T> encodedValue) {
 			String encodedValueName = encodedValue.getName();
-			if (profilePolicy == OverlayProfilePolicy.WHEELCHAIR) {
+			if (profilePolicy == OverlayProfilePolicy.SHARED_ACCESSIBILITY || profilePolicy == OverlayProfilePolicy.VISUAL) {
 				if (walkAccessEncodedValue.getName().equals(encodedValueName) && snapshot.walkAccess() != null) {
 					return (T)snapshot.walkAccess();
 				}
@@ -344,7 +345,6 @@ final class OverlayAwareWeighting implements Weighting {
 				if (widthStateEncodedValue.getName().equals(encodedValueName) && snapshot.widthState() != null) {
 					return (T)snapshot.widthState();
 				}
-				return null;
 			}
 			if (profilePolicy == OverlayProfilePolicy.VISUAL
 				&& brailleBlockStateEncodedValue.getName().equals(encodedValueName)

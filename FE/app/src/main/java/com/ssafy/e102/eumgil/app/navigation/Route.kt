@@ -98,6 +98,12 @@ sealed interface TopLevelRoute : AppRoute {
     }
 }
 
+sealed interface MyPageChildRoute : AppRoute {
+    data object TextSize : MyPageChildRoute {
+        override val route: String = "my_page/text_size"
+    }
+}
+
 /**
  * 시각지원(저시력/시각장애) 모드 풀스크린 셸 화면들의 라우트.
  *
@@ -153,6 +159,10 @@ sealed interface LowVisionRoute : AppRoute {
 
     data object AppInfo : LowVisionRoute {
         override val route: String = "low_vision/app_info"
+    }
+
+    data object TextSize : LowVisionRoute {
+        override val route: String = "low_vision/text_size"
     }
 
     /** 음성 인식 결과로 진입하는 검색 화면. [query]는 URL 인코딩된 STT 결과. */

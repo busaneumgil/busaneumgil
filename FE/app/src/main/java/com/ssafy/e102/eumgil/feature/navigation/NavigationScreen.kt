@@ -933,6 +933,16 @@ private fun NavigationMapStage(
     modifier: Modifier = Modifier,
 ) {
     val mapControlState = rememberMapOverlayViewportControlState()
+    LaunchedEffect(uiState.segmentSync.isInspectingSegments, uiState.segmentSync.focusedSegmentIndex) {
+        if (uiState.segmentSync.isInspectingSegments) {
+            mapControlState.clearManualCamera()
+        }
+    }
+    LaunchedEffect(uiState.mapOverlay.trackingMode, uiState.segmentSync.isInspectingSegments) {
+        if (!uiState.segmentSync.isInspectingSegments && uiState.mapOverlay.trackingMode != NavigationTrackingMode.IDLE) {
+            mapControlState.clearManualCamera()
+        }
+    }
     LaunchedEffect(uiState.locationRecenterRequestId) {
         if (uiState.locationRecenterRequestId == 0L) return@LaunchedEffect
         val currentLocation = uiState.mapOverlay.currentLocation?.coordinate
@@ -973,8 +983,14 @@ private fun NavigationMapStage(
         NavigationMapControls(
             onReportClick = onReportClick,
             onActionClick = onCurrentLocationClick,
-            onZoomInClick = { mapControlState.zoomIn() },
-            onZoomOutClick = { mapControlState.zoomOut() },
+            onZoomInClick = {
+                mapControlState.zoomIn()
+                onUserCameraGesture()
+            },
+            onZoomOutClick = {
+                mapControlState.zoomOut()
+                onUserCameraGesture()
+            },
             modifier =
                 Modifier
                     .align(Alignment.CenterEnd)

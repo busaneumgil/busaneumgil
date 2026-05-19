@@ -50,7 +50,9 @@ internal object LowVisionMyPageLayoutDefaults {
 
 internal object LowVisionAppInfoLayoutDefaults {
     const val infoPanelCount = 2
+    const val textSizeActionCount = 1
     const val withdrawActionCount = 1
+    val textSizeActionMinHeight = LowVisionMyPageLayoutDefaults.actionMinHeight
     val withdrawActionMinHeight = LowVisionMyPageLayoutDefaults.actionMinHeight
 }
 
@@ -144,6 +146,7 @@ fun LowVisionMyPageScreen(
 fun LowVisionAppInfoScreen(
     isWithdrawLoading: Boolean,
     snackbarHostState: SnackbarHostState,
+    onTextSizeClick: () -> Unit,
     onWithdrawClick: () -> Unit,
     onTabSelected: (LowVisionBottomTab) -> Unit,
     modifier: Modifier = Modifier,
@@ -186,6 +189,13 @@ fun LowVisionAppInfoScreen(
                     titleRes = R.string.low_vision_app_info_support_title,
                     bodyRes = R.string.low_vision_app_info_support_body,
                     modifier = Modifier.weight(1f),
+                )
+                LowVisionMyPageAction(
+                    labelRes = R.string.low_vision_app_info_text_size,
+                    iconRes = R.drawable.ic_terms_document,
+                    filled = true,
+                    onClick = onTextSizeClick,
+                    modifier = Modifier.heightIn(min = LowVisionAppInfoLayoutDefaults.textSizeActionMinHeight),
                 )
                 LowVisionMyPageAction(
                     labelRes =

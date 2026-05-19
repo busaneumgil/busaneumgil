@@ -39,21 +39,27 @@ class AndroidCurrentLocationManager(
         fusedLocationClient.lastLocation
             .addOnSuccessListener { location ->
                 mutableLatestLocation.value =
-                    location
-                        ?.toSnapshot()
-                        ?.takeIf { snapshot -> snapshot.isFreshCurrentLocation() }
+                    resolveCurrentLocationRefreshSnapshot(
+                        previous = mutableLatestLocation.value,
+                        candidate = location?.toSnapshot(),
+                    )
             }
     }
 
     @SuppressLint("MissingPermission")
     override fun startLocationUpdates() {
+        startLocationUpdates(LocationUpdateProfile.DEFAULT)
+    }
+
+    @SuppressLint("MissingPermission")
+    override fun startLocationUpdates(profile: LocationUpdateProfile) {
         stopLocationUpdates()
 
         val accuracy = appContext.resolveLocationGrantAccuracy() ?: return
         refreshLatestLocation()
         fusedLocationClient
             .requestLocationUpdates(
-                createLocationRequest(accuracy = accuracy),
+                createLocationRequest(accuracy = accuracy, profile = profile),
                 locationCallback,
                 Looper.getMainLooper(),
             ).addOnSuccessListener {
@@ -69,22 +75,51 @@ class AndroidCurrentLocationManager(
         isTracking = false
     }
 
-    private fun createLocationRequest(accuracy: LocationGrantAccuracy): LocationRequest {
+    private fun createLocationRequest(
+        accuracy: LocationGrantAccuracy,
+        profile: LocationUpdateProfile,
+    ): LocationRequest {
         val priority =
             when (accuracy) {
                 LocationGrantAccuracy.PRECISE -> Priority.PRIORITY_HIGH_ACCURACY
                 LocationGrantAccuracy.APPROXIMATE -> Priority.PRIORITY_BALANCED_POWER_ACCURACY
             }
+        val config = profile.toLocationRequestConfig()
         return LocationRequest
-            .Builder(priority, LOCATION_UPDATE_INTERVAL_MILLIS)
-            .setMinUpdateIntervalMillis(LOCATION_FASTEST_UPDATE_INTERVAL_MILLIS)
-            .setMinUpdateDistanceMeters(LOCATION_UPDATE_MIN_DISTANCE_METERS)
+            .Builder(priority, config.intervalMillis)
+            .setMinUpdateIntervalMillis(config.fastestIntervalMillis)
+            .setMinUpdateDistanceMeters(config.minDistanceMeters)
             .build()
     }
-
-    private companion object {
-        const val LOCATION_UPDATE_INTERVAL_MILLIS = 2_000L
-        const val LOCATION_FASTEST_UPDATE_INTERVAL_MILLIS = 1_000L
-        const val LOCATION_UPDATE_MIN_DISTANCE_METERS = 5f
-    }
 }
+
+internal data class LocationRequestConfig(
+    val intervalMillis: Long,
+    val fastestIntervalMillis: Long,
+    val minDistanceMeters: Float,
+)
+
+internal fun LocationUpdateProfile.toLocationRequestConfig(): LocationRequestConfig =
+    when (this) {
+        LocationUpdateProfile.DEFAULT ->
+            LocationRequestConfig(
+                intervalMillis = 2_000L,
+                fastestIntervalMillis = 1_000L,
+                minDistanceMeters = 5f,
+            )
+        LocationUpdateProfile.NAVIGATION ->
+            LocationRequestConfig(
+                intervalMillis = 1_000L,
+                fastestIntervalMillis = 500L,
+                minDistanceMeters = 1f,
+            )
+    }
+
+internal fun resolveCurrentLocationRefreshSnapshot(
+    previous: LocationSnapshot?,
+    candidate: LocationSnapshot?,
+    nowEpochMillis: Long = System.currentTimeMillis(),
+): LocationSnapshot? =
+    candidate
+        ?.takeIf { snapshot -> snapshot.isFreshCurrentLocation(nowEpochMillis = nowEpochMillis) }
+        ?: previous?.takeIf { snapshot -> snapshot.isFreshCurrentLocation(nowEpochMillis = nowEpochMillis) }

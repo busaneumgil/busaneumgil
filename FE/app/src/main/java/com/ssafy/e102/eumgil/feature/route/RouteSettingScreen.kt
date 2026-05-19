@@ -71,6 +71,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -99,6 +100,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDialog
 import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDismissStyle
@@ -277,7 +279,10 @@ fun RouteSettingScreen(
                         onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
                         onDisabledStartClick = onDisabledStartClick,
                         onRefreshClick = { onAction(RouteSettingUiAction.RouteRefreshClicked) },
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .zIndex(RouteSettingBottomBarZIndex),
                     )
                 }
             }
@@ -2988,6 +2993,7 @@ private fun RouteMapStage(
             WindowInsets.navigationBars.getBottom(this).toDp()
         }
     val walkPreviewBottomPadding = routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset)
+    val walkPreviewMapBottomClearance = routeWalkPreviewMapBottomClearance(navigationBarBottomInset)
     val mapControlsBottomPadding = routeWalkMapControlsBottomPadding(navigationBarBottomInset)
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -3016,7 +3022,13 @@ private fun RouteMapStage(
                 onMarkerClick = { markerId ->
                     onHazardMarkerClick(markerId)
                 },
-                modifier = Modifier.fillMaxSize(),
+                originIsCurrentLocation = uiState.originState == RouteOriginState.CURRENT_LOCATION_RESOLVED,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(bottom = walkPreviewMapBottomClearance)
+                        .clipToBounds()
+                        .zIndex(RouteMapBackdropZIndex),
             )
 
             ApprovedHazardMarkerBottomSheet(
@@ -3037,8 +3049,9 @@ private fun RouteMapStage(
                 )
             }
 
+            val showsWalkPreviewCards = uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()
             val mapControlsModifier =
-                if (uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()) {
+                if (showsWalkPreviewCards) {
                     Modifier
                         .align(Alignment.BottomEnd)
                         .padding(
@@ -3050,17 +3063,25 @@ private fun RouteMapStage(
                         .align(Alignment.CenterEnd)
                         .padding(end = EumSpacing.small)
                 }
-            RouteMapControls(
-                onActionClick = {
-                    onCurrentLocationClick()
-                    mapControlState.recenterToCurrentLocationOrRoute(uiState.currentLocationRecenterCoordinate)
-                },
-                onZoomInClick = { mapControlState.zoomIn() },
-                onZoomOutClick = { mapControlState.zoomOut() },
-                modifier = mapControlsModifier,
-            )
+            if (showsWalkPreviewCards) {
+                RouteMapZoomControls(
+                    onZoomInClick = { mapControlState.zoomIn() },
+                    onZoomOutClick = { mapControlState.zoomOut() },
+                    modifier = mapControlsModifier.zIndex(RouteMapControlsZIndex),
+                )
+            } else {
+                RouteMapControls(
+                    onActionClick = {
+                        onCurrentLocationClick()
+                        mapControlState.recenterToCurrentLocationOrRoute(uiState.currentLocationRecenterCoordinate)
+                    },
+                    onZoomInClick = { mapControlState.zoomIn() },
+                    onZoomOutClick = { mapControlState.zoomOut() },
+                    modifier = mapControlsModifier.zIndex(RouteMapControlsZIndex),
+                )
+            }
 
-            if (uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()) {
+            if (showsWalkPreviewCards) {
                 RouteWalkPreviewCarousel(
                     optionCards = uiState.optionCards,
                     onOptionClick = onOptionClick,
@@ -3072,7 +3093,8 @@ private fun RouteMapStage(
                                 start = EumSpacing.medium,
                                 end = EumSpacing.medium,
                                 bottom = walkPreviewBottomPadding,
-                            ),
+                            )
+                            .zIndex(RouteWalkPreviewCarouselZIndex),
                 )
             }
         }
@@ -3327,6 +3349,63 @@ private fun RouteMapControls(
         onZoomInClick = onZoomInClick,
         onZoomOutClick = onZoomOutClick,
     )
+}
+
+@Composable
+private fun RouteMapZoomControls(
+    onZoomInClick: () -> Unit,
+    onZoomOutClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.width(48.dp),
+        shape = RoundedCornerShape(EumRadius.scaleS),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+        shadowElevation = 6.dp,
+    ) {
+        Column {
+            RouteMapZoomControlButton(
+                label = "+",
+                onClick = onZoomInClick,
+            )
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
+            )
+            RouteMapZoomControlButton(
+                label = "-",
+                onClick = onZoomOutClick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteMapZoomControlButton(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .clickable(
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style =
+                MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 24.sp,
+                ),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
 
 @Composable
@@ -4552,6 +4631,7 @@ private fun RouteMapBackdrop(
     hazardOverlayPoints: List<MapViewportPointOverlay> = emptyList(),
     controlState: MapOverlayViewportControlState? = null,
     onViewportBoundsChanged: (MapViewportBounds?) -> Unit = {},
+    originIsCurrentLocation: Boolean = false,
     onMarkerClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -4577,6 +4657,7 @@ private fun RouteMapBackdrop(
                 ),
             routePolylineOverlays = routePolylineOverlays,
             guidanceMarkers = guidanceMarkers,
+            originIsCurrentLocation = originIsCurrentLocation,
             focusSelectedGuidanceMarker = hasFocusedGuidanceMarker,
             showDetailedRouteOverlay = shouldShowRouteDirectionArrows,
         ).let { baseOverlayState ->
@@ -4680,8 +4761,7 @@ private fun routePreviewFallbackDescription(previewMap: RoutePreviewMapUiState):
         RoutePreviewMapStatus.NO_DESTINATION -> stringResource(id = R.string.route_setting_preview_no_destination_description)
         RoutePreviewMapStatus.INVALID_DESTINATION -> stringResource(id = R.string.route_setting_preview_invalid_destination_description)
         RoutePreviewMapStatus.NO_ROUTE -> stringResource(id = R.string.route_setting_preview_no_route_description)
-        RoutePreviewMapStatus.POLYLINE_UNAVAILABLE ->
-            previewMap.fallbackMessage ?: stringResource(id = R.string.route_setting_preview_placeholder_description)
+        RoutePreviewMapStatus.POLYLINE_UNAVAILABLE -> stringResource(id = R.string.route_setting_preview_placeholder_description)
         RoutePreviewMapStatus.ERROR ->
             previewMap.fallbackMessage ?: stringResource(id = R.string.route_setting_preview_error_description)
         RoutePreviewMapStatus.READY -> stringResource(id = R.string.route_setting_preview_placeholder_description)
@@ -5196,7 +5276,7 @@ private fun compactDistanceLabel(distanceMeters: Int): String =
 
 private fun walkPreviewLabel(routeOption: RouteOption): String =
     when (routeOption) {
-        RouteOption.SHORTEST -> "최단거리"
+        RouteOption.SHORTEST -> "최단 경로"
         RouteOption.SAFE -> "안전한 경로"
         RouteOption.RECOMMENDED -> "추천 경로"
         RouteOption.MIN_TRANSFER -> "최소 환승"
@@ -5480,6 +5560,7 @@ private val RouteFastOrange = Color(0xFFF9AB4D)
 private const val RouteWalkPreviewVisibleCardCount = 2
 private val RouteWalkPreviewCardGap = 14.dp
 private val RouteWalkPreviewCardMinHeight = 116.dp
+private val RouteWalkPreviewMapToCardGap = 16.dp
 private val RouteWalkPreviewCardStartPadding = 14.dp
 private val RouteWalkPreviewTopRowEndPadding = 4.dp
 private val RouteWalkPreviewBadgeHorizontalPadding = RouteWalkPreviewCardStartPadding
@@ -5521,6 +5602,10 @@ private val RouteDetailSidePanelBottomClearance =
 // Match the tighter card-to-CTA spacing users currently see on devices with a visible system nav bar.
 private val RouteWalkPreviewToStartButtonGap = 22.dp
 private val RouteWalkMapControlsToPreviewGap = 70.dp
+private const val RouteMapBackdropZIndex = 0f
+private const val RouteMapControlsZIndex = 2f
+private const val RouteWalkPreviewCarouselZIndex = 3f
+private const val RouteSettingBottomBarZIndex = 4f
 private val RouteDetailFeatureCardContainerColor = Color(0xFFE9ECF3)
 private val RouteDetailFeatureTitleFontSize = 18.sp
 private val RouteDetailExpandedSidePanelScrimColor = Color(0x66000000)
@@ -5533,6 +5618,11 @@ internal fun routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset: Dp)
         RouteSettingBottomBarBottomGap +
         RouteWalkPreviewToStartButtonGap +
         navigationBarBottomInset
+
+internal fun routeWalkPreviewMapBottomClearance(navigationBarBottomInset: Dp): Dp =
+    routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset) +
+        RouteWalkPreviewCardMinHeight +
+        RouteWalkPreviewMapToCardGap
 
 internal fun routeWalkMapControlsBottomPadding(navigationBarBottomInset: Dp): Dp =
     routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset) +

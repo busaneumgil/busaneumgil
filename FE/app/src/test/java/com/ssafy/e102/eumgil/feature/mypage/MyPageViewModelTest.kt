@@ -81,6 +81,28 @@ class MyPageViewModelTest {
         }
 
     @Test
+    fun `text size menu action emits text size navigation event`() =
+        runTest {
+            val viewModel =
+                MyPageViewModel(
+                    settingsRepository = FakeSettingsRepository(),
+                    authSessionRepository = FakeAuthSessionRepository(),
+                    authLogoutRepository = FakeAuthLogoutRepository(),
+                    userProfileRepository = FakeUserProfileRepository(),
+                )
+
+            viewModel.onAction(MyPageUiAction.MainMenuClicked(MyPageMenuItem.TEXT_SIZE))
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertSame(MyPageUiEvent.NavigateToTextSizeSetting, event)
+        }
+
+    @Test
     fun `logout action exposes loading state and emits login navigation event on success`() =
         runTest {
             val logoutRepository = ControllableAuthLogoutRepository()

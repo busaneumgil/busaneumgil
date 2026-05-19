@@ -67,6 +67,7 @@ class MyPageScreenTest {
 
     @Test
     fun `main menu rows suppress ripple only for entries that open another screen`() {
+        assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.TEXT_SIZE))
         assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.APP_HELP))
         assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.PRIVACY_POLICY))
         assertTrue(shouldSuppressMyPageMenuRipple(MyPageMenuItem.SERVICE_TERMS))
@@ -120,9 +121,25 @@ class MyPageScreenTest {
         )
         assertTrue(
             "The regular policy/report menu rows and footer actions should be visible above the bottom tab.",
-            source.contains("MyPageMenuItem.PRIVACY_POLICY") &&
+            source.contains("MyPageMenuItem.TEXT_SIZE") &&
+                source.contains("R.string.my_page_menu_text_size") &&
+                source.contains("MyPageMenuItem.PRIVACY_POLICY") &&
                 source.contains("MyPageMenuItem.SERVICE_TERMS") &&
                 source.contains("MyPageFooter("),
+        )
+    }
+
+    @Test
+    fun `my page content scrolls above footer for small screens and large text`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+
+        assertTrue(
+            "My page should keep the account footer outside a scrollable weighted content area so expanded menu text cannot overlap it.",
+            source.contains(".weight(1f)") &&
+                source.contains(".verticalScroll(rememberScrollState())") &&
+                source.indexOf("MainMenuCard(") < source.indexOf("MyPageFooter("),
         )
     }
 

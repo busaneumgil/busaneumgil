@@ -27,6 +27,7 @@ import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
 import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
 import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.arrival.ArrivalRoute as ArrivalScreenRoute
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
@@ -43,7 +44,7 @@ import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
 import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
 import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputRoute
-import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.textsize.TextSizeSettingRoute
 import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
 import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
@@ -151,6 +152,17 @@ fun NavGraphBuilder.mainNavGraph(
             },
             onNavigateToGuide = {
                 navController.navigate(resolveMyPageGuideRoute())
+            },
+            onNavigateToTextSizeSetting = {
+                navController.navigate(MyPageChildRoute.TextSize.route)
+            },
+        )
+    }
+
+    composable(route = MyPageChildRoute.TextSize.route) {
+        TextSizeSettingRoute(
+            onNavigateBack = {
+                navController.popBackStack()
             },
         )
     }
@@ -926,19 +938,34 @@ internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel 
     val currentLocationManager = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.currentLocationManager
     }
+    val currentHeadingManager = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.currentHeadingManager
+    }
+    val locationPermissionManager = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.locationPermissionManager
+    }
     val bookmarkRepository = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.bookmarkRepository
     }
     val routeRepository = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.routeRepository
     }
-    val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository, routeRepository) {
-        NavigationGuidanceViewModel.provideFactory(
-            currentLocationManager = currentLocationManager,
-            bookmarkRepository = bookmarkRepository,
-            routeRepository = routeRepository,
-        )
-    }
+    val navigationViewModelFactory =
+        remember(
+            currentLocationManager,
+            currentHeadingManager,
+            locationPermissionManager,
+            bookmarkRepository,
+            routeRepository,
+        ) {
+            NavigationGuidanceViewModel.provideFactory(
+                currentLocationManager = currentLocationManager,
+                currentHeadingManager = currentHeadingManager,
+                locationPermissionManager = locationPermissionManager,
+                bookmarkRepository = bookmarkRepository,
+                routeRepository = routeRepository,
+            )
+        }
 
     return remember(activity, navigationViewModelFactory) {
         val owner = checkNotNull(activity) { "RouteSettingRoute requires a ComponentActivity host." }

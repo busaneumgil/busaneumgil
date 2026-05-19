@@ -7,6 +7,7 @@ Jenkins prod 배포에서 재현된 두 가지 회귀를 막는다.
 """
 
 from pathlib import Path
+import inspect
 import re
 import unittest
 
@@ -40,14 +41,39 @@ PROD_UP = ROOT_DIR / "scripts" / "make" / "docker" / "prod-up.sh"
 PROD_UP_GRAPHHOPPER = ROOT_DIR / "scripts" / "make" / "docker" / "prod-up-graphhopper.sh"
 PROD_GRAPHHOPPER_BOOTSTRAP = ROOT_DIR / "scripts" / "make" / "docker" / "prod-graphhopper-bootstrap.sh"
 JENKINS_COMPOSE = ROOT_DIR / "INF" / "jenkins" / "s1" / "docker-compose.yml"
+AI_INVALID_INPUT_BODY = """\
+{
+  "data": null,
+  "message": "\\uc798\\ubabb\\ub41c \\uc785\\ub825\\uc785\\ub2c8\\ub2e4.",
+  "status": "C4000"
+}
+"""
+
+
+def to_python_regex(pattern):
+    return pattern.replace("[[:space:]]", r"\s")
 
 
 class ProdDeployScriptsTest(unittest.TestCase):
+    def assertPatternsMatchAiInvalidInput(self, patterns):
+        for pattern in patterns:
+            self.assertIsNotNone(
+                re.search(to_python_regex(pattern), AI_INVALID_INPUT_BODY),
+                f"pattern did not match fixture: {pattern}",
+            )
+
     def test_ai_dockerfile_targets_llm_server_instead_of_placeholder_app(self):
         content = AI_DOCKERFILE.read_text(encoding="utf-8")
 
         self.assertIn("llm_test/server", content)
         self.assertNotIn("COPY app.py ./", content)
+
+    def test_ai_invalid_input_pattern_helper_uses_python_regex_without_external_grep(self):
+        helper_source = inspect.getsource(ProdDeployScriptsTest.assertPatternsMatchAiInvalidInput)
+
+        self.assertIn("re.search", helper_source)
+        self.assertNotIn("subprocess.run", helper_source)
+        self.assertNotIn('"grep"', helper_source)
 
     def test_ai_compose_passes_required_llm_runtime_env(self):
         dev_content = DEV_COMPOSE.read_text(encoding="utf-8")
@@ -183,8 +209,9 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('"POST /voice/analyze"', content)
         self.assertIn("/voice/analyze", content)
         self.assertIn("400", content)
-        self.assertIn('"success"[[:space:]]*:[[:space:]]*false', content)
-        self.assertIn('"intent"[[:space:]]*:[[:space:]]*"unknown"', content)
+        self.assertIn('"status"[[:space:]]*:[[:space:]]*"C4000"', content)
+        self.assertIn('"message"[[:space:]]*:', content)
+        self.assertIn('"data"[[:space:]]*:[[:space:]]*null', content)
         self.assertIn('wait_for_url "http://127.0.0.1:${SERVER_PORT}/v3/api-docs" "Backend"', content)
         self.assertIn('SMOKE_ADMIN="${SMOKE_ADMIN:-true}"', content)
         self.assertIn('if [ "$SMOKE_ADMIN" = "true" ]; then', content)
@@ -196,6 +223,11 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('ssl="${ssl:-true}"', content)
         self.assertIn('GRAPHHOPPER_BLUE_ADMIN_PORT="${GRAPHHOPPER_BLUE_ADMIN_PORT:-18990}"', content)
         self.assertIn('GRAPHHOPPER_GREEN_ADMIN_PORT="${GRAPHHOPPER_GREEN_ADMIN_PORT:-18992}"', content)
+        self.assertPatternsMatchAiInvalidInput([
+            '"status"[[:space:]]*:[[:space:]]*"C4000"',
+            '"message"[[:space:]]*:',
+            '"data"[[:space:]]*:[[:space:]]*null',
+        ])
 
     def test_prod_compose_declares_graphhopper_blue_green_slots(self):
         content = PROD_COMPOSE.read_text(encoding="utf-8")
@@ -351,9 +383,15 @@ class ProdDeployScriptsTest(unittest.TestCase):
         self.assertIn('"providers"[[:space:]]*:', content)
         self.assertIn("/voice/analyze", content)
         self.assertIn("400", content)
-        self.assertIn('"success"[[:space:]]*:[[:space:]]*false', content)
-        self.assertIn('"intent"[[:space:]]*:[[:space:]]*"unknown"', content)
+        self.assertIn('"status"[[:space:]]*:[[:space:]]*"C4000"', content)
+        self.assertIn('"message"[[:space:]]*:', content)
+        self.assertIn('"data"[[:space:]]*:[[:space:]]*null', content)
         self.assertLess(content.index("up -d --build postgres redis minio minio-init ai"), content.index('AI_HEALTH_STATUS='))
+        self.assertPatternsMatchAiInvalidInput([
+            '"status"[[:space:]]*:[[:space:]]*"C4000"',
+            '"message"[[:space:]]*:',
+            '"data"[[:space:]]*:[[:space:]]*null',
+        ])
 
     def test_dev_jenkinsfile_self_heals_graphhopper_runtime(self):
         content = DEV_JENKINSFILE.read_text(encoding="utf-8")

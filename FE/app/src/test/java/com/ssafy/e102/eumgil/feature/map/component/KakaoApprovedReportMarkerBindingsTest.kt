@@ -1,5 +1,6 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
+import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -14,7 +15,8 @@ class KakaoApprovedReportMarkerBindingsTest {
                 overlayId = "approved-report:42",
                 coordinate = MapCoordinate(35.1796, 129.0756),
                 kind = MapViewportPointKind.APPROVED_REPORT,
-                label = "보행 장애물",
+                reportTypeApiValue = "RAMP",
+                label = "경사로 문제",
                 includeInProjection = false,
                 clickTargetId = "approved-report:42",
             )
@@ -22,8 +24,26 @@ class KakaoApprovedReportMarkerBindingsTest {
         val marker = point.toKakaoProjectedPointMarkerState()
 
         assertEquals(KakaoOverlayMarkerKind.APPROVED_REPORT, marker?.kind)
-        assertEquals(28, marker?.sizeDp)
+        assertEquals(32, marker?.sizeDp)
+        assertEquals(R.drawable.ic_report_ramp, marker?.iconResId)
         assertEquals("approved-report:42", marker?.clickTargetId)
+    }
+
+    @Test
+    fun `approved report point falls back to other icon when report type is unknown`() {
+        val point =
+            MapViewportPointOverlay(
+                overlayId = "approved-report:99",
+                coordinate = MapCoordinate(35.1796, 129.0756),
+                kind = MapViewportPointKind.APPROVED_REPORT,
+                reportTypeApiValue = "UNKNOWN_TYPE",
+                includeInProjection = false,
+                clickTargetId = "approved-report:99",
+            )
+
+        val marker = point.toKakaoProjectedPointMarkerState()
+
+        assertEquals(R.drawable.ic_report_other, marker?.iconResId)
     }
 
     @Test

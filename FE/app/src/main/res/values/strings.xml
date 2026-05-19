@@ -691,6 +691,10 @@
     <string name="route_setting_detail_step_state_default">일반 이동 단계</string>
     <string name="route_setting_detail_step_state_info">안내 정보 단계</string>
     <string name="route_setting_detail_step_state_warning">주의가 필요한 단계</string>
+    <string name="approved_hazard_marker_sheet_title">승인 제보 경고</string>
+    <string name="approved_hazard_marker_no_images">사진 없음</string>
+    <string name="approved_hazard_marker_image_loading">사진 불러오는 중</string>
+    <string name="approved_hazard_marker_image_error">사진을 불러오지 못했습니다</string>
     <string name="route_setting_distance_meters">%1$d m</string>
     <string name="route_setting_distance_kilometers">%.1f km</string>
     <string name="route_setting_eta_distance">%1$d분 · %2$s</string>

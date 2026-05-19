@@ -128,6 +128,7 @@ internal fun isKakaoScreenPointInsideViewport(
         screenPoint.y in 0 until viewportHeight
 
 internal enum class KakaoProjectedMarkerKind {
+    HAZARD,
     CURRENT_LOCATION,
     CURRENT_LOCATION_DIRECTION,
     SELECTED_DESTINATION,
@@ -936,6 +937,15 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
 ): KakaoProjectedMarkerRenderState? {
     val markerSpec =
         when (kind) {
+            MapViewportPointKind.HAZARD ->
+                KakaoOverlayPointMarkerSpec(
+                    kind = KakaoProjectedMarkerKind.HAZARD,
+                    iconResId = R.drawable.ic_status_warning,
+                    sizeDp = if (isSelected) 34 else 30,
+                    anchorPointY = 1.0f,
+                    zIndex = if (isSelected) 5.2f else 4.6f,
+                )
+
             MapViewportPointKind.ORIGIN ->
                 KakaoOverlayPointMarkerSpec(
                     kind = KakaoProjectedMarkerKind.ROUTE_ORIGIN,

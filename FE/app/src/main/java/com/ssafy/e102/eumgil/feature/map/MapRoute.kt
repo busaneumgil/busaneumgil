@@ -238,6 +238,7 @@ fun MapRoute(
 
     MapScreen(
         uiState = uiState,
+        reportRepository = appContainer.reportRepository,
         snackbarHostState = snackbarHostState,
         onAction = viewModel::onAction,
         onVoiceSearchClick = openVoiceSearch,

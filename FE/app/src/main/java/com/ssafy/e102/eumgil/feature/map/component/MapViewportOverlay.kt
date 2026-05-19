@@ -63,6 +63,7 @@ internal data class MapViewportPointOverlay(
 
 internal enum class MapViewportPointKind {
     FACILITY,
+    HAZARD,
     APPROVED_REPORT,
     ORIGIN,
     DESTINATION,

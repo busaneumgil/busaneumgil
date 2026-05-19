@@ -31,6 +31,7 @@ public class OpenApiConfig {
 	private static final DomainTag PLACE_BOOKMARK_TAG = new DomainTag("/bookmarks", "장소 북마크", "장소 북마크 저장, 조회, 삭제 API");
 	private static final DomainTag FAVORITE_ROUTE_TAG = new DomainTag("/favorite-routes", "경로 북마크",
 		"자주 가는 길 저장, 조회, 수정, 삭제 API");
+	private static final DomainTag REPORT_MARKER_TAG = new DomainTag("/hazard/markers", "제보 마커", "승인 제보 마커 조회 API");
 	private static final DomainTag REPORT_TAG = new DomainTag("/hazard-reports", "제보", "위험 요소 제보 등록과 내 제보 조회 API");
 	private static final DomainTag ADMIN_REPORT_TAG = new DomainTag("/admin/hazard-reports", "관리자 제보",
 		"관리자 도로 상태 제보 조회 및 처리 API");
@@ -57,6 +58,7 @@ public class OpenApiConfig {
 		ROUTE_RATING_TAG,
 		PLACE_BOOKMARK_TAG,
 		FAVORITE_ROUTE_TAG,
+		REPORT_MARKER_TAG,
 		REPORT_TAG,
 		ETC_TAG);
 
@@ -68,6 +70,7 @@ public class OpenApiConfig {
 		ROUTE_RATING_TAG,
 		PLACE_BOOKMARK_TAG,
 		FAVORITE_ROUTE_TAG,
+		REPORT_MARKER_TAG,
 		REPORT_TAG,
 		ADMIN_REPORT_TAG,
 		ADMIN_MAP_AREA_TAG,
@@ -160,7 +163,7 @@ public class OpenApiConfig {
 
 	@Bean
 	public GroupedOpenApi reportApi() {
-		return groupedApi(REPORT_TAG, "/hazard-reports", "/hazard-reports/**");
+		return groupedApi(REPORT_TAG, "/hazard-reports", "/hazard-reports/**", "/hazard/markers", "/hazard/markers/**");
 	}
 
 	@Bean

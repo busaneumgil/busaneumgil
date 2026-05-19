@@ -41,6 +41,7 @@ import com.ssafy.e102.domain.report.dto.request.CreateHazardReportRequest;
 import com.ssafy.e102.domain.report.dto.response.HazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportIdResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportListResponse;
+import com.ssafy.e102.domain.report.dto.response.HazardMarkerListResponse;
 import com.ssafy.e102.domain.report.entity.HazardReport;
 import com.ssafy.e102.domain.report.exception.HazardReportErrorCode;
 import com.ssafy.e102.domain.report.exception.HazardReportException;
@@ -412,6 +413,61 @@ class HazardReportServiceTest {
 			.isEqualTo(HazardReportErrorCode.HAZARD_REPORT_NOT_FOUND);
 	}
 
+	@Test
+	@DisplayName("APPROVED ?듭씤 ?쒕낫留?bbox ?덈뿉??留ㅼ빱??諛섑솚?쒕떎")
+	void getApprovedHazardMarkers() {
+		HazardReport approvedWithImages = hazardReport(
+			user(UUID.randomUUID()),
+			12L,
+			ReportType.RAMP,
+			ReportStatus.APPROVED,
+			35.1,
+			129.1,
+			List.of("hazard-reports/user-1/20260514/image-1.jpg"));
+		HazardReport approvedWithoutImages = hazardReport(
+			user(UUID.randomUUID()),
+			13L,
+			ReportType.RAMP,
+			ReportStatus.APPROVED,
+			35.1005,
+			129.1005,
+			List.of());
+		PageRequest pageRequest = PageRequest.of(0, 100);
+		when(hazardReportRepository.findApprovedWithinBounds(129.095, 35.095, 129.105, 35.105, pageRequest))
+			.thenReturn(List.of(approvedWithImages, approvedWithoutImages));
+		when(hazardReportRepository.findAllByReportIdIn(List.of(12L, 13L)))
+			.thenReturn(List.of(approvedWithImages, approvedWithoutImages));
+		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-1.jpg"))
+			.thenReturn("https://storage.example.com/read?key=image-1");
+
+		HazardMarkerListResponse response = hazardReportService.getApprovedHazardMarkers(35.095, 129.095, 35.105, 129.105);
+
+		assertThat(response.markers()).hasSize(2);
+		assertThat(response.markers().get(0).reportId()).isEqualTo(12L);
+		assertThat(response.markers().get(0).reportType()).isEqualTo(ReportType.RAMP);
+		assertThat(response.markers().get(0).lat()).isEqualTo(35.1);
+		assertThat(response.markers().get(0).lng()).isEqualTo(129.1);
+		assertThat(response.markers().get(0).imageUrls())
+			.containsExactly("https://storage.example.com/read?key=image-1");
+		assertThat(response.markers().get(1).imageUrls()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("bbox 媛믪씠 ?뺤긽 踰붿쐞瑜?踰쀬낵?섎㈃ INVALID_HAZARD_REPORT_REQUEST瑜?諛쒖깮?쒕떎")
+	void rejectInvalidApprovedHazardMarkerBounds() {
+		assertThatThrownBy(() -> hazardReportService.getApprovedHazardMarkers(35.2, 129.0, 35.0, 129.2))
+			.isInstanceOf(HazardReportException.class)
+			.extracting("errorCode")
+			.isEqualTo(HazardReportErrorCode.INVALID_HAZARD_REPORT_REQUEST);
+
+		assertThatThrownBy(() -> hazardReportService.getApprovedHazardMarkers(35.0, 129.0, 35.04, 129.04))
+			.isInstanceOf(HazardReportException.class)
+			.extracting("errorCode")
+			.isEqualTo(HazardReportErrorCode.INVALID_HAZARD_REPORT_REQUEST);
+
+		verify(hazardReportRepository, never()).findApprovedWithinBounds(anyDouble(), anyDouble(), anyDouble(), anyDouble(), any());
+	}
+
 	private TransactionOperations testTransactionOperations() {
 		return new TransactionOperations() {
 
@@ -445,6 +501,27 @@ class HazardReportServiceTest {
 			geoPointConverter.toPoint(new GeoPointRequest(35.1686, 129.0576)),
 			imageObjectKeys);
 		ReflectionTestUtils.setField(hazardReport, "reportId", reportId);
+		ReflectionTestUtils.setField(hazardReport, "createdAt", LocalDateTime.of(2026, 4, 28, 17, 0));
+		return hazardReport;
+	}
+
+	private HazardReport hazardReport(
+		User user,
+		Long reportId,
+		ReportType reportType,
+		ReportStatus status,
+		double lat,
+		double lng,
+		List<String> imageObjectKeys) {
+		HazardReport hazardReport = HazardReport.create(
+			user,
+			reportType,
+			"蹂댄뻾 媛?ν븳 ?몃룄媛 ?놁뒿?덈떎.",
+			"遺??遺?곗쭊援??쒕?怨듭썝濡?73",
+			geoPointConverter.toPoint(new GeoPointRequest(lat, lng)),
+			imageObjectKeys);
+		ReflectionTestUtils.setField(hazardReport, "reportId", reportId);
+		ReflectionTestUtils.setField(hazardReport, "status", status);
 		ReflectionTestUtils.setField(hazardReport, "createdAt", LocalDateTime.of(2026, 4, 28, 17, 0));
 		return hazardReport;
 	}

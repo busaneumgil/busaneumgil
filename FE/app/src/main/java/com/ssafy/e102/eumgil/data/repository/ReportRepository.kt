@@ -12,6 +12,7 @@ import com.ssafy.e102.eumgil.data.remote.dto.CreateHazardReportResponseDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPointDto
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -25,6 +26,8 @@ import kotlinx.coroutines.flow.onStart
 
 interface ReportRepository {
     fun observeReportHistory(): Flow<List<ReportOutboxData>>
+
+    suspend fun getApprovedHazardMarkers(bounds: ApprovedHazardMarkerBounds): List<ApprovedHazardMarker> = emptyList()
 
     fun observeReportHistoryEntries(): Flow<List<ReportHistoryData>> =
         observeReportHistory().map { outboxItems ->
@@ -251,6 +254,32 @@ class DefaultReportRepository(
 
     override suspend fun getLatestDraft(): ReportDraftData? =
         reportDraftDao.getLatestReportDraft()?.toData()
+
+    override suspend fun getApprovedHazardMarkers(bounds: ApprovedHazardMarkerBounds): List<ApprovedHazardMarker> {
+        val datasource = hazardReportsRemoteDataSource ?: return emptyList()
+        val response =
+            runAuthenticated { token ->
+                datasource.getApprovedHazardMarkers(
+                    swLat = bounds.swLat,
+                    swLng = bounds.swLng,
+                    neLat = bounds.neLat,
+                    neLng = bounds.neLng,
+                    accessToken = token,
+                )
+            } ?: return emptyList()
+        return response.markers.map { marker ->
+            ApprovedHazardMarker(
+                reportId = marker.reportId,
+                reportType = marker.reportType,
+                coordinate =
+                    GeoCoordinate(
+                        latitude = marker.lat,
+                        longitude = marker.lng,
+                    ),
+                imageUrls = marker.imageUrls,
+            )
+        }
+    }
 
     override suspend fun saveDraft(draft: ReportDraftData): ReportDraftData {
         val now = clock()

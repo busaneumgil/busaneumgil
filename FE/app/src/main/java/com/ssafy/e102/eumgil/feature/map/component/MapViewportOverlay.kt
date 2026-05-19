@@ -5,11 +5,13 @@ import android.util.Log
 import com.ssafy.e102.eumgil.BuildConfig
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteOption
+import com.ssafy.e102.eumgil.feature.map.model.ApprovedReportMarkerData
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraTarget
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
+import com.ssafy.e102.eumgil.feature.map.model.approvedReportClickTargetId
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapFocusMode
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapOverlayUiState
 import com.ssafy.e102.eumgil.feature.navigation.NavigationMapPointUiState
@@ -60,6 +62,7 @@ internal data class MapViewportPointOverlay(
 
 internal enum class MapViewportPointKind {
     FACILITY,
+    APPROVED_REPORT,
     ORIGIN,
     DESTINATION,
     CURRENT_LOCATION,
@@ -132,6 +135,7 @@ internal fun createMapMarkerViewportOverlayState(
     selectedMarkerId: String?,
     currentLocation: MapCoordinate?,
     currentLocationLabel: String?,
+    approvedReportMarkers: List<ApprovedReportMarkerData> = emptyList(),
 ): MapViewportOverlayState =
     MapViewportOverlayState(
         fallbackCamera = cameraTarget.toViewportFallbackCamera(),
@@ -168,6 +172,20 @@ internal fun createMapMarkerViewportOverlayState(
                             isSelected = marker.markerId == selectedMarkerId,
                             includeInProjection = false,
                             clickTargetId = marker.markerId,
+                        )
+                    },
+                )
+                addAll(
+                    approvedReportMarkers.map { report ->
+                        val clickTargetId = approvedReportClickTargetId(report.reportId)
+                        MapViewportPointOverlay(
+                            overlayId = clickTargetId,
+                            coordinate = report.coordinate.toMapCoordinate(),
+                            kind = MapViewportPointKind.APPROVED_REPORT,
+                            label = report.reportTypeLabel,
+                            contentDescription = "주의 제보: ${report.reportTypeLabel}",
+                            includeInProjection = false,
+                            clickTargetId = clickTargetId,
                         )
                     },
                 )

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +25,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -106,6 +109,7 @@ fun ReportScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             ReportTopBar(
                 title =
@@ -139,7 +143,8 @@ fun ReportScreen(
             // TypeSelection은 그리드가 남은 공간을 채워야 하므로 verticalScroll 미사용 (weight 사용 가능).
             // 나머지 스텝은 폼 길이가 가변적이라 scrollable Column 유지.
             // scrollState는 ReportRoute에서 hoist하여 ScrollToFirstError 이벤트로 외부 제어 가능.
-            val isFlexStep = uiState.currentStep == ReportStep.TypeSelection
+            val isHomeStep = uiState.currentStep == ReportStep.Home
+            val isFlexStep = isHomeStep || uiState.currentStep == ReportStep.TypeSelection
             Column(
                 modifier =
                     Modifier
@@ -156,12 +161,7 @@ fun ReportScreen(
                             start = EumSpacing.medium,
                             top = EumSpacing.medium,
                             end = EumSpacing.medium,
-                            bottom =
-                                if (uiState.currentStep == ReportStep.Home) {
-                                    0.dp
-                                } else {
-                                    EumSpacing.medium
-                                },
+                            bottom = EumSpacing.medium,
                         ),
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             ) {
@@ -170,6 +170,7 @@ fun ReportScreen(
                         ReportHomeStep(
                             uiState = uiState,
                             onAction = onAction,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
                         )
                     ReportStep.TypeSelection ->
                         ReportTypeStep(
@@ -405,7 +406,7 @@ private fun ReportHomeStep(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
     ) {
         ReportHomeCtaCard(onAction = onAction)
@@ -417,6 +418,7 @@ private fun ReportHomeStep(
         ReportHomeRecentSection(
             reports = uiState.recentReports,
             onReportClick = { historyId -> onAction(ReportUiAction.RecentReportClicked(historyId)) },
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -689,7 +691,10 @@ private fun ReportHomeRecentSection(
             color = MaterialTheme.colorScheme.onSurface,
         )
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
             shape = RoundedCornerShape(EumRadius.large),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
@@ -711,19 +716,29 @@ private fun ReportHomeRecentSection(
                     )
                 }
             } else {
-                Column(
+                LazyColumn(
                     modifier =
                         Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = EumSpacing.medium),
+                            .fillMaxSize(),
+                    contentPadding =
+                        PaddingValues(
+                            start = EumSpacing.medium,
+                            end = EumSpacing.medium,
+                            bottom = EumSpacing.medium,
+                        ),
                 ) {
-                    reports.forEachIndexed { index, report ->
-                        ReportHomeRecentItem(
-                            report = report,
-                            onClick = { onReportClick(report.historyId) },
-                        )
-                        if (index != reports.lastIndex) {
-                            HorizontalDivider(color = EumBorderSubtle)
+                    itemsIndexed(
+                        items = reports,
+                        key = { _, report -> report.historyId },
+                    ) { index, report ->
+                        Column {
+                            ReportHomeRecentItem(
+                                report = report,
+                                onClick = { onReportClick(report.historyId) },
+                            )
+                            if (index != reports.lastIndex) {
+                                HorizontalDivider(color = EumBorderSubtle)
+                            }
                         }
                     }
                 }

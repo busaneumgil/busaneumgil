@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -85,6 +86,7 @@ fun SavedRouteScreen(
         }
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             SavedRouteTopBar(
                 isEditMode = uiState.isEditMode,
@@ -510,6 +512,7 @@ private fun SavedPlaceContent(
         SavedBookmarkContentState.CONTENT ->
             LazyColumn(
                 modifier = modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = SavedBookmarkListBottomContentPadding),
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             ) {
                 content.errorMessage?.let { message ->
@@ -591,6 +594,7 @@ private fun SavedRouteBookmarkContent(
         SavedBookmarkContentState.CONTENT ->
             LazyColumn(
                 modifier = modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = SavedBookmarkListBottomContentPadding),
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             ) {
                 content.errorMessage?.let { message ->
@@ -1543,3 +1547,4 @@ private val SavedBookmarkRoutePathVerticalPadding = 7.dp
 private val SavedBookmarkRouteWaypointGap = 8.dp
 private val SavedBookmarkRoutePathDotSize = 14.dp
 private val SavedBookmarkSortDropdownWidth = 132.dp
+private val SavedBookmarkListBottomContentPadding = 80.dp

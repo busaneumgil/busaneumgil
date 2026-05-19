@@ -128,6 +128,48 @@ class SavedRouteScreenPolicyTest {
     }
 
     @Test
+    fun `saved bookmark lists keep bottom breathing room outside edit mode`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun SavedRouteScreen(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkSectionHeader")
+        val placeContentSection =
+            source
+                .substringAfter("private fun SavedPlaceContent(")
+                .substringBefore("@Composable\nprivate fun SavedRouteBookmarkContent")
+        val routeContentSection =
+            source
+                .substringAfter("private fun SavedRouteBookmarkContent(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkEmptyState")
+
+        assertTrue(
+            "Top-level bookmark screen should disable default system insets because AppNavHost already reserves the bottom tab area.",
+            screenSection.contains("contentWindowInsets = WindowInsets(0, 0, 0, 0)"),
+        )
+        assertTrue(
+            "Saved place list should add bottom content padding so the final card can scroll clear of the list edge.",
+            placeContentSection.contains("contentPadding = PaddingValues(bottom = SavedBookmarkListBottomContentPadding)"),
+        )
+        assertTrue(
+            "Saved route list should add bottom content padding so the final card is not clipped against the bottom tab area.",
+            routeContentSection.contains("contentPadding = PaddingValues(bottom = SavedBookmarkListBottomContentPadding)"),
+        )
+        assertTrue(
+            "Saved bookmark bottom padding should be larger than the ordinary 16dp gap because the final card needs scroll clearance.",
+            source.contains("private val SavedBookmarkListBottomContentPadding = 80.dp"),
+        )
+        assertTrue(
+            "Edit delete bottom bar should still only be composed in edit mode.",
+            source.contains("bottomBar = {") &&
+                source.contains("if (uiState.isEditMode)") &&
+                source.contains("SavedBookmarkEditBottomBar("),
+        )
+    }
+
+    @Test
     fun `saved bookmark edit action only appears when selected tab has content`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")

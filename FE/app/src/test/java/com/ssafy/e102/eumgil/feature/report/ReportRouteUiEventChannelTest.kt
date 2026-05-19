@@ -53,6 +53,69 @@ class ReportRouteUiEventChannelTest {
         )
     }
 
+    @Test
+    fun `report home keeps fixed header content and scrolls recent reports inside remaining space`() {
+        val source = reportScreenSource()
+        val screenSection =
+            source
+                .substringAfter("fun ReportScreen(")
+                .substringBefore("@Composable\nprivate fun ReportBottomBar")
+        val homeStepSection =
+            source
+                .substringAfter("private fun ReportHomeStep(")
+                .substringBefore("@Composable\nprivate fun ReportHomeCtaCard")
+        val recentSection =
+            source
+                .substringAfter("private fun ReportHomeRecentSection(")
+                .substringBefore("@Composable\nprivate fun ReportHomeRecentItem")
+
+        assertTrue(
+            "Top-level report screen should disable default system insets because AppNavHost already reserves the bottom tab area.",
+            screenSection.contains("contentWindowInsets = WindowInsets(0, 0, 0, 0)"),
+        )
+        assertTrue(
+            "Report home should be a flex step so the CTA/status sections stay fixed instead of being clipped by the shared vertical scroll.",
+            screenSection.contains("val isHomeStep = uiState.currentStep == ReportStep.Home") &&
+                screenSection.contains("val isFlexStep = isHomeStep || uiState.currentStep == ReportStep.TypeSelection"),
+        )
+        assertTrue(
+            "Report home should fill the available content height and give recent reports the remaining space.",
+            screenSection.contains("ReportHomeStep(") &&
+                screenSection.contains("modifier = Modifier.weight(1f).fillMaxWidth()") &&
+                homeStepSection.contains("modifier.fillMaxSize()") &&
+                homeStepSection.contains("ReportHomeRecentSection(") &&
+                homeStepSection.contains("modifier = Modifier.weight(1f)"),
+        )
+        assertTrue(
+            "Recent reports should scroll inside their card instead of stretching the whole home page past the bottom edge.",
+            recentSection.contains("LazyColumn(") &&
+                recentSection.contains(".fillMaxSize()") &&
+                recentSection.contains("itemsIndexed("),
+        )
+        assertTrue(
+            "Recent reports should keep bottom padding so the final row can scroll clear of the rounded card edge.",
+            recentSection.contains("bottom = EumSpacing.medium"),
+        )
+    }
+
+    @Test
+    fun `report non-home forms keep the shared scroll state`() {
+        val source = reportScreenSource()
+        val scrollableContentSection =
+            source
+                .substringAfter("val isFlexStep = isHomeStep || uiState.currentStep == ReportStep.TypeSelection")
+                .substringBefore("verticalArrangement = Arrangement.spacedBy(EumSpacing.medium)")
+
+        assertTrue(
+            "Non-home report form steps should still use the hoisted scroll state for validation error scrolling.",
+            scrollableContentSection.contains("Modifier.verticalScroll(scrollState)"),
+        )
+        assertTrue(
+            "Report content should keep bottom padding inside its available viewport.",
+            scrollableContentSection.contains("bottom = EumSpacing.medium"),
+        )
+    }
+
     private fun reportRouteSource(): String =
         File("src/main/java/com/ssafy/e102/eumgil/feature/report/ReportRoute.kt").readText()
 

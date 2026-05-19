@@ -1,11 +1,13 @@
 package com.ssafy.e102.eumgil.feature.search
 
 import androidx.activity.ComponentActivity
+import com.ssafy.e102.eumgil.core.location.CurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationGrantAccuracy
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
@@ -160,7 +162,7 @@ class SearchViewModelEditingTargetTest {
         }
 
     @Test
-    fun `current location destination action stores explicit current place destination`() =
+    fun `current location destination action stores resolved address place destination`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val currentLocation = testLocationSnapshot(latitude = 35.1000, longitude = 129.0320)
@@ -174,6 +176,10 @@ class SearchViewModelEditingTargetTest {
                             initialLocation = currentLocation,
                         ),
                     locationPermissionManager = EditingTargetFakeLocationPermissionManager(),
+                    currentLocationAddressResolver =
+                        EditingTargetFakeCurrentLocationAddressResolver(
+                            address = "부산광역시 중구 중앙대로 100",
+                        ),
                 )
 
             advanceUntilIdle()
@@ -190,7 +196,8 @@ class SearchViewModelEditingTargetTest {
 
             val selectedDestination = destinationSelectionRepository.selectedDestination.value
             assertEquals("current-location", selectedDestination?.placeId)
-            assertEquals("현재 위치", selectedDestination?.name)
+            assertEquals("부산광역시 중구 중앙대로 100", selectedDestination?.name)
+            assertEquals("부산광역시 중구 중앙대로 100", selectedDestination?.address)
             assertEquals(currentLocation.latitude, selectedDestination?.latitude)
             assertEquals(currentLocation.longitude, selectedDestination?.longitude)
             assertEquals(
@@ -325,6 +332,51 @@ class SearchViewModelEditingTargetTest {
                 ),
                 uiEvent.await(),
             )
+        }
+
+    @Test
+    fun `results route entry resets stale origin apply mode back to home destination preview mode`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    setEditingTarget(RouteEditingTarget.ORIGIN)
+                }
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val result = testSearchResult()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+            viewModel.onAction(
+                SearchUiAction.ResultsRouteEntered(
+                    query = "city hall",
+                    editingTarget = RouteEditingTarget.DESTINATION,
+                    selectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(RouteEditingTarget.DESTINATION, viewModel.uiState.value.editingTarget)
+            assertEquals(SearchSelectionMode.PREVIEW_ON_MAP, viewModel.uiState.value.selectionMode)
+            assertEquals(RouteEditingTarget.DESTINATION, destinationSelectionRepository.editingTarget.value)
+
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+            viewModel.onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(RouteEditingTarget.DESTINATION, destinationPreviewRepository.pendingPreview.value?.editingTarget)
+            assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
         }
 
     @Test
@@ -506,6 +558,12 @@ private class EditingTargetFakeLocationPermissionManager(
     override fun refreshPermissionState() = Unit
 
     override fun requestLocationPermission(activity: ComponentActivity) = Unit
+}
+
+private class EditingTargetFakeCurrentLocationAddressResolver(
+    private val address: String?,
+) : CurrentLocationAddressResolver {
+    override suspend fun resolveAddress(coordinate: GeoCoordinate): String? = address
 }
 
 private class EditingTargetFakeSearchRepository : SearchRepository {

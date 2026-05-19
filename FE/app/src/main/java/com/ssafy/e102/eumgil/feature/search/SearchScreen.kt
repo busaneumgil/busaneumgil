@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.feature.search
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
@@ -9,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -22,6 +25,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -46,9 +50,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -59,6 +65,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -68,6 +75,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.feedback.EumCircularLoadingIndicator
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -120,8 +128,12 @@ internal fun resolveSearchResultClickAction(
         SearchSelectionMode.APPLY_TO_ROUTE -> SearchUiAction.SearchResultClicked(result = result)
     }
 
-internal fun shouldShowRouteEndpointQuickActions(selectionMode: SearchSelectionMode): Boolean =
-    selectionMode == SearchSelectionMode.APPLY_TO_ROUTE
+internal fun shouldShowRouteEndpointQuickActions(
+    selectionMode: SearchSelectionMode,
+    editingTarget: RouteEditingTarget,
+): Boolean =
+    selectionMode == SearchSelectionMode.APPLY_TO_ROUTE &&
+        (editingTarget == RouteEditingTarget.ORIGIN || editingTarget == RouteEditingTarget.DESTINATION)
 
 internal data class RouteEndpointQuickActionCopy(
     @StringRes val currentLocationActionRes: Int,
@@ -273,7 +285,8 @@ internal fun resolveSearchCopyUiState(editingTarget: RouteEditingTarget): Search
     }
 
 internal fun shouldShowDestinationPromoBanner(editingTarget: RouteEditingTarget): Boolean =
-    editingTarget == RouteEditingTarget.DESTINATION
+    editingTarget == RouteEditingTarget.DESTINATION ||
+        editingTarget == RouteEditingTarget.ORIGIN
 
 internal fun resolveVoiceInputBackgroundDestination(resultState: SearchResultUiState): SearchScreenDestination =
     when (resultState) {
@@ -476,7 +489,7 @@ private fun SearchEntryContent(
             onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
             onSearch = { onAction(SearchUiAction.SearchSubmitted) },
         )
-        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode)) {
+        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode, uiState.editingTarget)) {
             RouteEndpointQuickActionSection(
                 editingTarget = uiState.editingTarget,
                 currentLocationState = uiState.currentLocationQuickActionState,
@@ -539,14 +552,6 @@ private fun SearchResultsContent(
             onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
             onSearch = { onAction(SearchUiAction.SearchSubmitted) },
         )
-        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode)) {
-            RouteEndpointQuickActionSection(
-                editingTarget = uiState.editingTarget,
-                currentLocationState = uiState.currentLocationQuickActionState,
-                onCurrentLocationClick = { onAction(SearchUiAction.CurrentLocationClicked) },
-                onMapPickerClick = { onAction(SearchUiAction.MapPickerClicked) },
-            )
-        }
         SearchSortControl(
             selectedSortOption = uiState.sortOption,
             onSortOptionSelected = { sortOption ->
@@ -1197,26 +1202,57 @@ private fun SearchSortControl(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(EumRadius.scaleM),
+        shape = RoundedCornerShape(EumRadius.full),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Row(
-            modifier = Modifier.padding(EumSpacing.xSmall),
-            horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
+        BoxWithConstraints(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp),
         ) {
-            SearchSortOptionButton(
-                label = stringResource(id = R.string.search_screen_sort_relevance),
-                selected = selectedSortOption == SearchSortOption.RELEVANCE,
-                onClick = { onSortOptionSelected(SearchSortOption.RELEVANCE) },
-                modifier = Modifier.weight(1f),
+            val indicatorWidth = (maxWidth - SearchSortOptionButtonGap) / 2
+            val targetIndicatorOffset =
+                if (selectedSortOption == SearchSortOption.RELEVANCE) {
+                    0.dp
+                } else {
+                    indicatorWidth + SearchSortOptionButtonGap
+                }
+            val animatedIndicatorOffset by animateDpAsState(
+                targetValue = targetIndicatorOffset,
+                animationSpec = tween(SearchSortOptionButtonAnimationMillis),
+                label = "SearchSortOptionIndicatorOffset",
             )
-            SearchSortOptionButton(
-                label = stringResource(id = R.string.search_screen_sort_distance),
-                selected = selectedSortOption == SearchSortOption.DISTANCE,
-                onClick = { onSortOptionSelected(SearchSortOption.DISTANCE) },
-                modifier = Modifier.weight(1f),
-            )
+
+            Surface(
+                modifier =
+                    Modifier
+                        .offset(x = animatedIndicatorOffset)
+                        .width(indicatorWidth)
+                        .heightIn(min = SearchSortOptionButtonHeight),
+                shape = RoundedCornerShape(EumRadius.full),
+                color = MaterialTheme.colorScheme.primary,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+            ) {}
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(SearchSortOptionButtonGap),
+            ) {
+                SearchSortOptionButton(
+                    label = stringResource(id = R.string.search_screen_sort_relevance),
+                    selected = selectedSortOption == SearchSortOption.RELEVANCE,
+                    onClick = { onSortOptionSelected(SearchSortOption.RELEVANCE) },
+                    modifier = Modifier.weight(1f),
+                )
+                SearchSortOptionButton(
+                    label = stringResource(id = R.string.search_screen_sort_distance),
+                    selected = selectedSortOption == SearchSortOption.DISTANCE,
+                    onClick = { onSortOptionSelected(SearchSortOption.DISTANCE) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }
@@ -1228,27 +1264,22 @@ private fun SearchSortOptionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val containerColor =
-        if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            Color.Transparent
-        }
     val contentColor =
         if (selected) {
             MaterialTheme.colorScheme.onPrimary
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         }
-    Surface(
+    Box(
         modifier =
             modifier
-                .heightIn(min = 44.dp)
+                .clip(RoundedCornerShape(EumRadius.full))
                 .clickable(
                     role = Role.RadioButton,
                     onClick = onClick,
                 )
                 .semantics {
+                    this.selected = selected
                     stateDescription =
                         if (selected) {
                             label + " 선택됨"
@@ -1256,13 +1287,12 @@ private fun SearchSortOptionButton(
                             label + " 선택 안 됨"
                         }
                 },
-        shape = RoundedCornerShape(EumRadius.scaleS),
-        color = containerColor,
     ) {
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .heightIn(min = SearchSortOptionButtonHeight)
                     .padding(horizontal = EumSpacing.medium, vertical = EumSpacing.xxSmall),
             contentAlignment = Alignment.Center,
         ) {
@@ -1348,24 +1378,35 @@ private fun RecentVisitSection(
                 )
             }
         } else {
-            recentSearches.forEach { recentSearch ->
-                RecentVisitItem(
-                    keyword = recentSearch.keyword,
-                    onClick = {
-                        onAction(
-                            SearchUiAction.RecentSearchClicked(
-                                keyword = recentSearch.keyword,
-                            ),
-                        )
-                    },
-                    onDeleteClick = {
-                        onAction(
-                            SearchUiAction.RecentSearchDeleteClicked(
-                                keyword = recentSearch.keyword,
-                            ),
-                        )
-                    },
-                )
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+            ) {
+                items(
+                    items = recentSearches,
+                    key = { recentSearch -> recentSearch.keyword },
+                ) { recentSearch ->
+                    RecentVisitItem(
+                        keyword = recentSearch.keyword,
+                        onClick = {
+                            onAction(
+                                SearchUiAction.RecentSearchClicked(
+                                    keyword = recentSearch.keyword,
+                                ),
+                            )
+                        },
+                        onDeleteClick = {
+                            onAction(
+                                SearchUiAction.RecentSearchDeleteClicked(
+                                    keyword = recentSearch.keyword,
+                                ),
+                            )
+                        },
+                    )
+                }
             }
         }
     }
@@ -1656,9 +1697,10 @@ private fun searchResultAccessibilityTagIconSizeDp(
 
 private const val METERS_PER_KILOMETER = 1_000
 private const val SEARCH_NEXT_PAGE_PREFETCH_ITEM_THRESHOLD = 3
-private val SearchResultsLoadingIndicatorSize: Dp = 42.dp
 private val SearchResultPlaceIconContainerSize: Dp = 56.dp
 private val SearchResultPlaceIconSize: Dp = 32.dp
+private val SearchSortOptionButtonHeight: Dp = 44.dp
+private val SearchSortOptionButtonGap: Dp = 4.dp
 private val SearchStateIllustrationMinHeight: Dp = 360.dp
 private val SearchStateIllustrationSize: Dp = 128.dp
 private val SearchEmptyResultIllustrationSize: Dp = 300.dp
@@ -1669,6 +1711,7 @@ private val SearchScreenContentWindowInsets: WindowInsets = WindowInsets(0, 0, 0
 private val SearchVoiceInputBottomSheetWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
 private val SearchStateTitleLineHeight = 34.sp
 private val SearchEmptyResultTitleLineHeight = 34.sp
+private const val SearchSortOptionButtonAnimationMillis: Int = 220
 
 @Composable
 private fun SearchCenteredStateMessage(
@@ -1734,12 +1777,10 @@ private fun SearchCenteredStateMessage(
             )
         }
         if (showLoadingIndicator) {
-            CircularProgressIndicator(
+            EumCircularLoadingIndicator(
                 modifier =
                     Modifier
-                        .padding(top = EumSpacing.medium)
-                        .size(SearchResultsLoadingIndicatorSize),
-                strokeWidth = 3.dp,
+                        .padding(top = EumSpacing.medium),
             )
         }
         Text(

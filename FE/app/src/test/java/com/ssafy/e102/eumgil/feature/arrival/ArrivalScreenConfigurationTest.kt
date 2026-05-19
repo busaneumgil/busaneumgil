@@ -322,11 +322,11 @@ class ArrivalScreenConfigurationTest {
         )
         assertTrue(
             "Arrival route save CTA should keep the unsaved-state label on the outlined white button.",
-            stringsSource.contains("<string name=\"arrival_evaluation_save_route\">경로저장</string>"),
+            stringsSource.contains("<string name=\"arrival_evaluation_save_route\">경로 저장하기</string>"),
         )
         assertTrue(
-            "Arrival route save CTA should show a short saved-state label on the filled blue button.",
-            stringsSource.contains("<string name=\"arrival_evaluation_route_saved\">저장 완료</string>"),
+            "Arrival route save CTA should show an action label that makes the selected toggle state clear.",
+            stringsSource.contains("<string name=\"arrival_evaluation_route_saved\">저장 해제하기</string>"),
         )
     }
 
@@ -377,11 +377,11 @@ class ArrivalScreenConfigurationTest {
 
         assertTrue(
             "Arrival evaluation unsaved route save CTA should use the short route-save label requested for the bottom sheet.",
-            stringsSource.contains("<string name=\"arrival_evaluation_save_route\">경로저장</string>"),
+            stringsSource.contains("<string name=\"arrival_evaluation_save_route\">경로 저장하기</string>"),
         )
         assertTrue(
-            "Arrival evaluation saved route save CTA should use the compact saved-state label.",
-            stringsSource.contains("<string name=\"arrival_evaluation_route_saved\">저장 완료</string>"),
+            "Arrival evaluation saved route save CTA should use a toggle action label instead of a completion message.",
+            stringsSource.contains("<string name=\"arrival_evaluation_route_saved\">저장 해제하기</string>"),
         )
     }
 }

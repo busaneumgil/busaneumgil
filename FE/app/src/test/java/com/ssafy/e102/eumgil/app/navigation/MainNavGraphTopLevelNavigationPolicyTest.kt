@@ -120,6 +120,11 @@ class MainNavGraphTopLevelNavigationPolicyTest {
                 routeSettingDestination.contains("navController.navigateToTopLevelMapForHomeEntry()"),
         )
         assertTrue(
+            "Route setting back should also collapse the search stack and return to map home in one step.",
+            routeSettingDestination.contains("onNavigateBack = {") &&
+                routeSettingDestination.contains("navController.navigateToTopLevelMapForHomeEntry()"),
+        )
+        assertTrue(
             "Route detail close should also return to map home.",
             routeDetailDestination.contains("onNavigateToMap = {") &&
                 routeDetailDestination.contains("navController.navigateToTopLevelMapForHomeEntry()"),
@@ -127,6 +132,30 @@ class MainNavGraphTopLevelNavigationPolicyTest {
         assertTrue(
             "Route detail top-bar X should invoke the map-home callback directly instead of falling back through the route flow back stack.",
             routeDetailEntry.contains("onCloseClick = onNavigateToMap"),
+        )
+    }
+
+    @Test
+    fun `map search entry opens destination assignment search flow`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
+                .readText()
+        val mapDestination =
+            source
+                .substringAfter("composable(route = TopLevelRoute.Map.route)")
+                .substringBefore("composable(route = TopLevelRoute.SavedRoute.route)")
+
+        assertTrue(
+            "Home map search should enter the route endpoint assignment search flow so entry-only destination shortcuts are interactive.",
+            mapDestination.contains(
+                "SearchRoute.Entry.createRoute(editingTarget, SearchSelectionMode.APPLY_TO_ROUTE)",
+            ),
+        )
+        assertTrue(
+            "Home map voice/search result navigation should preserve destination assignment mode instead of falling back to preview-only results.",
+            mapDestination.contains(
+                "SearchRoute.Results.createRoute(query, editingTarget, SearchSelectionMode.APPLY_TO_ROUTE)",
+            ),
         )
     }
 

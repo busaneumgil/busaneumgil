@@ -175,6 +175,7 @@ private fun SearchRouteContent(
             viewModel.onAction(
                 SearchUiAction.ResultsRouteEntered(
                     query = initialQuery,
+                    editingTarget = initialEditingTarget,
                     selectionMode = initialSelectionMode,
                 ),
             )
@@ -352,6 +353,7 @@ private fun rememberSearchViewModel(): SearchViewModel {
                 placesRepository = appContainer.placesRepository,
                 currentLocationManager = appContainer.currentLocationManager,
                 locationPermissionManager = appContainer.locationPermissionManager,
+                currentLocationAddressResolver = appContainer.currentLocationAddressResolver,
             )
         }
 

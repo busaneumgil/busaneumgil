@@ -79,7 +79,7 @@ data class NavigationMapOverlayUiState(
     val focusCoordinate: GeoCoordinate? = null,
     val routeSegments: List<NavigationMapSegmentUiState> = emptyList(),
     val mapFocusMode: NavigationMapFocusMode = NavigationMapFocusMode.ACTIVE,
-    val trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING,
+    val trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW,
     val headingDegrees: Double? = null,
     val shouldAnimateCameraTransition: Boolean = true,
 ) {

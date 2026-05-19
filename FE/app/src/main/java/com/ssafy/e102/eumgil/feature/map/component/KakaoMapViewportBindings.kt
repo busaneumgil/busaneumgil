@@ -398,7 +398,6 @@ internal fun createKakaoProjectedMarkerRenderStates(
             overlayPoints.mapNotNull { point ->
                 point.toProjectedMarkerRenderState(
                     includeCurrentLocation = currentLocation == null,
-                    cameraBearingDegrees = cameraBearingDegrees,
                 )
             },
         )
@@ -927,7 +926,6 @@ private data class KakaoOverlayPointMarkerSpec(
 
 private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
     includeCurrentLocation: Boolean,
-    cameraBearingDegrees: Double,
 ): KakaoProjectedMarkerRenderState? {
     val markerSpec =
         when (kind) {
@@ -951,18 +949,12 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
 
             MapViewportPointKind.CURRENT_LOCATION ->
                 if (includeCurrentLocation) {
-                    val hasHeading = headingDegrees != null
                     KakaoOverlayPointMarkerSpec(
                         kind = KakaoProjectedMarkerKind.CURRENT_LOCATION,
-                        iconResId =
-                            if (hasHeading) {
-                                R.drawable.ic_map_current_location_heading
-                            } else {
-                                R.drawable.ic_map_current_location
-                            },
-                        sizeDp = if (hasHeading) 34 else 28,
+                        iconResId = R.drawable.ic_map_current_location,
+                        sizeDp = 28,
                         anchorPointY = 0.5f,
-                        zIndex = if (hasHeading) 6.2f else 6f,
+                        zIndex = 6f,
                     )
                 } else {
                     null
@@ -995,12 +987,7 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
         fillColorArgb = markerSpec.fillColorArgb,
         strokeColorArgb = markerSpec.strokeColorArgb,
         clickTargetId = clickTargetId,
-        rotationDegrees =
-            headingDegrees
-                ?.let { headingDegrees ->
-                    normalizeKakaoRouteDirectionArrowRotationDegrees(headingDegrees - cameraBearingDegrees).toFloat()
-                }
-                ?: 0f,
+        rotationDegrees = 0f,
         translationDistanceDp = 0,
     )
 }

@@ -169,7 +169,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `active navigation overlay uses phone heading for follow camera and current location puck`() {
+    fun `active navigation overlay keeps follow camera north up and current location without heading`() {
         val current = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
         val overlayState =
             createNavigationViewportOverlayState(
@@ -195,17 +195,11 @@ class MapViewportOverlayBindingsTest {
                             ),
                         mapFocusMode = NavigationMapFocusMode.ACTIVE,
                     ),
-            )
+        )
 
         assertFalse(overlayState.fitToProjection)
-        assertEquals(275.0, overlayState.fallbackCamera.bearingDegrees ?: -1.0, 0.0)
-        assertEquals(
-            275.0,
-            overlayState.points
-                .single { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION }
-                .headingDegrees ?: -1.0,
-            0.0,
-        )
+        assertEquals(null, overlayState.fallbackCamera.bearingDegrees)
+        assertEquals(null, overlayState.points.single { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION }.headingDegrees)
         assertTrue(overlayState.points.none { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION_HEADING })
     }
 
@@ -267,19 +261,8 @@ class MapViewportOverlayBindingsTest {
                 polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR
             }
 
-        assertTrue(connectorPolylines.isNotEmpty())
-        assertTrue(connectorPolylines.all { polyline -> polyline.overlayId.startsWith("route-origin-connector") })
-        assertFalse(connectorPolylines.any { polyline -> polyline.showDirectionArrows })
-        assertFalse(connectorPolylines.any { polyline -> polyline.includeInProjection })
+        assertTrue(connectorPolylines.isEmpty())
         assertFalse(overlayState.polylines.any { polyline -> polyline.overlayId.startsWith("navigation-start-connector") })
-        assertEquals(
-            MapCoordinate(latitude = current.latitude, longitude = current.longitude),
-            connectorPolylines.first().points.first(),
-        )
-        assertEquals(
-            MapCoordinate(latitude = previewRouteStart.latitude, longitude = previewRouteStart.longitude),
-            connectorPolylines.first().points.last(),
-        )
         assertTrue(
             overlayState.polylines
                 .filter { polyline -> polyline.style == MapViewportPolylineStyle.ROUTE_PREVIEW }
@@ -287,12 +270,12 @@ class MapViewportOverlayBindingsTest {
         )
         assertFalse(overlayState.fitToProjection)
         assertEquals(MapCoordinate(latitude = current.latitude, longitude = current.longitude), overlayState.fallbackCamera.center)
-        assertEquals(45.0, overlayState.fallbackCamera.bearingDegrees ?: -1.0, 0.0)
+        assertEquals(null, overlayState.fallbackCamera.bearingDegrees)
         assertTrue(overlayState.points.any { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION })
     }
 
     @Test
-    fun `active navigation keeps route start connector without replacing active route polylines`() {
+    fun `active navigation removes route start connector after route progress begins`() {
         val current = GeoCoordinate(latitude = 35.1792, longitude = 129.0754)
         val origin = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
         val routeStart = GeoCoordinate(latitude = 35.1750, longitude = 129.0756)
@@ -324,28 +307,18 @@ class MapViewportOverlayBindingsTest {
                         headingDegrees = 30.0,
                         mapFocusMode = NavigationMapFocusMode.ACTIVE,
                     ),
-            )
+        )
 
         assertFalse(overlayState.fitToProjection)
-        assertTrue(overlayState.polylines.any { polyline -> polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR })
+        assertFalse(overlayState.polylines.any { polyline -> polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR })
         assertTrue(overlayState.polylines.none { polyline -> polyline.style == MapViewportPolylineStyle.ROUTE_PREVIEW })
         assertTrue(overlayState.polylines.any { polyline -> polyline.style == MapViewportPolylineStyle.ROUTE_BASELINE })
-        assertFalse(
-            overlayState.polylines
-                .filter { polyline -> polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR }
-                .any { polyline -> polyline.includeInProjection },
-        )
-        val connector =
-            overlayState.polylines.first { polyline ->
-                polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR
-            }
-        assertEquals(MapCoordinate(latitude = current.latitude, longitude = current.longitude), connector.points.first())
         assertEquals(MapCoordinate(latitude = current.latitude, longitude = current.longitude), overlayState.fallbackCamera.center)
-        assertEquals(30.0, overlayState.fallbackCamera.bearingDegrees ?: -1.0, 0.0)
+        assertEquals(null, overlayState.fallbackCamera.bearingDegrees)
     }
 
     @Test
-    fun `active navigation overlay falls back to route bearing when phone heading is unavailable`() {
+    fun `active navigation overlay does not synthesize route bearing when phone heading is unavailable`() {
         val current = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
         val overlayState =
             createNavigationViewportOverlayState(
@@ -374,19 +347,13 @@ class MapViewportOverlayBindingsTest {
             )
 
         assertFalse(overlayState.fitToProjection)
-        assertEquals(0.0, overlayState.fallbackCamera.bearingDegrees ?: -1.0, 0.0001)
-        assertEquals(
-            0.0,
-            overlayState.points
-                .single { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION }
-                .headingDegrees ?: -1.0,
-            0.0,
-        )
+        assertEquals(null, overlayState.fallbackCamera.bearingDegrees)
+        assertEquals(null, overlayState.points.single { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION }.headingDegrees)
         assertTrue(overlayState.points.none { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION_HEADING })
     }
 
     @Test
-    fun `manual navigation overlay keeps current location heading from route bearing when phone heading is unavailable`() {
+    fun `manual navigation overlay keeps current location camera instead of route overview`() {
         val current = GeoCoordinate(latitude = 35.1796, longitude = 129.0756)
         val overlayState =
             createNavigationViewportOverlayState(
@@ -414,14 +381,10 @@ class MapViewportOverlayBindingsTest {
                     ),
             )
 
-        assertTrue(overlayState.fitToProjection)
-        assertEquals(
-            90.0,
-            overlayState.points
-                .single { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION }
-                .headingDegrees ?: -1.0,
-            0.0001,
-        )
+        assertFalse(overlayState.fitToProjection)
+        assertEquals(current.latitude, overlayState.fallbackCamera.center.latitude, 0.0)
+        assertEquals(current.longitude, overlayState.fallbackCamera.center.longitude, 0.0)
+        assertEquals(null, overlayState.points.single { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION }.headingDegrees)
         assertTrue(overlayState.points.none { point -> point.kind == MapViewportPointKind.CURRENT_LOCATION_HEADING })
     }
 
@@ -1088,7 +1051,7 @@ class MapViewportOverlayBindingsTest {
     }
 
     @Test
-    fun `navigation binding shows the route start junction marker with the origin pin`() {
+    fun `navigation binding hides origin pin when route start overlaps current location`() {
         val routeStart = GeoCoordinate(latitude = 35.170, longitude = 129.050)
         val overlayState =
             createNavigationViewportOverlayState(
@@ -1134,7 +1097,7 @@ class MapViewportOverlayBindingsTest {
             ),
             junctionPoints.map { it.coordinate },
         )
-        assertTrue(overlayState.points.any { it.kind == MapViewportPointKind.ORIGIN })
+        assertFalse(overlayState.points.any { it.kind == MapViewportPointKind.ORIGIN })
         assertTrue(overlayState.points.any { it.kind == MapViewportPointKind.CURRENT_LOCATION })
     }
 

@@ -326,10 +326,9 @@ internal fun createNavigationViewportOverlayState(
     val useFocusedProjection = mapOverlay.mapFocusMode == NavigationMapFocusMode.FOCUSED
     val routePreviewStartOverlayState = mapOverlay.createRoutePreviewStartOverlayStateOrNull()
     val useRoutePreviewStartOverlay = routePreviewStartOverlayState != null
-    val useActiveCurrentFollow =
+    val useActiveCurrentCamera =
         mapOverlay.mapFocusMode == NavigationMapFocusMode.ACTIVE &&
-            mapOverlay.currentLocation != null &&
-            mapOverlay.trackingMode != NavigationTrackingMode.IDLE
+            mapOverlay.currentLocation != null
     val useActiveFocusFallbackProjection =
         mapOverlay.mapFocusMode == NavigationMapFocusMode.ACTIVE &&
             mapOverlay.currentLocation == null &&
@@ -391,47 +390,23 @@ internal fun createNavigationViewportOverlayState(
             else -> null
         }
     val routePreviewStartPolylines =
-        routePreviewStartOverlayState
-            ?.polylines
-            .orEmpty()
-            .filter { polyline ->
-                shouldUseRoutePreviewOnly ||
-                    polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR
-            }
-            .map { polyline -> polyline.copy(includeInProjection = !useActiveCurrentFollow) }
-    val activeFollowBearingDegrees =
-        if (useActiveCurrentFollow) {
-            val currentCoordinate = mapOverlay.currentLocation!!.coordinate.toMapCoordinate()
-            mapOverlay.headingDegrees
-                ?: activeSegmentPoints.resolveLookaheadBearingDegrees(currentCoordinate)
-                ?: selectedRoutePoints.resolveLookaheadBearingDegrees(currentCoordinate)
+        if (shouldUseRoutePreviewOnly) {
+            routePreviewStartOverlayState
+                ?.polylines
+                .orEmpty()
+                .filterNot { polyline -> polyline.style == MapViewportPolylineStyle.ROUTE_CONNECTOR }
+                .map { polyline -> polyline.copy(includeInProjection = !useActiveCurrentCamera) }
         } else {
-            null
+            emptyList()
         }
-    val currentLocationMarkerHeadingDegrees =
-        mapOverlay.currentLocation?.let { currentLocation ->
-            val currentCoordinate = currentLocation.coordinate.toMapCoordinate()
-            mapOverlay.headingDegrees
-                ?: activeSegmentPoints.resolveLookaheadBearingDegrees(currentCoordinate)
-                ?: focusedSegmentPoints.resolveLookaheadBearingDegrees(currentCoordinate)
-                ?: selectedRoutePoints.resolveLookaheadBearingDegrees(currentCoordinate)
-        }
-
     val overlayState =
         MapViewportOverlayState(
             fallbackCamera =
                 when {
-                    useActiveCurrentFollow -> {
+                    useActiveCurrentCamera -> {
                         val currentCoordinate = mapOverlay.currentLocation!!.coordinate.toMapCoordinate()
-                        val bearingDegrees =
-                            when (mapOverlay.trackingMode) {
-                                NavigationTrackingMode.FOLLOW_WITH_HEADING -> activeFollowBearingDegrees
-                                NavigationTrackingMode.FOLLOW,
-                                NavigationTrackingMode.IDLE,
-                                    -> null
-                            }
                         currentCoordinate.toCurrentLocationFallbackCamera(
-                            bearingDegrees = bearingDegrees,
+                            bearingDegrees = null,
                         )
                     }
                     useFocusedProjection && focusedFallbackCoordinate != null ->
@@ -439,25 +414,18 @@ internal fun createNavigationViewportOverlayState(
                     else -> defaultMapViewportFallbackCamera()
                 },
             shouldAnimateCameraTransition = mapOverlay.shouldAnimateCameraTransition,
-            fitToProjection = !useActiveCurrentFollow,
+            fitToProjection = !useActiveCurrentCamera,
             points =
                 buildList {
                     if (shouldShowCurrentLocation) {
                         mapOverlay.currentLocation?.let { point ->
-                            val currentLocationHeadingDegrees =
-                                when (mapOverlay.trackingMode) {
-                                    NavigationTrackingMode.FOLLOW_WITH_HEADING -> currentLocationMarkerHeadingDegrees
-                                    NavigationTrackingMode.FOLLOW,
-                                    NavigationTrackingMode.IDLE,
-                                        -> currentLocationMarkerHeadingDegrees
-                                }
                             add(
                                 point.coordinate.toOverlayPoint(
                                     overlayId = "navigation-current",
                                     kind = MapViewportPointKind.CURRENT_LOCATION,
                                     label = "C",
-                                    headingDegrees = currentLocationHeadingDegrees,
-                                    includeInProjection = useRoutePreviewStartOverlay && !useActiveCurrentFollow,
+                                    headingDegrees = null,
+                                    includeInProjection = useRoutePreviewStartOverlay && !useActiveCurrentCamera,
                                 ),
                             )
                         }
@@ -471,8 +439,8 @@ internal fun createNavigationViewportOverlayState(
                                     label = "O",
                                     clickTargetId = mapOverlay.routeSegments.firstOrNull()?.let { navigationSegmentMarkerId(0) },
                                     includeInProjection =
-                                        (useRoutePreviewStartOverlay && !useActiveCurrentFollow) ||
-                                            (!useActiveCurrentFollow && currentLocationOverlapsOrigin),
+                                        (useRoutePreviewStartOverlay && !useActiveCurrentCamera) ||
+                                            (!useActiveCurrentCamera && currentLocationOverlapsOrigin),
                                 ),
                             )
                         }
@@ -484,8 +452,8 @@ internal fun createNavigationViewportOverlayState(
                                 kind = MapViewportPointKind.DESTINATION,
                                 label = "D",
                                 includeInProjection =
-                                    (useRoutePreviewStartOverlay && !useActiveCurrentFollow) ||
-                                        (!useActiveCurrentFollow && currentLocationOverlapsDestination),
+                                    (useRoutePreviewStartOverlay && !useActiveCurrentCamera) ||
+                                        (!useActiveCurrentCamera && currentLocationOverlapsDestination),
                             ),
                         )
                     }
@@ -493,12 +461,12 @@ internal fun createNavigationViewportOverlayState(
                         mapOverlay.routeSegments.toSegmentMarkerOverlays(
                             currentLocation =
                                 when {
-                                    useActiveCurrentFollow -> mapOverlay.currentLocation?.coordinate
+                                    useActiveCurrentCamera -> mapOverlay.currentLocation?.coordinate
                                     useRoutePreviewStartOverlay -> mapOverlay.origin?.coordinate ?: mapOverlay.currentLocation?.coordinate
                                     else -> null
                                 },
                             hideCompletedBeforeActiveIndex =
-                                if (useActiveCurrentFollow) {
+                                if (useActiveCurrentCamera) {
                                     mapOverlay.routeSegments.indexOfFirst(NavigationMapSegmentUiState::isActive)
                                 } else {
                                     null

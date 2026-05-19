@@ -85,7 +85,7 @@ internal class ApprovedHazardMarkerOverlayState(
                 MapViewportPointOverlay(
                     overlayId = marker.viewportOverlayId,
                     coordinate = marker.coordinate.toMapCoordinate(),
-                    kind = MapViewportPointKind.HAZARD,
+                    kind = MapViewportPointKind.APPROVED_REPORT,
                     tone = MapViewportOverlayTone.ERROR,
                     contentDescription = marker.contentDescription,
                     isSelected = marker.reportId == selectedMarker?.reportId,

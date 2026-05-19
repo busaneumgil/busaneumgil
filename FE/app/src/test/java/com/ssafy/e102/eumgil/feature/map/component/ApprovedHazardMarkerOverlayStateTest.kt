@@ -64,6 +64,7 @@ class ApprovedHazardMarkerOverlayStateTest {
         assertEquals(1, repository.requestedBounds.size)
         assertEquals(1, state.markers.size)
         assertEquals(12L, state.markers.single().reportId)
+        assertEquals(MapViewportPointKind.APPROVED_REPORT, state.overlayPoints.single().kind)
     }
 
     @Test

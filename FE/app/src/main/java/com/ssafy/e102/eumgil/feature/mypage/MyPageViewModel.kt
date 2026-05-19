@@ -69,6 +69,7 @@ class MyPageViewModel(
             is MyPageUiAction.MainMenuClicked -> {
                 viewModelScope.launch {
                     when (action.menuItem) {
+                        MyPageMenuItem.TEXT_SIZE -> uiEventChannel.send(MyPageUiEvent.NavigateToTextSizeSetting)
                         MyPageMenuItem.APP_HELP -> uiEventChannel.send(MyPageUiEvent.NavigateToGuide)
                         MyPageMenuItem.PRIVACY_POLICY -> uiEventChannel.send(MyPageUiEvent.OpenPrivacyPolicy)
                         MyPageMenuItem.SERVICE_TERMS -> uiEventChannel.send(MyPageUiEvent.OpenServiceTerms)

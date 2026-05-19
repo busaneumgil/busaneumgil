@@ -79,7 +79,7 @@ data class NavigationMapOverlayUiState(
     val focusCoordinate: GeoCoordinate? = null,
     val routeSegments: List<NavigationMapSegmentUiState> = emptyList(),
     val mapFocusMode: NavigationMapFocusMode = NavigationMapFocusMode.ACTIVE,
-    val trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING,
+    val trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW,
     val headingDegrees: Double? = null,
     val shouldAnimateCameraTransition: Boolean = true,
 ) {
@@ -215,6 +215,10 @@ data class NavigationCtaUiState(
 sealed interface NavigationUiAction {
     data object NavigationEntered : NavigationUiAction
 
+    data class HazardReportSubmitted(
+        val reportId: Long,
+    ) : NavigationUiAction
+
     data object BackClicked : NavigationUiAction
 
     data object RouteDetailClicked : NavigationUiAction
@@ -252,6 +256,8 @@ sealed interface NavigationUiAction {
 
 sealed interface NavigationUiEvent {
     data object NavigateBack : NavigationUiEvent
+
+    data object ShowDuribalCallDialog : NavigationUiEvent
 
     data class NavigateToRouteDetail(
         val routeOption: RouteOption,

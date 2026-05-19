@@ -5,6 +5,7 @@ import com.ssafy.e102.eumgil.core.location.AddressSearchResolver
 import com.ssafy.e102.eumgil.core.location.NoOpAddressSearchResolver
 import com.ssafy.e102.eumgil.data.local.dao.BookmarkDao
 import com.ssafy.e102.eumgil.data.local.dao.FavoriteRouteDao
+import com.ssafy.e102.eumgil.data.local.dao.AppSettingDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.datasource.AuthSessionLocalDataSource
@@ -30,6 +31,7 @@ import com.ssafy.e102.eumgil.data.repository.AuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.AuthLogoutRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
+import com.ssafy.e102.eumgil.data.repository.ApprovedReportMapRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultAuthSessionRepository
@@ -43,9 +45,11 @@ import com.ssafy.e102.eumgil.data.repository.NoOpHazardReportImageUploader
 import com.ssafy.e102.eumgil.data.repository.DefaultRouteRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSearchRepository
 import com.ssafy.e102.eumgil.data.repository.DefaultSettingsRepository
+import com.ssafy.e102.eumgil.data.repository.DefaultTextSizePreferenceRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.FacilitySeedRepository
 import com.ssafy.e102.eumgil.data.repository.DestinationPreviewRepository
+import com.ssafy.e102.eumgil.data.repository.EmptyApprovedReportMapRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationSelectionRepository
 import com.ssafy.e102.eumgil.data.repository.InMemoryDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.LocalOnlyAuthLoginRepository
@@ -63,6 +67,7 @@ import com.ssafy.e102.eumgil.data.repository.ServerAuthLoginRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
 import com.ssafy.e102.eumgil.data.repository.SocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.ServerUserProfileRepository
+import com.ssafy.e102.eumgil.data.repository.TextSizePreferenceRepository
 import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
 import com.ssafy.e102.eumgil.data.repository.policy.DefaultRepositorySourcePolicy
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
@@ -74,6 +79,9 @@ object RepositoryModule {
 
     fun provideDestinationPreviewRepository(): DestinationPreviewRepository =
         InMemoryDestinationPreviewRepository()
+
+    fun provideApprovedReportMapRepository(): ApprovedReportMapRepository =
+        EmptyApprovedReportMapRepository
 
     fun provideAuthSessionRepository(
         authSessionLocalDataSource: AuthSessionLocalDataSource,
@@ -187,6 +195,11 @@ object RepositoryModule {
             initSettingsLocalDataSource = initSettingsLocalDataSource,
             authSessionRepository = authSessionRepository,
         )
+
+    fun provideTextSizePreferenceRepository(
+        appSettingDao: AppSettingDao,
+    ): TextSizePreferenceRepository =
+        DefaultTextSizePreferenceRepository(appSettingDao = appSettingDao)
 
     fun provideRepositorySourcePolicy(): RepositorySourcePolicy = DefaultRepositorySourcePolicy()
 

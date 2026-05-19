@@ -6,7 +6,10 @@ import {
   deriveHazardDisplayStatus,
   hazardRouteReviewIntentLabel,
   hydrateHazardRouteReviewRecord,
+  isHazardRestorePending,
   loadStoredHazardRouteReview,
+  routeReviewCompletionClassName,
+  routeReviewCompletionMessage,
   startHazardRouteReview,
   storeHazardRouteReview,
   updateHazardRouteReviewSegmentDraft,
@@ -93,6 +96,28 @@ describe("hazard route review workflow state", () => {
     expect(hazardRouteReviewIntentLabel("restore")).toBe("원상복구 검수");
   });
 
+  it("distinguishes restore pending from merely restorable approved reports", () => {
+    expect(isHazardRestorePending()).toBe(false);
+
+    const approveReview = completeHazardRouteReview(startHazardRouteReview({
+      reportId: 8,
+      intent: "approve",
+      reviewerUserId: "admin-restore-check",
+      now: "2026-05-18T04:00:00.000Z",
+    }), "2026-05-18T04:10:00.000Z");
+
+    const restoreReview = startHazardRouteReview({
+      reportId: 9,
+      intent: "restore",
+      reviewerUserId: "admin-restore-check",
+      now: "2026-05-18T04:20:00.000Z",
+    });
+
+    expect(isHazardRestorePending(approveReview)).toBe(false);
+    expect(isHazardRestorePending(restoreReview)).toBe(true);
+    expect(isHazardRestorePending(completeHazardRouteReview(restoreReview, "2026-05-18T04:30:00.000Z"))).toBe(true);
+  });
+
   it("allows approve review for pending and rejected reports", () => {
     const review = startHazardRouteReview({
       reportId: 4,
@@ -122,6 +147,8 @@ describe("hazard route review workflow state", () => {
       startedAt: "2026-05-18T10:00:00",
       updatedAt: "2026-05-18T10:05:00",
       completedAt: null,
+      routingApplyStatus: "FAILED",
+      routingApplyMessage: "reload failed",
       segmentDrafts: [
         {
           edgeId: 41231,
@@ -141,9 +168,13 @@ describe("hazard route review workflow state", () => {
       intent: "restore",
       stage: "IN_PROGRESS",
       reviewerUserId: "admin-8",
+      gu: "부산진구",
+      dong: "부전동",
       startedAt: "2026-05-18T10:00:00",
       updatedAt: "2026-05-18T10:05:00",
       completedAt: null,
+      routingApplyStatus: "FAILED",
+      routingApplyMessage: "reload failed",
       selectedSegmentEdgeId: "41231",
       segmentDrafts: {
         "41231": {
@@ -157,5 +188,19 @@ describe("hazard route review workflow state", () => {
         },
       },
     });
+  });
+
+  it("formats route review completion messages from routing apply status", () => {
+    expect(routeReviewCompletionMessage("APPLIED")).toBe("검수 완료 및 경로 반영이 완료되었습니다.");
+    expect(routeReviewCompletionMessage("APPLIED_WITH_WARNING")).toContain("경고");
+    expect(routeReviewCompletionMessage("FAILED")).toContain("실패");
+    expect(routeReviewCompletionMessage("SKIPPED")).toContain("즉시 반영 대상 변경은 없습니다");
+  });
+
+  it("maps route review completion status to visual severity classes", () => {
+    expect(routeReviewCompletionClassName("FAILED")).toBe("error-box");
+    expect(routeReviewCompletionClassName("APPLIED_WITH_WARNING")).toBe("warning-box");
+    expect(routeReviewCompletionClassName("APPLIED")).toBe("success-box");
+    expect(routeReviewCompletionClassName("SKIPPED")).toBe("info-box");
   });
 });

@@ -66,6 +66,16 @@ class MainNavGraphTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun `navigation hazard report reroute result is consumed once`() {
+        val savedStateHandle = SavedStateHandle()
+
+        savedStateHandle.setNavigationHazardReportSubmittedReportId(42L)
+
+        assertEquals(42L, savedStateHandle.consumeNavigationHazardReportSubmittedReportId())
+        assertEquals(null, savedStateHandle.consumeNavigationHazardReportSubmittedReportId())
+    }
+
+    @Test
     fun `map home reentry helper pops the existing map entry before fallback navigate`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
@@ -165,6 +175,33 @@ class MainNavGraphTopLevelNavigationPolicyTest {
             "AppNavHost should preserve the search editing target in the global voice assistant context.",
             appNavHostSource.contains("onOpenVoiceAssistant = { editingTarget ->") &&
                 appNavHostSource.contains("currentVoiceAssistantSourceContext.copy(editingTarget = editingTarget)"),
+        )
+    }
+
+    @Test
+    fun `my page text size destination is registered as a my page child route`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
+                .readText()
+        val myPageDestination =
+            source
+                .substringAfter("composable(route = TopLevelRoute.MyPage.route)")
+                .substringBefore("composable(route = MyPageChildRoute.TextSize.route)")
+        val textSizeDestination =
+            source
+                .substringAfter("composable(route = MyPageChildRoute.TextSize.route)")
+                .substringBefore("composable(")
+
+        assertTrue(
+            "MyPageRoute should pass the text-size navigation event into the my_page/text_size child route.",
+            myPageDestination.contains("onNavigateToTextSizeSetting = {") &&
+                myPageDestination.contains("navController.navigate(MyPageChildRoute.TextSize.route)"),
+        )
+        assertTrue(
+            "The main graph should reuse the common TextSizeSettingRoute instead of creating a duplicate screen.",
+            textSizeDestination.contains("TextSizeSettingRoute(") &&
+                textSizeDestination.contains("onNavigateBack = {") &&
+                textSizeDestination.contains("navController.popBackStack()"),
         )
     }
 

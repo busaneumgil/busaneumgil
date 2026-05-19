@@ -27,6 +27,7 @@ import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
 import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
 import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
+import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.feature.arrival.ArrivalRoute as ArrivalScreenRoute
 import com.ssafy.e102.eumgil.feature.map.MapRoute
 import com.ssafy.e102.eumgil.feature.mypage.MyPageRoute
@@ -43,7 +44,7 @@ import com.ssafy.e102.eumgil.feature.search.SearchEntryRoute
 import com.ssafy.e102.eumgil.feature.search.SearchResultsRoute
 import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputRoute
-import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.textsize.TextSizeSettingRoute
 import com.ssafy.e102.eumgil.feature.tutorial.MobilityTutorialRoute
 import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
@@ -151,6 +152,17 @@ fun NavGraphBuilder.mainNavGraph(
             },
             onNavigateToGuide = {
                 navController.navigate(resolveMyPageGuideRoute())
+            },
+            onNavigateToTextSizeSetting = {
+                navController.navigate(MyPageChildRoute.TextSize.route)
+            },
+        )
+    }
+
+    composable(route = MyPageChildRoute.TextSize.route) {
+        TextSizeSettingRoute(
+            onNavigateBack = {
+                navController.popBackStack()
             },
         )
     }
@@ -552,6 +564,13 @@ fun NavGraphBuilder.mainNavGraph(
             onNavigateToMap = {
                 navController.navigateBackToNavigationGuidance()
             },
+            onReturnToNavigationWithSubmittedReport = { reportId ->
+                navController
+                    .getBackStackEntry(NavigationRoute.Guidance.route)
+                    .savedStateHandle
+                    .setNavigationHazardReportSubmittedReportId(reportId)
+                navController.navigateBackToNavigationGuidance()
+            },
             entryPoint = ReportEntryPoint.NavigationGuidance,
             startNewRequest = true,
         )
@@ -624,7 +643,7 @@ fun NavGraphBuilder.mainNavGraph(
         )
     }
 
-    composable(route = NavigationRoute.Guidance.route) {
+    composable(route = NavigationRoute.Guidance.route) { backStackEntry ->
         val context = LocalContext.current
         val settingsRepository =
             remember(context) {
@@ -636,6 +655,10 @@ fun NavGraphBuilder.mainNavGraph(
                     .observeInitSettings()
                     .map { initSettings -> initSettings.selectedPrimaryUserType }
             }.collectAsStateWithLifecycle(initialValue = null)
+        val submittedHazardReportId by
+            backStackEntry.savedStateHandle
+                .getStateFlow<Long?>(NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY, null)
+                .collectAsStateWithLifecycle()
         val useLowVisionUi = shouldUseLowVisionNavigationUi(selectedPrimaryUserType)
 
         NavigationScreenRoute(
@@ -673,6 +696,10 @@ fun NavGraphBuilder.mainNavGraph(
                     }
                 }
             },
+            submittedHazardReportId = submittedHazardReportId,
+            onSubmittedHazardReportConsumed = {
+                backStackEntry.savedStateHandle.consumeNavigationHazardReportSubmittedReportId()
+            },
             useLowVisionUi = useLowVisionUi,
         )
     }
@@ -703,6 +730,7 @@ private const val SEARCH_PRESERVE_ENTRY_STATE_KEY: String = "searchPreserveEntry
 private const val MAP_HOME_REENTRY_RESET_KEY: String = "mapHomeReentryReset"
 private const val MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY: String = "mapFacilityDetailDismissRequestId"
 private const val MAP_FACILITY_DETAIL_DISMISS_CONSUMED_ID_KEY: String = "mapFacilityDetailDismissConsumedId"
+private const val NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY: String = "navigationHazardReportSubmittedReportId"
 internal const val MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID: Long = 0L
 private const val MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY: String = "mapRouteEndpointPickerTarget"
 internal const val MAP_VOICE_SEARCH_VISIBLE_KEY: String = "mapVoiceSearchVisible"
@@ -895,6 +923,18 @@ internal fun SavedStateHandle.consumeMapFacilityDetailDismissRequest(requestId: 
     return true
 }
 
+internal fun SavedStateHandle.setNavigationHazardReportSubmittedReportId(reportId: Long) {
+    set(NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY, reportId)
+}
+
+internal fun SavedStateHandle.consumeNavigationHazardReportSubmittedReportId(): Long? {
+    val reportId = get<Long>(NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY)
+    if (reportId != null) {
+        set<Long?>(NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY, null)
+    }
+    return reportId
+}
+
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =
     when (this) {
         is ComponentActivity -> this
@@ -926,19 +966,39 @@ internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel 
     val currentLocationManager = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.currentLocationManager
     }
+    val currentHeadingManager = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.currentHeadingManager
+    }
+    val locationPermissionManager = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.locationPermissionManager
+    }
     val bookmarkRepository = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.bookmarkRepository
     }
     val routeRepository = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.routeRepository
     }
-    val navigationViewModelFactory = remember(currentLocationManager, bookmarkRepository, routeRepository) {
-        NavigationGuidanceViewModel.provideFactory(
-            currentLocationManager = currentLocationManager,
-            bookmarkRepository = bookmarkRepository,
-            routeRepository = routeRepository,
-        )
+    val reportRepository = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.reportRepository
     }
+    val navigationViewModelFactory =
+        remember(
+            currentLocationManager,
+            currentHeadingManager,
+            locationPermissionManager,
+            bookmarkRepository,
+            routeRepository,
+            reportRepository,
+        ) {
+            NavigationGuidanceViewModel.provideFactory(
+                currentLocationManager = currentLocationManager,
+                currentHeadingManager = currentHeadingManager,
+                locationPermissionManager = locationPermissionManager,
+                bookmarkRepository = bookmarkRepository,
+                routeRepository = routeRepository,
+                reportRepository = reportRepository,
+            )
+        }
 
     return remember(activity, navigationViewModelFactory) {
         val owner = checkNotNull(activity) { "RouteSettingRoute requires a ComponentActivity host." }

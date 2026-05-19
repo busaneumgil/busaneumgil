@@ -1,10 +1,12 @@
 package com.ssafy.e102.eumgil.core.designsystem.theme
 
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.sp
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -85,6 +87,37 @@ class BusanEumgilTypographyTest {
     }
 
     @Test
+    fun `typography scale helper scales font size and line height only`() {
+        val scaled = PretendardTypography.scaledBy(1.15f)
+
+        assertEquals(18f * 1.15f, scaled.titleMedium.fontSize.value, 0.001f)
+        assertEquals(26f * 1.15f, scaled.titleMedium.lineHeight.value, 0.001f)
+        assertEquals(PretendardTypography.titleMedium.letterSpacing, scaled.titleMedium.letterSpacing)
+    }
+
+    @Test
+    fun `typography scale helper keeps default scale as the base typography`() {
+        assertSame(PretendardTypography, PretendardTypography.scaledBy(1.0f))
+        assertSame(PretendardTypography, PretendardTypography.scaledBy(0f))
+    }
+
+    @Test
+    fun `text size preference scales local density so direct sp tokens follow app setting`() {
+        val scaled = Density(density = 2f, fontScale = 1.1f).scaledByTextSizeScale(1.3f)
+
+        assertEquals(2f, scaled.density, 0.001f)
+        assertEquals(1.1f * 1.3f, scaled.fontScale, 0.001f)
+    }
+
+    @Test
+    fun `invalid text size scale keeps existing density unchanged`() {
+        val base = Density(density = 2f, fontScale = 1.1f)
+
+        assertSame(base, base.scaledByTextSizeScale(0f))
+        assertSame(base, base.scaledByTextSizeScale(Float.NaN))
+    }
+
+    @Test
     fun `general mode typography tokens do not default to extra bold or black`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/theme/Type.kt")
@@ -101,6 +134,8 @@ class BusanEumgilTypographyTest {
             File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/theme/Theme.kt")
                 .readText()
 
-        assertTrue(source.contains("typography = PretendardTypography"))
+        assertTrue(source.contains("textSizePreference.scale"))
+        assertTrue(source.contains("LocalDensity provides scaledDensity"))
+        assertTrue(source.contains("typography = typography"))
     }
 }

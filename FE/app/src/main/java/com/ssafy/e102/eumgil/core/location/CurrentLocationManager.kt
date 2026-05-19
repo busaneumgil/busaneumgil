@@ -9,5 +9,14 @@ interface CurrentLocationManager {
 
     fun startLocationUpdates()
 
+    fun startLocationUpdates(profile: LocationUpdateProfile) {
+        startLocationUpdates()
+    }
+
     fun stopLocationUpdates()
+}
+
+enum class LocationUpdateProfile {
+    DEFAULT,
+    NAVIGATION,
 }

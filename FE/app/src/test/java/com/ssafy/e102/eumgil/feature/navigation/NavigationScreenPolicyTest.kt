@@ -474,6 +474,30 @@ class NavigationScreenPolicyTest {
     }
 
     @Test
+    fun `approved hazard marker viewer is mounted after navigation bottom bar at screen root`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/navigation/NavigationScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("Box(\n        modifier = modifier.fillMaxSize(),\n    ) {")
+                .substringBefore("if (uiState.isExitConfirmDialogVisible)")
+        val mapStageSection =
+            source
+                .substringAfter("Box(\n                    modifier =\n                        Modifier\n                            .weight(1f)\n                            .fillMaxWidth(),\n                ) {")
+                .substringBefore("            }\n        }\n\n        val bottomBarLayoutPolicy =")
+
+        assertFalse(
+            "The full-screen hazard image viewer should not be trapped inside the map-only Box.",
+            mapStageSection.contains("ApprovedHazardMarkerBottomSheet("),
+        )
+        assertTrue(
+            "The full-screen hazard image viewer should mount after the navigation bottom bar so it can cover the entire screen chrome.",
+            screenSection.indexOf("NavigationBottomBar(") < screenSection.indexOf("ApprovedHazardMarkerBottomSheet("),
+        )
+    }
+
+    @Test
     fun `focused navigation map inspection animates through camera target instead of fit projection jumps`() {
         val overlaySource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlay.kt")

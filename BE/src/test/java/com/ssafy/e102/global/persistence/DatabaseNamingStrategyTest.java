@@ -33,6 +33,7 @@ import com.ssafy.e102.domain.route.entity.BusStop;
 import com.ssafy.e102.domain.route.entity.OdsayLoadLane;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
+import com.ssafy.e102.domain.route.entity.RoutingSegmentOverride;
 import com.ssafy.e102.domain.route.entity.RouteRating;
 import com.ssafy.e102.domain.route.entity.RouteSession;
 import com.ssafy.e102.domain.route.entity.SegmentFeature;
@@ -66,6 +67,7 @@ class DatabaseNamingStrategyTest {
 		OdsayLoadLane.class,
 		RoadNode.class,
 		RoadSegment.class,
+		RoutingSegmentOverride.class,
 		AdminArea.class,
 		AdminAreaAssignment.class,
 		SegmentFeature.class,
@@ -216,6 +218,13 @@ class DatabaseNamingStrategyTest {
 		assertThat(physicalColumnName(RoadSegment.class, "signalState")).isEqualTo("signal_state");
 		assertThat(physicalColumnName(RoadSegment.class, "segmentType")).isEqualTo("segment_type");
 
+		assertThat(physicalColumnName(RoutingSegmentOverride.class, "edgeId")).isEqualTo("edge_id");
+		assertThat(physicalColumnName(RoutingSegmentOverride.class, "walkAccess")).isEqualTo("walk_access");
+		assertThat(physicalColumnName(RoutingSegmentOverride.class, "stairsState")).isEqualTo("stairs_state");
+		assertThat(physicalColumnName(RoutingSegmentOverride.class, "widthState")).isEqualTo("width_state");
+		assertThat(physicalColumnName(RoutingSegmentOverride.class, "brailleBlockState"))
+			.isEqualTo("braille_block_state");
+
 		assertThat(physicalColumnName(AdminArea.class, "areaId")).isEqualTo("area_id");
 		assertThat(physicalColumnName(AdminArea.class, "gu")).isEqualTo("gu");
 		assertThat(physicalColumnName(AdminArea.class, "dong")).isEqualTo("dong");
@@ -340,6 +349,7 @@ class DatabaseNamingStrategyTest {
 			OdsayLoadLane.class,
 			RoadNode.class,
 			RoadSegment.class,
+			RoutingSegmentOverride.class,
 			AdminArea.class,
 			AdminAreaAssignment.class,
 			SegmentFeature.class,

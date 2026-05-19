@@ -110,7 +110,8 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(
             "Route selection should render the start CTA as a floating overlay aligned to the bottom.",
             screenSection.contains("RouteSettingBottomBar(") &&
-                screenSection.contains("modifier = Modifier.align(Alignment.BottomCenter)"),
+                screenSection.contains(".align(Alignment.BottomCenter)") &&
+                screenSection.contains(".zIndex(RouteSettingBottomBarZIndex)"),
         )
         assertTrue(
             "Route selection should reuse the shared bottom bar component.",
@@ -436,13 +437,35 @@ class RouteSettingLayoutPolicyTest {
             "Walk preview cards should use the same navigation-bar inset basis as the shared bottom CTA.",
             mapStageSection.contains("WindowInsets.navigationBars.getBottom(this).toDp()") &&
                 mapStageSection.contains("val walkPreviewBottomPadding = routeWalkPreviewCarouselBottomPadding(navigationBarBottomInset)") &&
+                mapStageSection.contains("val walkPreviewMapBottomClearance = routeWalkPreviewMapBottomClearance(navigationBarBottomInset)") &&
                 source.contains("RouteWalkPreviewToStartButtonGap = 22.dp"),
         )
         assertTrue(
-            "Walk preview cards should stay below the recenter control by using a compact fixed minimum card height.",
+            "Walk preview map should stop above the route cards so origin and destination labels are not projected behind bottom controls.",
+            mapStageSection.contains(".padding(bottom = walkPreviewMapBottomClearance)") &&
+                mapStageSection.contains(".clipToBounds()") &&
+                source.contains("RouteWalkPreviewMapToCardGap = 16.dp"),
+        )
+        assertTrue(
+            "Walk preview layers should keep the cards and bottom CTA above the map backdrop.",
+            mapStageSection.contains(".zIndex(RouteMapBackdropZIndex)") &&
+                mapStageSection.contains(".zIndex(RouteWalkPreviewCarouselZIndex)") &&
+                source.contains(".zIndex(RouteSettingBottomBarZIndex)"),
+        )
+        assertTrue(
+            "Walk preview cards should use a compact fixed minimum height.",
             cardSection.contains(".heightIn(min = RouteWalkPreviewCardMinHeight)") &&
                 source.contains("RouteWalkPreviewCardMinHeight = 116.dp") &&
                 !source.contains("RouteWalkPreviewCarouselBottomPadding = RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + 12.dp"),
+        )
+        assertTrue(
+            "Walk preview should not compose the floating recenter action, so the circular button cannot sit behind route cards.",
+                mapStageSection.contains("val showsWalkPreviewCards = uiState.selectedTravelMode == RouteTravelMode.WALK && uiState.optionCards.isNotEmpty()") &&
+                mapStageSection.contains("if (showsWalkPreviewCards)") &&
+                mapStageSection.contains("RouteMapZoomControls(") &&
+                mapStageSection.contains("RouteMapControls(") &&
+                !mapStageSection.contains("showActionButton") &&
+                source.contains("private fun RouteMapZoomControls("),
         )
         assertTrue(
             "Walk preview should show exactly two equal-width option cards with symmetric horizontal padding.",
@@ -482,6 +505,8 @@ class RouteSettingLayoutPolicyTest {
 
         assertEquals(102.dp, routeWalkPreviewCarouselBottomPadding(0.dp))
         assertEquals(150.dp, routeWalkPreviewCarouselBottomPadding(48.dp))
+        assertEquals(234.dp, routeWalkPreviewMapBottomClearance(0.dp))
+        assertEquals(282.dp, routeWalkPreviewMapBottomClearance(48.dp))
         assertEquals(288.dp, routeWalkMapControlsBottomPadding(0.dp))
         assertEquals(336.dp, routeWalkMapControlsBottomPadding(48.dp))
         assertTrue(
@@ -523,6 +548,30 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(mapControlsSection.contains("onZoomInClick = onZoomInClick"))
         assertTrue(mapControlsSection.contains("onZoomOutClick = onZoomOutClick"))
         assertTrue(routeMapBackdropSection.contains("controlState = controlState"))
+        assertTrue(routeMapBackdropSection.contains("originIsCurrentLocation = originIsCurrentLocation"))
+        assertTrue(mapStageSection.contains("originIsCurrentLocation = uiState.originState == RouteOriginState.CURRENT_LOCATION_RESOLVED"))
+        assertTrue(mapControlsSection.contains("iconRes = R.drawable.ic_route_start_navigation_button"))
+        assertFalse(
+            "Route preview should not draw a separate current-location marker that competes with the origin marker.",
+            routeMapBackdropSection.contains("currentLocation = currentLocationCoordinate") ||
+                mapStageSection.contains("currentLocationCoordinate = uiState.currentLocationCoordinate"),
+        )
+    }
+
+    @Test
+    fun `route preview labels use revised shortest copy without drawing duplicate current position marker`() {
+        val viewModelSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingViewModel.kt")
+                .readText()
+        val overlaySource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlay.kt")
+                .readText()
+
+        assertTrue(viewModelSource.contains("OPTION_TITLE_SHORTEST = \"최단 경로\""))
+        assertFalse(viewModelSource.contains("OPTION_TITLE_SHORTEST = \"최단거리\""))
+        assertFalse(overlaySource.contains("overlayId = \"route-current-location\""))
+        assertTrue(overlaySource.contains("originIsCurrentLocation: Boolean = false"))
+        assertTrue(overlaySource.contains("MapViewportPolylineStyle.ROUTE_CONNECTOR"))
     }
 
     @Test
@@ -1585,6 +1634,38 @@ class RouteSettingLayoutPolicyTest {
                 refreshButtonSection.contains("R.drawable.ic_status_refresh") &&
                 refreshButtonSection.contains("CircularProgressIndicator(") &&
                 source.contains("RouteTransitRefreshButtonSize = 44.dp"),
+        )
+    }
+
+    @Test
+    fun `approved hazard marker viewer mounts at the screen root instead of inside route map stage`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val routeSettingSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("@Composable\nfun RouteDetailScreen")
+        val routeMapStageSection =
+            source
+                .substringAfter("private fun RouteMapStage(")
+                .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
+        val routeDetailSection =
+            source
+                .substringAfter("fun RouteDetailScreen(")
+                .substringBefore("@Composable\nprivate fun RouteDetailTopBar")
+
+        assertFalse(
+            "The route preview map stage should not own the hazard bottom sheet because that limits the full-screen viewer to the map subtree.",
+            routeMapStageSection.contains("ApprovedHazardMarkerBottomSheet("),
+        )
+        assertTrue(
+            "The route preview screen should mount the hazard viewer after the shared bottom bar so it can cover controls and cards.",
+            routeSettingSection.indexOf("RouteSettingBottomBar(") < routeSettingSection.indexOf("ApprovedHazardMarkerBottomSheet("),
+        )
+        assertTrue(
+            "The route detail screen should also keep the hazard viewer as the last sibling above side panels and the start CTA.",
+            routeDetailSection.indexOf("RouteSettingBottomBar(") < routeDetailSection.indexOf("ApprovedHazardMarkerBottomSheet("),
         )
     }
 

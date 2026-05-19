@@ -64,6 +64,12 @@ class AppNavHostRoutingTest {
     }
 
     @Test
+    fun `my page text size route keeps my page tab active`() {
+        assertEquals("my_page/text_size", MyPageChildRoute.TextSize.route)
+        assertEquals(TopLevelRoute.MyPage.route, MyPageChildRoute.TextSize.route.toCurrentTopLevelRoute())
+    }
+
+    @Test
     fun `map tab skips home reentry reset for bookmark while keeping other visible non-map routes`() {
         assertEquals(
             true,

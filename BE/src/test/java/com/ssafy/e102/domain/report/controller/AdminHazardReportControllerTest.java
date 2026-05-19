@@ -160,13 +160,11 @@ class AdminHazardReportControllerTest {
 	void startRouteReview() throws Exception {
 		UUID userId = UUID.randomUUID();
 		UsernamePasswordAuthenticationToken authentication = authentication(userId);
-		when(adminHazardRouteReviewService.startRouteReview(
-			userId,
-			1L,
-			new com.ssafy.e102.domain.report.dto.request.StartHazardRouteReviewRequest(
-				HazardRouteReviewIntent.APPROVE,
-				"부산진구",
-				"부전동")))
+			when(adminHazardRouteReviewService.startRouteReview(
+				userId,
+				1L,
+				new com.ssafy.e102.domain.report.dto.request.StartHazardRouteReviewRequest(
+					HazardRouteReviewIntent.APPROVE)))
 			.thenReturn(new AdminHazardRouteReviewResponse(
 				7L,
 				1L,
@@ -185,13 +183,11 @@ class AdminHazardReportControllerTest {
 		mockMvc.perform(post("/admin/hazard-reports/1/route-review/start")
 			.principal(authentication)
 			.contentType(MediaType.APPLICATION_JSON)
-			.content("""
-				{
-				  "intent": "APPROVE",
-				  "gu": "부산진구",
-				  "dong": "부전동"
-				}
-				"""))
+				.content("""
+					{
+					  "intent": "APPROVE"
+					}
+					"""))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.reviewId").value(7))
 			.andExpect(jsonPath("$.data.intent").value("APPROVE"))

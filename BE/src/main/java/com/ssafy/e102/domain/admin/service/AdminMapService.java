@@ -26,6 +26,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -64,6 +65,7 @@ import com.ssafy.e102.domain.place.exception.PlaceException;
 import com.ssafy.e102.domain.place.repository.PlaceAccessibilityFeatureRepository;
 import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.place.type.AccessibilityFeatureType;
+import com.ssafy.e102.domain.report.entity.HazardReportRouteReviewSegmentDraft;
 import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.RoutingSegmentOverride;
@@ -75,6 +77,7 @@ import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
 import com.ssafy.e102.domain.route.type.AccessibilityState;
 import com.ssafy.e102.domain.route.type.SegmentFeatureType;
 import com.ssafy.e102.domain.route.type.SegmentType;
+import com.ssafy.e102.domain.route.type.WidthState;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadStatus;
@@ -161,11 +164,37 @@ public class AdminMapService {
 	}
 
 	public AdminRoadNetworkResponse getRoadNetwork(String gu, String dong, int limit) {
+		return getRoadNetwork(gu, dong, limit, null, null, null);
+	}
+
+	public AdminRoadNetworkResponse getRoadNetwork(
+		String gu,
+		String dong,
+		int limit,
+		Double centerLat,
+		Double centerLng,
+		Integer radiusMeter) {
 		List<RoadSegment> roadSegments;
 		long segmentCount;
 		if (hasAreaScope(gu, dong)) {
-			roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
-			segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
+			if (hasClip(centerLat, centerLng, radiusMeter)) {
+				roadSegments = roadSegmentRepository.findAllIntersectingAreaWithinRadius(
+					gu,
+					dong,
+					centerLng,
+					centerLat,
+					radiusMeter,
+					limit);
+				segmentCount = roadSegmentRepository.countIntersectingAreaWithinRadius(
+					gu,
+					dong,
+					centerLng,
+					centerLat,
+					radiusMeter);
+			} else {
+				roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
+				segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
+			}
 		} else if (hasGu(gu)) {
 			roadSegments = roadSegmentRepository.findAllIntersectingGu(gu);
 			segmentCount = roadSegmentRepository.countIntersectingGu(gu);
@@ -279,6 +308,7 @@ public class AdminMapService {
 		return AdminPlaceDetailResponse.of(place, geoPointConverter);
 	}
 
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public AdminRoadSegmentUpdateResponse updateRoadSegmentAttributes(
 		UUID userId,
 		Long edgeId,
@@ -298,6 +328,71 @@ public class AdminMapService {
 			toAdminRoutingApplyStatus(routingApplyResult.status()),
 			routingApplyResult.message());
 	}
+
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public GraphHopperReloadResult applyRouteReviewSegmentDrafts(
+		UUID userId,
+		String gu,
+		String dong,
+		List<HazardReportRouteReviewSegmentDraft> drafts) {
+		boolean routingOverlayReloadRequired = Boolean.TRUE.equals(transactionTemplate.execute(transactionStatus ->
+			applyRouteReviewSegmentDraftsInCurrentTransaction(userId, gu, dong, drafts)));
+		return resolveRouteReviewRoutingApplyResult(routingOverlayReloadRequired);
+	}
+
+	public boolean applyRouteReviewSegmentDraftsInCurrentTransaction(
+		UUID userId,
+		String gu,
+		String dong,
+		List<HazardReportRouteReviewSegmentDraft> drafts) {
+		boolean routingOverlayReloadRequired = false;
+		for (HazardReportRouteReviewSegmentDraft draft : drafts) {
+			if (!roadSegmentRepository.existsIntersectingAreaByEdgeId(draft.getEdgeId(), gu, dong)) {
+				throw new BusinessException(CommonErrorCode.INVALID_INPUT, "route review segment is outside editable area.");
+			}
+			RoadSegment roadSegment = roadSegmentRepository.findById(draft.getEdgeId())
+				.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "segment not found."));
+			AdminRoadSegmentPropertiesResponse before = toRoadSegmentProperties(roadSegment);
+			roadSegment.updateAttributes(
+				draft.getWalkAccess(),
+				draft.getBrailleBlockState(),
+				draft.getAudioSignalState(),
+				draft.getWidthState(),
+				draft.getSurfaceState(),
+				draft.getStairsState(),
+				draft.getSignalState());
+			AdminRoadSegmentPropertiesResponse after = toRoadSegmentProperties(roadSegment);
+			adminAuditLogService.record(
+				userId,
+				"HAZARD_ROUTE_REVIEW_SEGMENT_APPLY",
+				"ROAD_SEGMENT",
+				String.valueOf(draft.getEdgeId()),
+				gu,
+				dong,
+				"route review segment draft applied edgeId=" + draft.getEdgeId(),
+				before,
+				after);
+			routingOverlayReloadRequired = patchRoutingOverride(
+				draft.getEdgeId(),
+				draft.getWalkAccess(),
+				draft.getStairsState(),
+				draft.getWidthState(),
+				draft.getBrailleBlockState(),
+				draft.getWalkAccess() != null,
+				draft.getStairsState() != null,
+				draft.getWidthState() != null,
+				draft.getBrailleBlockState() != null) || routingOverlayReloadRequired;
+		}
+		return routingOverlayReloadRequired;
+	}
+
+	public GraphHopperReloadResult resolveRouteReviewRoutingApplyResult(boolean routingOverlayReloadRequired) {
+		if (!routingOverlayReloadRequired) {
+			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "no routing overlay fields requested");
+		}
+		return graphHopperAdminClient.reloadRoutingOverrides();
+	}
+
 	@Transactional
 	public AdminPlaceDetailResponse updatePlace(
 		UUID userId,
@@ -584,6 +679,19 @@ public class AdminMapService {
 		return hasGu(gu) && dong != null && !dong.isBlank() && !ALL_DONG.equals(dong);
 	}
 
+	private boolean hasClip(Double centerLat, Double centerLng, Integer radiusMeter) {
+		if (centerLat == null && centerLng == null && radiusMeter == null) {
+			return false;
+		}
+		if (centerLat == null || centerLng == null || radiusMeter == null) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "중심 좌표와 반경은 함께 지정해야 합니다.");
+		}
+		if (radiusMeter <= 0) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "반경은 1m 이상이어야 합니다.");
+		}
+		return true;
+	}
+
 	private Place requirePlace(Long placeId) {
 		return placeRepository.findById(placeId)
 			.orElseThrow(() -> new PlaceException(PlaceErrorCode.PLACE_NOT_FOUND));
@@ -700,43 +808,70 @@ public class AdminMapService {
 			"보행 segment 속성 변경 edgeId=" + edgeId,
 			before,
 			after);
-		applyRoutingOverride(edgeId, request);
-		return new RoadSegmentUpdateContext(before, after, request.walkAccess(), Boolean.TRUE.equals(request.applyRoutingImmediately()));
+		boolean routingOverlayReloadRequired = applyRoutingOverride(edgeId, request);
+		return new RoadSegmentUpdateContext(
+			before,
+			after,
+			Boolean.TRUE.equals(request.applyRoutingImmediately()),
+			routingOverlayReloadRequired);
 	}
 
-	private void applyRoutingOverride(Long edgeId, AdminRoadSegmentAttributesUpdateRequest request) {
+	private boolean applyRoutingOverride(Long edgeId, AdminRoadSegmentAttributesUpdateRequest request) {
 		if (!Boolean.TRUE.equals(request.applyRoutingImmediately())) {
-			return;
+			return false;
 		}
-		if (request.walkAccess() == null) {
-			return;
+		if (!request.hasRoutingOverlayTargetField()) {
+			return false;
 		}
-		if (request.walkAccess() == AccessibilityState.NO) {
-			routingSegmentOverrideRepository.save(RoutingSegmentOverride.of(edgeId, AccessibilityState.NO));
-			return;
+		return patchRoutingOverride(
+			edgeId,
+			request.walkAccess(),
+			request.stairsState(),
+			request.widthState(),
+			request.brailleBlockState(),
+			request.hasWalkAccessField(),
+			request.hasStairsStateField(),
+			request.hasWidthStateField(),
+			request.hasBrailleBlockStateField());
+	}
+
+	private boolean patchRoutingOverride(
+		Long edgeId,
+		AccessibilityState walkAccess,
+		AccessibilityState stairsState,
+		WidthState widthState,
+		AccessibilityState brailleBlockState,
+		boolean patchWalkAccess,
+		boolean patchStairsState,
+		boolean patchWidthState,
+		boolean patchBrailleBlockState) {
+		if (!patchWalkAccess && !patchStairsState && !patchWidthState && !patchBrailleBlockState) {
+			return false;
 		}
-		if (request.walkAccess() == AccessibilityState.YES || request.walkAccess() == AccessibilityState.UNKNOWN) {
+		RoutingSegmentOverride currentOverride = routingSegmentOverrideRepository.findById(edgeId)
+			.orElseGet(() -> RoutingSegmentOverride.of(edgeId, null, null, null, null));
+		RoutingSegmentOverride nextOverride = RoutingSegmentOverride.of(
+			edgeId,
+			patchWalkAccess ? walkAccess : currentOverride.getWalkAccess(),
+			patchStairsState ? stairsState : currentOverride.getStairsState(),
+			patchWidthState ? widthState : currentOverride.getWidthState(),
+			patchBrailleBlockState ? brailleBlockState : currentOverride.getBrailleBlockState());
+		if (!nextOverride.hasAnyOverride()) {
 			routingSegmentOverrideRepository.deleteById(edgeId);
+		} else {
+			routingSegmentOverrideRepository.save(nextOverride);
 		}
+		return true;
 	}
 
 	private GraphHopperReloadResult resolveRoutingApplyResult(RoadSegmentUpdateContext updateContext) {
 		if (!updateContext.applyRoutingImmediately()) {
 			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "immediate routing apply disabled");
 		}
-		if (updateContext.requestedWalkAccess() == null) {
-			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "walk_access update not requested; runtime override unchanged");
+		if (!updateContext.routingOverlayReloadRequired()) {
+			return new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "no routing overlay fields requested");
 		}
-		GraphHopperReloadResult reloadResult = graphHopperAdminClient.reloadRoutingOverrides();
-		if (updateContext.requestedWalkAccess() == AccessibilityState.NO) {
-			return reloadResult;
-		}
-		if (reloadResult.status() == GraphHopperReloadStatus.FAILED) {
-			return reloadResult;
-		}
-		return new GraphHopperReloadResult(
-			GraphHopperReloadStatus.APPLIED_WITH_WARNING,
-			"runtime override cleared, but reopening walk_access may still require a full GraphHopper rebuild if the current graph-cache is already blocked");
+		return graphHopperAdminClient.reloadRoutingOverrides();
 	}
 
 	private AdminRoutingApplyStatus toAdminRoutingApplyStatus(GraphHopperReloadStatus applyStatus) {
@@ -931,7 +1066,7 @@ public class AdminMapService {
 	private record RoadSegmentUpdateContext(
 		AdminRoadSegmentPropertiesResponse before,
 		AdminRoadSegmentPropertiesResponse after,
-		AccessibilityState requestedWalkAccess,
-		boolean applyRoutingImmediately) {
+		boolean applyRoutingImmediately,
+		boolean routingOverlayReloadRequired) {
 	}
 }

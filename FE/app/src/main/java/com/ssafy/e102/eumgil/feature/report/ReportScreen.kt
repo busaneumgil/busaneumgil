@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -121,6 +122,7 @@ fun ReportScreen(
             ReportBottomBar(
                 uiState = uiState,
                 onAction = onAction,
+                reserveNavigationBarPadding = shouldReserveReportBottomNavigationInsets(uiState.entryPoint),
             )
         },
     ) { innerPadding ->
@@ -220,10 +222,14 @@ internal fun reportTopBarShowsBackButton(step: ReportStep): Boolean =
         ReportStep.Home, ReportStep.Complete -> false
     }
 
+internal fun shouldReserveReportBottomNavigationInsets(entryPoint: ReportEntryPoint): Boolean =
+    entryPoint == ReportEntryPoint.NavigationGuidance
+
 @Composable
 private fun ReportBottomBar(
     uiState: ReportUiState,
     onAction: (ReportUiAction) -> Unit,
+    reserveNavigationBarPadding: Boolean,
 ) {
     when (uiState.currentStep) {
         ReportStep.Home -> Unit
@@ -233,6 +239,7 @@ private fun ReportBottomBar(
                 enabled = uiState.reportType.value != null,
                 onClick = { onAction(ReportUiAction.NextStepClicked) },
                 suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
+                reserveNavigationBarPadding = reserveNavigationBarPadding,
             )
         ReportStep.LocationConfirm ->
             ReportPrimaryActionBar(
@@ -240,6 +247,7 @@ private fun ReportBottomBar(
                 enabled = uiState.isLocationStepConfirmable,
                 onClick = { onAction(ReportUiAction.NextStepClicked) },
                 suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
+                reserveNavigationBarPadding = reserveNavigationBarPadding,
             )
         ReportStep.DetailInput -> {
             val submitting = uiState.submitState is ReportSubmitState.Submitting
@@ -248,6 +256,7 @@ private fun ReportBottomBar(
                 enabled = uiState.isSubmitEnabled,
                 onClick = { onAction(ReportUiAction.SubmitClicked) },
                 suppressRipple = shouldSuppressReportPrimaryActionRipple(uiState.currentStep),
+                reserveNavigationBarPadding = reserveNavigationBarPadding,
             )
         }
         ReportStep.Complete -> Unit
@@ -263,6 +272,7 @@ private fun ReportPrimaryActionBar(
     enabled: Boolean,
     onClick: () -> Unit,
     suppressRipple: Boolean = false,
+    reserveNavigationBarPadding: Boolean = false,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -276,6 +286,13 @@ private fun ReportPrimaryActionBar(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .then(
+                        if (reserveNavigationBarPadding) {
+                            Modifier.navigationBarsPadding()
+                        } else {
+                            Modifier
+                        },
+                    )
                     .padding(EumSpacing.medium),
         )
     }

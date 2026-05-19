@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.ssafy.e102.eumgil.BuildConfig
@@ -109,26 +112,34 @@ fun MyPageScreen(
                     ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ProfileOverviewCard(
-                uiState = uiState,
-                onUserTypeChangeClick = {
-                    onAction(MyPageUiAction.UserTypeChangeClicked)
-                },
-            )
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ProfileOverviewCard(
+                    uiState = uiState,
+                    onUserTypeChangeClick = {
+                        onAction(MyPageUiAction.UserTypeChangeClicked)
+                    },
+                )
 
-            QuickActionGrid(
-                onDuribalCallClick = onDuribalCallClick,
-                onGuideClick = {
-                    onAction(MyPageUiAction.MainMenuClicked(MyPageMenuItem.APP_HELP))
-                },
-            )
+                QuickActionGrid(
+                    onDuribalCallClick = onDuribalCallClick,
+                    onGuideClick = {
+                        onAction(MyPageUiAction.MainMenuClicked(MyPageMenuItem.APP_HELP))
+                    },
+                )
 
-            MainMenuCard(
-                onMenuClick = { menuItem ->
-                    onAction(MyPageUiAction.MainMenuClicked(menuItem = menuItem))
-                },
-                modifier = Modifier.weight(1f, fill = false),
-            )
+                MainMenuCard(
+                    onMenuClick = { menuItem ->
+                        onAction(MyPageUiAction.MainMenuClicked(menuItem = menuItem))
+                    },
+                )
+            }
 
             MyPageFooter(
                 isLogoutLoading = uiState.isLogoutLoading,
@@ -422,6 +433,7 @@ private fun QuickActionGrid(
             iconRes = R.drawable.ic_mypage_duribal_call_vehicle,
             containerColor = EumSurfaceInfo,
             iconTint = Color.Unspecified,
+            iconSize = 34.dp,
             onClick = onDuribalCallClick,
             modifier = Modifier.weight(1f),
         )
@@ -429,6 +441,7 @@ private fun QuickActionGrid(
             titleRes = R.string.my_page_guide_title,
             iconRes = R.drawable.ic_mypage_sf3_doc_text,
             containerColor = MaterialTheme.colorScheme.surface,
+            iconSize = 30.dp,
             onClick = onGuideClick,
             modifier = Modifier.weight(1f),
         )
@@ -441,6 +454,7 @@ private fun QuickActionCard(
     @DrawableRes iconRes: Int,
     containerColor: Color,
     iconTint: Color = EumPrimary600,
+    iconSize: Dp = 34.dp,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -465,7 +479,7 @@ private fun QuickActionCard(
             Icon(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
-                modifier = Modifier.size(34.dp),
+                modifier = Modifier.size(iconSize),
                 tint = iconTint,
             )
             Column(
@@ -512,6 +526,13 @@ private fun MainMenuCard(
                 menuItem = MyPageMenuItem.NOTICE,
                 titleRes = R.string.my_page_menu_notice,
                 iconRes = R.drawable.ic_mypage_sf3_bell,
+                onClick = onMenuClick,
+            )
+            MyPageMenuDivider()
+            MyPageMenuRow(
+                menuItem = MyPageMenuItem.TEXT_SIZE,
+                titleRes = R.string.my_page_menu_text_size,
+                iconRes = R.drawable.ic_mypage_sf3_doc_text,
                 onClick = onMenuClick,
             )
             MyPageMenuDivider()
@@ -823,7 +844,8 @@ private fun CircleChevron() {
 }
 
 internal fun shouldSuppressMyPageMenuRipple(menuItem: MyPageMenuItem): Boolean =
-    menuItem == MyPageMenuItem.APP_HELP ||
+    menuItem == MyPageMenuItem.TEXT_SIZE ||
+        menuItem == MyPageMenuItem.APP_HELP ||
         menuItem == MyPageMenuItem.PRIVACY_POLICY ||
         menuItem == MyPageMenuItem.SERVICE_TERMS
 

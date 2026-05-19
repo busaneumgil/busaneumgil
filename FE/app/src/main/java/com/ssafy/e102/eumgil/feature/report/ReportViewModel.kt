@@ -777,6 +777,9 @@ class ReportViewModel(
                 submitState = ReportSubmitState.Success(reportId = serverReportId),
                 submittedAtMillis = System.currentTimeMillis(),
             )
+        if (validatedState.entryPoint == ReportEntryPoint.NavigationGuidance) {
+            emitUiEvent(ReportUiEvent.ReturnToNavigationWithSubmittedReport(serverReportId))
+        }
         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 서버에 등록되었습니다."))
     }
 

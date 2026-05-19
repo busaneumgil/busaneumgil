@@ -4,7 +4,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -83,6 +85,37 @@ class HazardReportRerouteControllerTest {
 			eq(userId),
 			eq(12L),
 			any(HazardReportRerouteRequest.class));
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("hazard report reroute keeps route field as null when no alternate route exists")
+	void rerouteWithoutAlternateRouteIncludesNullRouteField() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(hazardReportRerouteService.reroute(
+			eq(userId),
+			eq(12L),
+			any(HazardReportRerouteRequest.class)))
+			.thenReturn(new HazardReportRerouteResponse(false, null));
+
+		mockMvc.perform(post("/hazard/12/reroute")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{
+				  "routeId": "rr_active_123",
+				  "currentPoint": {
+				    "lat": 35.1,
+				    "lng": 129.1
+				  }
+				}
+				"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.rerouted").value(false))
+			.andExpect(content().string(containsString("\"route\":null")));
+
 		SecurityContextHolder.clearContext();
 	}
 

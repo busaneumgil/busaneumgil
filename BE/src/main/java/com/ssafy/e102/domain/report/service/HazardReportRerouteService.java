@@ -22,7 +22,9 @@ import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.service.RouteProjectionGeometryService;
 import com.ssafy.e102.domain.route.service.WalkRouteCandidate;
 import com.ssafy.e102.domain.route.service.WalkRoutePayloadService;
-import com.ssafy.e102.domain.route.type.RouteOption;
+import com.ssafy.e102.domain.route.service.WalkRouteProfileService;
+import com.ssafy.e102.domain.route.service.WalkRouteUserProfile;
+import com.ssafy.e102.domain.route.service.WalkRouteUserProfileQueryService;
 import com.ssafy.e102.domain.route.type.RouteSessionStatus;
 import com.ssafy.e102.domain.route.type.TransportMode;
 import com.ssafy.e102.domain.route.type.WalkRouteProfile;
@@ -41,6 +43,8 @@ public class HazardReportRerouteService {
 	private final HazardReportRerouteCustomModelFactory hazardReportRerouteCustomModelFactory;
 	private final GraphHopperRouteClient graphHopperRouteClient;
 	private final WalkRoutePayloadService walkRoutePayloadService;
+	private final WalkRouteUserProfileQueryService walkRouteUserProfileQueryService;
+	private final WalkRouteProfileService walkRouteProfileService;
 	@SuppressWarnings("unused")
 	private final ObjectMapper objectMapper;
 
@@ -52,6 +56,8 @@ public class HazardReportRerouteService {
 		HazardReportRerouteCustomModelFactory hazardReportRerouteCustomModelFactory,
 		GraphHopperRouteClient graphHopperRouteClient,
 		WalkRoutePayloadService walkRoutePayloadService,
+		WalkRouteUserProfileQueryService walkRouteUserProfileQueryService,
+		WalkRouteProfileService walkRouteProfileService,
 		ObjectMapper objectMapper) {
 		this.hazardReportRepository = hazardReportRepository;
 		this.routeSessionRepository = routeSessionRepository;
@@ -60,6 +66,8 @@ public class HazardReportRerouteService {
 		this.hazardReportRerouteCustomModelFactory = hazardReportRerouteCustomModelFactory;
 		this.graphHopperRouteClient = graphHopperRouteClient;
 		this.walkRoutePayloadService = walkRoutePayloadService;
+		this.walkRouteUserProfileQueryService = walkRouteUserProfileQueryService;
+		this.walkRouteProfileService = walkRouteProfileService;
 		this.objectMapper = objectMapper;
 	}
 
@@ -72,16 +80,17 @@ public class HazardReportRerouteService {
 		}
 
 		RouteSession routeSession = routeSessionRepository
-			.findFirstByUser_UserIdAndStatusOrderByUpdatedAtDesc(userId, RouteSessionStatus.ACTIVE)
+			.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+				userId,
+				request.routeId(),
+				RouteSessionStatus.ACTIVE)
 			.orElseThrow(() -> new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND));
-		if (!request.routeId().equals(routeSession.getRouteId())) {
-			throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
-		}
 
 		RouteSummaryResponse currentRoute = routeProjectionGeometryService.restoreRouteSnapshot(routeSession);
 		if (currentRoute.transportMode() != TransportMode.WALK) {
 			return new HazardReportRerouteResponse(false, null);
 		}
+		WalkRouteProfile profile = resolveWalkRouteProfile(userId, currentRoute);
 
 		RouteProjectionGeometryService.ProjectedRoutePoint reportProjection =
 			routeProjectionGeometryService.projectRoutePoint(currentRoute, hazardReport.getReportPoint());
@@ -96,13 +105,13 @@ public class HazardReportRerouteService {
 				new GraphHopperRouteRequest(
 					request.currentPoint(),
 					endPoint(routeSession),
-					profileFor(currentRoute.routeOption())),
+					profile),
 				customModel);
 			RouteSummaryResponse reroutedRoute = walkRoutePayloadService.toRouteSummary(
 				request.routeId(),
 				new WalkRouteCandidate(
 					currentRoute.routeOption(),
-					profileFor(currentRoute.routeOption()),
+					profile,
 					reroutedPath));
 			return new HazardReportRerouteResponse(true, withRouteId(reroutedRoute, newRouteId(request.routeId())));
 		} catch (RouteException exception) {
@@ -113,16 +122,20 @@ public class HazardReportRerouteService {
 		}
 	}
 
+	private WalkRouteProfile resolveWalkRouteProfile(UUID userId, RouteSummaryResponse currentRoute) {
+		WalkRouteUserProfile userProfile = walkRouteUserProfileQueryService.getProfile(userId);
+		return walkRouteProfileService.resolve(
+			userProfile.primaryUserType(),
+			userProfile.mobilitySubtype(),
+			currentRoute.routeOption());
+	}
+
 	private GeoPointRequest endPoint(RouteSession routeSession) {
 		Point endPoint = routeSession.getEndPoint();
 		if (endPoint == null) {
 			throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
 		}
 		return new GeoPointRequest(endPoint.getY(), endPoint.getX());
-	}
-
-	private WalkRouteProfile profileFor(RouteOption routeOption) {
-		return routeOption == RouteOption.SHORTEST ? WalkRouteProfile.PEDESTRIAN_FAST : WalkRouteProfile.PEDESTRIAN_SAFE;
 	}
 
 	private RouteSummaryResponse withRouteId(RouteSummaryResponse route, String routeId) {

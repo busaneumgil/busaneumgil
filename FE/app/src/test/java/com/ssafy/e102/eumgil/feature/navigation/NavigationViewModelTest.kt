@@ -41,6 +41,7 @@ import com.ssafy.e102.eumgil.feature.route.RouteNavigationRequest
 import com.ssafy.e102.eumgil.feature.route.RouteNavigationSelectionHandoff
 import com.ssafy.e102.eumgil.testing.MainDispatcherRule
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -79,6 +80,95 @@ class NavigationViewModelTest {
     @Test
     fun `submitted hazard report reroutes current navigation immediately`() =
         runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val reportRepository =
+                FakeNavigationReportRepository(
+                    rerouteResult = HazardReportRerouteResult(rerouted = true, route = reroutedWalkRoute()),
+                )
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    reportRepository = reportRepository,
+                )
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            locationManager.emitLocation(WALK_MID_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_MID_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
+            advanceUntilIdle()
+
+            assertEquals(listOf(Triple(42L, "walk-route-1", WALK_MID_POINT)), reportRepository.hazardRerouteCalls)
+            assertEquals("rr_rerouted_walk_1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
+        }
+
+    @Test
+    fun `submitted hazard report keeps current route and prompts duribal when no alternate route exists`() =
+        runTest {
+            val reportRepository =
+                FakeNavigationReportRepository(
+                    rerouteResult = HazardReportRerouteResult(rerouted = false, route = null),
+                )
+            val locationManager = FakeCurrentLocationManager()
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    reportRepository = reportRepository,
+                )
+            val eventDeferred =
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.first { it is NavigationUiEvent.ShowDuribalCallDialog }
+                }
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            locationManager.emitLocation(WALK_MID_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_MID_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+            viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
+            advanceUntilIdle()
+
+            assertEquals("walk-route-1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
+            assertEquals(NavigationUiEvent.ShowDuribalCallDialog, eventDeferred.await())
+        }
+
+    @Test
+    fun `submitted hazard report keeps current route and prompts duribal when reroute request fails`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val reportRepository =
+                FakeNavigationReportRepository(
+                    rerouteFailure = IllegalStateException("reroute failed"),
+                )
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    reportRepository = reportRepository,
+                )
+            val eventDeferred =
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.first { it is NavigationUiEvent.ShowDuribalCallDialog }
+                }
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            locationManager.emitLocation(WALK_MID_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_MID_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
+            advanceUntilIdle()
+
+            assertEquals(listOf(Triple(42L, "walk-route-1", WALK_MID_POINT)), reportRepository.hazardRerouteCalls)
+            assertEquals("walk-route-1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
+            assertEquals(NavigationUiEvent.ShowDuribalCallDialog, eventDeferred.await())
+        }
+
+    @Test
+    fun `submitted hazard report does not reroute without a current location`() =
+        runTest {
             val reportRepository =
                 FakeNavigationReportRepository(
                     rerouteResult = HazardReportRerouteResult(rerouted = true, route = reroutedWalkRoute()),
@@ -91,30 +181,53 @@ class NavigationViewModelTest {
             viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
             advanceUntilIdle()
 
-            assertEquals(listOf(Triple(42L, "walk-route-1", WALK_START_POINT)), reportRepository.hazardRerouteCalls)
-            assertEquals("rr_rerouted_walk_1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
+            assertTrue(reportRepository.hazardRerouteCalls.isEmpty())
+            assertEquals("walk-route-1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
         }
 
     @Test
-    fun `submitted hazard report keeps current route and prompts duribal when no alternate route exists`() =
+    fun `submitted hazard report is queued while route reroute is already in flight`() =
         runTest {
-            val reportRepository =
-                FakeNavigationReportRepository(
-                    rerouteResult = HazardReportRerouteResult(rerouted = false, route = null),
+            val locationManager = FakeCurrentLocationManager()
+            val routeRepository = FakeRouteRepository(rerouteGate = CompletableDeferred())
+            val reportRepository = FakeNavigationReportRepository()
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    routeRepository = routeRepository,
+                    reportRepository = reportRepository,
                 )
-            val viewModel = createViewModel(reportRepository = reportRepository)
-            val eventDeferred =
-                async(start = CoroutineStart.UNDISPATCHED) {
-                    viewModel.uiEvent.first { it is NavigationUiEvent.ShowDuribalCallDialog }
-                }
 
             viewModel.bindNavigationRequest(testWalkNavigationRequest())
             advanceUntilIdle()
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(WALK_START_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            locationManager.emitLocation(
+                OFF_ROUTE_WITHIN_OLD_THRESHOLD_POINT.toLocationSnapshot(recordedAtEpochMillis = 4_000L),
+            )
+            locationManager.emitLocation(
+                OFF_ROUTE_WITHIN_OLD_THRESHOLD_POINT.toLocationSnapshot(recordedAtEpochMillis = 5_500L),
+            )
+            advanceUntilIdle()
+            locationManager.emitLocation(OFF_ROUTE_CANDIDATE_POINT.toLocationSnapshot(recordedAtEpochMillis = 10_000L))
+            advanceUntilIdle()
+            locationManager.emitLocation(OFF_ROUTE_CANDIDATE_POINT.toLocationSnapshot(recordedAtEpochMillis = 11_500L))
+            advanceUntilIdle()
+
+            assertEquals(listOf("walk-route-1" to OFF_ROUTE_CANDIDATE_POINT), routeRepository.rerouteCalls)
+            assertTrue(reportRepository.hazardRerouteCalls.isEmpty())
+
             viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
             advanceUntilIdle()
 
-            assertEquals("walk-route-1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
-            assertEquals(NavigationUiEvent.ShowDuribalCallDialog, eventDeferred.await())
+            assertTrue(reportRepository.hazardRerouteCalls.isEmpty())
+
+            routeRepository.completeReroute()
+            advanceUntilIdle()
+
+            assertEquals(listOf(Triple(42L, "walk-route-1", OFF_ROUTE_CANDIDATE_POINT)), reportRepository.hazardRerouteCalls)
         }
 
     @Test
@@ -2555,6 +2668,7 @@ private class FakeRouteRepository(
             transits = listOf(RouteTransitArrivalData(routeNo = "100", remainingMinute = 6, isLowFloor = true)),
         ),
     private val rerouteRoute: RouteCandidate? = null,
+    private val rerouteGate: CompletableDeferred<Unit>? = null,
     private val endSessionId: String = "ended-session",
     private val freshWalkSearchData: RouteSearchData? = null,
     private val freshTransitSearchData: RouteSearchData? = null,
@@ -2603,6 +2717,7 @@ private class FakeRouteRepository(
         currentPoint: GeoCoordinate,
     ): RouteRerouteData {
         rerouteCalls += routeId to currentPoint
+        rerouteGate?.await()
         return RouteRerouteData(route = rerouteRoute)
     }
 
@@ -2615,10 +2730,15 @@ private class FakeRouteRepository(
         sessionId: String,
         score: Int,
     ): RouteRatingData = RouteRatingData(ratingId = 1L)
+
+    fun completeReroute() {
+        rerouteGate?.complete(Unit)
+    }
 }
 
 private class FakeNavigationReportRepository(
     private val rerouteResult: HazardReportRerouteResult = HazardReportRerouteResult(rerouted = false, route = null),
+    private val rerouteFailure: Throwable? = null,
 ) : ReportRepository {
     val hazardRerouteCalls = mutableListOf<Triple<Long, String, GeoCoordinate>>()
 
@@ -2640,6 +2760,7 @@ private class FakeNavigationReportRepository(
         currentPoint: GeoCoordinate,
     ): HazardReportRerouteResult {
         hazardRerouteCalls += Triple(reportId, routeId, currentPoint)
+        rerouteFailure?.let { throw it }
         return rerouteResult
     }
 }

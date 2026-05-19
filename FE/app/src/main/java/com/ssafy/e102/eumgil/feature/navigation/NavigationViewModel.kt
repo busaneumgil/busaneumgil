@@ -163,6 +163,7 @@ class NavigationViewModel(
     private var isTransitRefreshInFlight: Boolean = false
     private var isRerouteInFlight: Boolean = false
     private var isEndNavigationInFlight: Boolean = false
+    private var pendingHazardReportRerouteId: Long? = null
     private var guidanceMode: NavigationGuidanceMode = NavigationGuidanceMode.RouteDetail
     private var routeJoinStableUpdateCount: Int = 0
     private var routeJoinStableSinceEpochMillis: Long? = null
@@ -243,6 +244,7 @@ class NavigationViewModel(
         isTransitRefreshInFlight = false
         isRerouteInFlight = false
         isEndNavigationInFlight = false
+        pendingHazardReportRerouteId = null
         guidanceMode = NavigationGuidanceMode.RouteDetail
         routeJoinStableUpdateCount = 0
         routeJoinStableSinceEpochMillis = null
@@ -592,6 +594,7 @@ class NavigationViewModel(
             guidanceMode = guidanceMode,
         )
         publishNavigationState()
+        processPendingHazardReportReroute()
         maybeSpeakRealtimeGuidanceAutomatically()
     }
 
@@ -1609,16 +1612,25 @@ class NavigationViewModel(
                 publishNavigationState()
             }
             isRerouteInFlight = false
+            processPendingHazardReportReroute()
         }
     }
 
     private fun handleHazardReportSubmitted(reportId: Long) {
+        if (isLowVisionMode) return
+        pendingHazardReportRerouteId = reportId
+        processPendingHazardReportReroute()
+    }
+
+    private fun processPendingHazardReportReroute() {
         if (isLowVisionMode || isRerouteInFlight) return
 
+        val reportId = pendingHazardReportRerouteId ?: return
         val currentSession = routeSession ?: return
         val routeId = currentSession.routeId ?: return
-        val currentCoordinate = latestLocationCoordinate ?: navigationRequest?.origin?.coordinate ?: return
+        val currentCoordinate = latestLocationCoordinate ?: return
 
+        pendingHazardReportRerouteId = null
         isRerouteInFlight = true
         viewModelScope.launch {
             val rerouteResult =
@@ -1637,11 +1649,12 @@ class NavigationViewModel(
                     currentCoordinate = currentCoordinate,
                 )
                 publishNavigationState()
-            } else if (rerouteResult != null) {
+            } else {
                 emitUiEvent(NavigationUiEvent.ShowDuribalCallDialog)
             }
 
             isRerouteInFlight = false
+            processPendingHazardReportReroute()
         }
     }
 

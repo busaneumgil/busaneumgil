@@ -7,6 +7,16 @@ import org.junit.Test
 
 class SearchScreenPolicyTest {
     @Test
+    fun `destination search entry title uses destination copy`() {
+        val stringsSource = File("src/main/res/values/strings.xml").readText()
+
+        assertTrue(
+            "Home destination search should title the search screen as destination search instead of generic place search.",
+            stringsSource.contains("<string name=\"search_screen_title\">도착지 검색</string>"),
+        )
+    }
+
+    @Test
     fun `apply to route search exposes route endpoint quick actions`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
@@ -141,6 +151,36 @@ class SearchScreenPolicyTest {
         assertFalse(
             "Search results loading state should not fall back to the boxed SearchStateCard placeholder.",
             loadingStateSection.contains("SearchStateCard("),
+        )
+    }
+
+    @Test
+    fun `search result sort control matches saved bookmark segmented button motion`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val sortControlSection =
+            source
+                .substringAfter("private fun SearchSortControl(")
+                .substringBefore("@Composable\nprivate fun SearchSortOptionButton")
+        val sortButtonSection =
+            source
+                .substringAfter("private fun SearchSortOptionButton(")
+                .substringBefore("@Composable\nprivate fun SearchNextPageLoadingIndicator")
+
+        assertTrue(
+            "Search sort control should use the same segmented shell and animated indicator pattern as the saved bookmark tab control.",
+            sortControlSection.contains("BoxWithConstraints(") &&
+                sortControlSection.contains("animateDpAsState(") &&
+                sortControlSection.contains("SearchSortOptionIndicatorOffset") &&
+                sortControlSection.contains("RoundedCornerShape(EumRadius.full)") &&
+                sortControlSection.contains("SearchSortOptionButtonGap"),
+        )
+        assertTrue(
+            "Search sort buttons should be transparent hit targets over the moving selected indicator.",
+            sortButtonSection.contains(".clip(RoundedCornerShape(EumRadius.full))") &&
+                sortButtonSection.contains("this.selected = selected") &&
+                !sortButtonSection.contains("color = containerColor"),
         )
     }
 

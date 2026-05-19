@@ -175,6 +175,7 @@ private fun SearchRouteContent(
             viewModel.onAction(
                 SearchUiAction.ResultsRouteEntered(
                     query = initialQuery,
+                    editingTarget = initialEditingTarget,
                     selectionMode = initialSelectionMode,
                 ),
             )

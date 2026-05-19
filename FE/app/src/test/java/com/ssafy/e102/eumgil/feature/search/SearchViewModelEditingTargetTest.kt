@@ -328,6 +328,51 @@ class SearchViewModelEditingTargetTest {
         }
 
     @Test
+    fun `results route entry resets stale origin apply mode back to home destination preview mode`() =
+        runTest {
+            val destinationSelectionRepository =
+                InMemoryDestinationSelectionRepository().apply {
+                    setEditingTarget(RouteEditingTarget.ORIGIN)
+                }
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val result = testSearchResult()
+            val viewModel =
+                SearchViewModel(
+                    searchRepository = EditingTargetFakeSearchRepository(),
+                    bookmarkRepository = EditingTargetFakeBookmarkRepository(),
+                    destinationSelectionRepository = destinationSelectionRepository,
+                    destinationPreviewRepository = destinationPreviewRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(
+                SearchUiAction.EditingTargetConfigured(
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+            )
+            viewModel.onAction(
+                SearchUiAction.ResultsRouteEntered(
+                    query = "city hall",
+                    editingTarget = RouteEditingTarget.DESTINATION,
+                    selectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(RouteEditingTarget.DESTINATION, viewModel.uiState.value.editingTarget)
+            assertEquals(SearchSelectionMode.PREVIEW_ON_MAP, viewModel.uiState.value.selectionMode)
+            assertEquals(RouteEditingTarget.DESTINATION, destinationSelectionRepository.editingTarget.value)
+
+            val uiEvent = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvent.first() }
+            viewModel.onAction(SearchUiAction.SearchResultPreviewClicked(result = result))
+            advanceUntilIdle()
+
+            assertEquals(RouteEditingTarget.DESTINATION, destinationPreviewRepository.pendingPreview.value?.editingTarget)
+            assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
+        }
+
+    @Test
     fun `apply to route search result click stores selected origin and prechecks route setting permission`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()

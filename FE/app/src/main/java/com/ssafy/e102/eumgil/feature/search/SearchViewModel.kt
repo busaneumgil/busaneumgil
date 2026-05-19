@@ -109,6 +109,7 @@ class SearchViewModel(
             is SearchUiAction.ResultsRouteEntered ->
                 enterResultsRoute(
                     query = action.query,
+                    editingTarget = action.editingTarget,
                     selectionMode = action.selectionMode,
                 )
             is SearchUiAction.RecentSearchClicked -> submitSearch(keyword = action.keyword)
@@ -271,7 +272,7 @@ class SearchViewModel(
 
         destinationPreviewRepository.requestPreview(
             destination = destination,
-            editingTarget = destinationSelectionRepository.editingTarget.value,
+            editingTarget = mutableUiState.value.editingTarget,
             accessibilityTagKeys = result.accessibilityTagKeys,
             detailType =
                 if (result.isVerifiedPlace) {
@@ -619,13 +620,27 @@ class SearchViewModel(
 
     private fun enterResultsRoute(
         query: String,
+        editingTarget: RouteEditingTarget,
         selectionMode: SearchSelectionMode,
     ) {
         val normalizedQuery = query.trim()
         if (normalizedQuery.isEmpty()) return
 
+        destinationSelectionRepository.setEditingTarget(editingTarget)
         mutableUiState.update { state ->
-            state.copy(selectionMode = selectionMode)
+            state.copy(
+                editingTarget = editingTarget,
+                selectionMode = selectionMode,
+                currentLocationQuickActionState =
+                    if (
+                        selectionMode == SearchSelectionMode.APPLY_TO_ROUTE &&
+                        state.editingTarget == editingTarget
+                    ) {
+                        state.currentLocationQuickActionState
+                    } else {
+                        SearchCurrentLocationQuickActionUiState()
+                    },
+            )
         }
 
         val resultState = mutableUiState.value.resultState
@@ -647,7 +662,8 @@ class SearchViewModel(
         navigateToResults: Boolean = true,
     ) {
         val normalizedQuery = (keyword ?: mutableUiState.value.query).trim()
-        val searchSortOption = mutableUiState.value.sortOption
+        val currentState = mutableUiState.value
+        val searchSortOption = currentState.sortOption
 
         if (normalizedQuery.isEmpty()) {
             mutableUiState.update { state ->
@@ -671,8 +687,8 @@ class SearchViewModel(
             emitUiEvent(
                 SearchUiEvent.NavigateToResults(
                     query = normalizedQuery,
-                    editingTarget = destinationSelectionRepository.editingTarget.value,
-                    selectionMode = mutableUiState.value.selectionMode,
+                    editingTarget = currentState.editingTarget,
+                    selectionMode = currentState.selectionMode,
                 ),
             )
         }

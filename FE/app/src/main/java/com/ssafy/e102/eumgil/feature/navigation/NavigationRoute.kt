@@ -9,12 +9,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ssafy.e102.eumgil.app.BusanEumgilApp
+import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDialog
+import com.ssafy.e102.eumgil.core.designsystem.component.dialog.EumDuribalCallConfirmDismissStyle
+import com.ssafy.e102.eumgil.core.external.createDuribalDialIntent
 import com.ssafy.e102.eumgil.core.model.RouteOption
 import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
 import com.ssafy.e102.eumgil.core.tts.TextToSpeechAvailability
@@ -32,6 +38,8 @@ fun NavigationRoute(
     onNavigateToMap: () -> Unit,
     onNavigateToSavedRoute: () -> Unit,
     onNavigateToArrival: () -> Unit,
+    submittedHazardReportId: Long? = null,
+    onSubmittedHazardReportConsumed: () -> Unit = {},
     useLowVisionUi: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -62,13 +70,14 @@ fun NavigationRoute(
         (appContext as BusanEumgilApp).appContainer.reportRepository
     }
     val viewModelFactory =
-        remember(currentLocationManager, currentHeadingManager, locationPermissionManager, bookmarkRepository, routeRepository) {
+        remember(currentLocationManager, currentHeadingManager, locationPermissionManager, bookmarkRepository, routeRepository, reportRepository, useLowVisionUi) {
             NavigationViewModel.provideFactory(
                 currentLocationManager = currentLocationManager,
                 currentHeadingManager = currentHeadingManager,
                 locationPermissionManager = locationPermissionManager,
                 bookmarkRepository = bookmarkRepository,
                 routeRepository = routeRepository,
+                reportRepository = reportRepository,
                 isLowVisionMode = useLowVisionUi,
             )
         }
@@ -79,6 +88,7 @@ fun NavigationRoute(
         }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textToSpeechState by textToSpeechController.state.collectAsStateWithLifecycle()
+    var isDuribalConfirmDialogVisible by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(textToSpeechState) {
         viewModel.updateTextToSpeechState(
@@ -90,6 +100,12 @@ fun NavigationRoute(
 
     LaunchedEffect(textToSpeechController, uiState.tts.isEnabled) {
         textToSpeechController.setEnabled(uiState.tts.isEnabled)
+    }
+
+    LaunchedEffect(submittedHazardReportId, viewModel, onSubmittedHazardReportConsumed) {
+        val reportId = submittedHazardReportId ?: return@LaunchedEffect
+        viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId))
+        onSubmittedHazardReportConsumed()
     }
 
     BackHandler(
@@ -118,6 +134,11 @@ fun NavigationRoute(
                     NavigationUiEvent.NavigateToMap -> onNavigateToMap()
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToSavedRoute()
                     NavigationUiEvent.NavigateToArrival -> onNavigateToArrival()
+                    NavigationUiEvent.ShowDuribalCallDialog -> {
+                        if (!useLowVisionUi) {
+                            isDuribalConfirmDialogVisible = true
+                        }
+                    }
                     is NavigationUiEvent.ShowToast ->
                         Toast.makeText(appContext, event.message, Toast.LENGTH_SHORT).show()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)
@@ -151,6 +172,17 @@ fun NavigationRoute(
             reportRepository = reportRepository,
             onAction = viewModel::onAction,
             modifier = modifier,
+        )
+    }
+
+    if (!useLowVisionUi && isDuribalConfirmDialogVisible) {
+        EumDuribalCallConfirmDialog(
+            onDismiss = { isDuribalConfirmDialogVisible = false },
+            onConfirm = {
+                isDuribalConfirmDialogVisible = false
+                context.startActivity(createDuribalDialIntent())
+            },
+            dismissStyle = EumDuribalCallConfirmDismissStyle.TextButton,
         )
     }
 }

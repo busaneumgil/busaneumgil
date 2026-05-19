@@ -38,6 +38,7 @@ fun ReportRoute(
     onNavigateBack: () -> Unit,
     onNavigateToReportHistory: (String?) -> Unit,
     onNavigateToMap: () -> Unit,
+    onReturnToNavigationWithSubmittedReport: (Long) -> Unit = {},
     entryPoint: ReportEntryPoint = ReportEntryPoint.TopLevel,
     startNewRequest: Boolean = false,
     onStartNewRequestConsumed: () -> Unit = {},
@@ -133,10 +134,12 @@ fun ReportRoute(
         }
     }
 
-    LaunchedEffect(viewModel, onNavigateBack, onNavigateToReportHistory, onNavigateToMap) {
+    LaunchedEffect(viewModel, onNavigateBack, onNavigateToReportHistory, onNavigateToMap, onReturnToNavigationWithSubmittedReport) {
         viewModel.uiEvent.collect { event ->
             when (event) {
                 ReportUiEvent.NavigateBack -> onNavigateBack()
+                is ReportUiEvent.ReturnToNavigationWithSubmittedReport ->
+                    onReturnToNavigationWithSubmittedReport(event.reportId)
                 is ReportUiEvent.NavigateToReportHistory -> onNavigateToReportHistory(event.historyId)
                 ReportUiEvent.NavigateToMap -> onNavigateToMap()
                 is ReportUiEvent.AnnounceForAccessibility -> {

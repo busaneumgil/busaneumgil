@@ -296,6 +296,10 @@ sealed interface ReportUiAction {
 sealed interface ReportUiEvent {
     data object NavigateBack : ReportUiEvent
 
+    data class ReturnToNavigationWithSubmittedReport(
+        val reportId: Long,
+    ) : ReportUiEvent
+
     /**
      * 저장된 draft가 있는 상태에서 사용자가 새 유형을 선택했을 때 emit된다.
      * Route는 [pendingType]을 보관해 두었다가 다이얼로그 응답에 따라

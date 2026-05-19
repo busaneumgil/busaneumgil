@@ -66,6 +66,16 @@ class MainNavGraphTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun `navigation hazard report reroute result is consumed once`() {
+        val savedStateHandle = SavedStateHandle()
+
+        savedStateHandle.setNavigationHazardReportSubmittedReportId(42L)
+
+        assertEquals(42L, savedStateHandle.consumeNavigationHazardReportSubmittedReportId())
+        assertEquals(null, savedStateHandle.consumeNavigationHazardReportSubmittedReportId())
+    }
+
+    @Test
     fun `map home reentry helper pops the existing map entry before fallback navigate`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")

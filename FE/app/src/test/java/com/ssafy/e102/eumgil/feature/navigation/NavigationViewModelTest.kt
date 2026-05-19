@@ -26,12 +26,14 @@ import com.ssafy.e102.eumgil.core.model.RouteTransitStop
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.HazardReportRerouteResult
 import com.ssafy.e102.eumgil.data.repository.RouteRatingData
 import com.ssafy.e102.eumgil.data.repository.RouteRerouteData
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteSessionData
 import com.ssafy.e102.eumgil.data.repository.RouteTransitArrivalData
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointKind
 import com.ssafy.e102.eumgil.feature.map.component.createNavigationViewportOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
@@ -72,6 +74,65 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(NavigationUiEvent.NavigateToReport, eventDeferred.await())
+        }
+
+    @Test
+    fun `submitted hazard report reroutes current navigation immediately`() =
+        runTest {
+            val reportRepository =
+                FakeNavigationReportRepository(
+                    rerouteResult = HazardReportRerouteResult(rerouted = true, route = reroutedWalkRoute()),
+                )
+            val viewModel = createViewModel(reportRepository = reportRepository)
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
+            advanceUntilIdle()
+
+            assertEquals(listOf(Triple(42L, "walk-route-1", WALK_START_POINT)), reportRepository.hazardRerouteCalls)
+            assertEquals("rr_rerouted_walk_1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
+        }
+
+    @Test
+    fun `submitted hazard report keeps current route and prompts duribal when no alternate route exists`() =
+        runTest {
+            val reportRepository =
+                FakeNavigationReportRepository(
+                    rerouteResult = HazardReportRerouteResult(rerouted = false, route = null),
+                )
+            val viewModel = createViewModel(reportRepository = reportRepository)
+            val eventDeferred =
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.first { it is NavigationUiEvent.ShowDuribalCallDialog }
+                }
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
+            advanceUntilIdle()
+
+            assertEquals("walk-route-1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
+            assertEquals(NavigationUiEvent.ShowDuribalCallDialog, eventDeferred.await())
+        }
+
+    @Test
+    fun `submitted hazard report is ignored in low vision navigation mode`() =
+        runTest {
+            val reportRepository = FakeNavigationReportRepository()
+            val viewModel =
+                createViewModel(
+                    reportRepository = reportRepository,
+                    initialLowVisionMode = true,
+                )
+
+            viewModel.bindNavigationRequest(testWalkNavigationRequest())
+            advanceUntilIdle()
+            viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
+            advanceUntilIdle()
+
+            assertTrue(reportRepository.hazardRerouteCalls.isEmpty())
         }
 
     @Test
@@ -2344,6 +2405,7 @@ private fun createViewModel(
     headingManager: CurrentHeadingManager = FakeCurrentHeadingManager(),
     bookmarkRepository: BookmarkRepository = FakeBookmarkRepository(),
     routeRepository: RouteRepository = FakeRouteRepository(),
+    reportRepository: ReportRepository = FakeNavigationReportRepository(),
     initialLowVisionMode: Boolean = false,
 ): NavigationViewModel =
     NavigationViewModel(
@@ -2351,6 +2413,7 @@ private fun createViewModel(
         currentHeadingManager = headingManager,
         bookmarkRepository = bookmarkRepository,
         routeRepository = routeRepository,
+        reportRepository = reportRepository,
         initialLowVisionMode = initialLowVisionMode,
     )
 
@@ -2554,6 +2617,33 @@ private class FakeRouteRepository(
     ): RouteRatingData = RouteRatingData(ratingId = 1L)
 }
 
+private class FakeNavigationReportRepository(
+    private val rerouteResult: HazardReportRerouteResult = HazardReportRerouteResult(rerouted = false, route = null),
+) : ReportRepository {
+    val hazardRerouteCalls = mutableListOf<Triple<Long, String, GeoCoordinate>>()
+
+    override fun observeReportHistory() = kotlinx.coroutines.flow.flowOf(emptyList<com.ssafy.e102.eumgil.data.repository.ReportOutboxData>())
+
+    override suspend fun getLatestDraft() = null
+
+    override suspend fun saveDraft(draft: com.ssafy.e102.eumgil.data.repository.ReportDraftData) = draft
+
+    override suspend fun deleteDraft(draftId: String) = Unit
+
+    override suspend fun saveOutbox(outbox: com.ssafy.e102.eumgil.data.repository.ReportOutboxData) = outbox
+
+    override suspend fun submitOutboxToServer(outboxId: String) = com.ssafy.e102.eumgil.data.repository.ReportSubmitResult.Skipped
+
+    override suspend fun rerouteAfterHazardReport(
+        reportId: Long,
+        routeId: String,
+        currentPoint: GeoCoordinate,
+    ): HazardReportRerouteResult {
+        hazardRerouteCalls += Triple(reportId, routeId, currentPoint)
+        return rerouteResult
+    }
+}
+
 private fun testWalkNavigationRequest(): RouteNavigationRequest =
     RouteNavigationRequest(
         origin =
@@ -2627,7 +2717,8 @@ private fun reroutedWalkRoute(): RouteCandidate =
     testWalkNavigationRequest()
         .selectedRoute
         .copy(
-            serverRouteId = "rerouted-route-1",
+            routeId = "rr_rerouted_walk_1",
+            serverRouteId = "rr_rerouted_walk_1",
             title = "Rerouted Route",
         )
 

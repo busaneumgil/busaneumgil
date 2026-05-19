@@ -13,6 +13,8 @@ import com.ssafy.e102.eumgil.data.remote.dto.HazardReportDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPointDto
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
+import com.ssafy.e102.eumgil.data.route.DefaultRouteGeometryParser
+import com.ssafy.e102.eumgil.data.route.toRouteCandidate
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -28,6 +30,12 @@ interface ReportRepository {
     fun observeReportHistory(): Flow<List<ReportOutboxData>>
 
     suspend fun getApprovedHazardMarkers(bounds: ApprovedHazardMarkerBounds): List<ApprovedHazardMarker> = emptyList()
+
+    suspend fun rerouteAfterHazardReport(
+        reportId: Long,
+        routeId: String,
+        currentPoint: GeoCoordinate,
+    ): HazardReportRerouteResult = HazardReportRerouteResult(rerouted = false, route = null)
 
     fun observeReportHistoryEntries(): Flow<List<ReportHistoryData>> =
         observeReportHistory().map { outboxItems ->
@@ -188,6 +196,11 @@ sealed interface ReportSubmitResult {
     data object Skipped : ReportSubmitResult
 }
 
+data class HazardReportRerouteResult(
+    val rerouted: Boolean,
+    val route: com.ssafy.e102.eumgil.core.model.RouteCandidate?,
+)
+
 enum class ReportSubmitFailureReason {
     Unauthorized,
     InvalidInput,
@@ -210,6 +223,7 @@ class DefaultReportRepository(
     authRemoteDataSource: AuthRemoteDataSource? = null,
 ) : ReportRepository {
     private val serverReportHistory = MutableStateFlow(emptyList<ReportHistoryData>())
+    private val routeGeometryParser = DefaultRouteGeometryParser()
 
     private val authenticatedRequestRunner =
         if (authSessionRepository != null && authRemoteDataSource != null) {
@@ -279,6 +293,36 @@ class DefaultReportRepository(
                 imageUrls = marker.imageUrls,
             )
         }
+    }
+
+    override suspend fun rerouteAfterHazardReport(
+        reportId: Long,
+        routeId: String,
+        currentPoint: GeoCoordinate,
+    ): HazardReportRerouteResult {
+        val datasource = hazardReportsRemoteDataSource ?: return HazardReportRerouteResult(rerouted = false, route = null)
+        val response =
+            runCatching {
+                runAuthenticated { token ->
+                    datasource.rerouteAfterHazardReport(
+                        reportId = reportId,
+                        accessToken = token,
+                        routeId = routeId,
+                        currentPoint =
+                            HazardReportPointDto(
+                                lat = currentPoint.latitude,
+                                lng = currentPoint.longitude,
+                            ),
+                    )
+                }
+            }.getOrNull() ?: return HazardReportRerouteResult(rerouted = false, route = null)
+        if (response == null) {
+            return HazardReportRerouteResult(rerouted = false, route = null)
+        }
+        return HazardReportRerouteResult(
+            rerouted = response.rerouted && response.route != null,
+            route = response.route?.toRouteCandidate(geometryParser = routeGeometryParser),
+        )
     }
 
     override suspend fun saveDraft(draft: ReportDraftData): ReportDraftData {

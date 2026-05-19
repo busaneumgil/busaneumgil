@@ -22,6 +22,8 @@ public interface RouteSessionRepository extends JpaRepository<RouteSession, UUID
 		String routeId,
 		RouteSessionStatus status);
 
+	Optional<RouteSession> findFirstByUser_UserIdAndStatusOrderByUpdatedAtDesc(UUID userId, RouteSessionStatus status);
+
 	List<RouteSession> findAllByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
 		UUID userId,
 		String routeId,

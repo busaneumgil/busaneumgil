@@ -405,6 +405,42 @@ class ReportViewModelTest {
         }
 
     @Test
+    fun `navigation guidance submit success emits return event with submitted report id`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    submitResultFactory = { outboxId ->
+                        ReportSubmitResult.Success(outboxId = outboxId, serverReportId = 42L)
+                    },
+                )
+            val viewModel = createReportViewModel(repository)
+            val event =
+                backgroundScope.async(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.first { emitted -> emitted is ReportUiEvent.ReturnToNavigationWithSubmittedReport }
+                }
+            advanceUntilIdle()
+
+            viewModel.onAction(ReportUiAction.RouteEntered(ReportEntryPoint.NavigationGuidance))
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.RAMP))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "Busan",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            val emitted = event.await() as ReportUiEvent.ReturnToNavigationWithSubmittedReport
+            assertEquals(42L, emitted.reportId)
+        }
+
+    @Test
     fun `server submit failure keeps outbox saved and surfaces retryable failure`() =
         runTest {
             val repository =

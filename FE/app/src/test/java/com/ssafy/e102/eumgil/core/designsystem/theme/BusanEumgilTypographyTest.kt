@@ -1,6 +1,7 @@
 package com.ssafy.e102.eumgil.core.designsystem.theme
 
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.sp
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -101,6 +102,22 @@ class BusanEumgilTypographyTest {
     }
 
     @Test
+    fun `text size preference scales local density so direct sp tokens follow app setting`() {
+        val scaled = Density(density = 2f, fontScale = 1.1f).scaledByTextSizeScale(1.3f)
+
+        assertEquals(2f, scaled.density, 0.001f)
+        assertEquals(1.1f * 1.3f, scaled.fontScale, 0.001f)
+    }
+
+    @Test
+    fun `invalid text size scale keeps existing density unchanged`() {
+        val base = Density(density = 2f, fontScale = 1.1f)
+
+        assertSame(base, base.scaledByTextSizeScale(0f))
+        assertSame(base, base.scaledByTextSizeScale(Float.NaN))
+    }
+
+    @Test
     fun `general mode typography tokens do not default to extra bold or black`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/core/designsystem/theme/Type.kt")
@@ -118,7 +135,7 @@ class BusanEumgilTypographyTest {
                 .readText()
 
         assertTrue(source.contains("textSizePreference.scale"))
-        assertTrue(source.contains("PretendardTypography.scaledBy(textSizeScale)"))
+        assertTrue(source.contains("LocalDensity provides scaledDensity"))
         assertTrue(source.contains("typography = typography"))
     }
 }

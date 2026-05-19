@@ -2,7 +2,10 @@ package com.ssafy.e102.eumgil.core.designsystem.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import com.ssafy.e102.eumgil.core.model.TextSizePreference
 
 @Composable
@@ -21,13 +24,27 @@ fun BusanEumgilTheme(
     textSizeScale: Float,
     content: @Composable () -> Unit,
 ) {
-    val typography = remember(textSizeScale) {
-        PretendardTypography.scaledBy(textSizeScale)
+    val typography = PretendardTypography
+    val density = LocalDensity.current
+    val scaledDensity = remember(density, textSizeScale) {
+        density.scaledByTextSizeScale(textSizeScale)
     }
 
-    MaterialTheme(
-        colorScheme = BusanEumgilLightColorScheme,
-        typography = typography,
-        content = content,
+    CompositionLocalProvider(LocalDensity provides scaledDensity) {
+        MaterialTheme(
+            colorScheme = BusanEumgilLightColorScheme,
+            typography = typography,
+            content = content,
+        )
+    }
+}
+
+internal fun Density.scaledByTextSizeScale(textSizeScale: Float): Density {
+    val scale = textSizeScale.takeIf { value -> value.isFinite() && value > 0f } ?: 1f
+    if (scale == 1f) return this
+
+    return Density(
+        density = density,
+        fontScale = fontScale * scale,
     )
 }

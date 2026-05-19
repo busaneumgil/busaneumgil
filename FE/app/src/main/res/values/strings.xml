@@ -388,6 +388,7 @@
     <string name="my_page_duribal_call_dialog_confirm">예</string>
     <string name="my_page_duribal_call_dialog_dismiss">아니오</string>
     <string name="my_page_menu_notice">공지사항</string>
+    <string name="my_page_menu_text_size">글자 크기</string>
     <string name="my_page_menu_report_history">제보 내역</string>
     <string name="my_page_logout">로그아웃</string>
     <string name="my_page_logout_loading">로그아웃 중...</string>
@@ -405,6 +406,15 @@
     <string name="my_page_withdraw_dialog_message">탈퇴하면 계정 정보와 저장한 데이터가 삭제되며 복구할 수 없습니다.</string>
     <string name="my_page_withdraw_dialog_confirm">회원탈퇴</string>
     <string name="my_page_withdraw_dialog_dismiss">취소</string>
+    <string name="text_size_setting_title">글자 크기 설정</string>
+    <string name="text_size_setting_description">앱 화면에서 사용하는 기본 글자 크기를 선택해 주세요.</string>
+    <string name="text_size_setting_saved">글자 크기를 변경했습니다.</string>
+    <string name="text_size_default">기본</string>
+    <string name="text_size_large">크게</string>
+    <string name="text_size_extra_large">아주 크게</string>
+    <string name="text_size_default_description">1.00배</string>
+    <string name="text_size_large_description">1.15배</string>
+    <string name="text_size_extra_large_description">1.30배</string>
     <string name="feature_path_map">feature/map</string>
     <string name="feature_path_saved_route">feature/savedroute</string>
     <string name="feature_path_my_page">feature/mypage</string>
@@ -816,6 +826,7 @@
     <string name="low_vision_app_info_service_body">시각장애 사용자를 위한 큰 글씨, 고대비, 음성 중심 길 안내 화면입니다.</string>
     <string name="low_vision_app_info_support_title">도움말</string>
     <string name="low_vision_app_info_support_body">홈에서 음성 입력을 시작하고, 북마크와 카테고리 탭으로 자주 찾는 장소를 이동할 수 있습니다.</string>
+    <string name="low_vision_app_info_text_size">글자 크기 설정</string>
     <string name="low_vision_app_info_withdraw">회원탈퇴</string>
     <string name="low_vision_app_info_withdraw_loading">회원탈퇴 처리 중</string>
     <string name="low_vision_bookmark_title">북마크</string>

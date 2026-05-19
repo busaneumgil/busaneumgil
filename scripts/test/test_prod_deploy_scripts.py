@@ -7,9 +7,8 @@ Jenkins prod 배포에서 재현된 두 가지 회귀를 막는다.
 """
 
 from pathlib import Path
+import inspect
 import re
-import subprocess
-import tempfile
 import unittest
 
 
@@ -51,27 +50,30 @@ AI_INVALID_INPUT_BODY = """\
 """
 
 
+def to_python_regex(pattern):
+    return pattern.replace("[[:space:]]", r"\s")
+
+
 class ProdDeployScriptsTest(unittest.TestCase):
     def assertPatternsMatchAiInvalidInput(self, patterns):
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as fixture:
-            fixture.write(AI_INVALID_INPUT_BODY)
-            fixture_path = fixture.name
-
-        try:
-            for pattern in patterns:
-                result = subprocess.run(
-                    ["grep", "-Eq", pattern, fixture_path],
-                    check=False,
-                )
-                self.assertEqual(0, result.returncode, f"pattern did not match fixture: {pattern}")
-        finally:
-            Path(fixture_path).unlink(missing_ok=True)
+        for pattern in patterns:
+            self.assertIsNotNone(
+                re.search(to_python_regex(pattern), AI_INVALID_INPUT_BODY),
+                f"pattern did not match fixture: {pattern}",
+            )
 
     def test_ai_dockerfile_targets_llm_server_instead_of_placeholder_app(self):
         content = AI_DOCKERFILE.read_text(encoding="utf-8")
 
         self.assertIn("llm_test/server", content)
         self.assertNotIn("COPY app.py ./", content)
+
+    def test_ai_invalid_input_pattern_helper_uses_python_regex_without_external_grep(self):
+        helper_source = inspect.getsource(ProdDeployScriptsTest.assertPatternsMatchAiInvalidInput)
+
+        self.assertIn("re.search", helper_source)
+        self.assertNotIn("subprocess.run", helper_source)
+        self.assertNotIn('"grep"', helper_source)
 
     def test_ai_compose_passes_required_llm_runtime_env(self):
         dev_content = DEV_COMPOSE.read_text(encoding="utf-8")

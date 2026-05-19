@@ -566,6 +566,13 @@ fun NavGraphBuilder.mainNavGraph(
             onNavigateToMap = {
                 navController.navigateBackToNavigationGuidance()
             },
+            onReturnToNavigationWithSubmittedReport = { reportId ->
+                navController
+                    .getBackStackEntry(NavigationRoute.Guidance.route)
+                    .savedStateHandle
+                    .setNavigationHazardReportSubmittedReportId(reportId)
+                navController.navigateBackToNavigationGuidance()
+            },
             entryPoint = ReportEntryPoint.NavigationGuidance,
             startNewRequest = true,
         )
@@ -638,7 +645,7 @@ fun NavGraphBuilder.mainNavGraph(
         )
     }
 
-    composable(route = NavigationRoute.Guidance.route) {
+    composable(route = NavigationRoute.Guidance.route) { backStackEntry ->
         val context = LocalContext.current
         val settingsRepository =
             remember(context) {
@@ -650,6 +657,10 @@ fun NavGraphBuilder.mainNavGraph(
                     .observeInitSettings()
                     .map { initSettings -> initSettings.selectedPrimaryUserType }
             }.collectAsStateWithLifecycle(initialValue = null)
+        val submittedHazardReportId by
+            backStackEntry.savedStateHandle
+                .getStateFlow<Long?>(NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY, null)
+                .collectAsStateWithLifecycle()
         val useLowVisionUi = shouldUseLowVisionNavigationUi(selectedPrimaryUserType)
 
         NavigationScreenRoute(
@@ -687,6 +698,10 @@ fun NavGraphBuilder.mainNavGraph(
                     }
                 }
             },
+            submittedHazardReportId = submittedHazardReportId,
+            onSubmittedHazardReportConsumed = {
+                backStackEntry.savedStateHandle.consumeNavigationHazardReportSubmittedReportId()
+            },
             useLowVisionUi = useLowVisionUi,
         )
     }
@@ -717,6 +732,7 @@ private const val SEARCH_PRESERVE_ENTRY_STATE_KEY: String = "searchPreserveEntry
 private const val MAP_HOME_REENTRY_RESET_KEY: String = "mapHomeReentryReset"
 private const val MAP_FACILITY_DETAIL_DISMISS_REQUEST_ID_KEY: String = "mapFacilityDetailDismissRequestId"
 private const val MAP_FACILITY_DETAIL_DISMISS_CONSUMED_ID_KEY: String = "mapFacilityDetailDismissConsumedId"
+private const val NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY: String = "navigationHazardReportSubmittedReportId"
 internal const val MAP_FACILITY_DETAIL_DISMISS_REQUEST_INITIAL_ID: Long = 0L
 private const val MAP_ROUTE_ENDPOINT_PICKER_TARGET_KEY: String = "mapRouteEndpointPickerTarget"
 internal const val MAP_VOICE_SEARCH_VISIBLE_KEY: String = "mapVoiceSearchVisible"
@@ -909,6 +925,18 @@ internal fun SavedStateHandle.consumeMapFacilityDetailDismissRequest(requestId: 
     return true
 }
 
+internal fun SavedStateHandle.setNavigationHazardReportSubmittedReportId(reportId: Long) {
+    set(NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY, reportId)
+}
+
+internal fun SavedStateHandle.consumeNavigationHazardReportSubmittedReportId(): Long? {
+    val reportId = get<Long>(NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY)
+    if (reportId != null) {
+        set<Long?>(NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY, null)
+    }
+    return reportId
+}
+
 private tailrec fun Context.findComponentActivity(): ComponentActivity? =
     when (this) {
         is ComponentActivity -> this
@@ -952,6 +980,9 @@ internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel 
     val routeRepository = remember(context) {
         (context.applicationContext as BusanEumgilApp).appContainer.routeRepository
     }
+    val reportRepository = remember(context) {
+        (context.applicationContext as BusanEumgilApp).appContainer.reportRepository
+    }
     val navigationViewModelFactory =
         remember(
             currentLocationManager,
@@ -959,6 +990,7 @@ internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel 
             locationPermissionManager,
             bookmarkRepository,
             routeRepository,
+            reportRepository,
         ) {
             NavigationGuidanceViewModel.provideFactory(
                 currentLocationManager = currentLocationManager,
@@ -966,6 +998,7 @@ internal fun rememberNavigationGuidanceViewModel(): NavigationGuidanceViewModel 
                 locationPermissionManager = locationPermissionManager,
                 bookmarkRepository = bookmarkRepository,
                 routeRepository = routeRepository,
+                reportRepository = reportRepository,
             )
         }
 

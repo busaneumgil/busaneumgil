@@ -1,5 +1,7 @@
 package com.ssafy.e102.eumgil.data.remote.dto
 
+import com.ssafy.e102.eumgil.data.route.RouteDto
+
 data class HazardReportPointDto(
     val lat: Double,
     val lng: Double,
@@ -65,4 +67,26 @@ data class HazardReportDetailDto(
     val reportPoint: HazardReportPointDto,
     val createdAt: String,
     val imageUrls: List<String> = emptyList(),
+)
+
+data class HazardMarkersResponseDto(
+    val markers: List<HazardMarkerDto> = emptyList(),
+)
+
+data class HazardMarkerDto(
+    val reportId: Long,
+    val reportType: String,
+    val lat: Double,
+    val lng: Double,
+    val imageUrls: List<String> = emptyList(),
+)
+
+data class HazardReportRerouteRequestDto(
+    val routeId: String,
+    val currentPoint: HazardReportPointDto,
+)
+
+data class HazardReportRerouteResponseDto(
+    val rerouted: Boolean,
+    val route: RouteDto?,
 )

@@ -128,6 +128,7 @@ internal fun isKakaoScreenPointInsideViewport(
         screenPoint.y in 0 until viewportHeight
 
 internal enum class KakaoProjectedMarkerKind {
+    HAZARD,
     CURRENT_LOCATION,
     CURRENT_LOCATION_DIRECTION,
     SELECTED_DESTINATION,
@@ -138,6 +139,7 @@ internal enum class KakaoProjectedMarkerKind {
 }
 
 internal enum class KakaoOverlayMarkerKind {
+    APPROVED_REPORT,
     ROUTE_SEGMENT_JUNCTION,
     TRANSIT_STOP,
     TRANSIT_TRANSFER,
@@ -180,6 +182,7 @@ internal data class KakaoOverlayMarkerRenderState(
 
 internal data class KakaoOverlayMarkerRenderPartition(
     val pointMarkers: List<KakaoOverlayMarkerRenderState>,
+    val approvedReportMarkers: List<KakaoOverlayMarkerRenderState>,
     val directionArrowMarkers: List<KakaoOverlayMarkerRenderState>,
 )
 
@@ -663,7 +666,12 @@ internal fun partitionKakaoOverlayMarkerRenderStates(
     KakaoOverlayMarkerRenderPartition(
         pointMarkers =
             markers.filter { marker ->
-                marker.kind != KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW
+                marker.kind != KakaoOverlayMarkerKind.ROUTE_DIRECTION_ARROW &&
+                    marker.kind != KakaoOverlayMarkerKind.APPROVED_REPORT
+            },
+        approvedReportMarkers =
+            markers.filter { marker ->
+                marker.kind == KakaoOverlayMarkerKind.APPROVED_REPORT
             },
         directionArrowMarkers =
             markers.filter { marker ->
@@ -929,6 +937,15 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
 ): KakaoProjectedMarkerRenderState? {
     val markerSpec =
         when (kind) {
+            MapViewportPointKind.HAZARD ->
+                KakaoOverlayPointMarkerSpec(
+                    kind = KakaoProjectedMarkerKind.HAZARD,
+                    iconResId = R.drawable.ic_status_warning,
+                    sizeDp = if (isSelected) 34 else 30,
+                    anchorPointY = 1.0f,
+                    zIndex = if (isSelected) 5.2f else 4.6f,
+                )
+
             MapViewportPointKind.ORIGIN ->
                 KakaoOverlayPointMarkerSpec(
                     kind = KakaoProjectedMarkerKind.ROUTE_ORIGIN,
@@ -967,6 +984,7 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
             MapViewportPointKind.TRANSIT_BUS_STOP,
             MapViewportPointKind.TRANSIT_SUBWAY_STATION,
             MapViewportPointKind.TRANSIT_TRANSFER,
+            MapViewportPointKind.APPROVED_REPORT,
                 -> null
 
             MapViewportPointKind.FACILITY,
@@ -992,8 +1010,25 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
     )
 }
 
+internal fun MapViewportPointOverlay.toKakaoProjectedPointMarkerState(): KakaoOverlayMarkerRenderState? =
+    toOverlayMarkerRenderState()
+
 private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMarkerRenderState? {
     return when (kind) {
+        MapViewportPointKind.APPROVED_REPORT ->
+            KakaoOverlayMarkerRenderState(
+                markerId = overlayId,
+                coordinate = coordinate,
+                kind = KakaoOverlayMarkerKind.APPROVED_REPORT,
+                anchorPointX = 0.5f,
+                anchorPointY = 0.5f,
+                sizeDp = 28,
+                zIndex = 4.2f,
+                fillColorArgb = KAKAO_APPROVED_REPORT_MARKER_FILL,
+                strokeColorArgb = KAKAO_APPROVED_REPORT_MARKER_STROKE,
+                clickTargetId = clickTargetId,
+            )
+
         MapViewportPointKind.SEGMENT_JUNCTION ->
             KakaoOverlayMarkerRenderState(
                 markerId = "overlay-$overlayId",
@@ -1281,6 +1316,8 @@ internal const val KAKAO_CAMERA_BEARING_SOURCE_SYNC_SNAPSHOT = "sync-snapshot"
 private const val KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_SCREEN_RELATIVE = "screen-relative"
 private const val KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_MAP_ABSOLUTE = "map-absolute"
 private val KAKAO_ROUTE_DIRECTION_ARROW_TRANSFORM_METHOD = TransformMethod.AbsoluteRotation
+private val KAKAO_APPROVED_REPORT_MARKER_FILL = 0xFFFFD84D.toInt()
+private val KAKAO_APPROVED_REPORT_MARKER_STROKE = 0xFF7A4F00.toInt()
 
 private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineStyleSpec {
     val palette = tone.toKakaoRouteLinePalette()

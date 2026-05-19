@@ -370,6 +370,13 @@ private fun DrawScope.drawViewportPointHalo(
     val projectedPoint = bounds.project(overlay.coordinate).toCanvasOffset(canvasSize)
 
     when (overlay.kind) {
+        MapViewportPointKind.HAZARD ->
+            drawCircle(
+                color = palette.error.copy(alpha = 0.16f),
+                radius = 18.dp.toPx(),
+                center = projectedPoint,
+            )
+
         MapViewportPointKind.ORIGIN ->
             drawCircle(
                 color = palette.secondary.copy(alpha = 0.18f),
@@ -397,6 +404,7 @@ private fun DrawScope.drawViewportPointHalo(
         MapViewportPointKind.TRANSIT_BUS_STOP,
         MapViewportPointKind.TRANSIT_SUBWAY_STATION,
         MapViewportPointKind.TRANSIT_TRANSFER,
+        MapViewportPointKind.APPROVED_REPORT,
             -> Unit
 
         MapViewportPointKind.FOCUS_HALO ->
@@ -566,6 +574,55 @@ private fun ViewportPointMarker(
         }
     val semanticsLabel = point.contentDescription ?: spec.label
 
+    if (spec.shape == ViewportPointMarkerShape.TRIANGLE_WARNING) {
+        Box(
+            modifier =
+                modifier
+                    .zIndex(if (point.isSelected) 2f else 1f)
+                    .size(spec.size)
+                    .semantics {
+                        contentDescription = semanticsLabel.orEmpty()
+                    }
+                    .then(clickableModifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val strokeWidth = spec.borderWidth.toPx()
+                val halfStroke = strokeWidth / 2f
+                val padding = 2.dp.toPx()
+                val path =
+                    Path().apply {
+                        moveTo(size.width / 2f, padding + halfStroke)
+                        lineTo(size.width - padding - halfStroke, size.height - padding - halfStroke)
+                        lineTo(padding + halfStroke, size.height - padding - halfStroke)
+                        close()
+                    }
+                drawPath(path = path, color = spec.containerColor)
+                drawPath(
+                    path = path,
+                    color = spec.borderColor,
+                    style =
+                        Stroke(
+                            width = strokeWidth,
+                            join = StrokeJoin.Round,
+                        ),
+                )
+            }
+            Text(
+                text = spec.label.orEmpty(),
+                color = spec.contentColor,
+                style =
+                    MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = spec.fontSize,
+                    ),
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+        }
+        return
+    }
+
     Surface(
         modifier =
             modifier
@@ -579,7 +636,7 @@ private fun ViewportPointMarker(
                 }
                 .then(clickableModifier),
         shape =
-            if (spec.isDiamond) {
+            if (spec.isDiamond || spec.shape == ViewportPointMarkerShape.DIAMOND) {
                 RoundedCornerShape(12.dp)
             } else {
                 CircleShape
@@ -680,6 +737,15 @@ private fun String?.toFallbackSubwayLineShortLabel(): String =
 private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMarkerSpec? =
     when (kind) {
         MapViewportPointKind.FACILITY -> categoryType?.toFacilityMarkerSpec(isSelected)
+        MapViewportPointKind.HAZARD ->
+            ViewportPointMarkerSpec(
+                label = "!",
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError,
+                borderColor = MaterialTheme.colorScheme.surface,
+                size = if (isSelected) 42.dp else 38.dp,
+                fontSize = 16.sp,
+            )
         MapViewportPointKind.ORIGIN ->
             ViewportPointMarkerSpec(
                 label = label ?: "출발",
@@ -767,6 +833,18 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
             )
         }
 
+        MapViewportPointKind.APPROVED_REPORT ->
+            ViewportPointMarkerSpec(
+                label = "!",
+                containerColor = Color(0xFFFFD84D),
+                contentColor = Color(0xFF3A2A00),
+                borderColor = Color(0xFF7A4F00),
+                size = 44.dp,
+                fontSize = 18.sp,
+                borderWidth = 2.dp,
+                shape = ViewportPointMarkerShape.TRIANGLE_WARNING,
+            )
+
         MapViewportPointKind.CAMERA_FOCUS ->
             ViewportPointMarkerSpec(
                 label = null,
@@ -779,6 +857,12 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
 
         MapViewportPointKind.FOCUS_HALO -> null
     }
+
+private enum class ViewportPointMarkerShape {
+    CIRCLE,
+    DIAMOND,
+    TRIANGLE_WARNING,
+}
 
 private fun MapViewportPointOverlay.isDetailedRouteOverlayMarker(): Boolean =
     kind == MapViewportPointKind.SEGMENT_JUNCTION
@@ -817,6 +901,7 @@ private data class ViewportPointMarkerSpec(
     val size: Dp,
     val isDiamond: Boolean = false,
     val isRotated: Boolean = false,
+    val shape: ViewportPointMarkerShape = ViewportPointMarkerShape.CIRCLE,
     val fontSize: androidx.compose.ui.unit.TextUnit,
     val borderWidth: Dp = 1.dp,
 )

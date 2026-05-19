@@ -1681,6 +1681,38 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `approved hazard marker viewer mounts at the screen root instead of inside route map stage`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val routeSettingSection =
+            source
+                .substringAfter("fun RouteSettingScreen(")
+                .substringBefore("@Composable\nfun RouteDetailScreen")
+        val routeMapStageSection =
+            source
+                .substringAfter("private fun RouteMapStage(")
+                .substringBefore("@Composable\nprivate fun RouteMapMessageCard")
+        val routeDetailSection =
+            source
+                .substringAfter("fun RouteDetailScreen(")
+                .substringBefore("@Composable\nprivate fun RouteDetailTopBar")
+
+        assertFalse(
+            "The route preview map stage should not own the hazard bottom sheet because that limits the full-screen viewer to the map subtree.",
+            routeMapStageSection.contains("ApprovedHazardMarkerBottomSheet("),
+        )
+        assertTrue(
+            "The route preview screen should mount the hazard viewer after the shared bottom bar so it can cover controls and cards.",
+            routeSettingSection.indexOf("RouteSettingBottomBar(") < routeSettingSection.indexOf("ApprovedHazardMarkerBottomSheet("),
+        )
+        assertTrue(
+            "The route detail screen should also keep the hazard viewer as the last sibling above side panels and the start CTA.",
+            routeDetailSection.indexOf("RouteSettingBottomBar(") < routeDetailSection.indexOf("ApprovedHazardMarkerBottomSheet("),
+        )
+    }
+
+    @Test
     fun `route start CTA centers icon and label as a single group`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")

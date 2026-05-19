@@ -67,9 +67,15 @@ public class AdminMapController {
 		String gu,
 		@Parameter(description = "동") @RequestParam(required = false)
 		String dong,
+		@Parameter(description = "클리핑 중심 위도") @RequestParam(required = false)
+		Double centerLat,
+		@Parameter(description = "클리핑 중심 경도") @RequestParam(required = false)
+		Double centerLng,
+		@Parameter(description = "클리핑 반경(m)") @RequestParam(required = false)
+		Integer radiusMeter,
 		@Parameter(description = "구/동 미지정 전체 조회 fallback 개수. 구/동을 지정하면 해당 구/동의 모든 구간을 조회한다. 허용 범위는 1~20000이다.") @RequestParam(defaultValue = "10000") @Min(1) @Max(20000)
 		int limit) {
-		return ApiResponse.success(adminMapService.getRoadNetwork(gu, dong, limit));
+		return ApiResponse.success(adminMapService.getRoadNetwork(gu, dong, limit, centerLat, centerLng, radiusMeter));
 	}
 
 	@Operation(summary = "관리자 보행 네트워크 연결 후보 조회", description = "선택한 구/동에서 서로 다른 보행 네트워크 컴포넌트를 연결할 수 있는 가이드 후보를 조회한다.")

@@ -5,11 +5,16 @@ import type { GeoPoint } from "../types";
 interface HazardReportRoadviewPreviewProps {
   point: GeoPoint;
   label: string;
+  helperMessage?: string;
 }
 
 type RoadviewStatus = "loading" | "ready" | "empty" | "error";
 
-export function HazardReportRoadviewPreview({ point, label }: HazardReportRoadviewPreviewProps) {
+export function HazardReportRoadviewPreview({
+  point,
+  label,
+  helperMessage = "지도를 클릭해 가까운 로드뷰 지점을 다시 선택해보세요.",
+}: HazardReportRoadviewPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const roadviewRef = useRef<KakaoRoadview | null>(null);
   const roadviewClientRef = useRef<KakaoRoadviewClient | null>(null);
@@ -42,7 +47,7 @@ export function HazardReportRoadviewPreview({ point, label }: HazardReportRoadvi
 
           if (!panoId) {
             setStatus("empty");
-            setMessage("주변에서 Kakao 로드뷰를 찾지 못했습니다.");
+            setMessage(`주변에서 Kakao 로드뷰를 찾지 못했습니다. ${helperMessage}`);
             return;
           }
 

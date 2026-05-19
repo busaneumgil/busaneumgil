@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.admin.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -178,6 +179,28 @@ class AdminMapServiceTest {
 		assertThat(response.roadNodes().features()).hasSize(2);
 		assertThat(response.segments().features().get(0).geometry().coordinates().get(0))
 			.containsExactly(129.0, 35.0);
+	}
+
+	@Test
+	@DisplayName("경로 검수 지도 조회는 제보 좌표 반경으로 세그먼트를 클리핑한다")
+	void getRoadNetworkClipsAroundCenterPoint() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.findAllIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200, 1500))
+			.thenReturn(List.of(roadSegment));
+		when(roadSegmentRepository.countIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200))
+			.thenReturn(1L);
+		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());
+		when(roadNodeRepository.findAllById(any())).thenReturn(List.of(
+			roadNode(10L, 129.0, 35.0),
+			roadNode(20L, 129.1, 35.1)));
+
+		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "명지동", 1500, 35.05, 129.05, 200);
+
+		assertThat(response.summary().segmentCount()).isEqualTo(1);
+		assertThat(response.summary().visibleSegmentCount()).isEqualTo(1);
+		verify(roadSegmentRepository).findAllIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200, 1500);
+		verify(roadSegmentRepository).countIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200);
+		verify(roadSegmentRepository, never()).findAllIntersectingArea("강서구", "명지동");
 	}
 
 	@Test
@@ -490,6 +513,7 @@ class AdminMapServiceTest {
 				&& override.getWidthState() == WidthState.ADEQUATE_120
 				&& override.getStairsState() == AccessibilityState.NO));
 		verify(graphHopperAdminClient, times(1)).reloadRoutingOverrides();
+		verify(adminService, never()).requireCanEditArea(eq(adminUserId), eq("gu"), eq("dong"), any());
 	}
 
 	@Test

@@ -81,4 +81,35 @@ class MapOverlayViewportControlStateTest {
         assertEquals(16, cameraTarget.zoomLevel)
         assertFalse(controlState.shouldFitProjection)
     }
+
+    @Test
+    fun `clearing manual camera lets focused segment base target take over`() {
+        val controlState = MapOverlayViewportControlState()
+        val activeTarget =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1796, longitude = 129.0756),
+                source = MapCameraSource.CURRENT_LOCATION,
+                requestId = 20L,
+                zoomLevel = 17,
+            )
+        val focusedSegmentTarget =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1810, longitude = 129.0820),
+                source = MapCameraSource.SEARCH_RESULT,
+                requestId = 21L,
+                zoomLevel = 16,
+            )
+
+        controlState.updateBaseCameraTarget(activeTarget)
+        controlState.zoomOut()
+        assertFalse(controlState.shouldFitProjection)
+
+        controlState.updateBaseCameraTarget(focusedSegmentTarget)
+        controlState.clearManualCamera()
+
+        val cameraTarget = controlState.cameraTargetFor(focusedSegmentTarget)
+        assertEquals(focusedSegmentTarget.center, cameraTarget.center)
+        assertEquals(16, cameraTarget.zoomLevel)
+        assertTrue(controlState.shouldFitProjection)
+    }
 }

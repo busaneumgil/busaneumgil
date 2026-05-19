@@ -243,7 +243,7 @@ class KakaoMapViewportBindingsTest {
     }
 
     @Test
-    fun `overlay current location with heading adds separate direction arrow marker`() {
+    fun `overlay current location ignores heading and renders round marker`() {
         val markerStates =
             createKakaoProjectedMarkerRenderStates(
                 currentLocation = null,
@@ -255,22 +255,65 @@ class KakaoMapViewportBindingsTest {
                             overlayId = "navigation-current",
                             coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
                             kind = MapViewportPointKind.CURRENT_LOCATION,
-                        ),
-                        MapViewportPointOverlay(
-                            overlayId = "navigation-current-heading",
-                            coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
-                            kind = MapViewportPointKind.CURRENT_LOCATION_HEADING,
                             headingDegrees = 135.0,
                         ),
                     ),
             )
 
-        assertEquals(2, markerStates.size)
+        assertEquals(1, markerStates.size)
+        assertEquals(R.drawable.ic_map_current_location, markerStates.first().iconResId)
+        assertEquals(28, markerStates.first().sizeDp)
+        assertEquals(6f, markerStates.first().zIndex)
+        assertEquals(0f, markerStates.first().rotationDegrees)
+        assertEquals(0, markerStates.first().translationDistanceDp)
+    }
+
+    @Test
+    fun `overlay current location remains round for north heading`() {
+        val markerStates =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+                overlayPoints =
+                    listOf(
+                        MapViewportPointOverlay(
+                            overlayId = "navigation-current",
+                            coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                            kind = MapViewportPointKind.CURRENT_LOCATION,
+                            headingDegrees = 0.0,
+                        ),
+                    ),
+                cameraBearingDegrees = 0.0,
+            )
+
+        assertEquals(1, markerStates.size)
         assertEquals(R.drawable.ic_map_current_location, markerStates.first().iconResId)
         assertEquals(0f, markerStates.first().rotationDegrees)
-        assertEquals(R.drawable.ic_map_current_location_direction_arrow, markerStates.last().iconResId)
-        assertEquals(135f, markerStates.last().rotationDegrees)
-        assertEquals(18, markerStates.last().translationDistanceDp)
+    }
+
+    @Test
+    fun `overlay current location ignores camera bearing for marker rotation`() {
+        val markerStates =
+            createKakaoProjectedMarkerRenderStates(
+                currentLocation = null,
+                selectedDestinationCoordinate = null,
+                selectedMapPinCoordinate = null,
+                overlayPoints =
+                    listOf(
+                        MapViewportPointOverlay(
+                            overlayId = "navigation-current",
+                            coordinate = MapCoordinate(latitude = 35.1798, longitude = 129.0762),
+                            kind = MapViewportPointKind.CURRENT_LOCATION,
+                            headingDegrees = 135.0,
+                        ),
+                    ),
+                cameraBearingDegrees = 90.0,
+            )
+
+        assertEquals(1, markerStates.size)
+        assertEquals(R.drawable.ic_map_current_location, markerStates.first().iconResId)
+        assertEquals(0f, markerStates.first().rotationDegrees)
     }
 
     @Test

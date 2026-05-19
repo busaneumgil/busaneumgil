@@ -204,6 +204,19 @@ private fun DrawScope.drawViewportPolyline(
             )
         }
 
+        MapViewportPolylineStyle.ROUTE_CONNECTOR -> {
+            drawPath(
+                path = path,
+                color = Color(0xFF64748B),
+                style =
+                    Stroke(
+                        width = 18.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+            )
+        }
+
         MapViewportPolylineStyle.ROUTE_BASELINE -> {
             drawPath(
                 path = path,

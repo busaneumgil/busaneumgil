@@ -375,6 +375,7 @@ internal fun createKakaoProjectedMarkerRenderStates(
     selectedDestinationCoordinate: MapCoordinate?,
     selectedMapPinCoordinate: MapCoordinate?,
     overlayPoints: List<MapViewportPointOverlay> = emptyList(),
+    cameraBearingDegrees: Double = 0.0,
 ): List<KakaoProjectedMarkerRenderState> {
     val projectedMarkers =
         buildList {
@@ -953,24 +954,14 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
                         iconResId = R.drawable.ic_map_current_location,
                         sizeDp = 28,
                         anchorPointY = 0.5f,
-                        zIndex = 3f,
+                        zIndex = 6f,
                     )
                 } else {
                     null
                 }
 
             MapViewportPointKind.CURRENT_LOCATION_HEADING ->
-                if (includeCurrentLocation) {
-                    KakaoOverlayPointMarkerSpec(
-                        kind = KakaoProjectedMarkerKind.CURRENT_LOCATION_DIRECTION,
-                        iconResId = R.drawable.ic_map_current_location_direction_arrow,
-                        sizeDp = 18,
-                        anchorPointY = 0.5f,
-                        zIndex = 3.2f,
-                    )
-                } else {
-                    null
-                }
+                null
 
             MapViewportPointKind.SEGMENT_JUNCTION,
             MapViewportPointKind.TRANSIT_BUS_STOP,
@@ -996,8 +987,8 @@ private fun MapViewportPointOverlay.toProjectedMarkerRenderState(
         fillColorArgb = markerSpec.fillColorArgb,
         strokeColorArgb = markerSpec.strokeColorArgb,
         clickTargetId = clickTargetId,
-        rotationDegrees = headingDegrees?.toFloat() ?: 0f,
-        translationDistanceDp = if (kind == MapViewportPointKind.CURRENT_LOCATION_HEADING) 18 else 0,
+        rotationDegrees = 0f,
+        translationDistanceDp = 0,
     )
 }
 
@@ -1300,6 +1291,14 @@ private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineSt
                 lineColor = palette.lineColor,
                 strokeWidth = 0f,
                 strokeColor = palette.casingColor,
+            )
+
+        MapViewportPolylineStyle.ROUTE_CONNECTOR ->
+            KakaoRouteLineStyleSpec(
+                lineWidth = 18f,
+                lineColor = 0xFF64748B.toInt(),
+                strokeWidth = 0f,
+                strokeColor = 0xFF64748B.toInt(),
             )
 
         MapViewportPolylineStyle.ROUTE_BASELINE ->

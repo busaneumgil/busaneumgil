@@ -466,6 +466,7 @@ private class KakaoMapViewportController {
                     lastRenderedMarkers = emptyList()
                     lastRenderedPointOverlayMarkers = emptyList()
                     lastRenderedArrowOverlayMarkers = emptyList()
+                    invalidateRenderedRouteLines()
                     lastNativeSegmentRenderPathDebugSummary = null
                     lastRouteDirectionArrowDebugSummary = null
                     lastRouteDirectionArrowLayerSyncSummary = null
@@ -493,6 +494,8 @@ private class KakaoMapViewportController {
                 override fun onMapResumed() {
                     hasMapLifecycleResumed = true
                     lifecycleDispatchRetryCount = 0
+                    invalidateRenderedRouteLines()
+                    renderIntoMapIfReady()
                     Log.d(KAKAO_MAP_LOG_TAG, "Kakao map lifecycle resumed")
                 }
 
@@ -842,13 +845,15 @@ private class KakaoMapViewportController {
         if (lastRenderedRouteLines == routeLineStates) return
 
         val routeLineManager = readyMap.routeLineManager ?: return
-        routeLineManager.clearAll()
-        if (routeLineStates.isNotEmpty()) {
-            val routeLineLayer =
-                routeLineManager.addLayer(
+        val routeLineLayer =
+            routeLineManager.getLayer(KAKAO_ROUTE_LINE_LAYER_ID)
+                ?: routeLineManager.addLayer(
                     KAKAO_ROUTE_LINE_LAYER_ID,
                     KAKAO_ROUTE_LINE_LAYER_Z_ORDER,
-                ) ?: return
+                )
+                ?: return
+        routeLineLayer.removeAll()
+        if (routeLineStates.isNotEmpty()) {
             routeLineStates.forEach { routeLine ->
                 val points =
                     routeLine.points.map { point ->
@@ -874,6 +879,11 @@ private class KakaoMapViewportController {
             KAKAO_MAP_LOG_TAG,
             "Route lines synced count=${routeLineStates.size}",
         )
+    }
+
+    private fun invalidateRenderedRouteLines() {
+        lastRenderedRouteLines = emptyList()
+        consecutiveEmptyRouteLineFrameCount = 0
     }
 
     private fun syncMarkers(
@@ -1389,6 +1399,12 @@ private class KakaoMapViewportController {
         readyMap: KakaoMap,
         state: MapViewportUiState?,
     ) {
+        val cameraBearingDegrees =
+            readyMap
+                .getCameraPosition()
+                ?.toResolvedCameraPosition(source = KAKAO_CAMERA_BEARING_SOURCE_SYNC_SNAPSHOT)
+                ?.bearingDegrees
+                ?: 0.0
         val projectedMarkers =
             createKakaoProjectedMarkerRenderStates(
                 currentLocation = state?.currentLocation,
@@ -1396,6 +1412,7 @@ private class KakaoMapViewportController {
                 selectedDestinationCoordinate = state?.selectedDestinationCoordinate,
                 selectedMapPinCoordinate = state?.selectedMapPinCoordinate,
                 overlayPoints = state?.overlayState?.points.orEmpty(),
+                cameraBearingDegrees = cameraBearingDegrees,
             )
         val projectionResult =
             createKakaoProjectedMarkerProjectionResult(projectedMarkers) { coordinate ->

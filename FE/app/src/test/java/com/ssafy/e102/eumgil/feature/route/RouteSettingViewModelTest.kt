@@ -110,7 +110,7 @@ class RouteSettingViewModelTest {
                 listOf("낮음", "16분"),
                 safeCard.metrics.map(RouteOptionCardMetricUiState::value),
             )
-            assertEquals("최단거리", shortestCard.title)
+            assertEquals("최단 경로", shortestCard.title)
             assertEquals("이동 거리를 줄이는 기준으로 빠른 경로를 비교합니다.", shortestCard.description)
             assertEquals("탭하여 선택", shortestCard.selectionLabel)
             assertEquals(
@@ -790,7 +790,7 @@ class RouteSettingViewModelTest {
             assertEquals(uiState.origin.coordinate, uiState.routePreviewMap.originCoordinate)
             assertEquals(uiState.destination.coordinate, uiState.routePreviewMap.destinationCoordinate)
             assertTrue(uiState.routePreviewMap.isDisplayable)
-            assertEquals("최단거리", uiState.selectedRoute?.optionTitle)
+            assertEquals("최단 경로", uiState.selectedRoute?.optionTitle)
             assertEquals("Shortest Route", uiState.selectedRoute?.title)
             assertEquals(RouteRiskLevel.MEDIUM, uiState.selectedRoute?.riskLevel)
             assertEquals(uiState.destination, uiState.selectedRoute?.destination)

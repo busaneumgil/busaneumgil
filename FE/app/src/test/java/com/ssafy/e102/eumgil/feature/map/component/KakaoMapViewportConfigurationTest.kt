@@ -227,6 +227,8 @@ class KakaoMapViewportConfigurationTest {
             source.contains("syncRouteLines(") &&
                 source.contains("RouteLineOptions") &&
                 source.contains("RouteLineSegment") &&
+                source.contains("routeLineManager.getLayer(") &&
+                source.contains("routeLineLayer.removeAll()") &&
                 source.contains("routeLineManager.addLayer("),
         )
         assertTrue(
@@ -237,6 +239,21 @@ class KakaoMapViewportConfigurationTest {
         assertTrue(
             "Route origin and destination markers should stay projected over the Kakao map viewport.",
             source.contains("overlayPoints = state?.overlayState?.points.orEmpty()"),
+        )
+    }
+
+    @Test
+    fun `route line cache is invalidated across kakao renderer lifecycle changes`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(
+            "Kakao can clear native route line layers on resume or renderer destroy, so the FE cache must be invalidated.",
+            source.contains("invalidateRenderedRouteLines()") &&
+                source.contains("override fun onMapDestroy()") &&
+                source.contains("override fun onMapResumed()") &&
+                source.contains("renderIntoMapIfReady()"),
         )
     }
 

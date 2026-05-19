@@ -4715,8 +4715,7 @@ private fun routePreviewFallbackDescription(previewMap: RoutePreviewMapUiState):
         RoutePreviewMapStatus.NO_DESTINATION -> stringResource(id = R.string.route_setting_preview_no_destination_description)
         RoutePreviewMapStatus.INVALID_DESTINATION -> stringResource(id = R.string.route_setting_preview_invalid_destination_description)
         RoutePreviewMapStatus.NO_ROUTE -> stringResource(id = R.string.route_setting_preview_no_route_description)
-        RoutePreviewMapStatus.POLYLINE_UNAVAILABLE ->
-            previewMap.fallbackMessage ?: stringResource(id = R.string.route_setting_preview_placeholder_description)
+        RoutePreviewMapStatus.POLYLINE_UNAVAILABLE -> stringResource(id = R.string.route_setting_preview_placeholder_description)
         RoutePreviewMapStatus.ERROR ->
             previewMap.fallbackMessage ?: stringResource(id = R.string.route_setting_preview_error_description)
         RoutePreviewMapStatus.READY -> stringResource(id = R.string.route_setting_preview_placeholder_description)

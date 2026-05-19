@@ -5,6 +5,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
 
@@ -95,3 +96,43 @@ val PretendardTypography =
             lineHeight = 16,
         ),
     )
+
+/**
+ * Compose `sp` already follows Android system font scale, so this app-level scale is multiplied
+ * on top of the OS setting. QA should cover EXTRA_LARGE together with OS font scale 1.3x/1.5x.
+ */
+fun Typography.scaledBy(textSizeScale: Float): Typography {
+    val scale = textSizeScale.takeIf { value -> value.isFinite() && value > 0f } ?: 1f
+    if (scale == 1f) return this
+
+    return copy(
+        displayLarge = displayLarge.scaledBy(scale),
+        displayMedium = displayMedium.scaledBy(scale),
+        displaySmall = displaySmall.scaledBy(scale),
+        headlineLarge = headlineLarge.scaledBy(scale),
+        headlineMedium = headlineMedium.scaledBy(scale),
+        headlineSmall = headlineSmall.scaledBy(scale),
+        titleLarge = titleLarge.scaledBy(scale),
+        titleMedium = titleMedium.scaledBy(scale),
+        titleSmall = titleSmall.scaledBy(scale),
+        bodyLarge = bodyLarge.scaledBy(scale),
+        bodyMedium = bodyMedium.scaledBy(scale),
+        bodySmall = bodySmall.scaledBy(scale),
+        labelLarge = labelLarge.scaledBy(scale),
+        labelMedium = labelMedium.scaledBy(scale),
+        labelSmall = labelSmall.scaledBy(scale),
+    )
+}
+
+private fun TextStyle.scaledBy(scale: Float): TextStyle =
+    copy(
+        fontSize = fontSize.scaledBy(scale),
+        lineHeight = lineHeight.scaledBy(scale),
+    )
+
+private fun TextUnit.scaledBy(scale: Float): TextUnit =
+    if (this == TextUnit.Unspecified) {
+        this
+    } else {
+        (value * scale).sp
+    }

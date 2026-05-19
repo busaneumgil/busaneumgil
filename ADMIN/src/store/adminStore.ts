@@ -17,6 +17,8 @@ const adminPages: AdminPage[] = [
   "logs",
 ];
 
+const previewableAdminPages: AdminPage[] = ["routeStats", "bottleneckMonitoring", "hazards"];
+
 function areaAssignmentId(gu: string, dong: string) {
   return `area:${gu}:${dong}`;
 }
@@ -50,6 +52,10 @@ export function adminPageFromSearch(search: string): AdminPage {
   const page = params.get("page");
   if (page && adminPages.includes(page as AdminPage)) {
     return page as AdminPage;
+  }
+  const previewPage = params.get("preview");
+  if (previewPage && previewableAdminPages.includes(previewPage as AdminPage)) {
+    return previewPage as AdminPage;
   }
   return "home";
 }

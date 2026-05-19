@@ -121,6 +121,66 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 		String dong);
 
 	@Query(value = """
+		select distinct rs.*
+		from road_segments rs
+		join admin_areas aa
+			on ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 100)::geometry)
+		where aa.gu = :gu
+			and (
+				aa.dong = :dong
+				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+			)
+			and ST_DWithin(
+				rs.geom::geography,
+				ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+				:radiusMeter
+			)
+		order by rs.edge_id asc
+		limit :limit
+		""", nativeQuery = true)
+	List<RoadSegment> findAllIntersectingAreaWithinRadius(
+		@Param("gu")
+		String gu,
+		@Param("dong")
+		String dong,
+		@Param("lng")
+		double lng,
+		@Param("lat")
+		double lat,
+		@Param("radiusMeter")
+		int radiusMeter,
+		@Param("limit")
+		int limit);
+
+	@Query(value = """
+		select count(distinct rs.edge_id)
+		from road_segments rs
+		join admin_areas aa
+			on ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 100)::geometry)
+		where aa.gu = :gu
+			and (
+				aa.dong = :dong
+				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+			)
+			and ST_DWithin(
+				rs.geom::geography,
+				ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+				:radiusMeter
+			)
+		""", nativeQuery = true)
+	long countIntersectingAreaWithinRadius(
+		@Param("gu")
+		String gu,
+		@Param("dong")
+		String dong,
+		@Param("lng")
+		double lng,
+		@Param("lat")
+		double lat,
+		@Param("radiusMeter")
+		int radiusMeter);
+
+	@Query(value = """
 		select exists (
 			select 1
 			from road_segments rs

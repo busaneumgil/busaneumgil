@@ -78,6 +78,9 @@ const percentFormatter = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 1,
 });
 
+const HAZARD_ROUTE_REVIEW_RADIUS_METER = 200;
+const HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT = 1500;
+
 type PreviewHazardRecord = {
   summary: AdminHazardReportSummary;
   detail: AdminHazardReportDetail;
@@ -314,7 +317,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
   const summaryQuery = useQuery({
     queryKey: ["admin-dashboard-summary", accessToken],
-    queryFn: () => fetchAdminDashboardSummary(accessToken),
+    queryFn: () => fetchAdminDashboardSummary({ accessToken }),
     enabled: !preview && hasToken,
     retry: false,
     staleTime: 300_000,
@@ -487,17 +490,11 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     mutationFn: ({
       reportId,
       intent,
-      gu,
-      dong,
     }: {
       reportId: number;
       intent: "approve" | "restore";
-      gu: string;
-      dong: string;
     }) => startAdminHazardRouteReview(reportId, {
       intent: toAdminHazardRouteReviewIntent(intent),
-      gu,
-      dong,
     }, accessToken),
     onSuccess: (response) => {
       const hydratedReview = hydrateHazardRouteReviewRecord(response);
@@ -575,15 +572,32 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const locationAddress = preview ? previewRecord?.address ?? null : resolveHazardDisplayAddress(locationQuery.data);
   const locationRegion = preview ? previewRecord?.region ?? "" : formatHazardRegionLabel(locationQuery.data);
   const areaScope = activeReport ? resolveHazardAreaScope(preview ? previewRecord?.region ?? null : null, preview ? null : locationQuery.data) : null;
+  const routeReviewAreaScope = activeReviewDraft?.gu && activeReviewDraft?.dong
+    ? { gu: activeReviewDraft.gu, dong: activeReviewDraft.dong }
+    : areaScope;
   const routeNetworkQuery = useQuery({
-    queryKey: ["admin-hazard-route-review-network", areaScope?.gu, areaScope?.dong, accessToken],
-    queryFn: () => fetchAdminRoadNetworkPayload({
-      gu: areaScope?.gu,
-      dong: areaScope?.dong,
+    queryKey: [
+      "admin-hazard-route-review-network",
+      routeReviewAreaScope?.gu,
+      routeReviewAreaScope?.dong,
+      reportPoint?.lat,
+      reportPoint?.lng,
       accessToken,
-      limit: 12000,
+    ],
+    queryFn: () => fetchAdminRoadNetworkPayload({
+      gu: routeReviewAreaScope?.gu,
+      dong: routeReviewAreaScope?.dong,
+      centerLat: reportPoint?.lat,
+      centerLng: reportPoint?.lng,
+      radiusMeter: HAZARD_ROUTE_REVIEW_RADIUS_METER,
+      accessToken,
+      limit: HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT,
     }),
-    enabled: !preview && hasToken && Boolean(areaScope?.gu && areaScope?.dong) && isHazardReviewActive(activeReviewDraft),
+    enabled: !preview
+      && hasToken
+      && reportPoint != null
+      && Boolean(routeReviewAreaScope?.gu && routeReviewAreaScope?.dong)
+      && isHazardReviewActive(activeReviewDraft),
     retry: false,
     staleTime: 300_000,
   });
@@ -593,7 +607,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     : null;
   const roadviewLink = reportPoint ? createKakaoRoadviewLink(reportPoint) : null;
   const displayStatus = activeReport ? deriveHazardDisplayStatus(activeReport.status, activeReviewDraft) : null;
-  const hasRouteReviewScope = preview || Boolean(areaScope?.gu && areaScope?.dong);
+  const hasRouteReviewScope = preview || Boolean(routeReviewAreaScope?.gu && routeReviewAreaScope?.dong);
   const canStartApprove = Boolean(detail && canStartHazardApprove(detail.status, activeReviewDraft));
   const canReject = Boolean(
     detail
@@ -649,8 +663,6 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       startRouteReviewMutation.mutate({
         reportId: activeReport.reportId,
         intent,
-        gu: areaScope.gu,
-        dong: areaScope.dong,
       });
       return;
     }
@@ -973,7 +985,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   networkPayload={preview ? previewRouteReviewPayload : routeNetworkQuery.data}
                   networkLoading={preview ? false : routeNetworkQuery.isLoading}
                   networkError={preview ? null : routeNetworkQuery.error instanceof Error ? routeNetworkQuery.error : null}
-                  areaScopeLabel={areaScope ? `${areaScope.gu} ${areaScope.dong}` : null}
+                  areaScopeLabel={routeReviewAreaScope ? `${routeReviewAreaScope.gu} ${routeReviewAreaScope.dong}` : null}
                   routingApplyState={preview ? null : routingApplyStateQuery.data}
                   applyingRouting={applyRoutingMutation.isPending}
                   onApplyRouting={() => applyRoutingMutation.mutate()}

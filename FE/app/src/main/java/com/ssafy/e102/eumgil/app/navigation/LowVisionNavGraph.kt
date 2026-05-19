@@ -44,6 +44,7 @@ import com.ssafy.e102.eumgil.feature.lowvision.LowVisionSearchRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionViewModel
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionVoiceInputRoute
 import com.ssafy.e102.eumgil.feature.lowvision.component.LowVisionBottomNav
+import com.ssafy.e102.eumgil.feature.textsize.TextSizeSettingRoute
 
 /**
  * LowVision 중첩 네비게이션 그래프의 루트 경로.
@@ -335,9 +336,40 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                         }
                     }
                 },
+                onNavigateToTextSizeSetting = {
+                    navController.navigate(resolveLowVisionTextSizeRoute())
+                },
                 onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
             )
         }
+
+        lowVisionComposable(route = LowVisionRoute.TextSize.route) { backStackEntry ->
+            LowVisionKwsNavEffect(
+                navController = navController,
+                backStackEntry = backStackEntry,
+            )
+            LowVisionTextSizeSettingRoute(
+                onNavigateBack = { navController.popBackStack() },
+                onTabSelected = { tab -> navController.navigateToLowVisionBottomTab(tab) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun LowVisionTextSizeSettingRoute(
+    onNavigateBack: () -> Unit,
+    onTabSelected: (LowVisionBottomTab) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TextSizeSettingRoute(
+            onNavigateBack = onNavigateBack,
+            modifier = Modifier.weight(1f),
+        )
+        LowVisionBottomNav(
+            selectedTab = LowVisionBottomTab.MY_PAGE,
+            onTabSelected = onTabSelected,
+        )
     }
 }
 
@@ -464,6 +496,8 @@ internal fun resolveLowVisionModeChangeRoute(): String = OnboardingRoute.Profile
 
 internal fun resolveLowVisionAppInfoRoute(): String = LowVisionRoute.AppInfo.route
 
+internal fun resolveLowVisionTextSizeRoute(): String = LowVisionRoute.TextSize.route
+
 internal fun resolveLowVisionLogoutRoute(): String = AuthRoute.Login.route
 
 internal fun resolveLowVisionBottomTabRoute(tab: LowVisionBottomTab): String =
@@ -487,7 +521,8 @@ internal fun resolveLowVisionSelectedBottomTab(currentRoute: String?): LowVision
         LowVisionRoute.CategorySearch.route,
         LowVisionRoute.CategoryResult.route -> LowVisionBottomTab.CATEGORY
         LowVisionRoute.MyPage.route,
-        LowVisionRoute.AppInfo.route -> LowVisionBottomTab.MY_PAGE
+        LowVisionRoute.AppInfo.route,
+        LowVisionRoute.TextSize.route -> LowVisionBottomTab.MY_PAGE
         else -> null
     }
 

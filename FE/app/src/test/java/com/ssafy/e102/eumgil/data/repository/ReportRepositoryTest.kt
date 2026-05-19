@@ -1,15 +1,23 @@
 package com.ssafy.e102.eumgil.data.repository
 
+import com.ssafy.e102.eumgil.core.model.AuthGateState
+import com.ssafy.e102.eumgil.core.model.AuthSession
 import com.ssafy.e102.eumgil.data.local.dao.ReportDraftDao
 import com.ssafy.e102.eumgil.data.local.dao.ReportOutboxDao
 import com.ssafy.e102.eumgil.data.local.entity.ReportDraftEntity
 import com.ssafy.e102.eumgil.data.local.entity.ReportOutboxEntity
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.datasource.AuthRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
+import com.ssafy.e102.eumgil.data.remote.dto.HazardMarkerDto
+import com.ssafy.e102.eumgil.data.remote.dto.HazardMarkersResponseDto
+import com.ssafy.e102.eumgil.data.remote.dto.HazardReportRerouteResponseDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPageDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPointDto
+import com.ssafy.e102.eumgil.data.remote.dto.ReissueResponseDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -18,6 +26,127 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ReportRepositoryTest {
+    @Test
+    fun `hazard report reroute retries with refreshed token after unauthorized`() =
+        runTest {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession =
+                                AuthSession(
+                                    accessToken = "expired-access-token",
+                                    refreshToken = "refresh-token",
+                                ),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val authRemoteDataSource =
+                FakeReportAuthRemoteDataSource(
+                    reissueResponse =
+                        ReissueResponseDto(
+                            accessToken = "new-access-token",
+                            refreshToken = "new-refresh-token",
+                        ),
+                )
+            val remoteDataSource =
+                FakeHazardReportsRemoteDataSource(
+                    rerouteResponse = HazardReportRerouteResponseDto(rerouted = false, route = null),
+                    failFirstHazardRerouteRequestWithUnauthorized = true,
+                )
+            val repository =
+                DefaultReportRepository(
+                    reportDraftDao = FakeReportDraftDao(),
+                    reportOutboxDao = FakeReportOutboxDao(),
+                    hazardReportsRemoteDataSource = remoteDataSource,
+                    accessTokenProvider = { "legacy-access-token" },
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource = authRemoteDataSource,
+                )
+
+            val result =
+                repository.rerouteAfterHazardReport(
+                    reportId = 12L,
+                    routeId = "rr_active_123",
+                    currentPoint = ReportRerouteCurrentPoint,
+                )
+
+            assertEquals(listOf("expired-access-token", "new-access-token"), remoteDataSource.hazardRerouteRequestTokens)
+            assertEquals(1, authRemoteDataSource.reissueCallCount)
+            assertEquals("refresh-token", authRemoteDataSource.latestRefreshToken)
+            assertEquals(false, result.rerouted)
+            assertEquals(null, result.route)
+        }
+
+    @Test
+    fun `approved hazard markers retry with refreshed token after unauthorized`() =
+        runTest {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession =
+                                AuthSession(
+                                    accessToken = "expired-access-token",
+                                    refreshToken = "refresh-token",
+                                ),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val authRemoteDataSource =
+                FakeReportAuthRemoteDataSource(
+                    reissueResponse =
+                        ReissueResponseDto(
+                            accessToken = "new-access-token",
+                            refreshToken = "new-refresh-token",
+                        ),
+                )
+            val remoteDataSource =
+                FakeHazardReportsRemoteDataSource(
+                    markerResponse =
+                        HazardMarkersResponseDto(
+                            markers =
+                                listOf(
+                                    HazardMarkerDto(
+                                        reportId = 17L,
+                                        reportType = "STAIRS_STEP",
+                                        lat = 35.1796,
+                                        lng = 129.0756,
+                                        imageUrls = listOf("https://example.com/17-1.jpg"),
+                                    ),
+                                ),
+                        ),
+                    failFirstMarkerRequestWithUnauthorized = true,
+                )
+            val repository =
+                DefaultReportRepository(
+                    reportDraftDao = FakeReportDraftDao(),
+                    reportOutboxDao = FakeReportOutboxDao(),
+                    hazardReportsRemoteDataSource = remoteDataSource,
+                    accessTokenProvider = { "legacy-access-token" },
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource = authRemoteDataSource,
+                )
+
+            val markers =
+                repository.getApprovedHazardMarkers(
+                    ApprovedHazardMarkerBounds(
+                        swLat = 35.17,
+                        swLng = 129.07,
+                        neLat = 35.18,
+                        neLng = 129.08,
+                    ),
+                )
+
+            assertEquals(listOf("expired-access-token", "new-access-token"), remoteDataSource.markerRequestTokens)
+            assertEquals(1, authRemoteDataSource.reissueCallCount)
+            assertEquals("refresh-token", authRemoteDataSource.latestRefreshToken)
+            assertEquals("new-access-token", authSessionRepository.getAuthGateState().authSession?.accessToken)
+            assertEquals("new-refresh-token", authSessionRepository.getAuthGateState().authSession?.refreshToken)
+            assertEquals(1, markers.size)
+            assertEquals(17L, markers.single().reportId)
+        }
+
     @Test
     fun `server history coexists with unsynced outbox and suppresses submitted duplicate`() =
         runTest {
@@ -192,9 +321,50 @@ private class FakeReportOutboxDao(
 private class FakeHazardReportsRemoteDataSource(
     private val listItems: List<HazardReportListItemDto> = emptyList(),
     private val detail: HazardReportDetailDto? = null,
+    private val markerResponse: HazardMarkersResponseDto = HazardMarkersResponseDto(emptyList()),
+    private val failFirstMarkerRequestWithUnauthorized: Boolean = false,
+    private val rerouteResponse: HazardReportRerouteResponseDto = HazardReportRerouteResponseDto(rerouted = false, route = null),
+    private val failFirstHazardRerouteRequestWithUnauthorized: Boolean = false,
 ) : HazardReportsRemoteDataSource(HttpJsonClient(baseUrl = "http://test.invalid")) {
     var listRequestCount = 0
         private set
+    val markerRequestTokens = mutableListOf<String?>()
+    val hazardRerouteRequestTokens = mutableListOf<String?>()
+
+    override suspend fun getApprovedHazardMarkers(
+        swLat: Double,
+        swLng: Double,
+        neLat: Double,
+        neLng: Double,
+        accessToken: String?,
+    ): HazardMarkersResponseDto {
+        markerRequestTokens += accessToken
+        if (failFirstMarkerRequestWithUnauthorized && markerRequestTokens.size == 1) {
+            throw HazardReportsApiException(
+                httpStatusCode = 401,
+                status = "A4010",
+                message = "unauthorized",
+            )
+        }
+        return markerResponse
+    }
+
+    override suspend fun rerouteAfterHazardReport(
+        reportId: Long,
+        accessToken: String,
+        routeId: String,
+        currentPoint: HazardReportPointDto,
+    ): HazardReportRerouteResponseDto {
+        hazardRerouteRequestTokens += accessToken
+        if (failFirstHazardRerouteRequestWithUnauthorized && hazardRerouteRequestTokens.size == 1) {
+            throw HazardReportsApiException(
+                httpStatusCode = 401,
+                status = "A4010",
+                message = "unauthorized",
+            )
+        }
+        return rerouteResponse
+    }
 
     override suspend fun getMyHazardReports(
         accessToken: String,
@@ -215,6 +385,21 @@ private class FakeHazardReportsRemoteDataSource(
         reportId: Long,
     ): HazardReportDetailDto =
         checkNotNull(detail) { "detail is not configured" }
+}
+
+private class FakeReportAuthRemoteDataSource(
+    private val reissueResponse: ReissueResponseDto,
+) : AuthRemoteDataSource(httpJsonClient = HttpJsonClient(baseUrl = "https://example.com")) {
+    var latestRefreshToken: String? = null
+        private set
+    var reissueCallCount: Int = 0
+        private set
+
+    override suspend fun reissue(refreshToken: String): ReissueResponseDto {
+        reissueCallCount += 1
+        latestRefreshToken = refreshToken
+        return reissueResponse
+    }
 }
 
 private fun reportOutboxEntity(
@@ -253,3 +438,8 @@ private fun hazardReportListItem(
         createdAt = "2026-04-28T17:00:00",
         representativeImageUrl = null,
     )
+
+private val ReportRerouteCurrentPoint = com.ssafy.e102.eumgil.core.model.GeoCoordinate(
+    latitude = 35.1796,
+    longitude = 129.0756,
+)

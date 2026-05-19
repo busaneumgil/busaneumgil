@@ -68,7 +68,10 @@ import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.PlaceTransitArrival
 import com.ssafy.e102.eumgil.core.model.RecentDestination
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.map.component.ApprovedHazardMarkerBottomSheet
+import com.ssafy.e102.eumgil.feature.map.component.ApprovedReportBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.FacilityDetailBottomSheetShellState
 import com.ssafy.e102.eumgil.feature.map.component.MapFloatingControls
@@ -77,15 +80,19 @@ import com.ssafy.e102.eumgil.feature.map.component.MapShortcutFilterRow
 import com.ssafy.e102.eumgil.feature.map.component.MapShellScaffold
 import com.ssafy.e102.eumgil.feature.map.component.MapTopSearchBar
 import com.ssafy.e102.eumgil.feature.map.component.MapViewport
+import com.ssafy.e102.eumgil.feature.map.component.MapViewportPointOverlay
 import com.ssafy.e102.eumgil.feature.map.component.MapViewportUiState
 import com.ssafy.e102.eumgil.feature.map.component.createMapMarkerViewportOverlayState
 import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationBottomSheetShell
 import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationBottomSheetState
 import com.ssafy.e102.eumgil.feature.map.component.RecentDestinationRowState
+import com.ssafy.e102.eumgil.feature.map.component.rememberApprovedHazardMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.component.resolveMapIntegrationState
+import com.ssafy.e102.eumgil.feature.map.model.ApprovedReportSheetState
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
+import com.ssafy.e102.eumgil.feature.map.model.parseApprovedReportClickTargetId
 import kotlin.math.PI
 import kotlin.math.asin
 import kotlin.math.cos
@@ -98,6 +105,7 @@ import kotlin.math.sqrt
 @Composable
 fun MapScreen(
     uiState: MapUiState,
+    reportRepository: ReportRepository,
     snackbarHostState: SnackbarHostState,
     onAction: (MapUiAction) -> Unit,
     onVoiceSearchClick: () -> Unit,
@@ -105,7 +113,12 @@ fun MapScreen(
     onNavigateToMyPage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val viewportState = mapViewportState(uiState = uiState)
+    val hazardMarkerState = rememberApprovedHazardMarkerOverlayState(reportRepository = reportRepository)
+    val viewportState =
+        mapViewportState(
+            uiState = uiState,
+            additionalOverlayPoints = hazardMarkerState.overlayPoints,
+        )
     val searchBarState = mapSearchBarState(uiState = uiState)
     val facilityDetailSheetUiState = mapFacilityDetailBottomSheetState(uiState = uiState)
     val recentDestinationSheetState = mapRecentDestinationBottomSheetState(uiState = uiState)
@@ -113,8 +126,12 @@ fun MapScreen(
     val mapContent: @Composable () -> Unit = {
         MapViewport(
             state = viewportState,
-            onMarkerClick = { markerId ->
-                onAction(MapUiAction.MarkerTapped(markerId))
+            onMarkerClick = { clickTargetId ->
+                if (hazardMarkerState.onMarkerClick(clickTargetId)) {
+                    return@MapViewport
+                }
+                hazardMarkerState.dismissSelection()
+                dispatchMapMarkerClick(clickTargetId, onAction)
             },
             onCameraMoveEnd = { center, zoomLevel, isUserGesture, isSelectedMapPinVisibleInViewport ->
                 onAction(
@@ -126,7 +143,9 @@ fun MapScreen(
                     ),
                 )
             },
+            onViewportBoundsChanged = hazardMarkerState::onViewportBoundsChanged,
             onMapClick = { payload ->
+                hazardMarkerState.dismissSelection()
                 if (routeEndpointPickerState == null) {
                     onAction(MapUiAction.MapTapped(payload))
                 }
@@ -204,6 +223,7 @@ fun MapScreen(
                         recentDestinationSheetState.copy(
                             isVisible =
                                 recentDestinationSheetState.isVisible &&
+                                    uiState.approvedReportSheetState.isVisible.not() &&
                                     facilityDetailSheetUiState.isVisible.not() &&
                                     uiState.routeEndpointMapPickerState == null &&
                                     uiState.isVoiceSearchVisible.not(),
@@ -217,11 +237,29 @@ fun MapScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
+                ApprovedHazardMarkerBottomSheet(
+                    marker =
+                        if (
+                            facilityDetailSheetUiState.isVisible ||
+                            recentDestinationSheetState.isVisible ||
+                            uiState.approvedReportSheetState.isVisible ||
+                            uiState.routeEndpointMapPickerState != null ||
+                            uiState.isVoiceSearchVisible
+                        ) {
+                            null
+                        } else {
+                            hazardMarkerState.selectedMarker
+                        },
+                    onDismiss = hazardMarkerState::dismissSelection,
+                    modifier = Modifier.fillMaxSize(),
+                )
+
                 FacilityDetailBottomSheetShell(
                     state =
                         facilityDetailSheetUiState.toShellState().copy(
                             isVisible =
                                 facilityDetailSheetUiState.isVisible &&
+                                    uiState.approvedReportSheetState.isVisible.not() &&
                                     uiState.isVoiceSearchVisible.not(),
                         ),
                     modifier = Modifier.fillMaxSize(),
@@ -335,6 +373,19 @@ fun MapScreen(
                             }
                         }
                     },
+                )
+
+                ApprovedReportBottomSheetShell(
+                    state =
+                        if (uiState.approvedReportSheetState.isVisible &&
+                            uiState.routeEndpointMapPickerState == null &&
+                            uiState.isVoiceSearchVisible.not()) {
+                            uiState.approvedReportSheetState
+                        } else {
+                            ApprovedReportSheetState()
+                        },
+                    onDismissRequest = { onAction(MapUiAction.ApprovedReportSheetDismissed) },
+                    modifier = Modifier.fillMaxSize(),
                 )
                 },
             )
@@ -1501,7 +1552,10 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
 }
 
 @Composable
-private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
+private fun mapViewportState(
+    uiState: MapUiState,
+    additionalOverlayPoints: List<MapViewportPointOverlay> = emptyList(),
+): MapViewportUiState {
     val cameraTarget = uiState.cameraTarget
     val currentLocationMarker = resolveCurrentLocationMarker(uiState.locationStatus)
     val preview = uiState.facilityDetailSheetState.destinationPreview
@@ -1621,7 +1675,10 @@ private fun mapViewportState(uiState: MapUiState): MapViewportUiState {
                     currentLocationMarker?.let {
                         stringResource(id = R.string.navigation_map_marker_current)
                     },
-            ),
+                approvedReportMarkers = uiState.approvedReportMarkerState.visibleReports,
+            ).let { overlayState ->
+                overlayState.copy(points = overlayState.points + additionalOverlayPoints)
+            },
         selectedMarkerId = uiState.selectedMarkerId,
         selectedMapPinCoordinate = uiState.selectedMapPinCoordinate,
         regionLabel = regionLabel,
@@ -2042,6 +2099,15 @@ private fun recentDestinationIcon(category: PlaceCategory?): Int =
         PlaceCategory.OTHER -> R.drawable.ic_map_selected_pin_blue
         null -> R.drawable.ic_map_selected_pin_blue
     }
+
+private fun dispatchMapMarkerClick(
+    clickTargetId: String,
+    onAction: (MapUiAction) -> Unit,
+) {
+    parseApprovedReportClickTargetId(clickTargetId)?.let { reportId ->
+        onAction(MapUiAction.ApprovedReportMarkerTapped(reportId = reportId))
+    } ?: onAction(MapUiAction.MarkerTapped(clickTargetId))
+}
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEGREES_TO_RADIANS = PI / 180.0

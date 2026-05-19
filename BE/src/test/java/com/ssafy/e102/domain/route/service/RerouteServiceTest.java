@@ -203,37 +203,33 @@ class RerouteServiceTest {
 	}
 
 	@Test
-	@DisplayName("기존 route geometry 100m 이내 이탈은 복귀 WALK leg를 붙인 새 route를 반환한다")
-	void returnsWalkRepairWhenCurrentPointIsNearRouteGeometry() {
+	@DisplayName("기존 route geometry 10m 초과 500m 이내 이탈은 전체 재탐색 route를 반환한다")
+	void returnsFullRerouteWhenCurrentPointLeavesRouteGeometry() {
 		UUID userId = UUID.randomUUID();
 		RouteSession routeSession = routeSession(routeSummary("rt_001"));
-		RouteSummaryResponse repairRoute = repairRouteSummary("rt_repair_candidate");
+		RouteSummaryResponse reroutedRoute = routeSummary("rt_full_near_001");
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
 			.thenReturn(Optional.of(routeSession));
 		when(walkRouteSearchService.search(userId, new WalkRouteSearchRequest(
 			new GeoPointRequest(35.1195, 128.9360),
-			new GeoPointRequest(35.12, 128.936))))
-			.thenReturn(new WalkRouteSearchResponse("rs_walk_repair", List.of(repairRoute)));
+			new GeoPointRequest(35.1315, 128.8823))))
+			.thenReturn(new WalkRouteSearchResponse("rs_walk_reroute", List.of(reroutedRoute)));
 
 		RerouteResponse response = service.reroute(
 			userId,
 			new RerouteRequest("rt_001", new GeoPointRequest(35.1195, 128.9360)));
 
-		assertThat(response.route().routeId()).startsWith("rr_repair_");
+		assertThat(response.route().routeId()).startsWith("rr_full_");
 		assertThat(response.route().routeId()).isNotEqualTo("rt_001");
-		assertThat(response.route().legs()).hasSize(2);
-		assertThat(response.route().legs().get(0).instruction()).isEqualTo("기존 경로까지 이동하세요.");
-		assertThat(response.route().legs().get(0).geometry()).isEqualTo("LINESTRING(128.936 35.1195, 128.936 35.12)");
-		assertThat(response.route().legs().get(1).sequence()).isEqualTo(2);
-		assertThat(response.route().estimatedTimeMinute()).isEqualTo(2);
+		assertThat(response.route().routeId()).isNotEqualTo(reroutedRoute.routeId());
 		verify(walkRouteSearchService).search(userId, new WalkRouteSearchRequest(
 			new GeoPointRequest(35.1195, 128.9360),
-			new GeoPointRequest(35.12, 128.936)));
+			new GeoPointRequest(35.1315, 128.8823)));
 		assertSavedRerouteSession(response.route().routeId(), 35.1195, 128.9360);
 	}
 
 	@Test
-	@DisplayName("기존 route geometry 100m 초과 500m 이내 이탈은 전체 재탐색 route를 반환한다")
+	@DisplayName("기존 route geometry에서 크게 이탈해도 500m 이내면 전체 재탐색 route를 반환한다")
 	void returnsFullRerouteWhenCurrentPointIsFarFromRouteGeometry() {
 		UUID userId = UUID.randomUUID();
 		RouteSession routeSession = routeSession(routeSummary("rt_001"));
@@ -258,15 +254,15 @@ class RerouteServiceTest {
 	}
 
 	@Test
-	@DisplayName("복귀 경로 후보가 없으면 기존 no-route 오류 RT4040을 반환한다")
-	void returnsRouteNotFoundWhenWalkRepairPathIsMissing() {
+	@DisplayName("10m 초과 이탈도 전체 재탐색 후보가 없으면 RT4040을 반환한다")
+	void returnsRouteNotFoundWhenNearFullReroutePathIsMissing() {
 		UUID userId = UUID.randomUUID();
 		RouteSession routeSession = routeSession(routeSummary("rt_001"));
 		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdOrderByUpdatedAtDesc(userId, "rt_001"))
 			.thenReturn(Optional.of(routeSession));
 		when(walkRouteSearchService.search(userId, new WalkRouteSearchRequest(
 			new GeoPointRequest(35.1195, 128.9360),
-			new GeoPointRequest(35.12, 128.936))))
+			new GeoPointRequest(35.1315, 128.8823))))
 			.thenThrow(new RouteException(RouteErrorCode.ROUTE_NOT_FOUND));
 
 		assertRouteError(
@@ -348,29 +344,6 @@ class RerouteServiceTest {
 				90,
 				2,
 				"LINESTRING(128.936 35.12, 128.937 35.121)",
-				List.of())));
-	}
-
-	private RouteSummaryResponse repairRouteSummary(String routeId) {
-		return new RouteSummaryResponse(
-			routeId,
-			TransportMode.WALK,
-			RouteOption.SAFE,
-			"안전 경로",
-			BigDecimal.valueOf(55),
-			45,
-			1,
-			List.of(),
-			"LINESTRING(128.936 35.1195, 128.936 35.12)",
-			List.of(new RouteLegResponse(
-				1,
-				TransportMode.WALK,
-				RouteLegRole.WALK_ONLY,
-				"목적지까지 이동하세요.",
-				BigDecimal.valueOf(55),
-				45,
-				1,
-				"LINESTRING(128.936 35.1195, 128.936 35.12)",
 				List.of())));
 	}
 

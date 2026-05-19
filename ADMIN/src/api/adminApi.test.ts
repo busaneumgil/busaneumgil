@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   completeAdminHazardRouteReview,
+  fetchAdminDashboardBottlenecks,
+  fetchAdminDashboardSummary,
   fetchAdminHazardReportDetail,
   startAdminHazardRouteReview,
   updateAdminHazardRouteReview,
@@ -133,7 +135,7 @@ describe("admin hazard route review API", () => {
 
     await startAdminHazardRouteReview(
       1,
-      { intent: "APPROVE", gu: "부산진구", dong: "부전동" },
+      { intent: "APPROVE" },
       "token",
     );
     await updateAdminHazardRouteReview(
@@ -147,7 +149,10 @@ describe("admin hazard route review API", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining("/admin/hazard-reports/1/route-review/start"),
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ intent: "APPROVE" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -158,6 +163,43 @@ describe("admin hazard route review API", () => {
       3,
       expect.stringContaining("/admin/hazard-reports/1/route-review/complete"),
       expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("passes selected dashboard period to summary and bottleneck APIs", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: "OK",
+          message: "ok",
+          data: {},
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchAdminDashboardSummary({
+      accessToken: "token",
+      from: "2026-05-01",
+      to: "2026-05-19",
+    });
+    await fetchAdminDashboardBottlenecks({
+      accessToken: "token",
+      from: "2026-05-01",
+      to: "2026-05-19",
+      limit: 12,
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("/admin/dashboard/summary?from=2026-05-01&to=2026-05-19"),
+      expect.anything(),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("/admin/dashboard/bottlenecks?limit=12&from=2026-05-01&to=2026-05-19"),
+      expect.anything(),
     );
   });
 });

@@ -63,6 +63,7 @@ fun LowVisionNavigationRoute(
                 locationPermissionManager = appContainer.locationPermissionManager,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 routeRepository = appContainer.routeRepository,
+                reportRepository = appContainer.reportRepository,
                 isLowVisionMode = true,
             )
         }
@@ -107,6 +108,7 @@ fun LowVisionNavigationRoute(
                         -> onNavigateToComplete()
 
                     NavigationUiEvent.NavigateToSavedRoute -> onNavigateToBookmark()
+                    NavigationUiEvent.ShowDuribalCallDialog -> Unit
                     is NavigationUiEvent.ShowToast ->
                         Toast.makeText(appContext, event.message, Toast.LENGTH_SHORT).show()
                     is NavigationUiEvent.SpeakBriefing -> textToSpeechController.speak(event.text)

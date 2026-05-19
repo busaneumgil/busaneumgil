@@ -19,6 +19,8 @@ export interface HazardRouteReviewRecord {
   intent: HazardRouteReviewIntent;
   stage: HazardRouteReviewStage;
   reviewerUserId: string;
+  gu: string | null;
+  dong: string | null;
   startedAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -55,6 +57,8 @@ export function loadStoredHazardRouteReview(reportId: number): HazardRouteReview
       intent: parsed.intent,
       stage: parsed.stage === "COMPLETED" ? "COMPLETED" : "IN_PROGRESS",
       reviewerUserId: typeof parsed.reviewerUserId === "string" ? parsed.reviewerUserId : "ADMIN",
+      gu: typeof parsed.gu === "string" ? parsed.gu : null,
+      dong: typeof parsed.dong === "string" ? parsed.dong : null,
       startedAt: typeof parsed.startedAt === "string" ? parsed.startedAt : new Date().toISOString(),
       updatedAt: typeof parsed.updatedAt === "string"
         ? parsed.updatedAt
@@ -101,6 +105,8 @@ export function startHazardRouteReview({
     intent,
     stage: "IN_PROGRESS",
     reviewerUserId,
+    gu: existing?.gu ?? null,
+    dong: existing?.dong ?? null,
     startedAt: canResumeExisting ? existing.startedAt : now,
     updatedAt: now,
     completedAt: null,
@@ -121,6 +127,8 @@ export function hydrateHazardRouteReviewRecord(review?: AdminHazardRouteReview |
     intent: fromAdminHazardRouteReviewIntent(review.intent),
     stage: review.stage,
     reviewerUserId: review.reviewerUserId,
+    gu: review.gu,
+    dong: review.dong,
     startedAt: review.startedAt,
     updatedAt: review.updatedAt,
     completedAt: review.completedAt,
@@ -284,6 +292,10 @@ export function canStartHazardRestore(
     return true;
   }
   return baseStatus === "APPROVED";
+}
+
+export function isHazardRestorePending(review?: HazardRouteReviewRecord | null) {
+  return review?.intent === "restore" && (review.stage === "IN_PROGRESS" || review.stage === "COMPLETED");
 }
 
 export function isHazardReviewActive(review?: HazardRouteReviewRecord | null) {

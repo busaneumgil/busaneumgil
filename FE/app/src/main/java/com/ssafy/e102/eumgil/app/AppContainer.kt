@@ -43,6 +43,7 @@ import com.ssafy.e102.eumgil.data.repository.AuthLogoutRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSessionRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSignupRepository
 import com.ssafy.e102.eumgil.data.repository.AuthSocialProvider
+import com.ssafy.e102.eumgil.data.repository.ApprovedReportMapRepository
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.CompositeSocialAccessTokenProvider
 import com.ssafy.e102.eumgil.data.repository.DefaultHazardReportImageUploader
@@ -58,6 +59,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteBookmarkRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.SettingsRepository
+import com.ssafy.e102.eumgil.data.repository.TextSizePreferenceRepository
 import com.ssafy.e102.eumgil.data.repository.UserProfileRepository
 import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import com.ssafy.e102.eumgil.data.repository.policy.RepositorySourcePolicy
@@ -186,6 +188,10 @@ class AppContainer(
         RepositoryModule.provideDestinationPreviewRepository()
     }
 
+    val approvedReportMapRepository: ApprovedReportMapRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideApprovedReportMapRepository()
+    }
+
     val authSessionRepository: AuthSessionRepository by lazy(LazyThreadSafetyMode.NONE) {
         RepositoryModule.provideAuthSessionRepository(
             authSessionLocalDataSource = authSessionLocalDataSource,
@@ -277,6 +283,12 @@ class AppContainer(
         RepositoryModule.provideSettingsRepository(
             initSettingsLocalDataSource = initSettingsLocalDataSource,
             authSessionRepository = authSessionRepository,
+        )
+    }
+
+    val textSizePreferenceRepository: TextSizePreferenceRepository by lazy(LazyThreadSafetyMode.NONE) {
+        RepositoryModule.provideTextSizePreferenceRepository(
+            appSettingDao = localDatabase.appSettingDao(),
         )
     }
 

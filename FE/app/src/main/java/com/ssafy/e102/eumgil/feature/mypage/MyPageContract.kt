@@ -25,6 +25,7 @@ enum class MyPageMobilitySubtype {
 }
 
 enum class MyPageMenuItem {
+    TEXT_SIZE,
     NOTICE,
     APP_HELP,
     PRIVACY_POLICY,
@@ -49,6 +50,8 @@ sealed interface MyPageUiEvent {
     data object NavigateToLogin : MyPageUiEvent
 
     data object NavigateToGuide : MyPageUiEvent
+
+    data object NavigateToTextSizeSetting : MyPageUiEvent
 
     data object OpenPrivacyPolicy : MyPageUiEvent
 

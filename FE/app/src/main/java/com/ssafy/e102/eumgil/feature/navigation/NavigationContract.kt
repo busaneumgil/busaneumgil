@@ -79,7 +79,7 @@ data class NavigationMapOverlayUiState(
     val focusCoordinate: GeoCoordinate? = null,
     val routeSegments: List<NavigationMapSegmentUiState> = emptyList(),
     val mapFocusMode: NavigationMapFocusMode = NavigationMapFocusMode.ACTIVE,
-    val trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING,
+    val trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW,
     val headingDegrees: Double? = null,
     val shouldAnimateCameraTransition: Boolean = true,
 ) {
@@ -174,6 +174,7 @@ data class NavigationStepCardUiState(
     val heroDescription: String = "현재 구간의 이동 정보를 확인하고 있습니다.",
     val instruction: String = "경로 안내를 준비하고 있습니다",
     val supportingText: String = "현재 위치를 확인한 뒤 안내를 시작합니다.",
+    val speechText: String = "",
     val guidanceAction: NavigationGuidanceAction = NavigationGuidanceAction.STRAIGHT,
     val transitInfo: NavigationTransitInfoUiState? = null,
     val metrics: List<NavigationStepMetricUiState> =
@@ -215,6 +216,10 @@ data class NavigationCtaUiState(
 sealed interface NavigationUiAction {
     data object NavigationEntered : NavigationUiAction
 
+    data class HazardReportSubmitted(
+        val reportId: Long,
+    ) : NavigationUiAction
+
     data object BackClicked : NavigationUiAction
 
     data object RouteDetailClicked : NavigationUiAction
@@ -252,6 +257,8 @@ sealed interface NavigationUiAction {
 
 sealed interface NavigationUiEvent {
     data object NavigateBack : NavigationUiEvent
+
+    data object ShowDuribalCallDialog : NavigationUiEvent
 
     data class NavigateToRouteDetail(
         val routeOption: RouteOption,

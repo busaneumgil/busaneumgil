@@ -86,6 +86,7 @@ internal fun KakaoMapViewport(
     state: MapViewportUiState,
     onMarkerClick: (String) -> Unit,
     onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
+    onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
     onMapClick: (MapTapPayload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -195,6 +196,7 @@ internal fun KakaoMapViewport(
                         initialState = state,
                         onMarkerClick = onMarkerClick,
                         onCameraMoveEnd = onCameraMoveEnd,
+                        onViewportBoundsChanged = onViewportBoundsChanged,
                         onMapClick = onMapClick,
                     )
                 },
@@ -204,6 +206,7 @@ internal fun KakaoMapViewport(
                         state = state,
                         onMarkerClick = onMarkerClick,
                         onCameraMoveEnd = onCameraMoveEnd,
+                        onViewportBoundsChanged = onViewportBoundsChanged,
                         onMapClick = onMapClick,
                     )
                 },
@@ -273,6 +276,19 @@ internal fun KakaoMapViewport(
     }
 }
 
+internal fun createViewportBounds(
+    cornerCoordinates: List<MapCoordinate>,
+): MapViewportBounds? {
+    if (cornerCoordinates.isEmpty()) return null
+
+    return MapViewportBounds(
+        swLat = cornerCoordinates.minOf(MapCoordinate::latitude),
+        swLng = cornerCoordinates.minOf(MapCoordinate::longitude),
+        neLat = cornerCoordinates.maxOf(MapCoordinate::latitude),
+        neLng = cornerCoordinates.maxOf(MapCoordinate::longitude),
+    )
+}
+
 private class KakaoMapViewportController {
     var rendererStatus by mutableStateOf(KakaoRendererStatus.Initializing)
         private set
@@ -286,6 +302,7 @@ private class KakaoMapViewportController {
     private var latestState: MapViewportUiState? = null
     private var markerClickHandler: ((String) -> Unit)? = null
     private var cameraMoveEndHandler: ((MapCoordinate, Int, Boolean, Boolean?) -> Unit)? = null
+    private var viewportBoundsChangedHandler: ((MapViewportBounds?) -> Unit)? = null
     private var mapClickHandler: ((MapTapPayload) -> Unit)? = null
     private var facilityMarkerStyleCache: KakaoFacilityMarkerStyleCache? = null
     private var overlayMarkerStyleCache: KakaoOverlayMarkerStyleCache? = null
@@ -294,6 +311,7 @@ private class KakaoMapViewportController {
     private var lastRenderedRouteCameraSignature: Int? = null
     private var lastRenderedMarkers: List<KakaoMarkerRenderState> = emptyList()
     private var lastRenderedPointOverlayMarkers: List<KakaoOverlayMarkerRenderState> = emptyList()
+    private var lastRenderedApprovedReportMarkers: List<KakaoOverlayMarkerRenderState> = emptyList()
     private var lastRenderedArrowOverlayMarkers: List<KakaoOverlayMarkerRenderState> = emptyList()
     private var lastRenderedRouteLines: List<KakaoRouteLineRenderState> = emptyList()
     private var consecutiveEmptyRouteLineFrameCount: Int = 0
@@ -343,11 +361,13 @@ private class KakaoMapViewportController {
         initialState: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
         onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
+        onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
         onMapClick: (MapTapPayload) -> Unit,
     ): MapView {
         latestState = initialState
         markerClickHandler = onMarkerClick
         cameraMoveEndHandler = onCameraMoveEnd
+        viewportBoundsChangedHandler = onViewportBoundsChanged
         mapClickHandler = onMapClick
 
         return mapView ?: MapView(context).also { createdMapView ->
@@ -367,11 +387,13 @@ private class KakaoMapViewportController {
         state: MapViewportUiState,
         onMarkerClick: (String) -> Unit,
         onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
+        onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
         onMapClick: (MapTapPayload) -> Unit,
     ) {
         latestState = state
         markerClickHandler = onMarkerClick
         cameraMoveEndHandler = onCameraMoveEnd
+        viewportBoundsChangedHandler = onViewportBoundsChanged
         mapClickHandler = onMapClick
         renderIntoMapIfReady()
     }
@@ -404,6 +426,7 @@ private class KakaoMapViewportController {
         rendererStatus = KakaoRendererStatus.Initializing
         rendererFailure = null
         projectedMarkerOverlays = emptyList()
+        viewportBoundsChangedHandler = null
         facilityMarkerStyleCache?.clear()
         facilityMarkerStyleCache = null
         overlayMarkerStyleCache?.clear()
@@ -413,6 +436,7 @@ private class KakaoMapViewportController {
         lastRenderedRouteCameraSignature = null
         lastRenderedMarkers = emptyList()
         lastRenderedPointOverlayMarkers = emptyList()
+        lastRenderedApprovedReportMarkers = emptyList()
         lastRenderedArrowOverlayMarkers = emptyList()
         lastRenderedRouteLines = emptyList()
         lastNativeSegmentRenderPathDebugSummary = null
@@ -465,7 +489,9 @@ private class KakaoMapViewportController {
                     lastRenderedCameraTarget = null
                     lastRenderedMarkers = emptyList()
                     lastRenderedPointOverlayMarkers = emptyList()
+                    lastRenderedApprovedReportMarkers = emptyList()
                     lastRenderedArrowOverlayMarkers = emptyList()
+                    invalidateRenderedRouteLines()
                     lastNativeSegmentRenderPathDebugSummary = null
                     lastRouteDirectionArrowDebugSummary = null
                     lastRouteDirectionArrowLayerSyncSummary = null
@@ -493,6 +519,8 @@ private class KakaoMapViewportController {
                 override fun onMapResumed() {
                     hasMapLifecycleResumed = true
                     lifecycleDispatchRetryCount = 0
+                    invalidateRenderedRouteLines()
+                    renderIntoMapIfReady()
                     Log.d(KAKAO_MAP_LOG_TAG, "Kakao map lifecycle resumed")
                 }
 
@@ -530,6 +558,11 @@ private class KakaoMapViewportController {
                                 markerId = poiId,
                                 position = position,
                             )
+                        } else if (layerId == KAKAO_APPROVED_REPORT_MARKER_LAYER_ID && poiId.isNotBlank()) {
+                            dispatchMarkerTap(
+                                markerId = poiId,
+                                position = position,
+                            )
                         }
                     }
                     readyMap.setOnTerrainClickListener { _, position, _ ->
@@ -539,7 +572,7 @@ private class KakaoMapViewportController {
                         )
                     }
                     readyMap.setOnMapClickListener { _, position, _, poi ->
-                        if (poi?.isPoi == true && poi.layerId == KAKAO_MARKER_LAYER_ID && poi.poiId.isNotBlank()) {
+                        if (poi?.isPoi == true && poi.layerId.isClickableMarkerLayer() && poi.poiId.isNotBlank()) {
                             dispatchMarkerTap(
                                 markerId = poi.poiId,
                                 position = position,
@@ -607,6 +640,7 @@ private class KakaoMapViewportController {
                             gestureType.isUserDrivenCameraMove(),
                             selectedMapPinVisibleInViewport,
                         )
+                        dispatchViewportBounds(readyMap)
                         latestState?.let { state ->
                             syncMarkers(
                                 readyMap = readyMap,
@@ -651,6 +685,32 @@ private class KakaoMapViewportController {
         syncRouteLines(readyMap = readyMap, state = state)
         syncMarkers(readyMap = readyMap, state = state)
         updateProjectedMarkerOverlays(readyMap = readyMap, state = state)
+        dispatchViewportBounds(readyMap)
+    }
+
+    private fun dispatchViewportBounds(readyMap: KakaoMap) {
+        viewportBoundsChangedHandler?.invoke(readyMap.toViewportBounds())
+    }
+
+    private fun KakaoMap.toViewportBounds(): MapViewportBounds? {
+        val viewportRect = viewport
+        if (viewportRect.width() <= 0 || viewportRect.height() <= 0) return null
+
+        val viewportCornerCoordinates =
+            listOf(
+                viewportRect.left to viewportRect.bottom,
+                viewportRect.left to viewportRect.top,
+                viewportRect.right to viewportRect.bottom,
+                viewportRect.right to viewportRect.top,
+            ).map { (x, y) ->
+                val latLng = fromScreenPoint(x, y) ?: return null
+                MapCoordinate(
+                    latitude = latLng.latitude,
+                    longitude = latLng.longitude,
+                )
+            }
+
+        return createViewportBounds(viewportCornerCoordinates)
     }
 
     private fun syncLifecycleToMapView(reason: String) {
@@ -842,13 +902,15 @@ private class KakaoMapViewportController {
         if (lastRenderedRouteLines == routeLineStates) return
 
         val routeLineManager = readyMap.routeLineManager ?: return
-        routeLineManager.clearAll()
-        if (routeLineStates.isNotEmpty()) {
-            val routeLineLayer =
-                routeLineManager.addLayer(
+        val routeLineLayer =
+            routeLineManager.getLayer(KAKAO_ROUTE_LINE_LAYER_ID)
+                ?: routeLineManager.addLayer(
                     KAKAO_ROUTE_LINE_LAYER_ID,
                     KAKAO_ROUTE_LINE_LAYER_Z_ORDER,
-                ) ?: return
+                )
+                ?: return
+        routeLineLayer.removeAll()
+        if (routeLineStates.isNotEmpty()) {
             routeLineStates.forEach { routeLine ->
                 val points =
                     routeLine.points.map { point ->
@@ -874,6 +936,11 @@ private class KakaoMapViewportController {
             KAKAO_MAP_LOG_TAG,
             "Route lines synced count=${routeLineStates.size}",
         )
+    }
+
+    private fun invalidateRenderedRouteLines() {
+        lastRenderedRouteLines = emptyList()
+        consecutiveEmptyRouteLineFrameCount = 0
     }
 
     private fun syncMarkers(
@@ -916,6 +983,7 @@ private class KakaoMapViewportController {
         val overlayMarkerRenderStates = overlayMarkerRenderComputation.markers
         val overlayMarkerRenderPartition = partitionKakaoOverlayMarkerRenderStates(overlayMarkerRenderStates)
         val pointOverlayMarkerRenderStates = overlayMarkerRenderPartition.pointMarkers
+        val approvedReportMarkerRenderStates = overlayMarkerRenderPartition.approvedReportMarkers
         val arrowOverlayMarkerRenderStates = overlayMarkerRenderPartition.directionArrowMarkers
         logCameraBearingComparison(
             reason = reason,
@@ -926,6 +994,7 @@ private class KakaoMapViewportController {
         if (
             lastRenderedMarkers == markerRenderStates &&
             lastRenderedPointOverlayMarkers == pointOverlayMarkerRenderStates &&
+            lastRenderedApprovedReportMarkers == approvedReportMarkerRenderStates &&
             lastRenderedArrowOverlayMarkers == arrowOverlayMarkerRenderStates
         ) {
             return
@@ -962,6 +1031,23 @@ private class KakaoMapViewportController {
                 lastNativeSegmentRenderPathDebugSummary = nativeRenderPathSummary
                 Log.d(KAKAO_MAP_LOG_TAG, "SegmentMarkerTrace[RenderPath] $nativeRenderPathSummary")
             }
+        }
+        if (lastRenderedApprovedReportMarkers != approvedReportMarkerRenderStates) {
+            val isApprovedReportMarkerLayerClickable =
+                approvedReportMarkerRenderStates.any { marker -> marker.clickTargetId != null }
+            if (
+                !syncOverlayMarkerLayer(
+                    labelManager = labelManager,
+                    overlayStyleCache = overlayStyleCache,
+                    layerId = KAKAO_APPROVED_REPORT_MARKER_LAYER_ID,
+                    zOrder = KAKAO_APPROVED_REPORT_MARKER_LAYER_Z_ORDER,
+                    isLayerClickable = isApprovedReportMarkerLayerClickable,
+                    markers = approvedReportMarkerRenderStates,
+                )
+            ) {
+                return
+            }
+            lastRenderedApprovedReportMarkers = approvedReportMarkerRenderStates
         }
         if (lastRenderedArrowOverlayMarkers != arrowOverlayMarkerRenderStates) {
             val routeDirectionArrowLayerSyncResult =
@@ -1017,6 +1103,8 @@ private class KakaoMapViewportController {
                 }
                 append(" overlayPoints=")
                 append(pointOverlayMarkerRenderStates.size)
+                append(" approvedReports=")
+                append(approvedReportMarkerRenderStates.size)
                 append(" overlayArrows=")
                 append(arrowOverlayMarkerRenderStates.size)
                 append(" bearingSource=")
@@ -1389,6 +1477,12 @@ private class KakaoMapViewportController {
         readyMap: KakaoMap,
         state: MapViewportUiState?,
     ) {
+        val cameraBearingDegrees =
+            readyMap
+                .getCameraPosition()
+                ?.toResolvedCameraPosition(source = KAKAO_CAMERA_BEARING_SOURCE_SYNC_SNAPSHOT)
+                ?.bearingDegrees
+                ?: 0.0
         val projectedMarkers =
             createKakaoProjectedMarkerRenderStates(
                 currentLocation = state?.currentLocation,
@@ -1396,6 +1490,7 @@ private class KakaoMapViewportController {
                 selectedDestinationCoordinate = state?.selectedDestinationCoordinate,
                 selectedMapPinCoordinate = state?.selectedMapPinCoordinate,
                 overlayPoints = state?.overlayState?.points.orEmpty(),
+                cameraBearingDegrees = cameraBearingDegrees,
             )
         val projectionResult =
             createKakaoProjectedMarkerProjectionResult(projectedMarkers) { coordinate ->
@@ -1564,6 +1659,7 @@ private data class KakaoRouteDirectionArrowLayerSyncResult(
 )
 
 private const val KAKAO_MARKER_LAYER_ID = "eumgil-map-markers"
+private const val KAKAO_APPROVED_REPORT_MARKER_LAYER_ID = "eumgil-approved-report-markers"
 private const val KAKAO_OVERLAY_MARKER_LAYER_ID = "eumgil-overlay-markers"
 private const val KAKAO_DIRECTION_ARROW_LAYER_ID = "eumgil-overlay-arrows"
 private const val KAKAO_ROUTE_LINE_LAYER_ID = "eumgil-route-lines"
@@ -1581,12 +1677,19 @@ private const val KAKAO_MAP_TAP_DEDUP_WINDOW_MILLIS = 250L
 private const val KAKAO_MARKER_TAP_DEDUP_WINDOW_MILLIS = 250L
 private const val KAKAO_MAP_TAP_DEDUP_COORDINATE_EPSILON = 0.000001
 private const val KAKAO_MARKER_LAYER_Z_ORDER = 1000
+private const val KAKAO_APPROVED_REPORT_MARKER_LAYER_Z_ORDER = 1005
 private const val KAKAO_OVERLAY_MARKER_LAYER_Z_ORDER = 950
 private const val KAKAO_DIRECTION_ARROW_LAYER_Z_ORDER = 940
 private const val KAKAO_ROUTE_LINE_LAYER_Z_ORDER = 900
 private const val KAKAO_OVERLAY_MARKER_RANK = 0L
 private const val KAKAO_ROUTE_CAMERA_PADDING = 84
 private const val KAKAO_PROJECTED_MARKER_MAX_RETRY_FRAMES = 6
+private const val APPROVED_REPORT_MARKER_FILL = -10163 // 0xFFFFD84D
+private const val APPROVED_REPORT_MARKER_STROKE = -8761600 // 0xFF7A4F00
+private const val APPROVED_REPORT_MARKER_TEXT = -12965376 // 0xFF3A2A00
+
+private fun String?.isClickableMarkerLayer(): Boolean =
+    this == KAKAO_MARKER_LAYER_ID || this == KAKAO_APPROVED_REPORT_MARKER_LAYER_ID
 
 private fun LabelManager.getOrCreateLabelLayer(
     layerId: String,
@@ -1709,6 +1812,9 @@ private fun KakaoProjectedMarkerOverlay.resolveContentDescription(
     selectedDestinationName: String?,
 ): String? =
     when (kind) {
+        KakaoProjectedMarkerKind.HAZARD ->
+            stringResource(id = R.string.approved_hazard_marker_sheet_title)
+
         KakaoProjectedMarkerKind.CURRENT_LOCATION ->
             stringResource(id = R.string.navigation_map_marker_current)
 
@@ -1777,6 +1883,7 @@ private class KakaoOverlayMarkerStyleCache(
     ): Bitmap =
         bitmapCache.getOrPut(key) {
             when (marker.kind) {
+                KakaoOverlayMarkerKind.APPROVED_REPORT -> createApprovedReportWarningMarkerBitmap(marker)
                 KakaoOverlayMarkerKind.ROUTE_SEGMENT_JUNCTION -> createSegmentJunctionBitmap(marker)
                 KakaoOverlayMarkerKind.TRANSIT_STOP -> createTransitStopBitmap(marker)
                 KakaoOverlayMarkerKind.TRANSIT_TRANSFER -> createTransitTransferBitmap(marker)
@@ -1784,6 +1891,54 @@ private class KakaoOverlayMarkerStyleCache(
                 KakaoOverlayMarkerKind.FOCUS_HALO -> createFocusHaloBitmap(marker)
             }
         }
+
+    private fun createApprovedReportWarningMarkerBitmap(
+        marker: KakaoOverlayMarkerRenderState,
+    ): Bitmap {
+        val sizePx = dpToPx(marker.sizeDp.toFloat())
+        val bitmapSizePx = sizePx.roundToInt().coerceAtLeast(1)
+        val padding = dpToPx(2.5f)
+        val strokeWidth = dpToPx(2f).coerceAtLeast(1f)
+        val halfStroke = strokeWidth / 2f
+        val bitmap = Bitmap.createBitmap(bitmapSizePx, bitmapSizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val trianglePath =
+            AndroidPath().apply {
+                moveTo(sizePx / 2f, padding + halfStroke)
+                lineTo(sizePx - padding - halfStroke, sizePx - padding - halfStroke)
+                lineTo(padding + halfStroke, sizePx - padding - halfStroke)
+                close()
+            }
+        val fillPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = APPROVED_REPORT_MARKER_FILL
+            }
+        val strokePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                this.strokeWidth = strokeWidth
+                strokeJoin = Paint.Join.ROUND
+                color = APPROVED_REPORT_MARKER_STROKE
+            }
+        val textPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = APPROVED_REPORT_MARKER_TEXT
+                textAlign = Paint.Align.CENTER
+                textSize = dpToPx(15f)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+            }
+
+        canvas.drawPath(trianglePath, fillPaint)
+        canvas.drawPath(trianglePath, strokePaint)
+        canvas.drawText(
+            "!",
+            sizePx / 2f,
+            (sizePx * 0.62f) - ((textPaint.descent() + textPaint.ascent()) / 2f),
+            textPaint,
+        )
+        return bitmap
+    }
 
     private fun createFocusHaloBitmap(
         marker: KakaoOverlayMarkerRenderState,

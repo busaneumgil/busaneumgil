@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
@@ -24,12 +25,15 @@ import com.ssafy.e102.domain.report.dto.request.CreateHazardReportRequest;
 import com.ssafy.e102.domain.report.dto.response.HazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportIdResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportListResponse;
+import com.ssafy.e102.domain.report.dto.response.HazardMarkerListResponse;
+import com.ssafy.e102.domain.report.dto.response.HazardMarkerResponse;
 import com.ssafy.e102.domain.report.entity.HazardReport;
 import com.ssafy.e102.domain.report.entity.HazardReportImage;
 import com.ssafy.e102.domain.report.exception.HazardReportErrorCode;
 import com.ssafy.e102.domain.report.exception.HazardReportException;
 import com.ssafy.e102.domain.report.repository.HazardReportImageRepository;
 import com.ssafy.e102.domain.report.repository.HazardReportRepository;
+import com.ssafy.e102.domain.report.type.ReportStatus;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.exception.UserErrorCode;
 import com.ssafy.e102.domain.user.exception.UserException;
@@ -37,6 +41,7 @@ import com.ssafy.e102.domain.user.repository.UserRepository;
 import com.ssafy.e102.global.external.kakao.KakaoAddressDocument;
 import com.ssafy.e102.global.external.kakao.KakaoLocalClient;
 import com.ssafy.e102.global.geo.GeoPointConverter;
+import com.ssafy.e102.global.geo.GeoDistanceCalculator;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +54,8 @@ public class HazardReportService {
 	private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "reportId");
 	private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 255;
 	private static final long IDEMPOTENCY_RETENTION_HOURS = 24;
+	private static final int MAX_MARKER_COUNT = 100;
+	private static final double MAX_MARKER_BBOX_DIAGONAL_METERS = 2_000.0;
 
 	private final HazardReportRepository hazardReportRepository;
 	private final HazardReportImageRepository hazardReportImageRepository;
@@ -197,6 +204,37 @@ public class HazardReportService {
 			createImageReadUrls(hazardReport));
 	}
 
+	@Transactional(readOnly = true)
+	public HazardMarkerListResponse getApprovedHazardMarkers(
+		Double swLat,
+		Double swLng,
+		Double neLat,
+		Double neLng) {
+		validateMarkerBounds(swLat, swLng, neLat, neLng);
+		List<HazardReport> reportsInBounds = hazardReportRepository.findApprovedWithinBounds(
+			swLng,
+			swLat,
+			neLng,
+			neLat,
+			PageRequest.of(0, MAX_MARKER_COUNT));
+		if (reportsInBounds.isEmpty()) {
+			return new HazardMarkerListResponse(List.of());
+		}
+
+		Map<Long, HazardReport> reportsWithImagesById = hazardReportRepository.findAllByReportIdIn(
+				reportsInBounds.stream()
+					.map(HazardReport::getReportId)
+					.toList())
+			.stream()
+			.collect(Collectors.toMap(HazardReport::getReportId, hazardReport -> hazardReport));
+
+		List<HazardMarkerResponse> markers = reportsInBounds.stream()
+			.map(hazardReport -> toHazardMarkerResponse(
+				reportsWithImagesById.getOrDefault(hazardReport.getReportId(), hazardReport)))
+			.toList();
+		return new HazardMarkerListResponse(markers);
+	}
+
 	private Map<Long, String> getRepresentativeImageUrls(List<HazardReport> hazardReports) {
 		List<Long> reportIds = hazardReports.stream()
 			.map(HazardReport::getReportId)
@@ -219,6 +257,33 @@ public class HazardReportService {
 			.map(HazardReportImage::getImageObjectKey)
 			.map(hazardReportImageUploadService::createReadUrl)
 			.toList();
+	}
+
+	private HazardMarkerResponse toHazardMarkerResponse(HazardReport hazardReport) {
+		Point reportPoint = hazardReport.getReportPoint();
+		return new HazardMarkerResponse(
+			hazardReport.getReportId(),
+			hazardReport.getReportType(),
+			reportPoint.getY(),
+			reportPoint.getX(),
+			createMarkerImageReadUrls(hazardReport));
+	}
+
+	private List<String> createMarkerImageReadUrls(HazardReport hazardReport) {
+		return hazardReport.getImages()
+			.stream()
+			.map(image -> toMarkerImageReadUrl(hazardReport.getReportId(), image))
+			.filter(Objects::nonNull)
+			.toList();
+	}
+
+	private String toMarkerImageReadUrl(Long reportId, HazardReportImage image) {
+		try {
+			return hazardReportImageUploadService.createReadUrl(image.getImageObjectKey());
+		} catch (RuntimeException exception) {
+			log.warn("승인 제보 마커 이미지 URL 생성 실패. reportId={}, objectKey={}", reportId, image.getImageObjectKey(), exception);
+			return null;
+		}
 	}
 
 	private String resolveAddress(GeoPointRequest reportPoint) {
@@ -264,6 +329,33 @@ public class HazardReportService {
 				"Idempotency-Key는 255자 이하여야 합니다.");
 		}
 		return normalizedKey;
+	}
+
+	private void validateMarkerBounds(
+		Double swLat,
+		Double swLng,
+		Double neLat,
+		Double neLng) {
+		if (swLat == null || swLng == null || neLat == null || neLng == null) {
+			throw invalidMarkerBounds("bbox 좌표는 모두 필수입니다.");
+		}
+		if (swLat < -90 || swLat > 90 || neLat < -90 || neLat > 90) {
+			throw invalidMarkerBounds("위도는 -90 이상 90 이하여야 합니다.");
+		}
+		if (swLng < -180 || swLng > 180 || neLng < -180 || neLng > 180) {
+			throw invalidMarkerBounds("경도는 -180 이상 180 이하여야 합니다.");
+		}
+		if (swLat >= neLat || swLng >= neLng) {
+			throw invalidMarkerBounds("bbox 좌표 순서가 올바르지 않습니다.");
+		}
+		double diagonalDistance = GeoDistanceCalculator.distanceMeter(swLat, swLng, neLat, neLng);
+		if (diagonalDistance > MAX_MARKER_BBOX_DIAGONAL_METERS) {
+			throw invalidMarkerBounds("bbox 대각선 거리는 2km 이하여야 합니다.");
+		}
+	}
+
+	private HazardReportException invalidMarkerBounds(String message) {
+		return new HazardReportException(HazardReportErrorCode.INVALID_HAZARD_REPORT_REQUEST, message);
 	}
 
 	private User getUser(UUID userId) {

@@ -31,6 +31,7 @@ internal fun MapOverlayViewport(
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     onMarkerClick: (String) -> Unit = {},
+    onViewportBoundsChanged: (MapViewportBounds?) -> Unit = {},
     onUserCameraGesture: () -> Unit = {},
     controlState: MapOverlayViewportControlState? = null,
 ) {
@@ -94,17 +95,22 @@ internal fun MapOverlayViewport(
                         onUserCameraGesture()
                     }
                 },
+                onViewportBoundsChanged = onViewportBoundsChanged,
                 onMapClick = {},
                 modifier = describedModifier,
             )
 
-        MapIntegrationState.Unbound ->
+        MapIntegrationState.Unbound -> {
+            SideEffect {
+                onViewportBoundsChanged(null)
+            }
             MapViewportOverlayBackdrop(
                 overlayState = renderedOverlayState,
                 zoomLevel = cameraTarget.resolvedZoomLevel(),
                 modifier = describedModifier,
                 onPointClick = onMarkerClick,
             )
+        }
     }
 }
 
@@ -188,6 +194,11 @@ internal class MapOverlayViewportControlState {
                 requestId = nextControlRequestId(),
                 shouldAnimateTransition = true,
             )
+    }
+
+    fun clearManualCamera() {
+        manualCameraTarget = null
+        latestObservedCamera = null
     }
 
     fun recenterToCurrentLocation(currentLocation: MapCoordinate) {

@@ -1,8 +1,10 @@
 package com.ssafy.e102.eumgil.app.navigation
 
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LowVisionNavGraphRoutingTest {
@@ -139,6 +141,7 @@ class LowVisionNavGraphRoutingTest {
         assertEquals(LowVisionBottomTab.CATEGORY, resolveLowVisionSelectedBottomTab(LowVisionRoute.CategoryResult.route))
         assertEquals(LowVisionBottomTab.MY_PAGE, resolveLowVisionSelectedBottomTab(LowVisionRoute.MyPage.route))
         assertEquals(LowVisionBottomTab.MY_PAGE, resolveLowVisionSelectedBottomTab(LowVisionRoute.AppInfo.route))
+        assertEquals(LowVisionBottomTab.MY_PAGE, resolveLowVisionSelectedBottomTab(LowVisionRoute.TextSize.route))
     }
 
     @Test
@@ -182,8 +185,25 @@ class LowVisionNavGraphRoutingTest {
             resolveLowVisionAppInfoRoute(),
         )
         assertEquals(
+            LowVisionRoute.TextSize.route,
+            resolveLowVisionTextSizeRoute(),
+        )
+        assertEquals(
             AuthRoute.Login.route,
             resolveLowVisionLogoutRoute(),
         )
+    }
+
+    @Test
+    fun `low vision app info wires text size action to dedicated setting route with bottom tab`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/LowVisionNavGraph.kt")
+                .readText()
+
+        assertTrue(source.contains("onNavigateToTextSizeSetting = {"))
+        assertTrue(source.contains("navController.navigate(resolveLowVisionTextSizeRoute())"))
+        assertTrue(source.contains("lowVisionComposable(route = LowVisionRoute.TextSize.route)"))
+        assertTrue(source.contains("TextSizeSettingRoute("))
+        assertTrue(source.contains("selectedTab = LowVisionBottomTab.MY_PAGE"))
     }
 }

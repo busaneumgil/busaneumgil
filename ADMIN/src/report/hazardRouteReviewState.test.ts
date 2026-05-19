@@ -6,6 +6,7 @@ import {
   deriveHazardDisplayStatus,
   hazardRouteReviewIntentLabel,
   hydrateHazardRouteReviewRecord,
+  isHazardRestorePending,
   loadStoredHazardRouteReview,
   routeReviewCompletionClassName,
   routeReviewCompletionMessage,
@@ -92,6 +93,28 @@ describe("hazard route review workflow state", () => {
     expect(hazardRouteReviewIntentLabel("restore")).toBeTruthy();
   });
 
+  it("distinguishes restore pending from merely restorable approved reports", () => {
+    expect(isHazardRestorePending()).toBe(false);
+
+    const approveReview = completeHazardRouteReview(startHazardRouteReview({
+      reportId: 8,
+      intent: "approve",
+      reviewerUserId: "admin-restore-check",
+      now: "2026-05-18T04:00:00.000Z",
+    }), "2026-05-18T04:10:00.000Z");
+
+    const restoreReview = startHazardRouteReview({
+      reportId: 9,
+      intent: "restore",
+      reviewerUserId: "admin-restore-check",
+      now: "2026-05-18T04:20:00.000Z",
+    });
+
+    expect(isHazardRestorePending(approveReview)).toBe(false);
+    expect(isHazardRestorePending(restoreReview)).toBe(true);
+    expect(isHazardRestorePending(completeHazardRouteReview(restoreReview, "2026-05-18T04:30:00.000Z"))).toBe(true);
+  });
+
   it("allows approve review for pending and rejected reports", () => {
     const review = startHazardRouteReview({
       reportId: 4,
@@ -142,6 +165,8 @@ describe("hazard route review workflow state", () => {
       intent: "restore",
       stage: "IN_PROGRESS",
       reviewerUserId: "admin-8",
+      gu: "부산진구",
+      dong: "부전동",
       startedAt: "2026-05-18T10:00:00",
       updatedAt: "2026-05-18T10:05:00",
       completedAt: null,

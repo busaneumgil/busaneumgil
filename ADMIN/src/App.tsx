@@ -70,6 +70,11 @@ import type {
 const placeCategories: PlaceCategory[] = [...facilityCategoryOrder];
 const allDongScope = "전체";
 
+interface DashboardDateRange {
+  from: string;
+  to: string;
+}
+
 const accessibilityFeatureTypes: AccessibilityFeatureType[] = [
   "accessibleEntrance",
   "elevator",
@@ -420,7 +425,7 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
     description: "보행약자 편의시설 위치와 접근성 속성을 검수합니다.",
   },
   hazards: {
-    label: "불편신고 관리",
+    label: "불편제보 관리",
     description: "사용자가 등록한 도로 상태 제보를 확인하고 승인 또는 반려합니다.",
   },
   notices: {
@@ -474,9 +479,15 @@ function AdminApp() {
   const [auditLogGu, setAuditLogGu] = useState("");
   const [auditLogDong, setAuditLogDong] = useState("");
   const [auditLogActorUserId, setAuditLogActorUserId] = useState("");
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isDashboardRangeOpen, setIsDashboardRangeOpen] = useState(false);
+  const [dashboardRange, setDashboardRange] = useState<DashboardDateRange>(() => createDashboardPresetRange(6));
+  const [dashboardRangeDraft, setDashboardRangeDraft] = useState<DashboardDateRange>(() => createDashboardPresetRange(6));
   const completedRoadEditJobIdRef = useRef<number | null>(null);
   const submittedRoadEditAssignmentIdRef = useRef<string | null>(null);
   const workspaceRef = useRef<HTMLElement | null>(null);
+  const notificationPanelRef = useRef<HTMLDivElement | null>(null);
+  const dashboardRangePanelRef = useRef<HTMLDivElement | null>(null);
   const {
     page,
     selectedAssignmentId,
@@ -508,6 +519,10 @@ function AdminApp() {
   const isAdminAuthenticated = (hasToken && adminPrincipal?.role === "ADMIN") || Boolean(fullShellPreviewEnabled);
   const usesRealAdminApi = hasToken && adminPrincipal?.role === "ADMIN";
   const showsAreaSelector = page === "network" || page === "facilities" || page === "routeTuning";
+  const normalizedDashboardRange = useMemo(
+    () => normalizeDashboardDateRange(dashboardRange),
+    [dashboardRange],
+  );
   const selectedAssignmentType: AssignmentType = page === "facilities" ? "FACILITY" : "ROAD_NETWORK";
   const selectedScopeDong = allDongScope;
   const selectedAssignmentScopeLabel = `${selectedGu} ${selectedScopeDong}`;
@@ -563,16 +578,25 @@ function AdminApp() {
   });
 
   const dashboardSummaryQuery = useQuery({
-    queryKey: ["admin-dashboard-summary", accessToken],
-    queryFn: () => fetchAdminDashboardSummary(accessToken),
+    queryKey: ["admin-dashboard-summary", accessToken, normalizedDashboardRange.from, normalizedDashboardRange.to],
+    queryFn: () => fetchAdminDashboardSummary({
+      accessToken,
+      from: normalizedDashboardRange.from,
+      to: normalizedDashboardRange.to,
+    }),
     enabled: page === "home" && usesRealAdminApi,
     retry: false,
     refetchInterval: 60_000,
   });
 
   const dashboardBottlenecksQuery = useQuery({
-    queryKey: ["admin-dashboard-bottlenecks", accessToken],
-    queryFn: () => fetchAdminDashboardBottlenecks({ accessToken, limit: 12 }),
+    queryKey: ["admin-dashboard-bottlenecks", accessToken, normalizedDashboardRange.from, normalizedDashboardRange.to],
+    queryFn: () => fetchAdminDashboardBottlenecks({
+      accessToken,
+      from: normalizedDashboardRange.from,
+      to: normalizedDashboardRange.to,
+      limit: 12,
+    }),
     enabled: page === "home" && usesRealAdminApi,
     retry: false,
     refetchInterval: 60_000,
@@ -801,10 +825,21 @@ function AdminApp() {
   const pendingHazardBadge = pendingHazardReportsQuery.data?.hasNext
     ? `${pendingHazardCount}+`
     : String(pendingHazardCount);
+  const pendingHazardNotifications = useMemo(() => {
+    return (pendingHazardReportsQuery.data?.content ?? []).slice(0, 4);
+  }, [pendingHazardReportsQuery.data]);
+  const adminRoleLabel = currentAdmin?.role === "ADMIN" ? "Admin" : currentAdmin?.role ?? "Admin";
   const dashboardSummary = dashboardSummaryQuery.data;
-  const dashboardPeriodText = dashboardSummary
-    ? formatPeriodRange(dashboardSummary.period.from, dashboardSummary.period.to)
-    : "기간 선택";
+  const dashboardPeriodText = formatPeriodRange(
+    dashboardSummary?.period.from ?? normalizedDashboardRange.from,
+    dashboardSummary?.period.to ?? normalizedDashboardRange.to,
+  );
+  const normalizedDashboardRangeDraft = useMemo(
+    () => normalizeDashboardDateRange(dashboardRangeDraft),
+    [dashboardRangeDraft],
+  );
+  const dashboardRangeDirty = normalizedDashboardRangeDraft.from !== normalizedDashboardRange.from
+    || normalizedDashboardRangeDraft.to !== normalizedDashboardRange.to;
 
   function logoutAdmin() {
     void logoutAdminSession(accessToken).catch(() => undefined);
@@ -839,6 +874,72 @@ function AdminApp() {
     setSelectedFacility(null);
     setFacilityPickedLocation(null);
     setFacilityLocationPickEnabled(false);
+  }
+
+  useEffect(() => {
+    if (!isNotificationOpen && !isDashboardRangeOpen) {
+      return;
+    }
+
+    function handleOutsidePointer(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      const clickedNotification = notificationPanelRef.current?.contains(target);
+      const clickedDashboardRange = dashboardRangePanelRef.current?.contains(target);
+
+      if (!clickedNotification && !clickedDashboardRange) {
+        setIsNotificationOpen(false);
+        setIsDashboardRangeOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsNotificationOpen(false);
+        setIsDashboardRangeOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsidePointer);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsidePointer);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isDashboardRangeOpen, isNotificationOpen]);
+
+  useEffect(() => {
+    setIsNotificationOpen(false);
+    setIsDashboardRangeOpen(false);
+  }, [page]);
+
+  useEffect(() => {
+    if (!isDashboardRangeOpen) {
+      return;
+    }
+    setDashboardRangeDraft(normalizedDashboardRange);
+  }, [isDashboardRangeOpen, normalizedDashboardRange]);
+
+  function openDashboardRangePanel() {
+    setDashboardRangeDraft(normalizedDashboardRange);
+    setIsNotificationOpen(false);
+    setIsDashboardRangeOpen(true);
+  }
+
+  function applyDashboardRange() {
+    const nextRange = normalizeDashboardDateRange(dashboardRangeDraft);
+    setDashboardRange(nextRange);
+    setDashboardRangeDraft(nextRange);
+    setIsDashboardRangeOpen(false);
+  }
+
+  function resetDashboardRange() {
+    const nextRange = createDashboardPresetRange(6);
+    setDashboardRangeDraft(nextRange);
   }
 
   function renderNavPage(item: AdminPage, options: { child?: boolean } = {}) {
@@ -929,13 +1030,24 @@ function AdminApp() {
             );
           })}
         </nav>
-        <div className="sidebar-support-card">
-          <span aria-hidden="true">
-            <DashboardIcon name="chat" />
-          </span>
-          <strong>문의 및 지원</strong>
-          <p>운영 화면 오류가 있을 경우 관리자에게 문의해주세요.</p>
-          <button type="button">문의하기</button>
+        <div className="sidebar-admin-card">
+          <div className="sidebar-admin-card__identity">
+            <span className="sidebar-admin-card__eyebrow">관리자 세션</span>
+            <div className="sidebar-admin-card__profile">
+              <span className="sidebar-admin-card__avatar" aria-hidden="true">
+                <DashboardIcon name="user" />
+              </span>
+              <div className="sidebar-admin-card__copy">
+                <strong>{adminRoleLabel}</strong>
+                <small>{currentAdmin.userId}</small>
+              </div>
+            </div>
+          </div>
+          <div className="sidebar-admin-card__actions">
+            <button type="button" className="sidebar-admin-card__logout-button" onClick={logoutAdmin}>
+              로그아웃
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -954,55 +1066,109 @@ function AdminApp() {
             <h1>{pageMeta[page].label}</h1>
             {pageMeta[page].description && <p>{pageMeta[page].description}</p>}
           </div>
-          {page === "home" && (
-            <div className="topbar-actions home-topbar-actions">
-              <button className="topbar-date-range" type="button">
-                <span>{dashboardPeriodText}</span>
-                <DashboardIcon name="calendar" />
-              </button>
-              <button
-                className="topbar-refresh"
-                type="button"
-                onClick={() => {
-                  void dashboardSummaryQuery.refetch();
-                  void dashboardBottlenecksQuery.refetch();
-                }}
-                disabled={dashboardSummaryQuery.isFetching || dashboardBottlenecksQuery.isFetching}
-              >
-                <DashboardIcon name="refresh" />
-                <span>{dashboardSummaryQuery.isFetching || dashboardBottlenecksQuery.isFetching ? "갱신 중" : "새로고침"}</span>
-              </button>
-              <button className="topbar-icon-button" type="button" aria-label="알림">
-                <DashboardIcon name="bell" />
-              </button>
-              <span className="topbar-action-divider" aria-hidden="true" />
-              <button className="topbar-profile-button" type="button">
-                <DashboardIcon name="user" />
-                <span>관리자</span>
-                <DashboardIcon name="chevron" />
-              </button>
-            </div>
-          )}
-          {page === "hazards" && (
-            <div className="topbar-actions hazard-topbar-actions">
-              <button className="topbar-icon-button" type="button" aria-label="알림">
-                <DashboardIcon name="bell" />
-              </button>
-              <span className="topbar-action-divider" aria-hidden="true" />
-              <button className="topbar-profile-button" type="button">
-                <DashboardIcon name="user" />
-                <span>Admin</span>
-                <DashboardIcon name="chevron" />
-              </button>
-            </div>
-          )}
-          {page !== "home" && page !== "hazards" && page !== "users" && <div className="topbar-actions admin-topbar-actions">
-            <label className="backend-field">
-              Admin
-              <span>{currentAdmin.userId}</span>
-            </label>
-            <button className="topbar-logout-button" type="button" onClick={logoutAdmin}>로그아웃</button>
-            {showsAreaSelector && (
+          <div className="topbar-utility">
+            {page === "home" && (
+              <div className="topbar-actions home-topbar-actions">
+                <div className="topbar-date-range-shell" ref={dashboardRangePanelRef}>
+                  <button
+                    className={`topbar-date-range ${isDashboardRangeOpen ? "active" : ""}`}
+                    type="button"
+                    aria-expanded={isDashboardRangeOpen}
+                    aria-haspopup="dialog"
+                    onClick={() => {
+                      if (isDashboardRangeOpen) {
+                        setIsDashboardRangeOpen(false);
+                        return;
+                      }
+                      openDashboardRangePanel();
+                    }}
+                  >
+                    <span>{dashboardPeriodText}</span>
+                    <DashboardIcon name="calendar" />
+                  </button>
+                  {isDashboardRangeOpen && (
+                    <div className="topbar-date-range-panel" role="dialog" aria-label="대시보드 기간 선택">
+                      <div className="topbar-date-range-panel__header">
+                        <strong>조회 기간</strong>
+                        <p>대시보드 요약과 병목 후보 지도를 같은 기간으로 다시 조회합니다.</p>
+                      </div>
+                      <div className="topbar-date-range-panel__presets">
+                        <button
+                          type="button"
+                          onClick={() => setDashboardRangeDraft(createDashboardPresetRange(0))}
+                        >
+                          오늘
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDashboardRangeDraft(createDashboardPresetRange(6))}
+                        >
+                          최근 7일
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDashboardRangeDraft(createDashboardPresetRange(29))}
+                        >
+                          최근 30일
+                        </button>
+                      </div>
+                      <div className="topbar-date-range-panel__fields">
+                        <label>
+                          <span>시작일</span>
+                          <input
+                            type="date"
+                            value={dashboardRangeDraft.from}
+                            max={dashboardRangeDraft.to}
+                            onChange={(event) => setDashboardRangeDraft((current) => ({
+                              ...current,
+                              from: event.target.value,
+                            }))}
+                          />
+                        </label>
+                        <label>
+                          <span>종료일</span>
+                          <input
+                            type="date"
+                            value={dashboardRangeDraft.to}
+                            min={dashboardRangeDraft.from}
+                            onChange={(event) => setDashboardRangeDraft((current) => ({
+                              ...current,
+                              to: event.target.value,
+                            }))}
+                          />
+                        </label>
+                      </div>
+                      <div className="topbar-date-range-panel__footer">
+                        <button type="button" className="secondary" onClick={resetDashboardRange}>
+                          최근 7일로 초기화
+                        </button>
+                        <button
+                          type="button"
+                          className="primary"
+                          onClick={applyDashboardRange}
+                          disabled={!dashboardRangeDirty}
+                        >
+                          적용
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="topbar-refresh"
+                  type="button"
+                  onClick={() => {
+                    void dashboardSummaryQuery.refetch();
+                    void dashboardBottlenecksQuery.refetch();
+                  }}
+                  disabled={dashboardSummaryQuery.isFetching || dashboardBottlenecksQuery.isFetching}
+                >
+                  <DashboardIcon name="refresh" />
+                  <span>{dashboardSummaryQuery.isFetching || dashboardBottlenecksQuery.isFetching ? "갱신 중" : "새로고침"}</span>
+                </button>
+              </div>
+            )}
+            {page !== "home" && page !== "hazards" && page !== "users" && showsAreaSelector && <div className="topbar-actions admin-topbar-actions">
               <>
                 <label>
                   구
@@ -1047,8 +1213,110 @@ function AdminApp() {
                   </select>
                 </label>
               </>
-            )}
-          </div>}
+            </div>}
+            <div className="topbar-notification-shell" ref={notificationPanelRef}>
+              <button
+                className={`topbar-icon-button topbar-notification-button ${isNotificationOpen ? "active" : ""}`}
+                type="button"
+                aria-label="알림"
+                aria-expanded={isNotificationOpen}
+                aria-haspopup="dialog"
+                onClick={() => {
+                  setIsDashboardRangeOpen(false);
+                  setIsNotificationOpen((value) => !value);
+                }}
+              >
+                <DashboardIcon name="bell" />
+                {pendingHazardCount > 0 && <span className="topbar-notification-badge">{pendingHazardBadge}</span>}
+              </button>
+              {isNotificationOpen && (
+                <div className="topbar-notification-panel" role="dialog" aria-label="운영 알림">
+                  <div className="topbar-notification-panel__header">
+                    <div>
+                      <strong>운영 알림</strong>
+                      <p>
+                        {usesRealAdminApi
+                          ? pendingHazardCount > 0
+                            ? `지금 확인이 필요한 대기 제보 ${pendingHazardBadge}건`
+                            : "새로 확인할 대기 제보가 없습니다."
+                          : "실시간 알림은 관리자 로그인 후 확인할 수 있습니다."}
+                      </p>
+                    </div>
+                    {usesRealAdminApi && (
+                      <button
+                        type="button"
+                        className="topbar-notification-panel__refresh"
+                        onClick={() => {
+                          void pendingHazardReportsQuery.refetch();
+                        }}
+                        disabled={pendingHazardReportsQuery.isFetching}
+                      >
+                        {pendingHazardReportsQuery.isFetching ? "갱신 중" : "갱신"}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="topbar-notification-panel__summary">
+                    <div className="topbar-notification-metric">
+                      <span>대기 제보</span>
+                      <strong>{usesRealAdminApi ? `${pendingHazardBadge}건` : "-"}</strong>
+                    </div>
+                    <div className="topbar-notification-metric">
+                      <span>표시 범위</span>
+                      <strong>{usesRealAdminApi ? (pendingHazardReportsQuery.data?.hasNext ? "최근 20건" : "전체") : "-"}</strong>
+                    </div>
+                  </div>
+
+                  {usesRealAdminApi ? (
+                    pendingHazardNotifications.length > 0 ? (
+                      <div className="topbar-notification-list" role="list">
+                        {pendingHazardNotifications.map((report) => (
+                          <button
+                            key={report.reportId}
+                            type="button"
+                            className="topbar-notification-item"
+                            onClick={() => {
+                              setPage("hazards");
+                              setIsNotificationOpen(false);
+                            }}
+                          >
+                            <span className="topbar-notification-item__badge">대기 제보</span>
+                            <strong>{reportTypeLabels[report.reportType] ?? report.reportType}</strong>
+                            <span className="topbar-notification-item__meta">
+                              제보 #{String(report.reportId).padStart(4, "0")} · 접수 {formatNotificationDateTime(report.createdAt)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="topbar-notification-empty">
+                        대기 중인 제보가 없습니다. 새로운 제보가 들어오면 여기에 표시됩니다.
+                      </div>
+                    )
+                  ) : (
+                    <div className="topbar-notification-empty">
+                      실시간 제보 알림은 로그인된 관리자 세션에서만 제공됩니다.
+                    </div>
+                  )}
+
+                  {(usesRealAdminApi || previewPage === "hazards") && (
+                    <div className="topbar-notification-panel__footer">
+                      <button
+                        type="button"
+                        className="topbar-notification-panel__link"
+                        onClick={() => {
+                          setPage("hazards");
+                          setIsNotificationOpen(false);
+                        }}
+                      >
+                        불편제보 관리 열기
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </header>
 
         {page === "home" && (
@@ -1470,14 +1738,14 @@ function HomeDashboardPage({
         title: "병목 구간 수",
         value: bottlenecksLoading && !bottlenecks ? "-" : formatInteger(bottleneckCount),
         unit: "개",
-        delta: `신고 ${formatInteger(summary.reports.pendingReports)}건 대기`,
+        delta: `제보 ${formatInteger(summary.reports.pendingReports)}건 대기`,
         trend: "neutral" as TrendDirection,
-        caption: bottlenecks?.telemetryBased ? "실측 기반" : "경로+신고 후보",
+        caption: bottlenecks?.telemetryBased ? "실측 기반" : "경로+제보 후보",
         icon: "warning" as DashboardIconName,
         tone: "red" as MetricTone,
       },
       {
-        title: "불편 신고 접수",
+        title: "불편 제보 접수",
         value: formatInteger(summary.reports.newReports),
         unit: "건",
         delta: `전체 ${formatInteger(summary.reports.totalReports)}건`,
@@ -1747,7 +2015,7 @@ function BottleneckTableCard({
               <th>순위</th>
               <th>구간명</th>
               <th>평균 속도 (m/s)</th>
-              <th>불편 신고(건)</th>
+              <th>불편 제보(건)</th>
             </tr>
           </thead>
           <tbody>
@@ -1812,7 +2080,7 @@ function RecentReportsCard({
   return (
     <article className="admin-dashboard-card recent-report-card">
       <DashboardCardHeader
-        title="최근 불편 신고"
+        title="최근 불편 제보"
         action="더보기"
         onActionClick={onMore}
         actionTarget="hazards"
@@ -1823,7 +2091,7 @@ function RecentReportsCard({
             <tr>
               <th>접수일시</th>
               <th>위치</th>
-              <th>신고 내용</th>
+              <th>제보 내용</th>
               <th>상태</th>
             </tr>
           </thead>
@@ -1838,7 +2106,7 @@ function RecentReportsCard({
             ))}
             {!rows.length && (
               <tr>
-                <td colSpan={4} className="admin-empty-row">최근 접수된 불편 신고가 없습니다.</td>
+                <td colSpan={4} className="admin-empty-row">최근 접수된 불편 제보가 없습니다.</td>
               </tr>
             )}
           </tbody>
@@ -1889,6 +2157,7 @@ function HeatmapCard({
   const sourceLabel = hasRealCandidateData
     ? bottlenecks!.telemetryBased ? "실측" : "DB 후보"
     : telemetryEnabled ? "실측" : "실측 대기";
+  const [viewMode, setViewMode] = useState<"heatmap" | "segment">("heatmap");
 
   return (
     <article className="admin-dashboard-card heatmap-dashboard-card">
@@ -1902,9 +2171,29 @@ function HeatmapCard({
           </h3>
         </div>
         <div className="heatmap-actions">
-          <button type="button">속도 (m/s) <DashboardIcon name="chevron" /></button>
-          <button type="button" className="active"><DashboardIcon name="settings" /> 히트맵</button>
-          <button type="button"><DashboardIcon name="route" /> 구간</button>
+          <span className="heatmap-actions__metric" aria-label="현재 지표">
+            속도 기준 (m/s)
+          </span>
+          <div className="heatmap-actions__toggle" role="tablist" aria-label="지도 보기 전환">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "heatmap"}
+              className={viewMode === "heatmap" ? "active" : ""}
+              onClick={() => setViewMode("heatmap")}
+            >
+              <DashboardIcon name="settings" /> 히트맵
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "segment"}
+              className={viewMode === "segment" ? "active" : ""}
+              onClick={() => setViewMode("segment")}
+            >
+              <DashboardIcon name="route" /> 구간
+            </button>
+          </div>
           {grafanaUrl && (
             <a href={grafanaUrl} target="_blank" rel="noreferrer">Grafana</a>
           )}
@@ -1916,6 +2205,7 @@ function HeatmapCard({
       <AdminBottleneckKakaoMap
         hotspots={hotspots}
         routeSegments={routeSegments}
+        presentationMode={viewMode}
       />
     </article>
   );
@@ -2717,6 +3007,52 @@ function formatJson(value: unknown) {
 
 function formatDateTime(value: string) {
   return value.replace("T", " ").slice(0, 16);
+}
+
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function createDashboardPresetRange(daysBack: number): DashboardDateRange {
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(to.getDate() - Math.max(0, daysBack));
+  return {
+    from: toDateInputValue(from),
+    to: toDateInputValue(to),
+  };
+}
+
+function normalizeDashboardDateRange(range: DashboardDateRange): DashboardDateRange {
+  const fallback = createDashboardPresetRange(6);
+  const baseFrom = range.from || fallback.from;
+  const baseTo = range.to || fallback.to;
+
+  if (baseFrom > baseTo) {
+    return { from: baseTo, to: baseFrom };
+  }
+
+  return {
+    from: baseFrom,
+    to: baseTo,
+  };
+}
+
+function formatNotificationDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return formatDateTime(value).replace(/-/g, ".");
+  }
+
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${month}.${day} ${hours}:${minutes}`;
 }
 
 function formatPeriodRange(from: string, to: string) {

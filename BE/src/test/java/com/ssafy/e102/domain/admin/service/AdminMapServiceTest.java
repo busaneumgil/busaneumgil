@@ -29,12 +29,14 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.e102.domain.admin.dto.request.AdminRoadSegmentAttributesUpdateRequest;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentUpdateResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.place.repository.PlaceAccessibilityFeatureRepository;
 import com.ssafy.e102.domain.place.repository.PlaceRepository;
 import com.ssafy.e102.domain.report.entity.HazardReportRouteReviewSegmentDraft;
+import com.ssafy.e102.domain.route.entity.RoadNode;
 import com.ssafy.e102.domain.route.entity.RoadSegment;
 import com.ssafy.e102.domain.route.entity.RoutingSegmentOverride;
 import com.ssafy.e102.domain.route.repository.RoadNodeRepository;
@@ -102,6 +104,49 @@ class AdminMapServiceTest {
 			String.class,
 			String.class,
 			AdminRoadSegmentAttributesUpdateRequest.class);
+	}
+
+	@Test
+	@DisplayName("관리자 보행 네트워크는 area scope 기준 segment와 node를 반환한다")
+	void getRoadNetworkReturnsAreaSegmentsAndNodes() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동"))
+			.thenReturn(List.of(roadSegment));
+		when(roadSegmentRepository.countIntersectingArea("강서구", "명지동")).thenReturn(1L);
+		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());
+		when(roadNodeRepository.findAllById(any())).thenReturn(List.of(
+			roadNode(10L, 129.0, 35.0),
+			roadNode(20L, 129.1, 35.1)));
+
+		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "명지동", 10);
+
+		assertThat(response.summary().segmentCount()).isEqualTo(1);
+		assertThat(response.segments().features()).hasSize(1);
+		assertThat(response.roadNodes().features()).hasSize(2);
+		assertThat(response.segments().features().get(0).geometry().coordinates().get(0))
+			.containsExactly(129.0, 35.0);
+	}
+
+	@Test
+	@DisplayName("경로 검수 지도 조회는 제보 좌표 반경으로 segment를 클리핑한다")
+	void getRoadNetworkClipsAroundCenterPoint() {
+		RoadSegment roadSegment = roadSegment(1L);
+		when(roadSegmentRepository.findAllIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200, 1500))
+			.thenReturn(List.of(roadSegment));
+		when(roadSegmentRepository.countIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200))
+			.thenReturn(1L);
+		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());
+		when(roadNodeRepository.findAllById(any())).thenReturn(List.of(
+			roadNode(10L, 129.0, 35.0),
+			roadNode(20L, 129.1, 35.1)));
+
+		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "명지동", 1500, 35.05, 129.05, 200);
+
+		assertThat(response.summary().segmentCount()).isEqualTo(1);
+		assertThat(response.summary().visibleSegmentCount()).isEqualTo(1);
+		verify(roadSegmentRepository).findAllIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200, 1500);
+		verify(roadSegmentRepository).countIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200);
+		verify(roadSegmentRepository, never()).findAllIntersectingArea("강서구", "명지동");
 	}
 
 	@Test
@@ -276,6 +321,13 @@ class AdminMapServiceTest {
 		});
 		geom.setSRID(4326);
 		return RoadSegment.create(edgeId, 10L, 20L, geom, BigDecimal.valueOf(12.3));
+	}
+
+	private RoadNode roadNode(Long vertexId, double lng, double lat) {
+		return RoadNode.create(
+			vertexId,
+			"node-" + vertexId,
+			geometryFactory.createPoint(new Coordinate(lng, lat)));
 	}
 
 	private void assertNotSupportedTransaction(String methodName, Class<?>... parameterTypes) throws Exception {

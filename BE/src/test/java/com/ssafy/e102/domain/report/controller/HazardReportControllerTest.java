@@ -33,6 +33,8 @@ import com.ssafy.e102.domain.report.dto.response.CreateHazardReportImageUploadUr
 import com.ssafy.e102.domain.report.dto.response.HazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportIdResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportListResponse;
+import com.ssafy.e102.domain.report.dto.response.HazardMarkerListResponse;
+import com.ssafy.e102.domain.report.dto.response.HazardMarkerResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportSummaryResponse;
 import com.ssafy.e102.domain.report.service.HazardReportImageUploadService;
 import com.ssafy.e102.domain.report.service.HazardReportService;
@@ -55,7 +57,8 @@ class HazardReportControllerTest {
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
 		mockMvc = MockMvcBuilders.standaloneSetup(
-			new HazardReportController(hazardReportService, hazardReportImageUploadService))
+			new HazardReportController(hazardReportService, hazardReportImageUploadService),
+			new HazardMarkerController(hazardReportService))
 			.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
 			.build();
 	}
@@ -247,6 +250,39 @@ class HazardReportControllerTest {
 			.andExpect(jsonPath("$.data.imageUrls[1]").value("https://example.com/reports/1/image-2.jpg"));
 
 		verify(hazardReportService).getMyHazardReportDetail(userId, 1L);
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	@DisplayName("吏?꾨룄 bbox ?덈뿉??듭씤 ?쒕낫 留ㅼ빱 紐⑸줉??諛섑솚?쒕떎")
+	void getApprovedHazardMarkers() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(hazardReportService.getApprovedHazardMarkers(35.095, 129.095, 35.105, 129.105))
+			.thenReturn(new HazardMarkerListResponse(
+				List.of(
+					new HazardMarkerResponse(
+						12L,
+						ReportType.RAMP,
+						35.1,
+						129.1,
+						List.of("https://example.com/reports/12/image-1.jpg")))));
+
+		mockMvc.perform(get("/hazard/markers/")
+			.principal(authentication)
+			.param("swLat", "35.095")
+			.param("swLng", "129.095")
+			.param("neLat", "35.105")
+			.param("neLng", "129.105"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.markers[0].reportId").value(12))
+			.andExpect(jsonPath("$.data.markers[0].reportType").value("RAMP"))
+			.andExpect(jsonPath("$.data.markers[0].lat").value(35.1))
+			.andExpect(jsonPath("$.data.markers[0].lng").value(129.1))
+			.andExpect(jsonPath("$.data.markers[0].imageUrls[0]").value("https://example.com/reports/12/image-1.jpg"));
+
+		verify(hazardReportService).getApprovedHazardMarkers(35.095, 129.095, 35.105, 129.105);
 		SecurityContextHolder.clearContext();
 	}
 

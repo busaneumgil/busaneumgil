@@ -28,9 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
+import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
-import com.ssafy.e102.domain.admin.service.AdminService;
 import com.ssafy.e102.domain.report.dto.request.AdminHazardRouteReviewSegmentDraftRequest;
 import com.ssafy.e102.domain.report.dto.request.StartHazardRouteReviewRequest;
 import com.ssafy.e102.domain.report.dto.request.UpdateHazardRouteReviewRequest;
@@ -70,13 +70,13 @@ class AdminHazardRouteReviewServiceTest {
 	private RoadSegmentRepository roadSegmentRepository;
 
 	@Mock
-	private AdminService adminService;
-
-	@Mock
 	private AdminAuditLogService adminAuditLogService;
 
 	@Mock
 	private AdminMapService adminMapService;
+
+	@Mock
+	private AdminAreaRepository adminAreaRepository;
 
 	private AdminHazardRouteReviewService adminHazardRouteReviewService;
 	private GeoPointConverter geoPointConverter;
@@ -88,12 +88,12 @@ class AdminHazardRouteReviewServiceTest {
 		adminHazardRouteReviewService = new AdminHazardRouteReviewService(
 			hazardReportRepository,
 			hazardReportRouteReviewRepository,
-			roadSegmentRepository,
-			adminService,
-			adminAuditLogService,
-			adminMapService,
-			new NoOpPlatformTransactionManager(),
-			FIXED_CLOCK);
+				roadSegmentRepository,
+				adminAuditLogService,
+				adminMapService,
+				adminAreaRepository,
+				new NoOpPlatformTransactionManager(),
+				FIXED_CLOCK);
 	}
 
 	@Test
@@ -115,6 +115,8 @@ class AdminHazardRouteReviewServiceTest {
 		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
 		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdOrderByReviewIdDesc(1L))
 			.thenReturn(Optional.empty());
+		when(adminAreaRepository.findAreaByPoint(129.0576, 35.1686))
+			.thenReturn(Optional.of(new Object[] {"부산진구", "부전동"}));
 		when(hazardReportRouteReviewRepository.save(org.mockito.ArgumentMatchers.any(HazardReportRouteReview.class)))
 			.thenAnswer(invocation -> {
 				HazardReportRouteReview review = invocation.getArgument(0);
@@ -122,15 +124,17 @@ class AdminHazardRouteReviewServiceTest {
 				return review;
 			});
 
-		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.startRouteReview(
-			userId,
-			1L,
-			new StartHazardRouteReviewRequest(HazardRouteReviewIntent.APPROVE, "부산진구", "부전동"));
+			AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.startRouteReview(
+				userId,
+				1L,
+				new StartHazardRouteReviewRequest(HazardRouteReviewIntent.APPROVE));
 
 		assertThat(response.reviewId()).isEqualTo(10L);
-		assertThat(response.intent()).isEqualTo(HazardRouteReviewIntent.APPROVE);
-		assertThat(response.stage()).isEqualTo(HazardRouteReviewStage.IN_PROGRESS);
-		assertThat(response.reportStatus()).isEqualTo(ReportStatus.REJECTED);
+			assertThat(response.intent()).isEqualTo(HazardRouteReviewIntent.APPROVE);
+			assertThat(response.stage()).isEqualTo(HazardRouteReviewStage.IN_PROGRESS);
+			assertThat(response.reportStatus()).isEqualTo(ReportStatus.REJECTED);
+			assertThat(response.gu()).isEqualTo("부산진구");
+			assertThat(response.dong()).isEqualTo("부전동");
 	}
 
 	@Test
@@ -141,13 +145,15 @@ class AdminHazardRouteReviewServiceTest {
 		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
 		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdOrderByReviewIdDesc(1L))
 			.thenReturn(Optional.empty());
+		when(adminAreaRepository.findAreaByPoint(129.0576, 35.1686))
+			.thenReturn(Optional.of(new Object[] {"부산진구", "부전동"}));
 		when(hazardReportRouteReviewRepository.save(org.mockito.ArgumentMatchers.any(HazardReportRouteReview.class)))
 			.thenAnswer(invocation -> invocation.getArgument(0));
 
 		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.startRouteReview(
 			userId,
 			1L,
-			new StartHazardRouteReviewRequest(HazardRouteReviewIntent.RESTORE, "부산진구", "부전동"));
+			new StartHazardRouteReviewRequest(HazardRouteReviewIntent.RESTORE));
 
 		assertThat(response.intent()).isEqualTo(HazardRouteReviewIntent.RESTORE);
 		assertThat(response.reportStatus()).isEqualTo(ReportStatus.APPROVED);
@@ -161,16 +167,18 @@ class AdminHazardRouteReviewServiceTest {
 		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
 		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdOrderByReviewIdDesc(1L))
 			.thenReturn(Optional.empty());
+		when(adminAreaRepository.findAreaByPoint(129.0576, 35.1686))
+			.thenReturn(Optional.of(new Object[] {"부산진구", "부전동"}));
 		when(hazardReportRouteReviewRepository.save(org.mockito.ArgumentMatchers.any(HazardReportRouteReview.class)))
 			.thenThrow(new DataIntegrityViolationException("uk_hazard_report_route_reviews_in_progress"));
 
-		assertThatThrownBy(() -> adminHazardRouteReviewService.startRouteReview(
-			userId,
-			1L,
-			new StartHazardRouteReviewRequest(HazardRouteReviewIntent.APPROVE, "부산진구", "부전동")))
-			.isInstanceOf(HazardReportException.class)
-			.extracting("errorCode")
-			.isEqualTo(HazardReportErrorCode.HAZARD_ROUTE_REVIEW_CONFLICT);
+			assertThatThrownBy(() -> adminHazardRouteReviewService.startRouteReview(
+				userId,
+				1L,
+				new StartHazardRouteReviewRequest(HazardRouteReviewIntent.APPROVE)))
+				.isInstanceOf(HazardReportException.class)
+				.extracting("errorCode")
+				.isEqualTo(HazardReportErrorCode.HAZARD_ROUTE_REVIEW_CONFLICT);
 	}
 
 	@Test

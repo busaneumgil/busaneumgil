@@ -11,7 +11,10 @@ import com.ssafy.e102.eumgil.core.location.HeadingSnapshot
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.location.LocationUpdateProfile
 import com.ssafy.e102.eumgil.core.location.NoOpCurrentHeadingManager
+import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
+import com.ssafy.e102.eumgil.core.location.normalizeHeadingDegrees
 import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.RouteCandidate
 import com.ssafy.e102.eumgil.core.model.RouteBookmarkDraft
@@ -30,6 +33,9 @@ import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.ReportDraftData
+import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
 import com.ssafy.e102.eumgil.data.repository.toBookmarkDataOrNull
@@ -48,6 +54,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.cos
@@ -60,19 +67,49 @@ internal const val NavigationOriginSegmentIndex = -1
 private const val NavigationOriginHeroTitle = "\uCD9C\uBC1C"
 private const val NavigationOriginHeroDescription =
     "\uD604\uC7AC \uC704\uCE58\uC5D0\uC11C \uC120\uD0DD\uD55C \uACBD\uB85C \uC548\uB0B4\uB97C \uC2DC\uC791\uD569\uB2C8\uB2E4."
-private const val NAVIGATION_GUIDANCE_ENTER_RADIUS_METERS = 5
-private const val NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS = 25.0
+private const val NAVIGATION_ROUTE_START_JOIN_RADIUS_METERS = 8.0
+private const val NAVIGATION_ROUTE_PROGRESS_SNAP_DISTANCE_METERS = 15.0
+private const val NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS = 15.0
 private const val NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS = 40.0
 private const val NAVIGATION_ROUTE_JOIN_STABLE_UPDATE_COUNT = 2
 private const val NAVIGATION_ROUTE_JOIN_STABLE_DURATION_MILLIS = 3_000L
+private const val NAVIGATION_DESTINATION_AUTO_ARRIVAL_RADIUS_METERS = 10.0
+private const val NAVIGATION_DESTINATION_SOON_RADIUS_METERS = 25.0
+private const val NAVIGATION_DESTINATION_AUTO_ARRIVAL_STABLE_UPDATE_COUNT = 2
+private const val NAVIGATION_DESTINATION_AUTO_ARRIVAL_STABLE_DURATION_MILLIS = 3_000L
 private const val NAVIGATION_AUTO_TTS_NEAR_DISTANCE_METERS = 10
+private const val NAVIGATION_GPS_BEARING_MIN_SPEED_METERS_PER_SECOND = 0.5f
+private const val NAVIGATION_NODE_TRANSITION_RADIUS_METERS = 10.0
+private const val NAVIGATION_NODE_TRANSITION_ENTER_DISTANCE_METERS = 12.0
+private const val NAVIGATION_NODE_TRANSITION_DEFAULT_ADVANCE_METERS = 8.0
+private const val NAVIGATION_NODE_TRANSITION_MIN_ADVANCE_METERS = 3.0
+private const val NAVIGATION_NODE_TRANSITION_SEGMENT_ADVANCE_RATIO = 0.4
+private const val NAVIGATION_NODE_TRANSITION_PASSED_DISTANCE_METERS = 3.0
+private const val NAVIGATION_NODE_TRANSITION_COURSE_MIN_MOVE_METERS = 2.0
+private const val NAVIGATION_NODE_TRANSITION_COURSE_MAX_ANGLE_DEGREES = 60.0
+private const val NAVIGATION_NODE_TRANSITION_TURN_MAX_SIDE_DISTANCE_METERS = 25.0
+private const val NAVIGATION_NODE_TRANSITION_STABLE_UPDATE_COUNT = 2
+private const val NAVIGATION_NODE_TRANSITION_STABLE_DURATION_MILLIS = 3_000L
+private const val NAVIGATION_MAX_ACCEPTED_ACCURACY_METERS = 35f
+private const val NAVIGATION_WALKING_MAX_ACCEPTED_SPEED_METERS_PER_SECOND = 8.0
+private const val NAVIGATION_TRANSIT_MAX_ACCEPTED_SPEED_METERS_PER_SECOND = 45.0
+private const val NAVIGATION_IMPOSSIBLE_JUMP_MIN_DISTANCE_METERS = 30.0
+private const val NAVIGATION_JITTER_FREEZE_SPEED_METERS_PER_SECOND = 0.4f
+private const val NAVIGATION_JITTER_FREEZE_DISTANCE_METERS = 3.0
+private const val NAVIGATION_SMOOTHING_NEAR_DISTANCE_METERS = 8.0
+private const val NAVIGATION_SMOOTHING_MID_DISTANCE_METERS = 20.0
+private const val NAVIGATION_SMOOTHING_NEAR_ALPHA = 0.55
+private const val NAVIGATION_SMOOTHING_MID_ALPHA = 0.75
+private const val NAVIGATION_FOLLOW_LOOKAHEAD_METERS = 12.0
 private const val NAVIGATION_LIVE_GUIDANCE_TARGET_AHEAD_TOLERANCE_METERS = 1.0
 private const val NAVIGATION_LIVE_GUIDANCE_DISPLAY_THROTTLE_MILLIS = 3_000L
-private const val NAVIGATION_LIVE_GUIDANCE_SOON_DISTANCE_METERS = 10
-private const val NAVIGATION_LIVE_GUIDANCE_NEAR_BUCKET_METERS = 5
-private const val NAVIGATION_LIVE_GUIDANCE_FAR_BUCKET_METERS = 10
-private const val NAVIGATION_LIVE_GUIDANCE_BUCKET_THRESHOLD_METERS = 50
+private const val NAVIGATION_COMPLETION_TTS_NAVIGATION_DELAY_MILLIS = 5_000L
 private const val NAVIGATION_LOCATION_DEBUG_TAG = "NavigationLocation"
+private const val NAVIGATION_ROUTE_START_GUIDANCE_TEXT = "경로 시작 지점까지 이동하세요"
+private const val NAVIGATION_DESTINATION_SOON_TTS_TEXT = "목적지에 곧 도착합니다."
+private const val NAVIGATION_ARRIVAL_COMPLETION_TTS_TEXT = "목적지에 도착했습니다. 안내를 종료합니다."
+private const val NAVIGATION_REROUTE_TTS_TEXT = "경로를 벗어났습니다. 경로를 다시 탐색합니다."
+private const val NAVIGATION_AUTO_TTS_APPROACH_DISTANCE_METERS = 30
 
 private enum class NavigationGuidanceMode {
     RouteDetail,
@@ -85,12 +122,19 @@ private data class NavigationLiveGuidanceDisplayState(
     val updatedAtEpochMillis: Long,
 )
 
+private data class NavigationNodeTransitionCandidate(
+    val segmentIndex: Int,
+    val updateCount: Int,
+    val stableSinceEpochMillis: Long,
+)
+
 class NavigationViewModel(
     private val currentLocationManager: CurrentLocationManager,
     private val currentHeadingManager: CurrentHeadingManager = NoOpCurrentHeadingManager,
     private val locationPermissionManager: LocationPermissionManager? = null,
     private val bookmarkRepository: BookmarkRepository,
     private val routeRepository: RouteRepository = NoOpRouteRepository,
+    private val reportRepository: ReportRepository = NoOpReportRepository,
     initialLowVisionMode: Boolean = false,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(NavigationUiState())
@@ -115,12 +159,22 @@ class NavigationViewModel(
     private var isTransitRefreshInFlight: Boolean = false
     private var isRerouteInFlight: Boolean = false
     private var isEndNavigationInFlight: Boolean = false
+    private var pendingHazardReportRerouteId: Long? = null
     private var guidanceMode: NavigationGuidanceMode = NavigationGuidanceMode.RouteDetail
     private var routeJoinStableUpdateCount: Int = 0
     private var routeJoinStableSinceEpochMillis: Long? = null
+    private var hasJoinedRealtimeRouteLine: Boolean = false
+    private var destinationArrivalStableUpdateCount: Int = 0
+    private var destinationArrivalStableSinceEpochMillis: Long? = null
+    private var hasSpokenDestinationSoon: Boolean = false
+    private var nodeTransitionCandidate: NavigationNodeTransitionCandidate? = null
+    private val routeMatcher = NavigationRouteMatcher()
+    private var latestRouteMatch: NavigationRouteMatchResult? = null
     private var latestLocationCoordinate: GeoCoordinate? = null
+    private var latestNavigationPose: NavigationPose? = null
     private var latestHeadingDegrees: Double? = null
-    private var trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING
+    private var latestGpsBearingDegrees: Double? = null
+    private var trackingMode: NavigationTrackingMode = NavigationTrackingMode.FOLLOW
     private var pendingCurrentLocationRecenter: Boolean = false
     private var locationRecenterRequestId: Long = 0L
     private var latestProgress: NavigationProgressSnapshot? = null
@@ -144,6 +198,7 @@ class NavigationViewModel(
     private var lowVisionActualMetricsLastAttemptRecordedAtMillis: Long? = null
     private var lastLowVisionRouteChangeAlertSegmentIndex: Int? = null
     private val spokenInitialGuidanceKeys = mutableSetOf<String>()
+    private val spokenApproachGuidanceKeys = mutableSetOf<String>()
     private val spokenNearGuidanceKeys = mutableSetOf<String>()
     init {
         collectLocationUpdates()
@@ -186,15 +241,27 @@ class NavigationViewModel(
         isTransitRefreshInFlight = false
         isRerouteInFlight = false
         isEndNavigationInFlight = false
+        pendingHazardReportRerouteId = null
         guidanceMode = NavigationGuidanceMode.RouteDetail
         routeJoinStableUpdateCount = 0
         routeJoinStableSinceEpochMillis = null
+        hasJoinedRealtimeRouteLine = false
+        resetDestinationArrivalStability()
+        hasSpokenDestinationSoon = false
+        resetNodeTransitionStability()
+        latestRouteMatch = null
         latestLocationCoordinate = null
+        latestNavigationPose = null
         latestHeadingDegrees = null
-        trackingMode = NavigationTrackingMode.FOLLOW_WITH_HEADING
+        latestGpsBearingDegrees = null
+        trackingMode = NavigationTrackingMode.FOLLOW
         pendingCurrentLocationRecenter = false
         locationRecenterRequestId = 0L
-        latestProgress = routeSession?.route?.evaluateProgress(normalizedRequest.origin.coordinate)
+        currentLocationManager.latestLocation.value
+            ?.takeIf { snapshot -> snapshot.isFreshCurrentLocation() }
+            ?.let { snapshot -> seedLatestLocationSnapshot(snapshot, normalizedRequest.selectedRoute) }
+        val initialProgressCoordinate = latestLocationCoordinate ?: normalizedRequest.origin.coordinate
+        latestProgress = routeSession?.route?.evaluateProgress(initialProgressCoordinate)
         resetLiveGuidancePresentation()
         val initialRemainingMetrics =
             latestProgress?.let { progress ->
@@ -273,7 +340,11 @@ class NavigationViewModel(
 
     fun onAction(action: NavigationUiAction) {
         when (action) {
-            NavigationUiAction.NavigationEntered -> requestInitialBriefingIfNeeded()
+            NavigationUiAction.NavigationEntered -> {
+                requestCurrentLocationRefresh()
+                requestInitialBriefingIfNeeded()
+            }
+            is NavigationUiAction.HazardReportSubmitted -> handleHazardReportSubmitted(action.reportId)
             NavigationUiAction.BackClicked -> requestExitNavigationConfirmation()
             NavigationUiAction.RouteDetailClicked -> {
                 uiState.value.selectedRouteOption?.let { routeOption ->
@@ -286,15 +357,17 @@ class NavigationViewModel(
                 emitUiEvent(NavigationUiEvent.NavigateToReport)
             }
             NavigationUiAction.CurrentLocationClicked -> {
-                val didRequestRefresh = requestCurrentLocationRefresh()
                 currentHeadingManager.startHeadingUpdates()
                 trackingMode = trackingMode.nextOnCurrentLocationClick()
                 if (latestLocationCoordinate != null) {
                     pendingCurrentLocationRecenter = false
                     locationRecenterRequestId += 1
                     publishNavigationState()
-                } else if (didRequestRefresh) {
-                    pendingCurrentLocationRecenter = true
+                } else {
+                    val didRequestRefresh = requestCurrentLocationRefresh()
+                    if (didRequestRefresh) {
+                        pendingCurrentLocationRecenter = true
+                    }
                 }
             }
             NavigationUiAction.MapCameraMovedByUser -> {
@@ -362,7 +435,7 @@ class NavigationViewModel(
     private fun requestCurrentLocationRefresh(): Boolean {
         val permissionManager = locationPermissionManager
         if (permissionManager == null) {
-            currentLocationManager.startLocationUpdates()
+            currentLocationManager.startLocationUpdates(LocationUpdateProfile.NAVIGATION)
             currentHeadingManager.startHeadingUpdates()
             currentLocationManager.refreshLatestLocation()
             return true
@@ -370,7 +443,7 @@ class NavigationViewModel(
 
         permissionManager.refreshPermissionState()
         return if (permissionManager.permissionState.value is LocationPermissionState.Granted) {
-            currentLocationManager.startLocationUpdates()
+            currentLocationManager.startLocationUpdates(LocationUpdateProfile.NAVIGATION)
             currentHeadingManager.startHeadingUpdates()
             currentLocationManager.refreshLatestLocation()
             true
@@ -401,18 +474,48 @@ class NavigationViewModel(
 
     private fun onHeadingUpdated(snapshot: HeadingSnapshot) {
         latestHeadingDegrees = snapshot.azimuthDegrees
-        if (trackingMode == NavigationTrackingMode.FOLLOW_WITH_HEADING) {
+        latestNavigationPose =
+            latestNavigationPose?.withHeading(
+                resolveNavigationHeading(
+                    gpsBearingDegrees = latestGpsBearingDegrees,
+                    sensorHeadingDegrees = latestHeadingDegrees,
+                    routeFallbackDegrees = null,
+                ),
+            )
+        if (navigationRequest != null) {
             publishNavigationState()
         }
     }
 
     private fun onLocationUpdated(snapshot: LocationSnapshot) {
-        if (!shouldProcessLocation(snapshot)) return
         val currentSession = routeSession ?: return
+        if (!shouldProcessLocation(snapshot, currentSession.route)) return
 
-        val currentCoordinate = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude)
-        latestLocationCoordinate = currentCoordinate
-        latestProgress = currentSession.route.evaluateProgress(currentCoordinate)
+        val previousCoordinate = latestLocationCoordinate
+        val previousProgressCoordinate = latestProgress?.coordinate
+        val currentCoordinate = seedLatestLocationSnapshot(snapshot, currentSession.route)
+        val routeMatch =
+            routeMatcher.match(
+                route = currentSession.route,
+                snapshot = snapshot,
+                previousMatch = latestRouteMatch,
+            )
+        latestRouteMatch = routeMatch
+        val progressCoordinate = routeMatch?.matchedCoordinate ?: currentSession.route.resolveProgressCoordinate(currentCoordinate)
+        latestProgress =
+            currentSession.route
+                .evaluateProgress(
+                    current = progressCoordinate,
+                    rawCurrent = currentCoordinate,
+                    routeMatch = routeMatch,
+                )
+                ?.withStableNodeTransition(
+                    route = currentSession.route,
+                    previousCoordinate = previousProgressCoordinate ?: previousCoordinate,
+                    currentCoordinate = currentCoordinate,
+                    routeMatch = routeMatch,
+                    recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
+                )
         val destinationCoordinate = navigationRequest?.destination?.coordinate ?: currentCoordinate
 
         val progress = latestProgress
@@ -420,8 +523,8 @@ class NavigationViewModel(
             val nextGuidanceMode =
                 resolveGuidanceMode(
                     route = currentSession.route,
-                    currentCoordinate = currentCoordinate,
                     progress = progress,
+                    origin = navigationRequest?.origin?.coordinate,
                     recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
                 )
             if (nextGuidanceMode == NavigationGuidanceMode.RouteDetail) {
@@ -456,11 +559,23 @@ class NavigationViewModel(
                 maybePlayLowVisionRouteChangeAlert(currentSession.route, progress)
                 syncActiveSegment(progress.activeSegmentIndex)
                 maybeRefreshTransit(currentSession, progress, snapshot)
+            }
+            if (hasJoinedRealtimeRouteLine) {
                 maybeRequestReroute(currentSession, progress, snapshot)
             }
+            maybeSpeakDestinationSoon(
+                current = currentCoordinate,
+                progress = progress,
+            )
+            maybeCompleteNavigationAtDestination(
+                current = currentCoordinate,
+                progress = progress,
+                recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
+            )
         } else {
             guidanceMode = NavigationGuidanceMode.RouteDetail
             resetRouteJoinStability()
+            resetDestinationArrivalStability()
             resetLiveGuidancePresentation()
             applyRouteDetailGuidance(currentSession)
         }
@@ -476,32 +591,84 @@ class NavigationViewModel(
             guidanceMode = guidanceMode,
         )
         publishNavigationState()
+        processPendingHazardReportReroute()
         maybeSpeakRealtimeGuidanceAutomatically()
+    }
+
+    private fun maybeCompleteNavigationAtDestination(
+        current: GeoCoordinate,
+        progress: NavigationProgressSnapshot,
+        recordedAtEpochMillis: Long,
+    ) {
+        if (isEndNavigationInFlight) return
+        val currentSession = routeSession ?: return
+        if (!currentSession.route.isNearFinalRouteProgress(progress)) {
+            resetDestinationArrivalStability()
+            return
+        }
+        val finalRouteEndpoint = currentSession.route.finalRouteEndpoint() ?: return
+        val distanceToFinalEndpointMeters = haversineDistanceMeters(current, finalRouteEndpoint)
+        if (distanceToFinalEndpointMeters > NAVIGATION_DESTINATION_AUTO_ARRIVAL_RADIUS_METERS) {
+            resetDestinationArrivalStability()
+            return
+        }
+
+        destinationArrivalStableUpdateCount += 1
+        val stableSince =
+            destinationArrivalStableSinceEpochMillis
+                ?: recordedAtEpochMillis.also { firstStableEpochMillis ->
+                    destinationArrivalStableSinceEpochMillis = firstStableEpochMillis
+                }
+        val isStableEnough =
+            destinationArrivalStableUpdateCount >= NAVIGATION_DESTINATION_AUTO_ARRIVAL_STABLE_UPDATE_COUNT ||
+                recordedAtEpochMillis - stableSince >= NAVIGATION_DESTINATION_AUTO_ARRIVAL_STABLE_DURATION_MILLIS
+        if (!isStableEnough) return
+
+        resetDestinationArrivalStability()
+        finishNavigation(
+            event = NavigationUiEvent.NavigateToArrival,
+            completionBriefingText = NAVIGATION_ARRIVAL_COMPLETION_TTS_TEXT,
+        )
+    }
+
+    private fun maybeSpeakDestinationSoon(
+        current: GeoCoordinate,
+        progress: NavigationProgressSnapshot,
+    ) {
+        if (hasSpokenDestinationSoon) return
+        if (!uiState.value.tts.canRequestBriefing) return
+        val currentSession = routeSession ?: return
+        if (!currentSession.route.isNearFinalRouteProgress(progress)) return
+        val finalRouteEndpoint = currentSession.route.finalRouteEndpoint() ?: return
+        if (haversineDistanceMeters(current, finalRouteEndpoint) > NAVIGATION_DESTINATION_SOON_RADIUS_METERS) return
+
+        hasSpokenDestinationSoon = true
+        emitUiEvent(NavigationUiEvent.SpeakBriefing(NAVIGATION_DESTINATION_SOON_TTS_TEXT))
     }
 
     private fun resolveGuidanceMode(
         route: RouteCandidate,
-        currentCoordinate: GeoCoordinate,
         progress: NavigationProgressSnapshot,
+        origin: GeoCoordinate?,
         recordedAtEpochMillis: Long,
     ): NavigationGuidanceMode {
-        val originDistanceMeters =
-            navigationRequest
-                ?.origin
-                ?.coordinate
-                ?.let { origin -> haversineDistanceMeters(currentCoordinate, origin) }
-                ?: Double.POSITIVE_INFINITY
         val isInsideRealtimeEntryDistance =
-            progress.distanceToRouteMeters <= NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS ||
-                originDistanceMeters <= NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS
+            progress.distanceToRouteMeters <= NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS
+        val hasOnRouteMatch = progress.routeMatchState == NavigationRouteMatchState.OnRoute
         val isOutsideRouteDetailDistance =
-            progress.distanceToRouteMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS &&
-                originDistanceMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS
+            progress.distanceToRouteMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS
         val hasRenderableRealtimeProgress = route.hasRenderableRealtimeProgress(progress)
+        val isWaitingForInitialRouteStart =
+            !hasJoinedRealtimeRouteLine &&
+                !hasOnRouteMatch &&
+                route.shouldWaitForInitialRouteStartJoin(
+                    origin = origin,
+                    current = progress.coordinate,
+                )
 
         return when (guidanceMode) {
             NavigationGuidanceMode.Realtime -> {
-                if (isOutsideRouteDetailDistance || !hasRenderableRealtimeProgress) {
+                if (progress.routeMatchState == NavigationRouteMatchState.OffRoute || isOutsideRouteDetailDistance || !hasRenderableRealtimeProgress) {
                     guidanceMode = NavigationGuidanceMode.RouteDetail
                     resetRouteJoinStability()
                 } else if (isInsideRealtimeEntryDistance) {
@@ -510,7 +677,9 @@ class NavigationViewModel(
                 guidanceMode
             }
             NavigationGuidanceMode.RouteDetail -> {
-                if (isInsideRealtimeEntryDistance && hasRenderableRealtimeProgress) {
+                if (isWaitingForInitialRouteStart) {
+                    resetRouteJoinStability()
+                } else if (isInsideRealtimeEntryDistance && hasOnRouteMatch && hasRenderableRealtimeProgress) {
                     routeJoinStableUpdateCount += 1
                     val stableSince =
                         routeJoinStableSinceEpochMillis
@@ -522,6 +691,7 @@ class NavigationViewModel(
                             recordedAtEpochMillis - stableSince >= NAVIGATION_ROUTE_JOIN_STABLE_DURATION_MILLIS
                     if (isStableEnough) {
                         guidanceMode = NavigationGuidanceMode.Realtime
+                        hasJoinedRealtimeRouteLine = true
                         resetRouteJoinStability()
                     }
                 } else if (isOutsideRouteDetailDistance) {
@@ -539,12 +709,97 @@ class NavigationViewModel(
         routeJoinStableSinceEpochMillis = null
     }
 
+    private fun resetDestinationArrivalStability() {
+        destinationArrivalStableUpdateCount = 0
+        destinationArrivalStableSinceEpochMillis = null
+    }
+
+    private fun resetNodeTransitionStability() {
+        nodeTransitionCandidate = null
+    }
+
+    private fun NavigationProgressSnapshot.withStableNodeTransition(
+        route: RouteCandidate,
+        previousCoordinate: GeoCoordinate?,
+        currentCoordinate: GeoCoordinate,
+        routeMatch: NavigationRouteMatchResult?,
+        recordedAtEpochMillis: Long,
+    ): NavigationProgressSnapshot {
+        if (guidanceMode != NavigationGuidanceMode.Realtime) {
+            resetNodeTransitionStability()
+            return this
+        }
+        if (routeMatch?.state == NavigationRouteMatchState.OffRoute) {
+            resetNodeTransitionStability()
+            return copy(activeSegmentIndex = this@NavigationViewModel.activeSegmentIndex)
+        }
+        if (distanceToRouteMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS) {
+            resetNodeTransitionStability()
+            return copy(activeSegmentIndex = this@NavigationViewModel.activeSegmentIndex)
+        }
+        val currentActiveSegmentIndex = this@NavigationViewModel.activeSegmentIndex
+        if (currentActiveSegmentIndex !in route.segments.indices || currentActiveSegmentIndex >= route.segments.lastIndex) {
+            resetNodeTransitionStability()
+            return this
+        }
+        if (activeSegmentIndex > currentActiveSegmentIndex && currentActiveSegmentIndex == 0) {
+            resetNodeTransitionStability()
+            return copy(activeSegmentIndex = currentActiveSegmentIndex + 1)
+        }
+        val gatedProgress =
+            if (activeSegmentIndex != currentActiveSegmentIndex) {
+                copy(activeSegmentIndex = currentActiveSegmentIndex)
+            } else {
+                this
+            }
+
+        val transitionCandidateIndex = currentActiveSegmentIndex + 1
+        val shouldAdvance =
+            route.shouldAdvancePastGuidanceNode(
+                activeSegmentIndex = currentActiveSegmentIndex,
+                previousCoordinate = previousCoordinate,
+                currentCoordinate = currentCoordinate,
+                progress = gatedProgress,
+            )
+        if (!shouldAdvance) {
+            resetNodeTransitionStability()
+            return gatedProgress
+        }
+
+        val previousCandidate = nodeTransitionCandidate
+        val stableSince =
+            if (previousCandidate?.segmentIndex == transitionCandidateIndex) {
+                previousCandidate.stableSinceEpochMillis
+            } else {
+                recordedAtEpochMillis
+            }
+        val updateCount =
+            if (previousCandidate?.segmentIndex == transitionCandidateIndex) {
+                previousCandidate.updateCount + 1
+            } else {
+                1
+            }
+        nodeTransitionCandidate =
+            NavigationNodeTransitionCandidate(
+                segmentIndex = transitionCandidateIndex,
+                updateCount = updateCount,
+                stableSinceEpochMillis = stableSince,
+            )
+        val isStableEnough =
+            updateCount >= NAVIGATION_NODE_TRANSITION_STABLE_UPDATE_COUNT ||
+                recordedAtEpochMillis - stableSince >= NAVIGATION_NODE_TRANSITION_STABLE_DURATION_MILLIS
+        if (!isStableEnough) return gatedProgress
+
+        resetNodeTransitionStability()
+        return gatedProgress.copy(activeSegmentIndex = transitionCandidateIndex)
+    }
+
     private fun updateLiveGuidancePresentation(
         segmentIndex: Int,
         rawDistanceMeters: Int?,
         recordedAtEpochMillis: Long,
     ) {
-        val displayDistanceMeters = rawDistanceMeters?.toLiveGuidanceDisplayDistanceMeters()
+        val displayDistanceMeters = rawDistanceMeters?.let(::toLiveGuidanceDisplayDistanceMeters)
         latestLiveGuidanceDisplayDistanceMeters = displayDistanceMeters
         if (displayDistanceMeters == null) {
             liveGuidanceDisplayState = null
@@ -802,15 +1057,32 @@ class NavigationViewModel(
         return haversineDistanceMeters(lastAttemptCoordinate, current) >= LOW_VISION_ACTUAL_METRICS_MIN_REQUEST_DISTANCE_METERS
     }
 
-    private fun shouldProcessLocation(snapshot: LocationSnapshot): Boolean {
+    private fun shouldProcessLocation(
+        snapshot: LocationSnapshot,
+        route: RouteCandidate,
+    ): Boolean {
+        if (snapshot.accuracyMeters != null && snapshot.accuracyMeters > NAVIGATION_MAX_ACCEPTED_ACCURACY_METERS) {
+            return false
+        }
         val lastProcessed = lastProcessedLocationEpochMillis
-        if (lastProcessed != null && snapshot.recordedAtEpochMillis >= lastProcessed) {
+        if (lastProcessed != null) {
+            if (snapshot.recordedAtEpochMillis <= lastProcessed) return false
             val elapsedMillis = snapshot.recordedAtEpochMillis - lastProcessed
             if (elapsedMillis < MIN_LOCATION_UPDATE_INTERVAL_MILLIS) {
                 return false
             }
+            val latestCoordinate = latestLocationCoordinate
+            if (latestCoordinate != null &&
+                snapshot.isImpossibleNavigationJumpFrom(
+                    previousCoordinate = latestCoordinate,
+                    elapsedMillis = elapsedMillis,
+                    route = route,
+                    activeSegmentIndex = activeSegmentIndex,
+                )
+            ) {
+                return false
+            }
         }
-        lastProcessedLocationEpochMillis = snapshot.recordedAtEpochMillis
         return true
     }
 
@@ -839,7 +1111,40 @@ class NavigationViewModel(
         focusedSegmentIndex = activeSegmentIndex
         isInspectingSegments = false
         hasPendingActiveChange = false
+        currentHeadingManager.startHeadingUpdates()
+        trackingMode = NavigationTrackingMode.FOLLOW
         publishNavigationState()
+    }
+
+    private fun seedLatestLocationSnapshot(
+        snapshot: LocationSnapshot,
+        route: RouteCandidate,
+    ): GeoCoordinate {
+        val currentCoordinate = GeoCoordinate(latitude = snapshot.latitude, longitude = snapshot.longitude)
+        latestLocationCoordinate = currentCoordinate
+        latestGpsBearingDegrees = snapshot.toUsableNavigationBearingDegrees()
+        val displayCoordinate =
+            snapshot.resolveSmoothedDisplayCoordinate(
+                rawCoordinate = currentCoordinate,
+                previousPose = latestNavigationPose,
+            )
+        latestNavigationPose =
+            NavigationPose(
+                rawLocation = currentCoordinate,
+                displayLocation = displayCoordinate,
+                heading =
+                    resolveNavigationHeading(
+                        gpsBearingDegrees = latestGpsBearingDegrees,
+                        sensorHeadingDegrees = latestHeadingDegrees,
+                        routeFallbackDegrees =
+                            route.resolveNavigationRouteFallbackBearingDegrees(
+                                current = currentCoordinate,
+                            ),
+                    ),
+                recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
+            )
+        lastProcessedLocationEpochMillis = snapshot.recordedAtEpochMillis
+        return currentCoordinate
     }
 
     private fun publishNavigationState() {
@@ -867,6 +1172,23 @@ class NavigationViewModel(
             } else {
                 NavigationMapFocusMode.ACTIVE
             }
+        val destinationEndpointDistanceMeters =
+            latestProgress?.let { progress ->
+                if (!runtimeRequest.selectedRoute.isNearFinalRouteProgress(progress)) return@let null
+                val currentCoordinate = latestLocationCoordinate ?: latestNavigationPose?.displayLocation ?: return@let null
+                runtimeRequest.selectedRoute.finalRouteEndpoint()?.let { endpoint ->
+                    haversineDistanceMeters(currentCoordinate, endpoint).roundToInt()
+                }
+            }
+        val destinationSoon =
+            destinationEndpointDistanceMeters
+                ?.let { distanceMeters -> distanceMeters <= NAVIGATION_DESTINATION_SOON_RADIUS_METERS }
+                ?: false
+        val hasPassedFinalRouteEndpoint =
+            latestProgress?.let { progress ->
+                runtimeRequest.selectedRoute.isNearFinalRouteProgress(progress) &&
+                    progress.remainingRouteDistanceMeters <= NAVIGATION_NODE_TRANSITION_PASSED_DISTANCE_METERS.roundToInt()
+            } ?: false
         val stepCard =
             runtimeRequest.toStepCardUiState(
                 screenState = screenState,
@@ -875,22 +1197,31 @@ class NavigationViewModel(
                 estimatedMinutes = latestEstimatedMinutes,
                 remainingMetricsSource = latestRemainingMetricsSource,
                 transitPresentation = latestTransitPresentation,
-                liveGuidanceDistanceMeters =
+                liveGuidanceRawDistanceMeters =
+                    if (guidanceMode == NavigationGuidanceMode.Realtime) {
+                        latestLiveGuidanceRawDistanceMeters
+                    } else {
+                        null
+                    },
+                liveGuidanceDisplayDistanceMeters =
                     if (guidanceMode == NavigationGuidanceMode.Realtime) {
                         latestLiveGuidanceDisplayDistanceMeters
                     } else {
                         null
                     },
+                destinationDistanceMeters = destinationEndpointDistanceMeters,
+                destinationSoon = destinationSoon,
+                hasPassedFinalRouteEndpoint = hasPassedFinalRouteEndpoint,
             )
         val briefingText = stepCard.toNavigationBriefingText()
         val mapOverlay =
             runtimeRequest.toMapOverlayUiState(
-                currentLocationCoordinate = latestLocationCoordinate,
+                currentLocationCoordinate = latestNavigationPose?.displayLocation ?: latestLocationCoordinate,
                 activeSegmentIndex = activeSegmentIndex,
                 focusedSegmentIndex = focusedSegmentIndex,
                 mapFocusMode = mapFocusMode,
                 trackingMode = trackingMode,
-                headingDegrees = latestHeadingDegrees,
+                headingDegrees = null,
             )
         logSegmentMarkerDebugSummary(mapOverlay)
 
@@ -956,6 +1287,7 @@ class NavigationViewModel(
         if (nextActiveSegmentIndex == activeSegmentIndex) return
 
         activeSegmentIndex = nextActiveSegmentIndex
+        resetNodeTransitionStability()
         val activeSegment = routeSession?.route?.segments?.getOrNull(activeSegmentIndex)
         if (isInspectingSegments && activeSegment?.isRiskPrioritySegment() == true) {
             focusedSegmentIndex = activeSegmentIndex
@@ -1083,6 +1415,7 @@ class NavigationViewModel(
 
     private fun resetAutomaticTtsHistory() {
         spokenInitialGuidanceKeys.clear()
+        spokenApproachGuidanceKeys.clear()
         spokenNearGuidanceKeys.clear()
     }
 
@@ -1091,14 +1424,21 @@ class NavigationViewModel(
         if (!tts.canRequestBriefing) return
         if (guidanceMode != NavigationGuidanceMode.Realtime) return
         if (isInspectingSegments) return
-        val speechText = uiState.value.stepCard.toNavigationBriefingText()
-        if (speechText.isBlank()) return
-
         val currentSession = routeSession ?: return
         val route = currentSession.route
         val progress = latestProgress ?: return
         if (progress.activeSegmentIndex != activeSegmentIndex) return
         if (progress.distanceToRouteMeters > NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS) return
+        if (
+            route.isNearFinalRouteProgress(progress) &&
+            latestLocationCoordinate?.let { current ->
+                route.finalRouteEndpoint()?.let { endpoint ->
+                    haversineDistanceMeters(current, endpoint) <= NAVIGATION_DESTINATION_SOON_RADIUS_METERS
+                }
+            } == true
+        ) {
+            return
+        }
 
         val segment = route.segments.getOrNull(activeSegmentIndex) ?: return
         val heroDetail = route.toNavigationHeroDetail(segment)
@@ -1114,19 +1454,40 @@ class NavigationViewModel(
                     progress.activeSegmentIndex >= route.segments.lastIndex
                 }
                 ?: segment.guidanceDisplayDistanceMeters()
-        val shouldSpeakNear = distanceToGuidanceMeters <= NAVIGATION_AUTO_TTS_NEAR_DISTANCE_METERS
 
-        if (shouldSpeakNear) {
-            if (spokenNearGuidanceKeys.add(guidanceKey)) {
-                spokenInitialGuidanceKeys += guidanceKey
-                emitUiEvent(NavigationUiEvent.SpeakBriefing(speechText))
+        val speechStage =
+            when {
+                distanceToGuidanceMeters <= NAVIGATION_AUTO_TTS_NEAR_DISTANCE_METERS &&
+                    !spokenNearGuidanceKeys.contains(guidanceKey) -> NavigationLiveGuidanceSpeechStage.NEAR_10M
+                distanceToGuidanceMeters <= NAVIGATION_AUTO_TTS_APPROACH_DISTANCE_METERS &&
+                    !spokenApproachGuidanceKeys.contains(guidanceKey) -> NavigationLiveGuidanceSpeechStage.APPROACH_30M
+                !spokenInitialGuidanceKeys.contains(guidanceKey) -> NavigationLiveGuidanceSpeechStage.INITIAL
+                else -> return
             }
-            return
-        }
+        val speechText =
+            formatNavigationLiveGuidanceSpeechText(
+                action = heroDetail.guidanceAction,
+                rawDistanceMeters = distanceToGuidanceMeters,
+                stage = speechStage,
+                fallbackTitle = heroDetail.title,
+            )
+        if (speechText.isBlank()) return
 
-        if (spokenInitialGuidanceKeys.add(guidanceKey)) {
-            emitUiEvent(NavigationUiEvent.SpeakBriefing(speechText))
+        when (speechStage) {
+            NavigationLiveGuidanceSpeechStage.INITIAL -> {
+                if (!spokenInitialGuidanceKeys.add(guidanceKey)) return
+            }
+            NavigationLiveGuidanceSpeechStage.APPROACH_30M -> {
+                if (!spokenApproachGuidanceKeys.add(guidanceKey)) return
+                spokenInitialGuidanceKeys += guidanceKey
+            }
+            NavigationLiveGuidanceSpeechStage.NEAR_10M -> {
+                if (!spokenNearGuidanceKeys.add(guidanceKey)) return
+                spokenApproachGuidanceKeys += guidanceKey
+                spokenInitialGuidanceKeys += guidanceKey
+            }
         }
+        emitUiEvent(NavigationUiEvent.SpeakBriefing(speechText))
     }
 
     private fun saveDestinationBookmarkAndNavigate() {
@@ -1156,13 +1517,22 @@ class NavigationViewModel(
         }
     }
 
-    private fun finishNavigation(event: NavigationUiEvent) {
+    private fun finishNavigation(
+        event: NavigationUiEvent,
+        completionBriefingText: String? = null,
+    ) {
         viewModelScope.launch {
-            completeNavigation(event)
+            completeNavigation(
+                event = event,
+                completionBriefingText = completionBriefingText,
+            )
         }
     }
 
-    private suspend fun completeNavigation(event: NavigationUiEvent) {
+    private suspend fun completeNavigation(
+        event: NavigationUiEvent,
+        completionBriefingText: String? = null,
+    ) {
         if (isEndNavigationInFlight) return
         isEndNavigationInFlight = true
         currentLocationManager.stopLocationUpdates()
@@ -1181,6 +1551,10 @@ class NavigationViewModel(
         isEndNavigationInFlight = false
         publishNavigationState()
         mutableUiEvent.emit(NavigationUiEvent.StopBriefing)
+        if (completionBriefingText != null && uiState.value.tts.isEnabled) {
+            mutableUiEvent.emit(NavigationUiEvent.SpeakBriefing(completionBriefingText))
+            delay(NAVIGATION_COMPLETION_TTS_NAVIGATION_DELAY_MILLIS)
+        }
         mutableUiEvent.emit(event)
     }
 
@@ -1230,11 +1604,7 @@ class NavigationViewModel(
         progress: NavigationProgressSnapshot,
         snapshot: LocationSnapshot,
     ) {
-        val accuracyMeters = snapshot.accuracyMeters
-        val isOffRoute =
-            accuracyMeters != null &&
-                accuracyMeters <= REROUTE_MAX_GPS_ACCURACY_METERS &&
-                progress.distanceToRouteMeters >= REROUTE_DEVIATION_DISTANCE_METERS
+        val isOffRoute = progress.routeMatchState == NavigationRouteMatchState.OffRoute
         deviationState =
             deviationState.next(
                 isOffRoute = isOffRoute,
@@ -1245,9 +1615,12 @@ class NavigationViewModel(
         }
 
         val routeId = currentSession.routeId ?: return
-        val currentCoordinate = progress.coordinate
+        val currentCoordinate = progress.rawCoordinate
         deviationState = NavigationDeviationState()
         isRerouteInFlight = true
+        if (uiState.value.tts.canRequestBriefing) {
+            emitUiEvent(NavigationUiEvent.SpeakBriefing(NAVIGATION_REROUTE_TTS_TEXT))
+        }
         viewModelScope.launch {
             runCatching {
                 routeRepository.reroute(
@@ -1256,36 +1629,92 @@ class NavigationViewModel(
                 )
             }.onSuccess { rerouteData ->
                 rerouteData.route?.let { reroutedRoute ->
-                    routeSession = routeSession?.withReroutedRoute(reroutedRoute)
-                    resetAutomaticTtsHistory()
-                    latestProgress = reroutedRoute.evaluateProgress(currentCoordinate)
-                    val remainingMetrics =
-                        latestProgress?.let { progress ->
-                            reroutedRoute.resolveRemainingMetrics(
-                                progress = progress,
-                                destination = navigationRequest?.destination?.coordinate ?: currentCoordinate,
-                                useLowVisionWalkingPace = isLowVisionMode,
-                            )
-                        }
-                    latestRemainingDistanceMeters =
-                        remainingMetrics?.distanceMeters ?: reroutedRoute.totalDistanceMeters()
-                    latestEstimatedMinutes =
-                        remainingMetrics?.estimatedMinutes ?: reroutedRoute.summary.estimatedTimeMinutes
-                    latestRemainingMetricsSource =
-                        remainingMetrics?.source ?: NavigationRemainingMetricsSource.ProjectedRoute
-                    latestTransitPresentation =
-                        routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
-                    val reroutedSegmentIndex = latestProgress?.activeSegmentIndex ?: 0
-                    activeSegmentIndex = reroutedSegmentIndex
-                    focusedSegmentIndex = reroutedSegmentIndex
-                    isInspectingSegments = false
-                    hasPendingActiveChange = false
-                    lastLowVisionRouteChangeAlertSegmentIndex = null
+                    applyReroutedRoute(
+                        currentSession = currentSession,
+                        reroutedRoute = reroutedRoute,
+                        currentCoordinate = currentCoordinate,
+                    )
                 }
                 publishNavigationState()
             }
             isRerouteInFlight = false
+            processPendingHazardReportReroute()
         }
+    }
+
+    private fun handleHazardReportSubmitted(reportId: Long) {
+        if (isLowVisionMode) return
+        pendingHazardReportRerouteId = reportId
+        processPendingHazardReportReroute()
+    }
+
+    private fun processPendingHazardReportReroute() {
+        if (isLowVisionMode || isRerouteInFlight) return
+
+        val reportId = pendingHazardReportRerouteId ?: return
+        val currentSession = routeSession ?: return
+        val routeId = currentSession.routeId ?: return
+        val currentCoordinate = latestLocationCoordinate ?: return
+
+        pendingHazardReportRerouteId = null
+        isRerouteInFlight = true
+        viewModelScope.launch {
+            val rerouteResult =
+                runCatching {
+                    reportRepository.rerouteAfterHazardReport(
+                        reportId = reportId,
+                        routeId = routeId,
+                        currentPoint = currentCoordinate,
+                    )
+                }.getOrNull()
+
+            if (rerouteResult?.rerouted == true && rerouteResult.route != null) {
+                applyReroutedRoute(
+                    currentSession = currentSession,
+                    reroutedRoute = rerouteResult.route,
+                    currentCoordinate = currentCoordinate,
+                )
+                publishNavigationState()
+            } else {
+                emitUiEvent(NavigationUiEvent.ShowDuribalCallDialog)
+            }
+
+            isRerouteInFlight = false
+            processPendingHazardReportReroute()
+        }
+    }
+
+    private fun applyReroutedRoute(
+        currentSession: NavigationRouteSession,
+        reroutedRoute: RouteCandidate,
+        currentCoordinate: GeoCoordinate,
+    ) {
+        routeSession = currentSession.withReroutedRoute(reroutedRoute)
+        latestRouteMatch = null
+        resetAutomaticTtsHistory()
+        latestProgress = reroutedRoute.evaluateProgress(currentCoordinate)
+        val remainingMetrics =
+            latestProgress?.let { progress ->
+                reroutedRoute.resolveRemainingMetrics(
+                    progress = progress,
+                    destination = navigationRequest?.destination?.coordinate ?: currentCoordinate,
+                    useLowVisionWalkingPace = isLowVisionMode,
+                )
+            }
+        latestRemainingDistanceMeters =
+            remainingMetrics?.distanceMeters ?: reroutedRoute.totalDistanceMeters()
+        latestEstimatedMinutes =
+            remainingMetrics?.estimatedMinutes ?: reroutedRoute.summary.estimatedTimeMinutes
+        latestRemainingMetricsSource =
+            remainingMetrics?.source ?: NavigationRemainingMetricsSource.ProjectedRoute
+        latestTransitPresentation =
+            routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
+        val reroutedSegmentIndex = latestProgress?.activeSegmentIndex ?: 0
+        activeSegmentIndex = reroutedSegmentIndex
+        focusedSegmentIndex = reroutedSegmentIndex
+        isInspectingSegments = false
+        hasPendingActiveChange = false
+        lastLowVisionRouteChangeAlertSegmentIndex = null
     }
 
     companion object {
@@ -1295,6 +1724,7 @@ class NavigationViewModel(
             locationPermissionManager: LocationPermissionManager? = null,
             bookmarkRepository: BookmarkRepository,
             routeRepository: RouteRepository,
+            reportRepository: ReportRepository,
             isLowVisionMode: Boolean = false,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -1306,6 +1736,7 @@ class NavigationViewModel(
                         locationPermissionManager = locationPermissionManager,
                         bookmarkRepository = bookmarkRepository,
                         routeRepository = routeRepository,
+                        reportRepository = reportRepository,
                         initialLowVisionMode = isLowVisionMode,
                     ) as T
             }
@@ -1463,8 +1894,11 @@ private fun arrivalBasis(arrivalStatus: String?): String =
 
 private data class NavigationProgressSnapshot(
     val coordinate: GeoCoordinate,
+    val rawCoordinate: GeoCoordinate,
     val activeSegmentIndex: Int,
     val activeLegIndex: Int,
+    val routeMatchState: NavigationRouteMatchState = NavigationRouteMatchState.OnRoute,
+    val routeMatchConfidence: Double = 1.0,
     val distanceToRouteMeters: Double,
     val distanceAlongPolylineMeters: Double,
     val routePolylineDistanceMeters: Double,
@@ -1585,15 +2019,22 @@ private fun RouteLeg.toNavigationTransitInfo(
     )
 }
 
-private data class RoutePolylineProjection(
+internal data class RoutePolylineProjection(
     val distanceToPolylineMeters: Double,
     val distanceAlongPolylineMeters: Double,
     val totalPolylineDistanceMeters: Double,
+    val projectedCoordinate: GeoCoordinate,
 )
 
-private data class RouteSegmentProjection(
+internal data class RouteSegmentProjection(
     val distanceToSegmentMeters: Double,
     val distanceAlongSegmentMeters: Double,
+    val projectedCoordinate: GeoCoordinate,
+)
+
+private data class RouteSegmentDistanceSpan(
+    val startDistanceMeters: Double,
+    val endDistanceMeters: Double,
 )
 
 private fun RouteNavigationRequest.toDestinationBookmarkDataOrNull(): BookmarkData? =
@@ -1668,9 +2109,14 @@ private fun RouteCandidate.totalDurationSeconds(): Int =
         ?: summary.estimatedTimeMinutes.takeIf { estimatedTimeMinutes -> estimatedTimeMinutes > 0 }?.times(60)
         ?: 0
 
-private fun RouteCandidate.evaluateProgress(current: GeoCoordinate): NavigationProgressSnapshot? {
+private fun RouteCandidate.evaluateProgress(
+    current: GeoCoordinate,
+    rawCurrent: GeoCoordinate = current,
+    routeMatch: NavigationRouteMatchResult? = null,
+): NavigationProgressSnapshot? {
     val routePoints = navigationPolylinePoints()
-    val projection = projectOntoPolylineMeters(current = current, polyline = routePoints) ?: return null
+    val projection = routeMatch?.matchedProjection ?: projectOntoPolylineMeters(current = current, polyline = routePoints) ?: return null
+    val rawProjection = routeMatch?.rawProjection ?: projectOntoPolylineMeters(current = rawCurrent, polyline = routePoints) ?: projection
     val progressRatio =
         if (projection.totalPolylineDistanceMeters <= 0.0) {
             0.0
@@ -1683,9 +2129,12 @@ private fun RouteCandidate.evaluateProgress(current: GeoCoordinate): NavigationP
 
     return NavigationProgressSnapshot(
         coordinate = current,
+        rawCoordinate = rawCurrent,
         activeSegmentIndex = resolveActiveSegmentIndex(projection),
         activeLegIndex = resolveActiveLegIndex(progressRatio),
-        distanceToRouteMeters = projection.distanceToPolylineMeters,
+        routeMatchState = routeMatch?.state ?: NavigationRouteMatchState.OnRoute,
+        routeMatchConfidence = routeMatch?.confidence ?: 1.0,
+        distanceToRouteMeters = rawProjection.distanceToPolylineMeters,
         distanceAlongPolylineMeters = projection.distanceAlongPolylineMeters,
         routePolylineDistanceMeters = projection.totalPolylineDistanceMeters,
         distanceAlongRouteMeters = (totalDistanceMeters * progressRatio).roundToInt().coerceAtLeast(0),
@@ -1704,7 +2153,7 @@ private fun RouteCandidate.resolveRemainingMetrics(
     resolveRemainingMetrics(
         progress = progress,
         destination = destination,
-        directDistanceMeters = haversineDistanceMeters(progress.coordinate, destination).roundToInt().coerceAtLeast(0),
+        directDistanceMeters = haversineDistanceMeters(progress.rawCoordinate, destination).roundToInt().coerceAtLeast(0),
         useLowVisionWalkingPace = useLowVisionWalkingPace,
     )
 
@@ -1824,11 +2273,177 @@ private fun RouteCandidate.resolveActiveSegmentIndex(projection: RoutePolylinePr
     val routePoints = navigationPolylinePoints()
     if (routePoints.size < 2) return 0
     val currentDistance = projection.distanceAlongPolylineMeters
+    segments.forEachIndexed { segmentIndex, segment ->
+        if (!segment.shouldHoldRealtimeGuidanceUntilSegmentEnd()) return@forEachIndexed
+        val span = resolveSegmentRouteSpanMeters(segmentIndex = segmentIndex, routePoints = routePoints) ?: return@forEachIndexed
+        if (
+            currentDistance >= span.startDistanceMeters - NAVIGATION_LIVE_GUIDANCE_TARGET_AHEAD_TOLERANCE_METERS &&
+            currentDistance <= span.endDistanceMeters + NAVIGATION_NODE_TRANSITION_PASSED_DISTANCE_METERS
+        ) {
+            return segmentIndex
+        }
+    }
     return segments.indices.firstOrNull { segmentIndex ->
         val targetCoordinate = resolveRealtimeStepTargetCoordinate(segmentIndex) ?: return@firstOrNull false
         val targetProjection = projectOntoPolylineMeters(current = targetCoordinate, polyline = routePoints) ?: return@firstOrNull false
         targetProjection.distanceAlongPolylineMeters >= currentDistance - NAVIGATION_LIVE_GUIDANCE_TARGET_AHEAD_TOLERANCE_METERS
     } ?: segments.lastIndex
+}
+
+private fun RouteCandidate.shouldAdvancePastGuidanceNode(
+    activeSegmentIndex: Int,
+    previousCoordinate: GeoCoordinate?,
+    currentCoordinate: GeoCoordinate,
+    progress: NavigationProgressSnapshot,
+): Boolean {
+    val routePoints = navigationPolylinePoints()
+    if (routePoints.size < 2) return false
+    val activeSegment = segments.getOrNull(activeSegmentIndex) ?: return false
+    val isSegmentHoldGuidance = activeSegment.shouldHoldRealtimeGuidanceUntilSegmentEnd()
+    val guidanceNode =
+        if (isSegmentHoldGuidance) {
+            resolveSegmentEndCoordinate(activeSegmentIndex)
+        } else {
+            resolveRealtimeStepTargetCoordinate(activeSegmentIndex)
+        } ?: return false
+    val guidanceNodeProjection = projectOntoPolylineMeters(current = guidanceNode, polyline = routePoints) ?: return false
+    val previousRouteProjection =
+        previousCoordinate?.let { coordinate -> projectOntoPolylineMeters(current = coordinate, polyline = routePoints) }
+    if (
+        previousRouteProjection != null &&
+        progress.distanceAlongPolylineMeters < previousRouteProjection.distanceAlongPolylineMeters - NAVIGATION_LIVE_GUIDANCE_TARGET_AHEAD_TOLERANCE_METERS
+    ) {
+        return false
+    }
+    val nextSegmentIndex = activeSegmentIndex + 1
+    val transitionSegmentPolyline =
+        if (isSegmentHoldGuidance) {
+            resolveSegmentDisplayPolyline(nextSegmentIndex)
+        } else {
+            resolveSegmentDisplayPolyline(activeSegmentIndex)
+        }.takeIf { polyline -> polyline.size >= 2 }
+            ?: listOfNotNull(guidanceNode, resolveSegmentEndCoordinate(nextSegmentIndex))
+                .takeIf { polyline -> polyline.size >= 2 }
+            ?: return progress.distanceAlongPolylineMeters >=
+                guidanceNodeProjection.distanceAlongPolylineMeters + NAVIGATION_NODE_TRANSITION_PASSED_DISTANCE_METERS
+    val hasPassedGuidanceNodeOnRoute =
+        progress.distanceAlongPolylineMeters >= guidanceNodeProjection.distanceAlongPolylineMeters
+    if (!hasPassedGuidanceNodeOnRoute) {
+        if (isSegmentHoldGuidance) return false
+        val currentSegmentProjection =
+            projectOntoPolylineMeters(current = currentCoordinate, polyline = transitionSegmentPolyline) ?: return false
+        if (currentSegmentProjection.distanceToPolylineMeters > NAVIGATION_NODE_TRANSITION_TURN_MAX_SIDE_DISTANCE_METERS) {
+            return false
+        }
+        val previousSegmentProjection =
+            previousCoordinate
+                ?.let { coordinate -> projectOntoPolylineMeters(current = coordinate, polyline = transitionSegmentPolyline) }
+                ?: return false
+        return isMovingAlongTransitionSegment(
+            previousCoordinate = previousCoordinate,
+            currentCoordinate = currentCoordinate,
+            transitionPolyline = transitionSegmentPolyline,
+            previousSegmentProjection = previousSegmentProjection,
+            currentSegmentProjection = currentSegmentProjection,
+        )
+    }
+    if (
+        isSegmentHoldGuidance &&
+        progress.distanceAlongPolylineMeters <
+        guidanceNodeProjection.distanceAlongPolylineMeters + NAVIGATION_NODE_TRANSITION_PASSED_DISTANCE_METERS
+    ) {
+        return false
+    }
+
+    val currentProgressCoordinate = progress.coordinate
+    val distanceToGuidanceNodeMeters =
+        minOf(
+            haversineDistanceMeters(currentCoordinate, guidanceNode),
+            haversineDistanceMeters(currentProgressCoordinate, guidanceNode),
+        )
+    if (
+        distanceToGuidanceNodeMeters > NAVIGATION_NODE_TRANSITION_RADIUS_METERS &&
+        progress.distanceAlongPolylineMeters <
+        guidanceNodeProjection.distanceAlongPolylineMeters + NAVIGATION_NODE_TRANSITION_PASSED_DISTANCE_METERS
+    ) {
+        return false
+    }
+
+    val currentSegmentProjection =
+        projectOntoPolylineMeters(current = currentProgressCoordinate, polyline = transitionSegmentPolyline) ?: return false
+    val transitionEnterDistanceMeters =
+        if (isSegmentHoldGuidance) {
+            NAVIGATION_NODE_TRANSITION_ENTER_DISTANCE_METERS
+        } else {
+            NAVIGATION_NODE_TRANSITION_TURN_MAX_SIDE_DISTANCE_METERS
+        }
+    if (currentSegmentProjection.distanceToPolylineMeters > transitionEnterDistanceMeters) {
+        return false
+    }
+    val requiredAdvanceMeters = resolveNodeTransitionAdvanceMeters(transitionSegmentPolyline)
+    if (currentSegmentProjection.distanceAlongPolylineMeters >= requiredAdvanceMeters) return true
+
+    if (!isSegmentHoldGuidance && previousCoordinate != null) {
+        val previousSegmentProjection =
+            projectOntoPolylineMeters(current = previousCoordinate, polyline = transitionSegmentPolyline)
+        if (
+            previousSegmentProjection != null &&
+            isMovingAlongTransitionSegment(
+                previousCoordinate = previousCoordinate,
+                currentCoordinate = currentCoordinate,
+                transitionPolyline = transitionSegmentPolyline,
+                previousSegmentProjection = previousSegmentProjection,
+                currentSegmentProjection = currentSegmentProjection,
+            )
+        ) {
+            return true
+        }
+    }
+
+    val previousSegmentProjection =
+        previousCoordinate
+            ?.let { coordinate -> projectOntoPolylineMeters(current = coordinate, polyline = transitionSegmentPolyline) }
+            ?: return false
+    return currentSegmentProjection.distanceAlongPolylineMeters - previousSegmentProjection.distanceAlongPolylineMeters >=
+        requiredAdvanceMeters
+}
+
+private fun resolveNodeTransitionAdvanceMeters(segmentPolyline: List<GeoCoordinate>): Double {
+    val segmentDistanceMeters = segmentPolyline.totalPolylineDistanceMeters()
+    val scaledAdvanceMeters = segmentDistanceMeters * NAVIGATION_NODE_TRANSITION_SEGMENT_ADVANCE_RATIO
+    return minOf(NAVIGATION_NODE_TRANSITION_DEFAULT_ADVANCE_METERS, scaledAdvanceMeters)
+        .coerceAtLeast(NAVIGATION_NODE_TRANSITION_MIN_ADVANCE_METERS)
+}
+
+private fun isMovingAlongTransitionSegment(
+    previousCoordinate: GeoCoordinate,
+    currentCoordinate: GeoCoordinate,
+    transitionPolyline: List<GeoCoordinate>,
+    previousSegmentProjection: RoutePolylineProjection,
+    currentSegmentProjection: RoutePolylineProjection,
+): Boolean {
+    val movedMeters = haversineDistanceMeters(previousCoordinate, currentCoordinate)
+    if (movedMeters < NAVIGATION_NODE_TRANSITION_COURSE_MIN_MOVE_METERS) return false
+
+    val progressDeltaMeters =
+        currentSegmentProjection.distanceAlongPolylineMeters - previousSegmentProjection.distanceAlongPolylineMeters
+    if (progressDeltaMeters < NAVIGATION_NODE_TRANSITION_MIN_ADVANCE_METERS) return false
+
+    val moveBearingDegrees = bearingDegreesBetween(previousCoordinate, currentCoordinate)
+    val segmentBearingDegrees =
+        transitionPolyline.bearingAtDistanceMeters(currentSegmentProjection.distanceAlongPolylineMeters) ?: return false
+    return angularDifferenceDegrees(moveBearingDegrees, segmentBearingDegrees) <=
+        NAVIGATION_NODE_TRANSITION_COURSE_MAX_ANGLE_DEGREES
+}
+
+private fun RouteCandidate.resolveProgressCoordinate(rawCurrent: GeoCoordinate): GeoCoordinate {
+    val routePoints = navigationPolylinePoints()
+    val projection = projectOntoPolylineMeters(current = rawCurrent, polyline = routePoints) ?: return rawCurrent
+    return if (projection.distanceToPolylineMeters <= NAVIGATION_ROUTE_PROGRESS_SNAP_DISTANCE_METERS) {
+        projection.projectedCoordinate
+    } else {
+        rawCurrent
+    }
 }
 
 private fun RouteCandidate.resolveActiveLegIndex(progressRatio: Double): Int =
@@ -1871,7 +2486,7 @@ private fun resolveActiveIndex(
     return sanitizedWeights.lastIndex
 }
 
-private fun RouteCandidate.navigationPolylinePoints(): List<GeoCoordinate> {
+internal fun RouteCandidate.navigationPolylinePoints(): List<GeoCoordinate> {
     if (previewPolyline.isRenderable) return previewPolyline.points
     if (geometry.isRenderable) return geometry.points
 
@@ -1889,6 +2504,11 @@ private fun RouteCandidate.navigationPolylinePoints(): List<GeoCoordinate> {
         }
     }
 }
+
+private fun RouteCandidate.finalRouteEndpoint(): GeoCoordinate? =
+    navigationPolylinePoints().lastOrNull()
+        ?: segments.lastOrNull()?.polyline?.points?.lastOrNull()
+        ?: segments.lastOrNull()?.anchorCoordinate
 
 private fun RouteCandidate.resolveSegmentTravelKind(
     segment: RouteSegment?,
@@ -1919,14 +2539,14 @@ private fun RouteCandidate.hasTransitLeg(): Boolean =
 private fun RoutePolyline.totalDistanceWeight(): Double? =
     points.totalPolylineDistanceMeters().takeIf { distanceMeters -> distanceMeters > 0.0 }
 
-private fun List<GeoCoordinate>.totalPolylineDistanceMeters(): Double =
+internal fun List<GeoCoordinate>.totalPolylineDistanceMeters(): Double =
     if (size < 2) {
         0.0
     } else {
         zipWithNext().sumOf { (start, end) -> haversineDistanceMeters(start, end) }
     }
 
-private fun projectOntoPolylineMeters(
+internal fun projectOntoPolylineMeters(
     current: GeoCoordinate,
     polyline: List<GeoCoordinate>,
 ): RoutePolylineProjection? {
@@ -1937,12 +2557,14 @@ private fun projectOntoPolylineMeters(
             distanceToPolylineMeters = haversineDistanceMeters(current, polyline.single()),
             distanceAlongPolylineMeters = 0.0,
             totalPolylineDistanceMeters = 0.0,
+            projectedCoordinate = polyline.single(),
         )
     }
 
     var cumulativeDistanceMeters = 0.0
     var bestDistanceToPolylineMeters = Double.POSITIVE_INFINITY
     var bestDistanceAlongPolylineMeters = 0.0
+    var bestProjectedCoordinate = polyline.first()
     polyline.zipWithNext().forEach { (start, end) ->
         val segmentLengthMeters = haversineDistanceMeters(start, end)
         val projection =
@@ -1961,6 +2583,7 @@ private fun projectOntoPolylineMeters(
         if (isCloser || isTieButFurtherAlong) {
             bestDistanceToPolylineMeters = projection.distanceToSegmentMeters
             bestDistanceAlongPolylineMeters = projectedDistanceAlongPolyline
+            bestProjectedCoordinate = projection.projectedCoordinate
         }
         cumulativeDistanceMeters += segmentLengthMeters
     }
@@ -1969,6 +2592,7 @@ private fun projectOntoPolylineMeters(
         distanceToPolylineMeters = bestDistanceToPolylineMeters,
         distanceAlongPolylineMeters = bestDistanceAlongPolylineMeters.coerceIn(0.0, totalPolylineDistanceMeters),
         totalPolylineDistanceMeters = totalPolylineDistanceMeters,
+        projectedCoordinate = bestProjectedCoordinate,
     )
 }
 
@@ -1982,6 +2606,7 @@ private fun projectOntoSegmentMeters(
         return RouteSegmentProjection(
             distanceToSegmentMeters = haversineDistanceMeters(point, start),
             distanceAlongSegmentMeters = 0.0,
+            projectedCoordinate = start,
         )
     }
 
@@ -2011,6 +2636,7 @@ private fun projectOntoSegmentMeters(
     return RouteSegmentProjection(
         distanceToSegmentMeters = sqrt(deltaX * deltaX + deltaY * deltaY),
         distanceAlongSegmentMeters = segmentLengthMeters * projectionRatio,
+        projectedCoordinate = start.interpolateTo(end, projectionRatio),
     )
 }
 
@@ -2057,8 +2683,8 @@ private const val TRANSIT_REFRESH_COOLDOWN_MILLIS = 60_000L
 private const val TRANSIT_BOARDING_REFRESH_DISTANCE_METERS = 300.0
 private const val BUS_STOP_REFRESH_DISTANCE_METERS = TRANSIT_BOARDING_REFRESH_DISTANCE_METERS
 private const val SUBWAY_ELEVATOR_REFRESH_DISTANCE_METERS = TRANSIT_BOARDING_REFRESH_DISTANCE_METERS
-private const val REROUTE_DEVIATION_DISTANCE_METERS = 10.0
-private const val REROUTE_MAX_GPS_ACCURACY_METERS = 20f
+private const val REROUTE_DEVIATION_DISTANCE_METERS = 40.0
+private const val REROUTE_MAX_GPS_ACCURACY_METERS = 25f
 private const val REROUTE_OFF_ROUTE_CONSECUTIVE_COUNT = 2
 private const val REROUTE_OFF_ROUTE_DURATION_MILLIS = 3_000L
 private const val PROJECTED_PROGRESS_MAX_DISTANCE_METERS = 75.0
@@ -2239,7 +2865,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         currentLocation =
             currentLocationCoordinate?.let { coordinate ->
                 NavigationMapPointUiState(
-                    label = originPoint.label,
+                    label = "현재 위치",
                     coordinate = coordinate,
                 )
             },
@@ -2263,11 +2889,127 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
     )
 }
 
+private data class NavigationPose(
+    val rawLocation: GeoCoordinate,
+    val displayLocation: GeoCoordinate,
+    val heading: NavigationHeadingSelection,
+    val recordedAtEpochMillis: Long,
+)
+
+private fun NavigationPose.withHeading(heading: NavigationHeadingSelection): NavigationPose =
+    copy(heading = heading)
+
+private data class NavigationHeadingSelection(
+    val degrees: Double?,
+    val source: NavigationHeadingSource?,
+)
+
+private enum class NavigationHeadingSource {
+    GPS_BEARING,
+    DEVICE_SENSOR,
+    ROUTE_FALLBACK,
+}
+
+private fun resolveNavigationHeading(
+    gpsBearingDegrees: Double?,
+    sensorHeadingDegrees: Double?,
+    routeFallbackDegrees: Double?,
+): NavigationHeadingSelection =
+    when {
+        sensorHeadingDegrees != null ->
+            NavigationHeadingSelection(
+                degrees = normalizeHeadingDegrees(sensorHeadingDegrees),
+                source = NavigationHeadingSource.DEVICE_SENSOR,
+            )
+        gpsBearingDegrees != null ->
+            NavigationHeadingSelection(
+                degrees = normalizeHeadingDegrees(gpsBearingDegrees),
+                source = NavigationHeadingSource.GPS_BEARING,
+            )
+        routeFallbackDegrees != null ->
+            NavigationHeadingSelection(
+                degrees = normalizeHeadingDegrees(routeFallbackDegrees),
+                source = NavigationHeadingSource.ROUTE_FALLBACK,
+            )
+        else -> NavigationHeadingSelection(degrees = null, source = null)
+    }
+
+private fun LocationSnapshot.toUsableNavigationBearingDegrees(): Double? {
+    val bearing = bearingDegrees ?: return null
+    val speed = speedMetersPerSecond
+    if (speed != null && speed < NAVIGATION_GPS_BEARING_MIN_SPEED_METERS_PER_SECOND) return null
+    return normalizeHeadingDegrees(bearing.toDouble())
+}
+
+private fun LocationSnapshot.isImpossibleNavigationJumpFrom(
+    previousCoordinate: GeoCoordinate,
+    elapsedMillis: Long,
+    route: RouteCandidate,
+    activeSegmentIndex: Int,
+): Boolean {
+    if (elapsedMillis <= 0L) return true
+    val currentCoordinate = GeoCoordinate(latitude = latitude, longitude = longitude)
+    val jumpDistanceMeters = haversineDistanceMeters(previousCoordinate, currentCoordinate)
+    if (jumpDistanceMeters < NAVIGATION_IMPOSSIBLE_JUMP_MIN_DISTANCE_METERS) return false
+    val currentRouteDistanceMeters =
+        projectOntoPolylineMeters(
+            current = currentCoordinate,
+            polyline = route.navigationPolylinePoints(),
+        )?.distanceToPolylineMeters ?: Double.POSITIVE_INFINITY
+    if (currentRouteDistanceMeters <= NAVIGATION_ROUTE_PROGRESS_SNAP_DISTANCE_METERS) return false
+    val elapsedSeconds = elapsedMillis / 1_000.0
+    val observedSpeedMetersPerSecond = jumpDistanceMeters / elapsedSeconds
+    val maxAcceptedSpeed =
+        if (route.isTransitNavigationContext(activeSegmentIndex)) {
+            NAVIGATION_TRANSIT_MAX_ACCEPTED_SPEED_METERS_PER_SECOND
+        } else {
+            NAVIGATION_WALKING_MAX_ACCEPTED_SPEED_METERS_PER_SECOND
+        }
+    return observedSpeedMetersPerSecond > maxAcceptedSpeed
+}
+
+private fun LocationSnapshot.resolveSmoothedDisplayCoordinate(
+    rawCoordinate: GeoCoordinate,
+    previousPose: NavigationPose?,
+): GeoCoordinate {
+    val previousDisplayCoordinate = previousPose?.displayLocation ?: return rawCoordinate
+    val distanceMeters = haversineDistanceMeters(previousDisplayCoordinate, rawCoordinate)
+    if (distanceMeters <= 0.0) return rawCoordinate
+    val shouldFreezeJitter =
+        speedMetersPerSecond != null &&
+            speedMetersPerSecond <= NAVIGATION_JITTER_FREEZE_SPEED_METERS_PER_SECOND &&
+            distanceMeters <= NAVIGATION_JITTER_FREEZE_DISTANCE_METERS
+    if (shouldFreezeJitter) return previousDisplayCoordinate
+    val alpha =
+        when {
+            distanceMeters <= NAVIGATION_SMOOTHING_NEAR_DISTANCE_METERS -> NAVIGATION_SMOOTHING_NEAR_ALPHA
+            distanceMeters <= NAVIGATION_SMOOTHING_MID_DISTANCE_METERS -> NAVIGATION_SMOOTHING_MID_ALPHA
+            else -> 1.0
+        }
+    return previousDisplayCoordinate.interpolateTo(rawCoordinate, alpha)
+}
+
+private fun RouteCandidate.resolveNavigationRouteFallbackBearingDegrees(current: GeoCoordinate): Double? {
+    val routePoints = navigationPolylinePoints()
+    if (routePoints.size < 2) return null
+    val projection = projectOntoPolylineMeters(current = current, polyline = routePoints) ?: return null
+    val lookaheadDistance =
+        (projection.distanceAlongPolylineMeters + NAVIGATION_FOLLOW_LOOKAHEAD_METERS)
+            .coerceAtMost(projection.totalPolylineDistanceMeters)
+    val lookaheadCoordinate = routePoints.coordinateAtDistanceMeters(lookaheadDistance) ?: return null
+    return bearingDegreesBetween(projection.projectedCoordinate, lookaheadCoordinate)
+}
+
+private fun RouteCandidate.isTransitNavigationContext(activeSegmentIndex: Int): Boolean {
+    val activeSegment = segments.getOrNull(activeSegmentIndex)
+    return resolveSegmentTravelKind(segment = activeSegment, hasTransitLeg = hasTransitLeg()) == NavigationSegmentTravelKind.TRANSIT
+}
+
 private fun NavigationTrackingMode.nextOnCurrentLocationClick(): NavigationTrackingMode =
     when (this) {
         NavigationTrackingMode.IDLE -> NavigationTrackingMode.FOLLOW
-        NavigationTrackingMode.FOLLOW -> NavigationTrackingMode.FOLLOW_WITH_HEADING
-        NavigationTrackingMode.FOLLOW_WITH_HEADING -> NavigationTrackingMode.FOLLOW_WITH_HEADING
+        NavigationTrackingMode.FOLLOW -> NavigationTrackingMode.FOLLOW
+        NavigationTrackingMode.FOLLOW_WITH_HEADING -> NavigationTrackingMode.FOLLOW
     }
 
 private fun RouteCandidate.toFallbackWalkingLegMapSegments(
@@ -2515,8 +3257,8 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
     transitPresentation: NavigationTransitPresentation?,
 ): NavigationFocusedSegmentCardUiState? {
     val totalStepCount = selectedRoute.segments.size.coerceAtLeast(1)
-    val remainingTimeLabel = estimatedMinutes.toDestinationRemainingTimeLabel()
     if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
+        val remainingTimeLabel = estimatedMinutes.toDestinationRemainingTimeLabel()
         return NavigationFocusedSegmentCardUiState(
             sequenceLabel = "1 / $totalStepCount",
             instruction = NavigationOriginHeroTitle,
@@ -2531,6 +3273,12 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
 
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex) ?: return null
     val heroDetail = selectedRoute.toNavigationHeroDetail(focusedSegment)
+    val remainingTimeLabel =
+        selectedRoute
+            .remainingMinutesFromSegmentIndex(
+                segmentIndex = focusedSegmentIndex,
+                fallbackEstimatedMinutes = estimatedMinutes,
+            ).toDestinationRemainingTimeLabel()
 
     return NavigationFocusedSegmentCardUiState(
         sequenceLabel = "${focusedSegment.sequence} / $totalStepCount",
@@ -2543,6 +3291,46 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
         guidanceAction = heroDetail.guidanceAction,
         transitInfo = selectedRoute.resolveFocusedSegmentTransitInfo(focusedSegment, transitPresentation),
     )
+}
+
+private fun RouteCandidate.remainingMinutesFromSegmentIndex(
+    segmentIndex: Int,
+    fallbackEstimatedMinutes: Int?,
+): Int? {
+    if (segments.isEmpty()) return fallbackEstimatedMinutes
+    val boundedIndex = segmentIndex.coerceIn(0, segments.lastIndex)
+    val totalSeconds =
+        totalDurationSeconds().takeIf { seconds -> seconds > 0 }
+            ?: fallbackEstimatedMinutes?.takeIf { minutes -> minutes >= 0 }?.times(60)
+            ?: return fallbackEstimatedMinutes
+
+    segments
+        .getOrNull(boundedIndex)
+        ?.durationFromRouteStartSeconds
+        ?.takeIf { seconds -> seconds >= 0 }
+        ?.let { elapsedSeconds ->
+            return (totalSeconds - elapsedSeconds)
+                .coerceAtLeast(0)
+                .toEtaMinutes()
+        }
+
+    val totalSegmentDistance = segments.sumOf { segment -> segment.distanceMeters.coerceAtLeast(0) }
+    val routeDistance = totalSegmentDistance.takeIf { distance -> distance > 0 } ?: totalDistanceMeters()
+    if (routeDistance <= 0) return fallbackEstimatedMinutes
+
+    val elapsedDistance =
+        segments
+            .take(boundedIndex)
+            .sumOf { segment -> segment.distanceMeters.coerceAtLeast(0) }
+            .coerceAtMost(routeDistance)
+    val remainingRatio =
+        ((routeDistance - elapsedDistance).toDouble() / routeDistance.toDouble())
+            .coerceIn(0.0, 1.0)
+
+    return (totalSeconds * remainingRatio)
+        .roundToInt()
+        .coerceAtLeast(0)
+        .toEtaMinutes()
 }
 
 private fun RouteCandidate.resolveFocusedSegmentTransitInfo(
@@ -2666,6 +3454,43 @@ private fun RouteCandidate.resolveSegmentDisplayPolyline(segmentIndex: Int): Lis
     return segment.polyline.points
 }
 
+private fun RouteCandidate.resolveSegmentRouteSpanMeters(
+    segmentIndex: Int,
+    routePoints: List<GeoCoordinate>,
+): RouteSegmentDistanceSpan? {
+    val segmentPolyline = resolveSegmentDisplayPolyline(segmentIndex).takeIf { it.size >= 2 }
+    val startCoordinate =
+        segmentPolyline?.firstOrNull()
+            ?: resolveSegmentStartCoordinate(segmentIndex)
+            ?: return null
+    val endCoordinate =
+        segmentPolyline?.lastOrNull()
+            ?: resolveSegmentEndCoordinate(segmentIndex)
+            ?: return null
+    val startProjection = projectOntoPolylineMeters(current = startCoordinate, polyline = routePoints) ?: return null
+    val endProjection = projectOntoPolylineMeters(current = endCoordinate, polyline = routePoints) ?: return null
+    val startDistance = minOf(startProjection.distanceAlongPolylineMeters, endProjection.distanceAlongPolylineMeters)
+    val endDistance = maxOf(startProjection.distanceAlongPolylineMeters, endProjection.distanceAlongPolylineMeters)
+    if (endDistance - startDistance <= 0.5) return null
+    return RouteSegmentDistanceSpan(
+        startDistanceMeters = startDistance,
+        endDistanceMeters = endDistance,
+    )
+}
+
+private fun RouteSegment.shouldHoldRealtimeGuidanceUntilSegmentEnd(): Boolean =
+    when (guidanceType) {
+        RouteGuidanceType.CROSSWALK,
+        RouteGuidanceType.LOW_SLOPE,
+        RouteGuidanceType.MIDDLE_SLOPE,
+        RouteGuidanceType.STAIR,
+        RouteGuidanceType.NARROW_SIDEWALK,
+        RouteGuidanceType.UNPAVED,
+        RouteGuidanceType.SUBWAY_ELEVATOR,
+            -> true
+        else -> false
+    }
+
 private fun List<GeoCoordinate>.withResolvedEndCoordinate(endCoordinate: GeoCoordinate?): List<GeoCoordinate> {
     if (endCoordinate == null || isEmpty() || last() == endCoordinate) return this
     return dropLast(1) + endCoordinate
@@ -2746,18 +3571,20 @@ private fun RouteCandidate.hasRenderableRealtimeProgress(progress: NavigationPro
     return true
 }
 
-private fun Int.toLiveGuidanceDisplayDistanceMeters(): Int =
-    when {
-        this <= NAVIGATION_LIVE_GUIDANCE_SOON_DISTANCE_METERS -> 0
-        this <= NAVIGATION_LIVE_GUIDANCE_BUCKET_THRESHOLD_METERS ->
-            floorToBucket(NAVIGATION_LIVE_GUIDANCE_NEAR_BUCKET_METERS)
-        else -> floorToBucket(NAVIGATION_LIVE_GUIDANCE_FAR_BUCKET_METERS)
-    }
+private fun RouteCandidate.shouldWaitForInitialRouteStartJoin(
+    origin: GeoCoordinate?,
+    current: GeoCoordinate,
+): Boolean {
+    val routeStart = navigationPolylinePoints().firstOrNull() ?: return false
+    if (origin == null) return false
+    val hasDetachedOrigin =
+        haversineDistanceMeters(origin, routeStart) > NAVIGATION_ROUTE_START_JOIN_RADIUS_METERS
+    if (!hasDetachedOrigin) return false
+    return haversineDistanceMeters(current, routeStart) > NAVIGATION_ROUTE_START_JOIN_RADIUS_METERS
+}
 
-private fun Int.floorToBucket(bucketMeters: Int): Int =
-    (this / bucketMeters)
-        .times(bucketMeters)
-        .coerceAtLeast(bucketMeters)
+private fun RouteCandidate.isNearFinalRouteProgress(progress: NavigationProgressSnapshot): Boolean =
+    progress.activeSegmentIndex >= segments.lastIndex.coerceAtLeast(0)
 
 private fun RouteCandidate.resolveLiveGuidanceTargetCoordinate(segmentIndex: Int): GeoCoordinate? {
     resolveRealtimeStepTargetCoordinate(segmentIndex)?.let { return it }
@@ -2931,6 +3758,65 @@ private fun GeoCoordinate.interpolateTo(
         longitude = longitude + ((other.longitude - longitude) * progressRatio),
     )
 
+private fun List<GeoCoordinate>.coordinateAtDistanceMeters(distanceMeters: Double): GeoCoordinate? {
+    if (isEmpty()) return null
+    if (size == 1 || distanceMeters <= 0.0) return first()
+    var cumulativeDistanceMeters = 0.0
+    zipWithNext().forEach { (start, end) ->
+        val segmentDistanceMeters = haversineDistanceMeters(start, end)
+        val nextCumulativeDistanceMeters = cumulativeDistanceMeters + segmentDistanceMeters
+        if (distanceMeters <= nextCumulativeDistanceMeters || end == last()) {
+            val segmentRatio =
+                if (segmentDistanceMeters <= 0.0) {
+                    0.0
+                } else {
+                    ((distanceMeters - cumulativeDistanceMeters) / segmentDistanceMeters).coerceIn(0.0, 1.0)
+                }
+            return start.interpolateTo(end, segmentRatio)
+        }
+        cumulativeDistanceMeters = nextCumulativeDistanceMeters
+    }
+    return last()
+}
+
+private fun bearingDegreesBetween(
+    start: GeoCoordinate,
+    end: GeoCoordinate,
+): Double {
+    val startLatitudeRadians = Math.toRadians(start.latitude)
+    val endLatitudeRadians = Math.toRadians(end.latitude)
+    val deltaLongitudeRadians = Math.toRadians(end.longitude - start.longitude)
+    val y = sin(deltaLongitudeRadians) * cos(endLatitudeRadians)
+    val x =
+        cos(startLatitudeRadians) * sin(endLatitudeRadians) -
+            sin(startLatitudeRadians) * cos(endLatitudeRadians) * cos(deltaLongitudeRadians)
+    return normalizeHeadingDegrees(Math.toDegrees(atan2(y, x)))
+}
+
+private fun angularDifferenceDegrees(
+    firstDegrees: Double,
+    secondDegrees: Double,
+): Double {
+    val delta = kotlin.math.abs(normalizeHeadingDegrees(firstDegrees) - normalizeHeadingDegrees(secondDegrees))
+    return minOf(delta, 360.0 - delta)
+}
+
+private fun List<GeoCoordinate>.bearingAtDistanceMeters(distanceAlongPolylineMeters: Double): Double? {
+    if (size < 2) return null
+    var cumulativeDistanceMeters = 0.0
+    zipWithNext().forEach { (start, end) ->
+        val segmentLengthMeters = haversineDistanceMeters(start, end)
+        val nextCumulativeDistanceMeters = cumulativeDistanceMeters + segmentLengthMeters
+        if (segmentLengthMeters > 0.0 && distanceAlongPolylineMeters <= nextCumulativeDistanceMeters) {
+            return bearingDegreesBetween(start, end)
+        }
+        cumulativeDistanceMeters = nextCumulativeDistanceMeters
+    }
+    return zipWithNext()
+        .lastOrNull { (start, end) -> haversineDistanceMeters(start, end) > 0.0 }
+        ?.let { (start, end) -> bearingDegreesBetween(start, end) }
+}
+
 private fun RouteNavigationRequest.toStepCardUiState(
     screenState: NavigationScreenState,
     activeSegmentIndex: Int,
@@ -2938,7 +3824,11 @@ private fun RouteNavigationRequest.toStepCardUiState(
     estimatedMinutes: Int?,
     remainingMetricsSource: NavigationRemainingMetricsSource,
     transitPresentation: NavigationTransitPresentation?,
-    liveGuidanceDistanceMeters: Int?,
+    liveGuidanceRawDistanceMeters: Int?,
+    liveGuidanceDisplayDistanceMeters: Int?,
+    destinationDistanceMeters: Int?,
+    destinationSoon: Boolean,
+    hasPassedFinalRouteEndpoint: Boolean,
 ): NavigationStepCardUiState =
     when (screenState) {
         NavigationScreenState.Loading -> NavigationStepCardUiState()
@@ -2949,18 +3839,25 @@ private fun RouteNavigationRequest.toStepCardUiState(
                 estimatedMinutes = estimatedMinutes,
                 remainingMetricsSource = remainingMetricsSource,
                 transitPresentation = transitPresentation,
-                liveGuidanceDistanceMeters = liveGuidanceDistanceMeters,
+                liveGuidanceRawDistanceMeters = liveGuidanceRawDistanceMeters,
+                liveGuidanceDisplayDistanceMeters = liveGuidanceDisplayDistanceMeters,
+                destinationDistanceMeters = destinationDistanceMeters,
+                destinationSoon = destinationSoon,
+                hasPassedFinalRouteEndpoint = hasPassedFinalRouteEndpoint,
             )
         NavigationScreenState.Empty -> toEmptyStepCardUiState()
     }
 
 private fun NavigationStepCardUiState.toNavigationBriefingText(): String =
-    listOf(
-        heroTitle.trim(),
-        heroDescription.trim(),
-    ).filter(String::isNotEmpty)
-        .distinct()
-        .joinToString(separator = " ")
+    speechText
+        .trim()
+        .takeIf(String::isNotEmpty)
+        ?: listOf(
+            heroTitle.trim(),
+            heroDescription.trim(),
+        ).filter(String::isNotEmpty)
+            .distinct()
+            .joinToString(separator = " ")
 
 private fun NavigationFocusedSegmentCardUiState.toSpeechText(): String? =
     listOf(
@@ -2986,7 +3883,11 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
     estimatedMinutes: Int?,
     remainingMetricsSource: NavigationRemainingMetricsSource,
     transitPresentation: NavigationTransitPresentation?,
-    liveGuidanceDistanceMeters: Int?,
+    liveGuidanceRawDistanceMeters: Int?,
+    liveGuidanceDisplayDistanceMeters: Int?,
+    destinationDistanceMeters: Int?,
+    destinationSoon: Boolean,
+    hasPassedFinalRouteEndpoint: Boolean,
 ): NavigationStepCardUiState {
     val totalStepCount = selectedRoute.segments.size.coerceAtLeast(1)
     val remainingTimeLabel = estimatedMinutes.toDestinationRemainingTimeLabel()
@@ -3010,9 +3911,16 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
             emphasisLabel = selectedRoute.summary.riskLevel.toRiskLabel(),
             distanceLabel = remainingTimeLabel,
             heroTitle = NavigationOriginHeroTitle,
-            heroDescription = remainingTimeLabel,
-            instruction = NavigationOriginHeroDescription,
+            heroDescription = NAVIGATION_ROUTE_START_GUIDANCE_TEXT,
+            instruction = NAVIGATION_ROUTE_START_GUIDANCE_TEXT,
             supportingText = selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption),
+            speechText =
+                formatNavigationLiveGuidanceSpeechText(
+                    action = NavigationGuidanceAction.START,
+                    rawDistanceMeters = 0,
+                    stage = NavigationLiveGuidanceSpeechStage.INITIAL,
+                    fallbackTitle = NavigationOriginHeroTitle,
+                ),
             guidanceAction = NavigationGuidanceAction.START,
             transitInfo = null,
             metrics =
@@ -3033,27 +3941,79 @@ private fun RouteNavigationRequest.toReadyStepCardUiState(
         )
     }
 
+    val heroGuidanceAction =
+        if (destinationSoon || hasPassedFinalRouteEndpoint) {
+            NavigationGuidanceAction.ARRIVAL
+        } else {
+            primarySegment?.let { segment -> selectedRoute.toNavigationHeroDetail(segment).guidanceAction }
+                ?: NavigationGuidanceAction.STRAIGHT
+        }
+    val fallbackHeroTitle =
+        primarySegment?.let { segment -> selectedRoute.toNavigationHeroDetail(segment).title }
+            ?: "경로 안내"
+    val liveGuidanceRawDistance = liveGuidanceRawDistanceMeters ?: primarySegment?.guidanceDisplayDistanceMeters()
+    val liveGuidanceDisplayDistance =
+        liveGuidanceDisplayDistanceMeters
+            ?: liveGuidanceRawDistance?.let(::toLiveGuidanceDisplayDistanceMeters)
+    val arrivalRawDistance =
+        destinationDistanceMeters
+            ?: remainingDistanceMeters
+            ?: liveGuidanceRawDistance
+            ?: selectedRoute.summary.distanceMeters
+    val heroTitle =
+        when {
+            destinationSoon ->
+                formatNavigationLiveGuidanceCardTextFromRawDistance(
+                    action = NavigationGuidanceAction.ARRIVAL,
+                    rawDistanceMeters = arrivalRawDistance,
+                    fallbackTitle = "목적지",
+                )
+            hasPassedFinalRouteEndpoint -> "목적지"
+            else ->
+                liveGuidanceDisplayDistance?.let { displayDistance ->
+                    formatNavigationLiveGuidanceCardText(
+                        action = heroGuidanceAction,
+                        displayDistanceMeters = displayDistance,
+                        fallbackTitle = fallbackHeroTitle,
+                    )
+                }
+                    ?: "경로 안내를 준비하고 있습니다"
+        }
+    val speechText =
+        when {
+            destinationSoon -> NAVIGATION_DESTINATION_SOON_TTS_TEXT
+            hasPassedFinalRouteEndpoint -> "목적지 방향으로 계속 이동하세요."
+            else ->
+                formatNavigationLiveGuidanceSpeechText(
+                    action = heroGuidanceAction,
+                    rawDistanceMeters = liveGuidanceRawDistance ?: 0,
+                    stage = NavigationLiveGuidanceSpeechStage.INITIAL,
+                    fallbackTitle = fallbackHeroTitle,
+                )
+        }
+
     return NavigationStepCardUiState(
         sectionLabel = "현재 안내",
         statusLabel = selectedRoute.routeOption.toRouteOptionLabel(),
         emphasisLabel = (primarySegment?.riskLevel ?: selectedRoute.summary.riskLevel).toRiskLabel(),
         distanceLabel = estimatedMinutes.toDestinationRemainingTimeLabel(),
-        heroTitle =
-            primarySegment?.let { segment -> selectedRoute.toLiveGuidanceText(segment, liveGuidanceDistanceMeters) }
-                ?: "경로 안내를 준비하고 있습니다",
+        heroTitle = heroTitle,
         heroDescription =
             estimatedMinutes.toDestinationRemainingTimeLabel(),
         instruction =
-            primarySegment?.guidanceMessage
-                ?.trim()
-                ?.takeIf { guidanceMessage -> guidanceMessage.isNotEmpty() }
-                ?: "목적지 방향으로 계속 이동해 주세요.",
+            if (destinationSoon || hasPassedFinalRouteEndpoint) {
+                "목적지 방향으로 계속 이동해 주세요."
+            } else {
+                primarySegment?.guidanceMessage
+                    ?.trim()
+                    ?.takeIf { guidanceMessage -> guidanceMessage.isNotEmpty() }
+                    ?: "목적지 방향으로 계속 이동해 주세요."
+            },
         supportingText =
             transitPresentation?.supportingText ?: "${destination.name.orEmpty().ifBlank { "목적지" }} 방향으로 " +
                 "${selectedRoute.title.toNavigationRouteTitle(selectedRoute.routeOption)} 경로를 따라 이동합니다.",
-        guidanceAction =
-            primarySegment?.let { segment -> selectedRoute.toNavigationHeroDetail(segment).guidanceAction }
-                ?: NavigationGuidanceAction.STRAIGHT,
+        speechText = speechText,
+        guidanceAction = heroGuidanceAction,
         transitInfo = primarySegment?.let { segment -> selectedRoute.resolveFocusedSegmentTransitInfo(segment, transitPresentation) },
         metrics =
             listOf(
@@ -3078,84 +4038,6 @@ private fun Int?.toDestinationRemainingTimeLabel(): String =
         ?.takeIf { minutes -> minutes >= 0 }
         ?.let { minutes -> "목적지까지 약 ${minutes.coerceAtLeast(1)}분" }
         ?: "목적지까지 확인 중"
-
-private fun RouteCandidate.toLiveGuidanceText(
-    segment: RouteSegment,
-    liveGuidanceDistanceMeters: Int? = null,
-): String {
-    val heroDetail = toNavigationHeroDetail(segment)
-    val distanceMeters = liveGuidanceDistanceMeters ?: segment.guidanceDisplayDistanceMeters()
-    val isArrived = distanceMeters <= NAVIGATION_GUIDANCE_ENTER_RADIUS_METERS
-    if (isArrived) {
-        return if (liveGuidanceDistanceMeters != null) {
-            heroDetail.guidanceAction.toNearGuidanceText(heroDetail.title)
-        } else {
-            heroDetail.guidanceAction.toImmediateGuidanceText(heroDetail.title)
-        }
-    }
-
-    return heroDetail.guidanceAction.toUpcomingGuidanceText(
-        distanceLabel = distanceMeters.toNavigationDistanceLabel(),
-        fallbackTitle = heroDetail.title,
-    )
-}
-
-private fun NavigationGuidanceAction.toImmediateGuidanceText(fallbackTitle: String): String =
-    when (this) {
-        NavigationGuidanceAction.CROSSWALK -> "횡단보도를 건너세요"
-        NavigationGuidanceAction.TURN_LEFT -> "좌회전하세요"
-        NavigationGuidanceAction.TURN_RIGHT -> "우회전하세요"
-        NavigationGuidanceAction.STRAIGHT -> "직진 이동하세요"
-        NavigationGuidanceAction.CURB_GAP -> "단차 구간입니다"
-        NavigationGuidanceAction.STAIRS -> "계단 구간입니다"
-        NavigationGuidanceAction.CONSTRUCTION -> "공사 구간입니다"
-        NavigationGuidanceAction.ELEVATOR -> "엘리베이터를 이용하세요"
-        NavigationGuidanceAction.BUS -> "버스에 탑승하세요"
-        NavigationGuidanceAction.SUBWAY -> "지하철에 탑승하세요"
-        NavigationGuidanceAction.ALIGHT -> "하차하세요"
-        NavigationGuidanceAction.ARRIVAL -> "목적지에 도착했습니다"
-        NavigationGuidanceAction.START -> "출발합니다"
-        else -> fallbackTitle
-    }
-
-private fun NavigationGuidanceAction.toNearGuidanceText(fallbackTitle: String): String =
-    when (this) {
-        NavigationGuidanceAction.CROSSWALK -> "곧 횡단보도입니다. 신호를 확인하고 건너세요"
-        NavigationGuidanceAction.TURN_LEFT -> "곧 좌회전입니다"
-        NavigationGuidanceAction.TURN_RIGHT -> "곧 우회전입니다"
-        NavigationGuidanceAction.STRAIGHT -> "곧 직진 구간입니다"
-        NavigationGuidanceAction.CURB_GAP -> "곧 단차 구간입니다"
-        NavigationGuidanceAction.STAIRS -> "곧 계단 구간입니다"
-        NavigationGuidanceAction.CONSTRUCTION -> "곧 공사 구간입니다"
-        NavigationGuidanceAction.ELEVATOR -> "곧 엘리베이터 이용 지점입니다"
-        NavigationGuidanceAction.BUS -> "곧 버스 탑승 지점입니다"
-        NavigationGuidanceAction.SUBWAY -> "곧 지하철 탑승 지점입니다"
-        NavigationGuidanceAction.ALIGHT -> "곧 하차 지점입니다"
-        NavigationGuidanceAction.ARRIVAL -> "곧 목적지입니다"
-        NavigationGuidanceAction.START -> "곧 출발 지점입니다"
-        else -> "곧 $fallbackTitle"
-    }
-
-private fun NavigationGuidanceAction.toUpcomingGuidanceText(
-    distanceLabel: String,
-    fallbackTitle: String,
-): String =
-    when (this) {
-        NavigationGuidanceAction.CROSSWALK -> "${distanceLabel} 앞 횡단보도가 있습니다"
-        NavigationGuidanceAction.TURN_LEFT -> "${distanceLabel} 후 좌회전입니다"
-        NavigationGuidanceAction.TURN_RIGHT -> "${distanceLabel} 후 우회전입니다"
-        NavigationGuidanceAction.STRAIGHT -> "${distanceLabel} 후 직진 이동입니다"
-        NavigationGuidanceAction.CURB_GAP -> "${distanceLabel} 후 단차 구간입니다"
-        NavigationGuidanceAction.STAIRS -> "${distanceLabel} 후 계단 구간입니다"
-        NavigationGuidanceAction.CONSTRUCTION -> "${distanceLabel} 후 공사 구간입니다"
-        NavigationGuidanceAction.ELEVATOR -> "${distanceLabel} 후 엘리베이터 이용입니다"
-        NavigationGuidanceAction.BUS -> "${distanceLabel} 후 버스 탑승입니다"
-        NavigationGuidanceAction.SUBWAY -> "${distanceLabel} 후 지하철 탑승입니다"
-        NavigationGuidanceAction.ALIGHT -> "${distanceLabel} 후 하차입니다"
-        NavigationGuidanceAction.ARRIVAL -> "${distanceLabel} 후 목적지 도착입니다"
-        NavigationGuidanceAction.START -> "${distanceLabel} 후 출발입니다"
-        else -> "${distanceLabel} 후 $fallbackTitle"
-    }
 
 private fun RouteSegment.isRiskPrioritySegment(): Boolean {
     if (riskLevel != RouteRiskLevel.LOW) return true
@@ -3353,6 +4235,26 @@ private object NoOpRouteRepository : RouteRepository {
         sessionId: String,
         score: Int,
     ) = error("NavigationViewModel does not submit ratings.")
+}
+
+private object NoOpReportRepository : ReportRepository {
+    override fun observeReportHistory() =
+        error("NavigationViewModel does not observe report history.")
+
+    override suspend fun getLatestDraft(): ReportDraftData =
+        error("NavigationViewModel does not read report drafts.")
+
+    override suspend fun saveDraft(draft: ReportDraftData): ReportDraftData =
+        error("NavigationViewModel does not save report drafts.")
+
+    override suspend fun deleteDraft(draftId: String) =
+        error("NavigationViewModel does not delete report drafts.")
+
+    override suspend fun saveOutbox(outbox: ReportOutboxData): ReportOutboxData =
+        error("NavigationViewModel does not save report outbox.")
+
+    override suspend fun submitOutboxToServer(outboxId: String) =
+        error("NavigationViewModel does not submit report outbox.")
 }
 
 private fun GeoCoordinate?.toDebugCoordinate(): String =

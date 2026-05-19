@@ -162,11 +162,37 @@ public class AdminMapService {
 	}
 
 	public AdminRoadNetworkResponse getRoadNetwork(String gu, String dong, int limit) {
+		return getRoadNetwork(gu, dong, limit, null, null, null);
+	}
+
+	public AdminRoadNetworkResponse getRoadNetwork(
+		String gu,
+		String dong,
+		int limit,
+		Double centerLat,
+		Double centerLng,
+		Integer radiusMeter) {
 		List<RoadSegment> roadSegments;
 		long segmentCount;
 		if (hasAreaScope(gu, dong)) {
-			roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
-			segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
+			if (hasClip(centerLat, centerLng, radiusMeter)) {
+				roadSegments = roadSegmentRepository.findAllIntersectingAreaWithinRadius(
+					gu,
+					dong,
+					centerLng,
+					centerLat,
+					radiusMeter,
+					limit);
+				segmentCount = roadSegmentRepository.countIntersectingAreaWithinRadius(
+					gu,
+					dong,
+					centerLng,
+					centerLat,
+					radiusMeter);
+			} else {
+				roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
+				segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
+			}
 		} else if (hasGu(gu)) {
 			roadSegments = roadSegmentRepository.findAllIntersectingGu(gu);
 			segmentCount = roadSegmentRepository.countIntersectingGu(gu);
@@ -312,7 +338,6 @@ public class AdminMapService {
 		String gu,
 		String dong,
 		List<HazardReportRouteReviewSegmentDraft> drafts) {
-		adminService.requireCanEditArea(userId, gu, dong, AdminAreaAssignmentType.ROAD_NETWORK);
 		boolean routingOverlayReloadRequired = false;
 		try {
 			for (HazardReportRouteReviewSegmentDraft draft : drafts) {
@@ -645,6 +670,19 @@ public class AdminMapService {
 
 	private boolean hasAreaScope(String gu, String dong) {
 		return hasGu(gu) && dong != null && !dong.isBlank() && !ALL_DONG.equals(dong);
+	}
+
+	private boolean hasClip(Double centerLat, Double centerLng, Integer radiusMeter) {
+		if (centerLat == null && centerLng == null && radiusMeter == null) {
+			return false;
+		}
+		if (centerLat == null || centerLng == null || radiusMeter == null) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "중심 좌표와 반경은 함께 지정해야 합니다.");
+		}
+		if (radiusMeter <= 0) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "반경은 1m 이상이어야 합니다.");
+		}
+		return true;
 	}
 
 	private Place requirePlace(Long placeId) {

@@ -174,11 +174,6 @@ fun NavigationScreen(
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
-                    ApprovedHazardMarkerBottomSheet(
-                        marker = hazardMarkerState.selectedMarker,
-                        onDismiss = hazardMarkerState::dismissSelection,
-                        modifier = Modifier.fillMaxSize(),
-                    )
                     if (screenPolicy.showSegmentRail) {
                         if (isSidePanelExpanded) {
                             if (sidePanelPolicy.showsExpandedScrim) {
@@ -240,6 +235,11 @@ fun NavigationScreen(
             onAction = onAction,
             layoutPolicy = bottomBarLayoutPolicy,
             modifier = Modifier.align(Alignment.BottomCenter),
+        )
+        ApprovedHazardMarkerBottomSheet(
+            marker = hazardMarkerState.selectedMarker,
+            onDismiss = hazardMarkerState::dismissSelection,
+            modifier = Modifier.matchParentSize(),
         )
 
         if (uiState.isExitConfirmDialogVisible) {

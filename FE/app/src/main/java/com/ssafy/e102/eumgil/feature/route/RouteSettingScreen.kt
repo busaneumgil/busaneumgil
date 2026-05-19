@@ -252,9 +252,7 @@ fun RouteSettingScreen(
                     RouteMapStage(
                         uiState = uiState,
                         hazardOverlayPoints = hazardMarkerState.overlayPoints,
-                        selectedHazardMarker = hazardMarkerState.selectedMarker,
                         onHazardMarkerClick = hazardMarkerState::onMarkerClick,
-                        onHazardMarkerDismiss = hazardMarkerState::dismissSelection,
                         onViewportBoundsChanged = hazardMarkerState::onViewportBoundsChanged,
                         modifier = Modifier.fillMaxSize(),
                         onOptionClick = { routeOption ->
@@ -304,6 +302,11 @@ fun RouteSettingScreen(
         if (uiState.isLoading && uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
             RouteSearchFullscreenLoadingOverlay(modifier = Modifier.matchParentSize())
         }
+        ApprovedHazardMarkerBottomSheet(
+            marker = hazardMarkerState.selectedMarker,
+            onDismiss = hazardMarkerState::dismissSelection,
+            modifier = Modifier.matchParentSize(),
+        )
     }
 
     if (isDuribalConfirmDialogVisible) {
@@ -418,12 +421,6 @@ fun RouteDetailScreen(
                         .padding(end = EumSpacing.small),
             )
 
-            ApprovedHazardMarkerBottomSheet(
-                marker = hazardMarkerState.selectedMarker,
-                onDismiss = hazardMarkerState::dismissSelection,
-                modifier = Modifier.fillMaxSize(),
-            )
-
             if (isDetailSidePanelExpanded && selectedRoute != null) {
                 Box(
                     modifier =
@@ -514,6 +511,11 @@ fun RouteDetailScreen(
                 selectedRoute = selectedRoute,
                 onStartClick = onStartClick,
                 modifier = Modifier.align(Alignment.BottomCenter),
+            )
+            ApprovedHazardMarkerBottomSheet(
+                marker = hazardMarkerState.selectedMarker,
+                onDismiss = hazardMarkerState::dismissSelection,
+                modifier = Modifier.matchParentSize(),
             )
         }
     }
@@ -2976,9 +2978,7 @@ private fun MapOverlayViewportControlState.recenterToCurrentLocationOrRoute(curr
 private fun RouteMapStage(
     uiState: RouteSettingUiState,
     hazardOverlayPoints: List<MapViewportPointOverlay>,
-    selectedHazardMarker: com.ssafy.e102.eumgil.data.repository.ApprovedHazardMarker?,
     onHazardMarkerClick: (String) -> Boolean,
-    onHazardMarkerDismiss: () -> Unit,
     onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
     modifier: Modifier = Modifier,
     onOptionClick: (RouteOption) -> Unit = {},
@@ -3029,12 +3029,6 @@ private fun RouteMapStage(
                         .padding(bottom = walkPreviewMapBottomClearance)
                         .clipToBounds()
                         .zIndex(RouteMapBackdropZIndex),
-            )
-
-            ApprovedHazardMarkerBottomSheet(
-                marker = selectedHazardMarker,
-                onDismiss = onHazardMarkerDismiss,
-                modifier = Modifier.fillMaxSize(),
             )
 
             if (shouldShowRouteMapMessageCard(selectedRoute = selectedRoute, previewMap = previewMap)) {

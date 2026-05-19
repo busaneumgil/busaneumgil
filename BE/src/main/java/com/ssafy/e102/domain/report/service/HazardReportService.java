@@ -266,7 +266,24 @@ public class HazardReportService {
 			hazardReport.getReportType(),
 			reportPoint.getY(),
 			reportPoint.getX(),
-			createImageReadUrls(hazardReport));
+			createMarkerImageReadUrls(hazardReport));
+	}
+
+	private List<String> createMarkerImageReadUrls(HazardReport hazardReport) {
+		return hazardReport.getImages()
+			.stream()
+			.map(image -> toMarkerImageReadUrl(hazardReport.getReportId(), image))
+			.filter(Objects::nonNull)
+			.toList();
+	}
+
+	private String toMarkerImageReadUrl(Long reportId, HazardReportImage image) {
+		try {
+			return hazardReportImageUploadService.createReadUrl(image.getImageObjectKey());
+		} catch (RuntimeException exception) {
+			log.warn("승인 제보 마커 이미지 URL 생성 실패. reportId={}, objectKey={}", reportId, image.getImageObjectKey(), exception);
+			return null;
+		}
 	}
 
 	private String resolveAddress(GeoPointRequest reportPoint) {

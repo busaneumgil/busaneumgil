@@ -64,7 +64,7 @@ class NavigationLiveGuidanceFormatterTest {
             ),
         )
         assertEquals(
-            "10m 후 우회전입니다.",
+            "곧 우회전입니다.",
             formatNavigationLiveGuidanceSpeechText(
                 action = NavigationGuidanceAction.TURN_RIGHT,
                 rawDistanceMeters = 10,

@@ -754,12 +754,12 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(2, spokenBriefings.size)
-            assertEquals(expectedSpeechText(viewModel.uiState.value.stepCard), spokenBriefings.last())
+            assertEquals("곧 우회전입니다.", spokenBriefings.last())
 
             locationManager.emitLocation(WALK_VERY_NEAR_TURN_POINT.toLocationSnapshot(recordedAtEpochMillis = 5_500L))
             advanceUntilIdle()
 
-            assertEquals(3, spokenBriefings.size)
+            assertEquals(2, spokenBriefings.size)
             collector.cancel()
         }
 
@@ -785,7 +785,7 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, spokenBriefings.size)
-            assertEquals(expectedSpeechText(viewModel.uiState.value.stepCard), spokenBriefings.single())
+            assertEquals("곧 우회전입니다.", spokenBriefings.single())
             collector.cancel()
         }
 

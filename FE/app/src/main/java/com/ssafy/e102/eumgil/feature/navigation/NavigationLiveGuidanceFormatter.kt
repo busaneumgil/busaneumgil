@@ -78,6 +78,12 @@ internal fun formatNavigationLiveGuidanceSpeechText(
     if (action == NavigationGuidanceAction.START) {
         return "현재 위치에서 선택한 경로 안내를 시작합니다."
     }
+    if (stage == NavigationLiveGuidanceSpeechStage.NEAR_10M) {
+        return formatNearNavigationLiveGuidanceSpeechText(
+            action = action,
+            fallbackTitle = fallbackTitle,
+        )
+    }
 
     val distanceLabel = rawDistanceMeters.takeIf { distance -> distance > 0 }?.let { distance -> "${distance}m" }
     return when (action) {
@@ -107,14 +113,34 @@ internal fun formatNavigationLiveGuidanceSpeechText(
             distanceLabel?.let { "목적지까지 $it 남았습니다." } ?: "목적지입니다."
         else ->
             distanceLabel?.let { "$it 후 $fallbackTitle 입니다." } ?: fallbackTitle
-    }.withSpeechStagePrefix(stage = stage)
+    }
 }
 
-private fun String.withSpeechStagePrefix(stage: NavigationLiveGuidanceSpeechStage): String =
-    when (stage) {
-        NavigationLiveGuidanceSpeechStage.INITIAL -> this
-        NavigationLiveGuidanceSpeechStage.APPROACH_30M -> this
-        NavigationLiveGuidanceSpeechStage.NEAR_10M -> this
+private fun formatNearNavigationLiveGuidanceSpeechText(
+    action: NavigationGuidanceAction,
+    fallbackTitle: String,
+): String =
+    when (action) {
+        NavigationGuidanceAction.CROSSWALK -> "곧 횡단보도가 있습니다."
+        NavigationGuidanceAction.TURN_LEFT -> "곧 좌회전입니다."
+        NavigationGuidanceAction.TURN_RIGHT -> "곧 우회전입니다."
+        NavigationGuidanceAction.STRAIGHT -> "곧 직진 이동입니다."
+        NavigationGuidanceAction.CURB_GAP -> "곧 단차 구간입니다."
+        NavigationGuidanceAction.STAIRS -> "곧 계단 구간입니다."
+        NavigationGuidanceAction.CONSTRUCTION -> "곧 공사 구간입니다."
+        NavigationGuidanceAction.ELEVATOR -> "곧 엘리베이터가 있습니다."
+        NavigationGuidanceAction.BUS -> "곧 버스 탑승 지점입니다."
+        NavigationGuidanceAction.SUBWAY -> "곧 지하철 탑승 지점입니다."
+        NavigationGuidanceAction.ALIGHT -> "곧 하차입니다."
+        NavigationGuidanceAction.ARRIVAL -> "곧 목적지입니다."
+        else -> {
+            val title = fallbackTitle.trim()
+            if (title.isEmpty()) {
+                "곧 다음 안내입니다."
+            } else {
+                "곧 $title 입니다."
+            }
+        }
     }
 
 private fun Int.floorToLiveGuidanceBucket(bucketMeters: Int): Int =

@@ -1449,11 +1449,11 @@ class NavigationViewModel(
 
         val speechStage =
             when {
-                !spokenInitialGuidanceKeys.contains(guidanceKey) -> NavigationLiveGuidanceSpeechStage.INITIAL
                 distanceToGuidanceMeters <= NAVIGATION_AUTO_TTS_NEAR_DISTANCE_METERS &&
                     !spokenNearGuidanceKeys.contains(guidanceKey) -> NavigationLiveGuidanceSpeechStage.NEAR_10M
                 distanceToGuidanceMeters <= NAVIGATION_AUTO_TTS_APPROACH_DISTANCE_METERS &&
                     !spokenApproachGuidanceKeys.contains(guidanceKey) -> NavigationLiveGuidanceSpeechStage.APPROACH_30M
+                !spokenInitialGuidanceKeys.contains(guidanceKey) -> NavigationLiveGuidanceSpeechStage.INITIAL
                 else -> return
             }
         val speechText =
@@ -1471,9 +1471,12 @@ class NavigationViewModel(
             }
             NavigationLiveGuidanceSpeechStage.APPROACH_30M -> {
                 if (!spokenApproachGuidanceKeys.add(guidanceKey)) return
+                spokenInitialGuidanceKeys += guidanceKey
             }
             NavigationLiveGuidanceSpeechStage.NEAR_10M -> {
                 if (!spokenNearGuidanceKeys.add(guidanceKey)) return
+                spokenApproachGuidanceKeys += guidanceKey
+                spokenInitialGuidanceKeys += guidanceKey
             }
         }
         emitUiEvent(NavigationUiEvent.SpeakBriefing(speechText))

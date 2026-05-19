@@ -256,6 +256,8 @@ class HazardReportControllerTest {
 	@Test
 	@DisplayName("吏?꾨룄 bbox ?덈뿉??듭씤 ?쒕낫 留ㅼ빱 紐⑸줉??諛섑솚?쒕떎")
 	void getApprovedHazardMarkers() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
 		when(hazardReportService.getApprovedHazardMarkers(35.095, 129.095, 35.105, 129.105))
 			.thenReturn(new HazardMarkerListResponse(
 				List.of(
@@ -267,6 +269,7 @@ class HazardReportControllerTest {
 						List.of("https://example.com/reports/12/image-1.jpg")))));
 
 		mockMvc.perform(get("/hazard/markers/")
+			.principal(authentication)
 			.param("swLat", "35.095")
 			.param("swLng", "129.095")
 			.param("neLat", "35.105")
@@ -280,6 +283,7 @@ class HazardReportControllerTest {
 			.andExpect(jsonPath("$.data.markers[0].imageUrls[0]").value("https://example.com/reports/12/image-1.jpg"));
 
 		verify(hazardReportService).getApprovedHazardMarkers(35.095, 129.095, 35.105, 129.105);
+		SecurityContextHolder.clearContext();
 	}
 
 	private UsernamePasswordAuthenticationToken authentication(UUID userId) {

@@ -198,7 +198,7 @@ class SearchScreenTest {
     }
 
     @Test
-    fun `route endpoint quick actions appear only for destination apply to route mode`() {
+    fun `route endpoint quick actions appear for route endpoint assignment mode`() {
         assertEquals(
             false,
             shouldShowRouteEndpointQuickActions(
@@ -207,7 +207,7 @@ class SearchScreenTest {
             ),
         )
         assertEquals(
-            false,
+            true,
             shouldShowRouteEndpointQuickActions(
                 selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
                 editingTarget = RouteEditingTarget.ORIGIN,
@@ -242,6 +242,12 @@ class SearchScreenTest {
             ),
             resolveRouteEndpointQuickActionCopy(RouteEditingTarget.DESTINATION),
         )
+    }
+
+    @Test
+    fun `destination promo banner appears for both route endpoint search targets`() {
+        assertEquals(true, shouldShowDestinationPromoBanner(RouteEditingTarget.ORIGIN))
+        assertEquals(true, shouldShowDestinationPromoBanner(RouteEditingTarget.DESTINATION))
     }
 
     @Test

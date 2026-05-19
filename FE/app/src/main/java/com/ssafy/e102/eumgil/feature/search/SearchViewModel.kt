@@ -3,11 +3,14 @@ package com.ssafy.e102.eumgil.feature.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.core.location.CurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.location.NoOpCurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.MapPlaceDetailType
 import com.ssafy.e102.eumgil.core.model.PlaceDestination
 import com.ssafy.e102.eumgil.core.model.RecentDestination
@@ -27,6 +30,7 @@ import com.ssafy.e102.eumgil.data.repository.NoOpDestinationPreviewRepository
 import com.ssafy.e102.eumgil.data.repository.PlacesRepository
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -58,6 +62,7 @@ class SearchViewModel(
     private val placesRepository: PlacesRepository? = null,
     private val currentLocationManager: CurrentLocationManager? = null,
     private val locationPermissionManager: LocationPermissionManager? = null,
+    private val currentLocationAddressResolver: CurrentLocationAddressResolver = NoOpCurrentLocationAddressResolver,
 ) : ViewModel() {
     private val mutableUiState =
         MutableStateFlow(
@@ -232,8 +237,8 @@ class SearchViewModel(
         }
     }
 
-    private fun applyCurrentLocationSnapshotToRouteEndpoint(snapshot: LocationSnapshot) {
-        val destination = snapshot.toCurrentLocationDestinationOrNull()
+    private suspend fun applyCurrentLocationSnapshotToRouteEndpoint(snapshot: LocationSnapshot) {
+        val destination = snapshot.toCurrentLocationDestinationOrNull(currentLocationAddressResolver)
         if (destination == null) {
             updateCurrentLocationQuickActionStatus(SearchCurrentLocationQuickActionStatus.LocationUnavailable)
             return
@@ -937,6 +942,7 @@ class SearchViewModel(
             placesRepository: PlacesRepository,
             currentLocationManager: CurrentLocationManager? = null,
             locationPermissionManager: LocationPermissionManager? = null,
+            currentLocationAddressResolver: CurrentLocationAddressResolver = NoOpCurrentLocationAddressResolver,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -950,6 +956,7 @@ class SearchViewModel(
                             placesRepository = placesRepository,
                             currentLocationManager = currentLocationManager,
                             locationPermissionManager = locationPermissionManager,
+                            currentLocationAddressResolver = currentLocationAddressResolver,
                         ) as T
                     }
 
@@ -995,16 +1002,33 @@ private fun LocationSnapshot?.toSearchLocationOriginOrNull(): SearchLocationOrig
     )
 }
 
-private fun LocationSnapshot?.toCurrentLocationDestinationOrNull(): PlaceDestination? {
+private suspend fun LocationSnapshot?.toCurrentLocationDestinationOrNull(
+    addressResolver: CurrentLocationAddressResolver,
+): PlaceDestination? {
     val snapshot = toFreshSearchLocationSnapshotOrNull() ?: return null
+    val coordinate =
+        GeoCoordinate(
+            latitude = snapshot.latitude,
+            longitude = snapshot.longitude,
+        )
+    val displayName =
+        addressResolver
+            .resolveAddress(coordinate)
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: coordinate.toFallbackCurrentLocationLabel()
 
     return PlaceDestination(
         placeId = CURRENT_LOCATION_DESTINATION_PLACE_ID,
-        name = CURRENT_LOCATION_DESTINATION_NAME,
+        name = displayName,
+        address = displayName,
         latitude = snapshot.latitude,
         longitude = snapshot.longitude,
     )
 }
+
+private fun GeoCoordinate.toFallbackCurrentLocationLabel(): String =
+    String.format(Locale.US, "%.6f, %.6f", latitude, longitude)
 
 private fun LocationSnapshot?.toFreshSearchLocationSnapshotOrNull(): LocationSnapshot? {
     if (this == null || !isFreshCurrentLocation()) return null
@@ -1069,4 +1093,3 @@ private const val MAX_LONGITUDE = 180.0
 private const val SEARCH_LOCATION_WAIT_TIMEOUT_MILLIS = 1_500L
 private const val SEARCH_CURRENT_LOCATION_ACTION_WAIT_TIMEOUT_MILLIS = 1_500L
 private const val CURRENT_LOCATION_DESTINATION_PLACE_ID = "current-location"
-private const val CURRENT_LOCATION_DESTINATION_NAME = "현재 위치"

@@ -1,11 +1,13 @@
 package com.ssafy.e102.eumgil.feature.search
 
 import androidx.activity.ComponentActivity
+import com.ssafy.e102.eumgil.core.location.CurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationGrantAccuracy
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
+import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.model.PlaceCategory
 import com.ssafy.e102.eumgil.core.model.RecentDestination
 import com.ssafy.e102.eumgil.core.model.RecentSearch
@@ -160,7 +162,7 @@ class SearchViewModelEditingTargetTest {
         }
 
     @Test
-    fun `current location destination action stores explicit current place destination`() =
+    fun `current location destination action stores resolved address place destination`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val currentLocation = testLocationSnapshot(latitude = 35.1000, longitude = 129.0320)
@@ -174,6 +176,10 @@ class SearchViewModelEditingTargetTest {
                             initialLocation = currentLocation,
                         ),
                     locationPermissionManager = EditingTargetFakeLocationPermissionManager(),
+                    currentLocationAddressResolver =
+                        EditingTargetFakeCurrentLocationAddressResolver(
+                            address = "부산광역시 중구 중앙대로 100",
+                        ),
                 )
 
             advanceUntilIdle()
@@ -190,7 +196,8 @@ class SearchViewModelEditingTargetTest {
 
             val selectedDestination = destinationSelectionRepository.selectedDestination.value
             assertEquals("current-location", selectedDestination?.placeId)
-            assertEquals("현재 위치", selectedDestination?.name)
+            assertEquals("부산광역시 중구 중앙대로 100", selectedDestination?.name)
+            assertEquals("부산광역시 중구 중앙대로 100", selectedDestination?.address)
             assertEquals(currentLocation.latitude, selectedDestination?.latitude)
             assertEquals(currentLocation.longitude, selectedDestination?.longitude)
             assertEquals(
@@ -551,6 +558,12 @@ private class EditingTargetFakeLocationPermissionManager(
     override fun refreshPermissionState() = Unit
 
     override fun requestLocationPermission(activity: ComponentActivity) = Unit
+}
+
+private class EditingTargetFakeCurrentLocationAddressResolver(
+    private val address: String?,
+) : CurrentLocationAddressResolver {
+    override suspend fun resolveAddress(coordinate: GeoCoordinate): String? = address
 }
 
 private class EditingTargetFakeSearchRepository : SearchRepository {

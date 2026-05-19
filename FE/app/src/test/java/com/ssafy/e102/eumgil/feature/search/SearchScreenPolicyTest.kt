@@ -23,8 +23,10 @@ class SearchScreenPolicyTest {
                 .readText()
 
         assertTrue(
-            "Apply-to-route search should show quick actions only for destination route assignment mode.",
+            "Apply-to-route search entry should show quick actions for both route endpoint assignment targets.",
             source.contains("shouldShowRouteEndpointQuickActions(uiState.selectionMode, uiState.editingTarget)") &&
+                source.contains("selectionMode == SearchSelectionMode.APPLY_TO_ROUTE") &&
+                source.contains("editingTarget == RouteEditingTarget.ORIGIN") &&
                 source.contains("editingTarget == RouteEditingTarget.DESTINATION") &&
                 source.contains("RouteEndpointQuickActionSection("),
         )
@@ -56,6 +58,23 @@ class SearchScreenPolicyTest {
             "Current-location failures should remain visible on the screen instead of being only transient feedback.",
             source.contains("currentLocationQuickActionState") &&
                 source.contains("resolveSearchCurrentLocationStatusContent("),
+        )
+    }
+
+    @Test
+    fun `search results screen never renders route endpoint quick actions`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val searchResultsContentSection =
+            source
+                .substringAfter("private fun SearchResultsContent(")
+                .substringBefore("@Composable\nprivate fun SearchInputField")
+
+        assertFalse(
+            "Search results should keep route endpoint shortcuts out of the result list surface.",
+            searchResultsContentSection.contains("RouteEndpointQuickActionSection(") ||
+                searchResultsContentSection.contains("shouldShowRouteEndpointQuickActions("),
         )
     }
 

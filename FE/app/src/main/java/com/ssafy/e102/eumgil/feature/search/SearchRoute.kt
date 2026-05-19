@@ -353,6 +353,7 @@ private fun rememberSearchViewModel(): SearchViewModel {
                 placesRepository = appContainer.placesRepository,
                 currentLocationManager = appContainer.currentLocationManager,
                 locationPermissionManager = appContainer.locationPermissionManager,
+                currentLocationAddressResolver = appContainer.currentLocationAddressResolver,
             )
         }
 

@@ -132,7 +132,7 @@ internal fun shouldShowRouteEndpointQuickActions(
     editingTarget: RouteEditingTarget,
 ): Boolean =
     selectionMode == SearchSelectionMode.APPLY_TO_ROUTE &&
-        editingTarget == RouteEditingTarget.DESTINATION
+        (editingTarget == RouteEditingTarget.ORIGIN || editingTarget == RouteEditingTarget.DESTINATION)
 
 internal data class RouteEndpointQuickActionCopy(
     @StringRes val currentLocationActionRes: Int,
@@ -284,7 +284,8 @@ internal fun resolveSearchCopyUiState(editingTarget: RouteEditingTarget): Search
     }
 
 internal fun shouldShowDestinationPromoBanner(editingTarget: RouteEditingTarget): Boolean =
-    editingTarget == RouteEditingTarget.DESTINATION
+    editingTarget == RouteEditingTarget.DESTINATION ||
+        editingTarget == RouteEditingTarget.ORIGIN
 
 internal fun resolveVoiceInputBackgroundDestination(resultState: SearchResultUiState): SearchScreenDestination =
     when (resultState) {
@@ -550,14 +551,6 @@ private fun SearchResultsContent(
             onClearQueryClick = { onAction(SearchUiAction.ClearQueryClicked) },
             onSearch = { onAction(SearchUiAction.SearchSubmitted) },
         )
-        if (shouldShowRouteEndpointQuickActions(uiState.selectionMode, uiState.editingTarget)) {
-            RouteEndpointQuickActionSection(
-                editingTarget = uiState.editingTarget,
-                currentLocationState = uiState.currentLocationQuickActionState,
-                onCurrentLocationClick = { onAction(SearchUiAction.CurrentLocationClicked) },
-                onMapPickerClick = { onAction(SearchUiAction.MapPickerClicked) },
-            )
-        }
         SearchSortControl(
             selectedSortOption = uiState.sortOption,
             onSortOptionSelected = { sortOption ->

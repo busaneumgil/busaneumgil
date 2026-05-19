@@ -126,6 +126,30 @@ class MainNavGraphTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun `map search entry opens destination assignment search flow`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
+                .readText()
+        val mapDestination =
+            source
+                .substringAfter("composable(route = TopLevelRoute.Map.route)")
+                .substringBefore("composable(route = TopLevelRoute.SavedRoute.route)")
+
+        assertTrue(
+            "Home map search should enter the route endpoint assignment search flow so entry-only destination shortcuts are interactive.",
+            mapDestination.contains(
+                "SearchRoute.Entry.createRoute(editingTarget, SearchSelectionMode.APPLY_TO_ROUTE)",
+            ),
+        )
+        assertTrue(
+            "Home map voice/search result navigation should preserve destination assignment mode instead of falling back to preview-only results.",
+            mapDestination.contains(
+                "SearchRoute.Results.createRoute(query, editingTarget, SearchSelectionMode.APPLY_TO_ROUTE)",
+            ),
+        )
+    }
+
+    @Test
     fun `search mic actions open global voice assistant instead of navigating to search voice route`() {
         val mainNavGraphSource =
             File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")

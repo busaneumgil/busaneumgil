@@ -28,6 +28,8 @@ import com.ssafy.e102.global.security.jwt.JwtProperties;
 @EnableConfigurationProperties({JwtProperties.class, CorsProperties.class})
 public class SecurityConfig {
 
+	static final String HAZARD_REPORT_REROUTE_PATTERN = "/hazard/{reportId}/reroute";
+
 	private final RestAuthenticationEntryPoint authenticationEntryPoint;
 	private final RestAccessDeniedHandler accessDeniedHandler;
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -82,7 +84,7 @@ public class SecurityConfig {
 				.authenticated()
 				.requestMatchers("/hazard-reports", "/hazard-reports/**")
 				.authenticated()
-				.requestMatchers("/hazard/markers", "/hazard/markers/**", "/hazard/*/reroute", "/hazard/**/reroute")
+				.requestMatchers("/hazard/markers", "/hazard/markers/**", HAZARD_REPORT_REROUTE_PATTERN)
 				.authenticated()
 				.requestMatchers("/admin", "/admin/**")
 				.hasRole("ADMIN")

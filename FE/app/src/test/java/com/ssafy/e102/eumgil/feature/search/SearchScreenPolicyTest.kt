@@ -162,7 +162,8 @@ class SearchScreenPolicyTest {
         )
         assertTrue(
             "Search results loading state should keep a spinner affordance inside the centered state.",
-            loadingStateSection.contains("showLoadingIndicator = true"),
+            loadingStateSection.contains("showLoadingIndicator = true") &&
+                source.contains("EumCircularLoadingIndicator("),
         )
         assertTrue(
             "Search results loading state should not render the centered illustration while the request is in progress.",
@@ -171,6 +172,10 @@ class SearchScreenPolicyTest {
         assertFalse(
             "Search results loading state should not fall back to the boxed SearchStateCard placeholder.",
             loadingStateSection.contains("SearchStateCard("),
+        )
+        assertFalse(
+            "Search results loading should not use an oversized custom spinner.",
+            source.contains("SearchResultsLoadingIndicatorSize"),
         )
     }
 

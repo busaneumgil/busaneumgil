@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.feedback.EumCircularLoadingIndicator
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.BusanEumgilLightColorScheme
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
@@ -1696,7 +1697,6 @@ private fun searchResultAccessibilityTagIconSizeDp(
 
 private const val METERS_PER_KILOMETER = 1_000
 private const val SEARCH_NEXT_PAGE_PREFETCH_ITEM_THRESHOLD = 3
-private val SearchResultsLoadingIndicatorSize: Dp = 42.dp
 private val SearchResultPlaceIconContainerSize: Dp = 56.dp
 private val SearchResultPlaceIconSize: Dp = 32.dp
 private val SearchSortOptionButtonHeight: Dp = 44.dp
@@ -1777,12 +1777,10 @@ private fun SearchCenteredStateMessage(
             )
         }
         if (showLoadingIndicator) {
-            CircularProgressIndicator(
+            EumCircularLoadingIndicator(
                 modifier =
                     Modifier
-                        .padding(top = EumSpacing.medium)
-                        .size(SearchResultsLoadingIndicatorSize),
-                strokeWidth = 3.dp,
+                        .padding(top = EumSpacing.medium),
             )
         }
         Text(

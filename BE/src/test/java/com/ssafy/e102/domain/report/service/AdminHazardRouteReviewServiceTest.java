@@ -30,7 +30,6 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
 import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
-import com.ssafy.e102.domain.admin.service.AdminService;
 import com.ssafy.e102.domain.report.dto.request.AdminHazardRouteReviewSegmentDraftRequest;
 import com.ssafy.e102.domain.report.dto.request.StartHazardRouteReviewRequest;
 import com.ssafy.e102.domain.report.dto.request.UpdateHazardRouteReviewRequest;
@@ -70,9 +69,6 @@ class AdminHazardRouteReviewServiceTest {
 	private RoadSegmentRepository roadSegmentRepository;
 
 	@Mock
-	private AdminService adminService;
-
-	@Mock
 	private AdminAuditLogService adminAuditLogService;
 
 	@Mock
@@ -89,7 +85,6 @@ class AdminHazardRouteReviewServiceTest {
 			hazardReportRepository,
 			hazardReportRouteReviewRepository,
 			roadSegmentRepository,
-			adminService,
 			adminAuditLogService,
 			adminMapService,
 			new NoOpPlatformTransactionManager(),

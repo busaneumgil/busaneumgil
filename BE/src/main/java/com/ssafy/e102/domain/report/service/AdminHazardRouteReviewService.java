@@ -15,8 +15,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
-import com.ssafy.e102.domain.admin.service.AdminService;
-import com.ssafy.e102.domain.admin.type.AdminAreaAssignmentType;
 import com.ssafy.e102.domain.report.dto.request.AdminHazardRouteReviewSegmentDraftRequest;
 import com.ssafy.e102.domain.report.dto.request.StartHazardRouteReviewRequest;
 import com.ssafy.e102.domain.report.dto.request.UpdateHazardRouteReviewRequest;
@@ -41,7 +39,6 @@ public class AdminHazardRouteReviewService {
 	private final HazardReportRepository hazardReportRepository;
 	private final HazardReportRouteReviewRepository hazardReportRouteReviewRepository;
 	private final RoadSegmentRepository roadSegmentRepository;
-	private final AdminService adminService;
 	private final AdminAuditLogService adminAuditLogService;
 	private final AdminMapService adminMapService;
 	private final TransactionTemplate transactionTemplate;
@@ -52,7 +49,6 @@ public class AdminHazardRouteReviewService {
 		HazardReportRepository hazardReportRepository,
 		HazardReportRouteReviewRepository hazardReportRouteReviewRepository,
 		RoadSegmentRepository roadSegmentRepository,
-		AdminService adminService,
 		AdminAuditLogService adminAuditLogService,
 		AdminMapService adminMapService,
 		PlatformTransactionManager transactionManager,
@@ -60,7 +56,6 @@ public class AdminHazardRouteReviewService {
 		this.hazardReportRepository = hazardReportRepository;
 		this.hazardReportRouteReviewRepository = hazardReportRouteReviewRepository;
 		this.roadSegmentRepository = roadSegmentRepository;
-		this.adminService = adminService;
 		this.adminAuditLogService = adminAuditLogService;
 		this.adminMapService = adminMapService;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -73,7 +68,6 @@ public class AdminHazardRouteReviewService {
 		Long reportId,
 		StartHazardRouteReviewRequest request) {
 		HazardReport hazardReport = getHazardReport(reportId);
-		adminService.requireCanEditArea(userId, request.gu(), request.dong(), AdminAreaAssignmentType.ROAD_NETWORK);
 		HazardReportRouteReview latestReview = findLatestReview(reportId);
 		validateStartReview(hazardReport, latestReview, request.intent());
 

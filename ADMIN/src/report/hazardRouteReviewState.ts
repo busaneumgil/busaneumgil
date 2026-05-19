@@ -56,7 +56,11 @@ export function loadStoredHazardRouteReview(reportId: number): HazardRouteReview
       stage: parsed.stage === "COMPLETED" ? "COMPLETED" : "IN_PROGRESS",
       reviewerUserId: typeof parsed.reviewerUserId === "string" ? parsed.reviewerUserId : "ADMIN",
       startedAt: typeof parsed.startedAt === "string" ? parsed.startedAt : new Date().toISOString(),
-      updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : typeof parsed.startedAt === "string" ? parsed.startedAt : new Date().toISOString(),
+      updatedAt: typeof parsed.updatedAt === "string"
+        ? parsed.updatedAt
+        : typeof parsed.startedAt === "string"
+          ? parsed.startedAt
+          : new Date().toISOString(),
       completedAt: typeof parsed.completedAt === "string" ? parsed.completedAt : null,
       selectedSegmentEdgeId: typeof parsed.selectedSegmentEdgeId === "string" ? parsed.selectedSegmentEdgeId : null,
       segmentDrafts: parsed.segmentDrafts && typeof parsed.segmentDrafts === "object" ? parsed.segmentDrafts : {},
@@ -199,16 +203,18 @@ export function completeHazardRouteReview(review: HazardRouteReviewRecord, now: 
 
 export function routeReviewCompletionMessage(status?: AdminRoutingApplyStatus | null) {
   switch (status) {
+    case "PENDING":
+      return "검수 완료, 경로 반영 필요 상태입니다.";
     case "APPLIED":
-      return "검수 완료 및 경로 반영이 완료되었습니다.";
+      return "경로 반영이 완료되었습니다.";
     case "APPLIED_WITH_WARNING":
-      return "검수는 완료됐고 일부 경로 반영 경고가 있습니다. 운영 상태를 확인해 주세요.";
+      return "경로 반영은 수행됐지만 일부 경고가 있습니다. 운영 상태를 확인해 주세요.";
     case "FAILED":
-      return "검수는 완료됐지만 경로 즉시 반영에 실패했습니다. 운영 상태를 확인해 주세요.";
+      return "경로 반영에 실패했습니다. 저장된 변경은 유지되며 다시 시도할 수 있습니다.";
     case "SKIPPED":
-      return "검수는 완료됐고 즉시 반영 대상 변경은 없습니다.";
+      return "검수 완료, 경로 반영 대상이 없습니다.";
     default:
-      return "검수가 완료되었습니다.";
+      return "검수 또는 저장이 완료되었습니다.";
   }
 }
 
@@ -216,6 +222,8 @@ export function routeReviewCompletionClassName(status?: AdminRoutingApplyStatus 
   switch (status) {
     case "FAILED":
       return "error-box";
+    case "PENDING":
+      return "warning-box";
     case "APPLIED_WITH_WARNING":
       return "warning-box";
     case "APPLIED":
@@ -235,7 +243,7 @@ export function deriveHazardDisplayStatus(
     return { key: "IN_PROGRESS", label: "진행중", tone: "blue" };
   }
   if (review?.stage === "COMPLETED" && review.intent === "restore") {
-    return { key: "RESTORED", label: "원복 완료", tone: "purple" };
+    return { key: "RESTORED", label: "원상복구 완료", tone: "purple" };
   }
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
     return { key: "COMPLETED", label: "완료", tone: "green" };
@@ -291,7 +299,8 @@ function fromAdminHazardRouteReviewIntent(intent: AdminHazardRouteReviewIntent):
 }
 
 function isAdminRoutingApplyStatus(value: unknown): value is AdminRoutingApplyStatus {
-  return value === "SKIPPED"
+  return value === "PENDING"
+    || value === "SKIPPED"
     || value === "APPLIED"
     || value === "APPLIED_WITH_WARNING"
     || value === "FAILED";

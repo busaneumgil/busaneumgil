@@ -26,7 +26,9 @@ import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditJobResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkBridgePayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentUpdateResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStateResponse;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
+import com.ssafy.e102.domain.admin.service.AdminRoutingApplyService;
 import com.ssafy.e102.domain.admin.service.AdminRoutePreviewService;
 import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditJobService;
 import com.ssafy.e102.domain.admin.service.AdminRoadNetworkEditService;
@@ -50,6 +52,7 @@ import lombok.RequiredArgsConstructor;
 public class AdminMapController {
 
 	private final AdminMapService adminMapService;
+	private final AdminRoutingApplyService adminRoutingApplyService;
 	private final AdminRoadNetworkEditService adminRoadNetworkEditService;
 	private final AdminRoadNetworkEditJobService adminRoadNetworkEditJobService;
 	private final AdminRoutePreviewService adminRoutePreviewService;
@@ -133,6 +136,18 @@ public class AdminMapController {
 		AdminRoadSegmentAttributesUpdateRequest request) {
 		return ApiResponse
 			.success(adminMapService.updateRoadSegmentAttributes(principal.userId(), edgeId, gu, dong, request));
+	}
+
+	@Operation(summary = "관리자 경로 반영 상태 조회", description = "DB에 저장된 routing override 변경이 runtime에 반영됐는지 현재 상태를 조회한다.")
+	@GetMapping("/routing/overrides/apply-state")
+	public ApiResponse<AdminRoutingApplyStateResponse> getRoutingApplyState() {
+		return ApiResponse.success(adminRoutingApplyService.getCurrentState());
+	}
+
+	@Operation(summary = "관리자 경로 반영 실행", description = "저장된 routing override 최신 상태 전체를 기준으로 GraphHopper runtime reload를 1회 수행한다.")
+	@PostMapping("/routing/overrides/apply")
+	public ApiResponse<AdminRoutingApplyStateResponse> applyRoutingOverrides() {
+		return ApiResponse.success(adminRoutingApplyService.applyRoutingOverrides());
 	}
 
 	@Operation(summary = "관리자 편의시설 조회", description = "데이터베이스에 적재된 장소를 지도 표시용 형식으로 조회한다.")

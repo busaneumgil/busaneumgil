@@ -419,7 +419,15 @@ export interface AdminRoadSegmentAttributesUpdateRequest {
   applyRoutingImmediately?: boolean | null;
 }
 
-export type AdminRoutingApplyStatus = "SKIPPED" | "APPLIED" | "APPLIED_WITH_WARNING" | "FAILED";
+export type AdminRoutingApplyStatus = "PENDING" | "SKIPPED" | "APPLIED" | "APPLIED_WITH_WARNING" | "FAILED";
+
+export interface AdminRoutingApplyStateResponse {
+  routingApplyStatus: AdminRoutingApplyStatus;
+  message: string | null;
+  dirty: boolean;
+  applying: boolean;
+  lastAppliedAt: string | null;
+}
 
 export interface AdminRoadSegmentUpdateResponse {
   segment: SegmentFeature["properties"];

@@ -29,6 +29,19 @@ class GraphHopperAdminClientTest {
 		server = MockRestServiceServer.createServer(restTemplate);
 		client = new GraphHopperAdminClient(
 			restTemplate,
+			new GraphHopperProperties(
+				"http://graphhopper-green.test",
+				java.time.Duration.ofSeconds(5),
+				java.time.Duration.ofSeconds(5),
+				"graphhopper:active-slot",
+				"graphhopper:previous-slot",
+				"graphhopper:blue:url",
+				"graphhopper:green:url",
+				"http://graphhopper-blue.test",
+				"http://graphhopper-green.test",
+				"http://localhost:8990/healthcheck",
+				"http://graphhopper-blue:8990/healthcheck",
+				"http://graphhopper-green:8990/healthcheck"),
 			() -> new GraphHopperEndpointSelection(
 				"http://graphhopper-green.test",
 				"http://graphhopper-blue.test",

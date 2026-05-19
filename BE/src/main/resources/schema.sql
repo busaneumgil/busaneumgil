@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS routing_segment_overrides (
     stairs_state VARCHAR(30),
     width_state VARCHAR(30),
     braille_block_state VARCHAR(30),
+    version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT fk_routing_segment_overrides_edge_id
         FOREIGN KEY (edge_id)
         REFERENCES road_segments (edge_id)
@@ -77,6 +78,43 @@ ALTER TABLE routing_segment_overrides
 
 ALTER TABLE routing_segment_overrides
     ADD COLUMN IF NOT EXISTS braille_block_state VARCHAR(30);
+
+ALTER TABLE routing_segment_overrides
+    ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
+
+ALTER TABLE road_segments
+    ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS routing_apply_states (
+    state_key VARCHAR(60) PRIMARY KEY,
+    dirty BOOLEAN NOT NULL DEFAULT FALSE,
+    applying BOOLEAN NOT NULL DEFAULT FALSE,
+    applying_started_at TIMESTAMP,
+    dirty_marked_at TIMESTAMP,
+    last_applied_at TIMESTAMP,
+    last_result_status VARCHAR(30),
+    last_result_message TEXT,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO routing_apply_states (
+    state_key,
+    dirty,
+    applying,
+    applying_started_at,
+    last_result_status,
+    last_result_message,
+    updated_at
+) VALUES (
+    'ROUTING_OVERRIDES',
+    FALSE,
+    FALSE,
+    NULL,
+    'SKIPPED',
+    '아직 반영할 경로 변경이 없습니다.',
+    CURRENT_TIMESTAMP
+)
+ON CONFLICT (state_key) DO NOTHING;
 
 ALTER TABLE IF EXISTS hazard_reports
     ADD COLUMN IF NOT EXISTS processed_by_user_id UUID;

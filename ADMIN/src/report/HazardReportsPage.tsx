@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  applyAdminRoutingOverrides,
   approveAdminHazardReport,
   completeAdminHazardRouteReview,
+  fetchAdminRoutingApplyState,
   fetchAdminDashboardSummary,
   fetchAdminHazardReportDetail,
   fetchAdminHazardReports,
@@ -317,6 +319,30 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     retry: false,
     staleTime: 300_000,
   });
+  const routingApplyStateQuery = useQuery({
+    queryKey: ["admin-routing-apply-state", accessToken],
+    queryFn: () => fetchAdminRoutingApplyState(accessToken),
+    enabled: !preview && hasToken,
+    retry: false,
+    staleTime: 15_000,
+  });
+  const applyRoutingMutation = useMutation({
+    mutationFn: () => applyAdminRoutingOverrides(accessToken),
+    onSuccess: (response) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
+      const notice = routingApplyNotice(response.routingApplyStatus);
+      setRouteReviewCompletionNotice({
+        message: response.message ?? notice.message,
+        className: notice.className,
+      });
+    },
+    onError: (error) => {
+      setRouteReviewCompletionNotice({
+        message: error instanceof Error ? error.message : "경로 반영에 실패했습니다.",
+        className: "error-box",
+      });
+    },
+  });
 
   const reportListData = preview
     ? {
@@ -442,6 +468,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
     },
   });
 
@@ -512,6 +539,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
         message: routeReviewCompletionMessage(response.routingApplyStatus),
         className: routeReviewCompletionClassName(response.routingApplyStatus),
       });
+      void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] });
@@ -784,7 +812,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
           <div className="hazard-inline-banner">
             <HazardUiIcon name="info" />
-            <span>승인/반려/원상복구는 신고 별도 개별 처리됩니다. 처리한 항목은 DB 반영 대기 상태에서 일괄 반영할 수 있습니다.</span>
+            <span>승인/반려/원상복구는 신고별로 개별 처리됩니다. 처리한 항목은 경로 반영 필요 상태로 모아 두었다가 별도 경로 반영으로 적용합니다.</span>
           </div>
 
           {reportsQuery.error instanceof Error && <p className="error-box">{reportsQuery.error.message}</p>}
@@ -877,12 +905,17 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
           <div className={`hazard-bulk-bar ${hasDbSyncQueue ? "" : "empty"}`}>
             <div className="hazard-bulk-bar__summary">
-              <strong>{hasDbSyncQueue ? `전체 DB 반영 대기 ${totalSyncPendingCount}건` : "지금 반영할 항목이 없습니다."}</strong>
-              <span>DB 반영 대기 {dbSyncPendingCount}건 · 원상복구 대기 {restorePendingCount}건</span>
+              <strong>{hasDbSyncQueue ? `전체 경로 반영 필요 ${totalSyncPendingCount}건` : "지금 반영할 항목이 없습니다."}</strong>
+              <span>경로 반영 필요 {dbSyncPendingCount}건 · 원상복구 대기 {restorePendingCount}건</span>
               <small>{latestReportStamp ? `마지막 집계 ${formatLongDateTime(latestReportStamp)}` : "마지막 집계 준비 중"}</small>
             </div>
-            <button type="button" className="hazard-bulk-bar__button" title="백엔드 연동 예정">
-              전체 DB 반영
+            <button
+              type="button"
+              className="hazard-bulk-bar__button"
+              onClick={() => applyRoutingMutation.mutate()}
+              disabled={applyRoutingMutation.isPending || routingApplyStateQuery.data?.applying || !routingApplyStateQuery.data?.dirty}
+            >
+              전체 경로 반영
             </button>
           </div>
         </section>
@@ -941,6 +974,9 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   networkLoading={preview ? false : routeNetworkQuery.isLoading}
                   networkError={preview ? null : routeNetworkQuery.error instanceof Error ? routeNetworkQuery.error : null}
                   areaScopeLabel={areaScope ? `${areaScope.gu} ${areaScope.dong}` : null}
+                  routingApplyState={preview ? null : routingApplyStateQuery.data}
+                  applyingRouting={applyRoutingMutation.isPending}
+                  onApplyRouting={() => applyRoutingMutation.mutate()}
                   onBack={() => setDetailPaneMode("detail")}
                   onReviewChange={handleRouteReviewChange}
                   onComplete={completeRouteReviewFlow}
@@ -1024,7 +1060,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                     <div className="hazard-operation-grid">
                       <OperationRow label="지도 반영 상태" status={operationSnapshot.mapSync} />
                       <OperationRow label="추천 경로 제외" status={operationSnapshot.routeExclusion} />
-                      <OperationRow label="DB 반영 상태" status={operationSnapshot.dbSync} />
+                      <OperationRow label="경로 반영 상태" status={operationSnapshot.dbSync} />
                       <OperationRow label="원상복구 상태" status={operationSnapshot.recovery} />
                     </div>
                   )}
@@ -1645,7 +1681,7 @@ function buildHazardTimeline(
         meta: reviewerLabel,
         tone: "purple" as HazardBadgeTone,
       },
-      { time: "-", label: "DB 반영 대기", meta: "(백엔드 연동 예정)", tone: "gray" as HazardBadgeTone },
+      { time: "-", label: "경로 반영 필요", meta: "(경로 반영 대기)", tone: "gray" as HazardBadgeTone },
     ];
   }
 
@@ -1670,7 +1706,7 @@ function buildHazardTimeline(
   if (report.status === "APPROVED") {
     return [
       { time: baseTime, label: "처리 완료", meta: reviewerLabel, tone: "green" as HazardBadgeTone },
-      { time: baseTime, label: "DB 반영 대기", meta: "(시스템)", tone: "orange" as HazardBadgeTone },
+      { time: baseTime, label: "경로 반영 필요", meta: "(시스템)", tone: "orange" as HazardBadgeTone },
       { time: "-", label: "원상복구 반영", meta: "-", tone: "purple" as HazardBadgeTone },
     ];
   }
@@ -1679,14 +1715,14 @@ function buildHazardTimeline(
     return [
       { time: baseTime, label: "반려", meta: reviewerLabel, tone: "red" as HazardBadgeTone },
       { time: "-", label: "후속 조치 없음", meta: "-", tone: "gray" as HazardBadgeTone },
-      { time: "-", label: "DB 반영", meta: "-", tone: "gray" as HazardBadgeTone },
+      { time: "-", label: "경로 반영", meta: "-", tone: "gray" as HazardBadgeTone },
     ];
   }
 
   return [
     { time: baseTime, label: "신고 접수", meta: "(사용자)", tone: "blue" as HazardBadgeTone },
     { time: "-", label: "승인 검수 대기", meta: "(Admin)", tone: "orange" as HazardBadgeTone },
-    { time: "-", label: "DB 반영", meta: "-", tone: "gray" as HazardBadgeTone },
+    { time: "-", label: "경로 반영", meta: "-", tone: "gray" as HazardBadgeTone },
   ];
 }
 
@@ -2156,4 +2192,34 @@ function createPreviewStreetImage(background: string, accent: string, label: str
   `;
 
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function routingApplyNotice(status?: string | null) {
+  switch (status) {
+    case "FAILED":
+      return {
+        message: "경로 반영에 실패했습니다. 저장된 변경은 유지되며 다시 시도할 수 있습니다.",
+        className: "error-box",
+      };
+    case "APPLIED_WITH_WARNING":
+      return {
+        message: "경로 반영은 수행됐지만 일부 경고가 있습니다. 운영 상태를 확인해 주세요.",
+        className: "warning-box",
+      };
+    case "SKIPPED":
+      return {
+        message: "경로 반영 대상이 없습니다.",
+        className: "info-box",
+      };
+    case "APPLIED":
+      return {
+        message: "경로 반영이 완료되었습니다.",
+        className: "success-box",
+      };
+    default:
+      return {
+        message: "경로 반영 요청이 처리되었습니다.",
+        className: "info-box",
+      };
+  }
 }

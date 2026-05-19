@@ -32,7 +32,7 @@ import com.ssafy.e102.domain.report.type.HazardRouteReviewIntent;
 import com.ssafy.e102.domain.report.type.HazardRouteReviewStage;
 import com.ssafy.e102.domain.report.type.ReportStatus;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
-import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
 
 @Service
 @Transactional(readOnly = true)
@@ -161,12 +161,13 @@ public class AdminHazardRouteReviewService {
 		if (completion == null) {
 			throw new HazardReportException(HazardReportErrorCode.HAZARD_ROUTE_REVIEW_NOT_FOUND);
 		}
-		GraphHopperReloadResult routingApplyResult = adminMapService.resolveRouteReviewRoutingApplyResult(
-			completion.routingOverlayReloadRequired());
 		AdminHazardRouteReviewResponse after = AdminHazardRouteReviewResponse.from(
 			completion.review(),
 			completion.reportStatus(),
-			routingApplyResult);
+			completion.routingOverlayReloadRequired() ? AdminRoutingApplyStatus.PENDING : AdminRoutingApplyStatus.SKIPPED,
+			completion.routingOverlayReloadRequired()
+				? "DB 저장이 완료되었습니다. 경로 반영이 필요합니다."
+				: "경로 반영 대상 변경이 없습니다.");
 
 		adminAuditLogService.record(
 			userId,

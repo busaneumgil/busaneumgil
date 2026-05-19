@@ -9,8 +9,6 @@ import com.ssafy.e102.domain.report.entity.HazardReportRouteReview;
 import com.ssafy.e102.domain.report.type.HazardRouteReviewIntent;
 import com.ssafy.e102.domain.report.type.HazardRouteReviewStage;
 import com.ssafy.e102.domain.report.type.ReportStatus;
-import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
-import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -42,9 +40,9 @@ public record AdminHazardRouteReviewResponse(
 	LocalDateTime completedAt,
 	@Schema(description = "saved segment drafts")
 	List<AdminHazardRouteReviewSegmentDraftResponse> segmentDrafts,
-	@Schema(description = "routing apply status", example = "APPLIED")
+	@Schema(description = "routing apply status after DB save", example = "PENDING")
 	AdminRoutingApplyStatus routingApplyStatus,
-	@Schema(description = "routing apply message")
+	@Schema(description = "routing apply message after DB save")
 	String routingApplyMessage) {
 
 	public AdminHazardRouteReviewResponse(
@@ -80,13 +78,14 @@ public record AdminHazardRouteReviewResponse(
 	}
 
 	public static AdminHazardRouteReviewResponse from(HazardReportRouteReview review, ReportStatus reportStatus) {
-		return from(review, reportStatus, null);
+		return from(review, reportStatus, AdminRoutingApplyStatus.SKIPPED, null);
 	}
 
 	public static AdminHazardRouteReviewResponse from(
 		HazardReportRouteReview review,
 		ReportStatus reportStatus,
-		GraphHopperReloadResult routingApplyResult) {
+		AdminRoutingApplyStatus routingApplyStatus,
+		String routingApplyMessage) {
 		if (review == null) {
 			return null;
 		}
@@ -106,20 +105,7 @@ public record AdminHazardRouteReviewResponse(
 			review.getSegmentDrafts().stream()
 				.map(AdminHazardRouteReviewSegmentDraftResponse::from)
 				.toList(),
-			toAdminRoutingApplyStatus(routingApplyResult),
-			routingApplyResult == null ? null : routingApplyResult.message());
-	}
-
-	private static AdminRoutingApplyStatus toAdminRoutingApplyStatus(GraphHopperReloadResult routingApplyResult) {
-		if (routingApplyResult == null) {
-			return AdminRoutingApplyStatus.SKIPPED;
-		}
-		GraphHopperReloadStatus status = routingApplyResult.status();
-		return switch (status) {
-			case SKIPPED -> AdminRoutingApplyStatus.SKIPPED;
-			case APPLIED -> AdminRoutingApplyStatus.APPLIED;
-			case APPLIED_WITH_WARNING -> AdminRoutingApplyStatus.APPLIED_WITH_WARNING;
-			case FAILED -> AdminRoutingApplyStatus.FAILED;
-		};
+			routingApplyStatus,
+			routingApplyMessage);
 	}
 }

@@ -3,6 +3,7 @@ import { SegmentMap } from "../map/SegmentMap";
 import type {
   AccessibilityState,
   AdminRoadSegmentAttributesUpdateRequest,
+  AdminRoutingApplyStateResponse,
   GeoPoint,
   SegmentFeature,
   SegmentPayload,
@@ -25,7 +26,7 @@ const accessibilityOptions: Array<{ value: AccessibilityState; label: string }> 
 const widthOptions: Array<{ value: WidthState; label: string }> = [
   { value: "ADEQUATE_150", label: "150cm 이상" },
   { value: "ADEQUATE_120", label: "120cm 이상" },
-  { value: "NARROW", label: "협소" },
+  { value: "NARROW", label: "좁음" },
   { value: "UNKNOWN", label: "미정" },
 ];
 
@@ -40,6 +41,9 @@ interface HazardRouteReviewWorkspaceProps {
   networkLoading: boolean;
   networkError?: Error | null;
   areaScopeLabel: string | null;
+  routingApplyState?: AdminRoutingApplyStateResponse | null;
+  applyingRouting: boolean;
+  onApplyRouting: () => void;
   onBack: () => void;
   onReviewChange: (review: HazardRouteReviewRecord) => void;
   onComplete: () => void;
@@ -57,6 +61,9 @@ export function HazardRouteReviewWorkspace({
   networkLoading,
   networkError,
   areaScopeLabel,
+  routingApplyState,
+  applyingRouting,
+  onApplyRouting,
   onBack,
   onReviewChange,
   onComplete,
@@ -115,14 +122,14 @@ export function HazardRouteReviewWorkspace({
   return (
     <div className="hazard-review-shell">
       <div className="hazard-inline-banner hazard-review-banner">
-        <span>좌측 신고 리스트를 벗어나도 현재 검수 초안은 자동 저장됩니다. 세그먼트를 선택해 통행 가능 여부와 보행 속성을 먼저 확정해 주세요.</span>
+        <span>신고 검수와 경로 반영은 분리됩니다. 세그먼트를 검수한 뒤 DB 저장 상태를 확인하고, 필요하면 경로 반영을 별도로 실행해 주세요.</span>
       </div>
 
       <section className="hazard-detail-card hazard-review-map-card">
         <div className="hazard-review-map-card__header">
           <div>
             <strong>{hazardRouteReviewIntentLabel(review.intent)}</strong>
-            <span>{areaScopeLabel ? `${areaScopeLabel} 좌표 주변 세그먼트 검수` : "좌표 기준 검수 범위를 준비하는 중입니다."}</span>
+            <span>{areaScopeLabel ? `${areaScopeLabel} 좌표 주변 segment 검수` : "좌표 기준 검수 범위를 준비하는 중입니다."}</span>
           </div>
           <div className="hazard-review-map-card__meta">
             <span>신고 좌표</span>
@@ -159,11 +166,11 @@ export function HazardRouteReviewWorkspace({
         <section className="hazard-detail-card hazard-review-context-card">
           <h3>검수 기준</h3>
           <dl className="hazard-detail-list">
-            <ReviewRow label="처리 흐름" value={review.intent === "restore" ? "원상복구 처리" : "승인 처리"} />
+            <ReviewRow label="처리 흐름" value={review.intent === "restore" ? "정상화 검수" : "승인 검수"} />
             <ReviewRow label="신고 유형" value={reportTypeLabel} />
             <ReviewRow label="위치" value={locationAddress ?? "좌표 기준 위치 확인 중"} secondary={locationRegion || undefined} />
             <ReviewRow label="좌표" value={formatHazardCoordinates(reportPoint)} />
-            <ReviewRow label="검수 현황" value={`검수 세그먼트 ${reviewedSegmentCount}건`} secondary={`마지막 저장 ${formatReviewStamp(review.updatedAt)}`} />
+            <ReviewRow label="검수 현황" value={`검수한 세그먼트 ${reviewedSegmentCount}건`} secondary={`마지막 저장 ${formatReviewStamp(review.updatedAt)}`} />
             <div className="hazard-detail-list__row hazard-detail-list__row--description">
               <dt>내용</dt>
               <dd>
@@ -177,14 +184,14 @@ export function HazardRouteReviewWorkspace({
 
         <section className="hazard-detail-card hazard-review-segment-card">
           <h3>세그먼트 검수</h3>
-          <p className="hazard-review-helper">지도에서 세그먼트를 누르면 해당 edge의 속성을 바로 검수할 수 있습니다.</p>
+          <p className="hazard-review-helper">지도에서 세그먼트를 누르면 해당 edge의 핵심 통행 속성을 바로 검수할 수 있습니다.</p>
 
           {selectedSegment && selectedSegmentDraft ? (
             <>
               <dl className="hazard-review-segment-meta">
                 <ReviewMeta label="edge" value={String(selectedSegment.properties.edgeId)} />
                 <ReviewMeta label="길이" value={formatDistanceValue(selectedSegment.properties.lengthMeter, "m")} />
-                <ReviewMeta label="실측 폭" value={formatDistanceValue(selectedSegment.properties.widthMeter, "m")} />
+                <ReviewMeta label="보도 폭" value={formatDistanceValue(selectedSegment.properties.widthMeter, "m")} />
                 <ReviewMeta label="평균 경사" value={formatDistanceValue(selectedSegment.properties.avgSlopePercent, "%")} />
               </dl>
 
@@ -208,7 +215,7 @@ export function HazardRouteReviewWorkspace({
                   onChange={(value) => updateSelectedSegmentDraft({ brailleBlockState: value as AccessibilityState })}
                 />
                 <ReviewSelect
-                  label="보도폭"
+                  label="보도 폭"
                   value={selectedSegmentDraft.widthState}
                   options={widthOptions}
                   onChange={(value) => updateSelectedSegmentDraft({ widthState: value as WidthState })}
@@ -218,7 +225,7 @@ export function HazardRouteReviewWorkspace({
           ) : (
             <div className="hazard-review-empty">
               <strong>검수할 세그먼트를 선택해 주세요.</strong>
-              <span>신고 좌표 주변 도로를 클릭하면 통행 가능 여부와 계단/점자블록/보도폭을 조정할 수 있습니다.</span>
+              <span>신고 좌표 주변 도로를 클릭하면 통행 가능 여부와 계단, 점자블록, 보도 폭을 조정할 수 있습니다.</span>
             </div>
           )}
         </section>
@@ -227,7 +234,8 @@ export function HazardRouteReviewWorkspace({
       <div className="hazard-review-actionbar">
         <div className="hazard-review-actionbar__summary">
           <strong>{hazardRouteReviewIntentLabel(review.intent)}</strong>
-          <span>{canComplete ? `검수 세그먼트 ${reviewedSegmentCount}건이 저장되었습니다. 완료 시 사용자 재탐색부터 경로 계산에 반영됩니다.` : "최소 1개 세그먼트를 검수해야 처리 완료를 진행할 수 있습니다."}</span>
+          <span>{canComplete ? `검수한 세그먼트 ${reviewedSegmentCount}건이 DB 저장 대상입니다. 검수 완료 후 DB 저장 후 경로 반영 버튼 순서로 적용해 주세요.` : "최소 1개 세그먼트를 검수해야 처리 완료를 진행할 수 있습니다."}</span>
+          <RoutingApplyStateSummary state={routingApplyState} />
         </div>
         <div className="hazard-review-actionbar__buttons">
           <button type="button" className="hazard-action-button secondary" onClick={onBack}>
@@ -235,11 +243,19 @@ export function HazardRouteReviewWorkspace({
           </button>
           <button
             type="button"
+            className="hazard-action-button secondary"
+            disabled={applyingRouting || !routingApplyState?.dirty}
+            onClick={onApplyRouting}
+          >
+            {applyingRouting || routingApplyState?.applying ? "경로 반영 중" : "경로 반영"}
+          </button>
+          <button
+            type="button"
             className="hazard-action-button approve"
             disabled={!canComplete || completing}
             onClick={onComplete}
           >
-            {completing ? "처리 중" : "검수 완료 및 즉시 반영"}
+            {completing ? "처리 중" : "검수 완료"}
           </button>
         </div>
       </div>
@@ -301,6 +317,18 @@ function ReviewSelect({
   );
 }
 
+function RoutingApplyStateSummary({ state }: { state?: AdminRoutingApplyStateResponse | null }) {
+  if (!state) {
+    return null;
+  }
+  return (
+    <span className={routingApplyStateClassName(state)}>
+      {routingApplyStateLabel(state)}
+      {state.lastAppliedAt ? ` · 마지막 반영 ${formatReviewStamp(state.lastAppliedAt)}` : ""}
+    </span>
+  );
+}
+
 function normalizeAccessibility(value: unknown): AccessibilityState {
   return value === "YES" || value === "NO" ? value : "UNKNOWN";
 }
@@ -318,9 +346,22 @@ function formatDistanceValue(value: number | string | null | undefined, suffix: 
 function formatReviewStamp(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${month}.${day} ${hours}:${minutes}`;
+  return date.toLocaleString("ko-KR");
+}
+
+function routingApplyStateLabel(state: AdminRoutingApplyStateResponse) {
+  if (state.applying) return "경로 반영 중";
+  if (state.dirty && state.routingApplyStatus === "FAILED") return "경로 반영 실패";
+  if (state.dirty) return "경로 반영 필요";
+  if (state.routingApplyStatus === "FAILED") return "경로 반영 실패";
+  if (state.routingApplyStatus === "SKIPPED") return "경로 반영 대상 없음";
+  return "경로 반영 완료";
+}
+
+function routingApplyStateClassName(state: AdminRoutingApplyStateResponse) {
+  if (state.applying) return "warning-box";
+  if (state.dirty && state.routingApplyStatus === "FAILED") return "error-box";
+  if (state.dirty) return "warning-box";
+  if (state.routingApplyStatus === "FAILED") return "error-box";
+  return "success-box";
 }

@@ -42,6 +42,7 @@ import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.service.RouteProjectionGeometryService;
+import com.ssafy.e102.domain.route.service.RouteSessionCommandService;
 import com.ssafy.e102.domain.route.service.WalkRouteProfileService;
 import com.ssafy.e102.domain.route.service.WalkRouteUserProfile;
 import com.ssafy.e102.domain.route.service.WalkRouteUserProfileQueryService;
@@ -70,6 +71,9 @@ class HazardReportRerouteServiceTest {
 
 	@Mock
 	private RouteSessionRepository routeSessionRepository;
+
+	@Mock
+	private RouteSessionCommandService routeSessionCommandService;
 
 	@Mock
 	private RouteProjectionGeometryService routeProjectionGeometryService;
@@ -102,6 +106,7 @@ class HazardReportRerouteServiceTest {
 		service = new HazardReportRerouteService(
 			hazardReportRepository,
 			routeSessionRepository,
+			routeSessionCommandService,
 			routeProjectionGeometryService,
 			hazardReportAvoidAreaBuilder,
 			hazardReportRerouteCustomModelFactory,
@@ -217,6 +222,67 @@ class HazardReportRerouteServiceTest {
 		verify(walkRoutePayloadService).toRouteSummary(
 			eq("rr_active_123"),
 			argThat(candidate -> candidate.profile() == WalkRouteProfile.WHEELCHAIR_MANUAL_FAST));
+	}
+
+	@Test
+	@DisplayName("reroute saves an active session snapshot for the returned rerouted routeId")
+	void rerouteSavesActiveSessionForReturnedRouteId() {
+		UUID userId = UUID.randomUUID();
+		HazardReport report = report(userId, 12L, 35.1200, 129.0000);
+		RouteSession routeSession = routeSession("rr_active_123");
+		GraphHopperRoutePath reroutedPath = new GraphHopperRoutePath(
+			BigDecimal.valueOf(80),
+			60_000L,
+			List.of(),
+			java.util.Map.of());
+		RouteSummaryResponse reroutedRoute = routeSummary("graphhopper-route-id", RouteOption.SAFE);
+		when(hazardReportRepository.findWithImagesByReportId(12L)).thenReturn(Optional.of(report));
+		when(routeSessionRepository.findFirstByUser_UserIdAndRouteIdAndStatusOrderByUpdatedAtDesc(
+			eq(userId),
+			eq("rr_active_123"),
+			eq(RouteSessionStatus.ACTIVE)))
+			.thenReturn(Optional.of(routeSession));
+		when(routeProjectionGeometryService.restoreRouteSnapshot(routeSession))
+			.thenReturn(routeSummary("rr_active_123", RouteOption.SAFE));
+		when(routeProjectionGeometryService.projectRoutePoint(any(RouteSummaryResponse.class), any(Point.class)))
+			.thenReturn(new RouteProjectionGeometryService.ProjectedRoutePoint(
+				new Coordinate(129.0000, 35.1200),
+				0,
+				5.0,
+				new Coordinate(128.9999, 35.1200),
+				new Coordinate(129.0001, 35.1200)));
+		when(hazardReportAvoidAreaBuilder.build(any(), any(), any()))
+			.thenReturn(GEOMETRY_FACTORY.createPolygon(new Coordinate[] {
+				new Coordinate(128.9999, 35.1199),
+				new Coordinate(129.0001, 35.1199),
+				new Coordinate(129.0001, 35.1201),
+				new Coordinate(128.9999, 35.1201),
+				new Coordinate(128.9999, 35.1199)
+			}));
+		when(hazardReportRerouteCustomModelFactory.create(any()))
+			.thenReturn(JsonNodeFactory.instance.objectNode());
+		when(walkRouteUserProfileQueryService.getProfile(userId))
+			.thenReturn(new WalkRouteUserProfile(PrimaryUserType.LOW_VISION, null));
+		when(walkRouteProfileService.resolve(PrimaryUserType.LOW_VISION, null, RouteOption.SAFE))
+			.thenReturn(WalkRouteProfile.VISUAL_SAFE);
+		when(graphHopperRouteClient.routeWithCustomModel(any(), any()))
+			.thenReturn(reroutedPath);
+		when(walkRoutePayloadService.toRouteSummary(any(), any()))
+			.thenReturn(reroutedRoute);
+
+		HazardReportRerouteResponse response = service.reroute(
+			userId,
+			12L,
+			new HazardReportRerouteRequest("rr_active_123", new GeoPointRequest(35.1, 129.1)));
+
+		assertThat(response.rerouted()).isTrue();
+		assertThat(response.route()).isNotNull();
+		verify(routeSessionCommandService).saveActiveSessionIfAbsent(
+			eq(userId),
+			eq(response.route().routeId()),
+			argThat(point -> point.getY() == 35.1 && point.getX() == 129.1),
+			eq(routeSession.getEndPoint()),
+			argThat(snapshot -> response.route().routeId().equals(snapshot.get("routeId").asText())));
 	}
 
 	@Test

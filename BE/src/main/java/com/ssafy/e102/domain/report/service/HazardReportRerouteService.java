@@ -2,7 +2,10 @@ package com.ssafy.e102.domain.report.service;
 
 import java.util.UUID;
 
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
+import org.locationtech.jts.geom.PrecisionModel;
 import org.locationtech.jts.geom.Polygon;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +23,7 @@ import com.ssafy.e102.domain.route.exception.RouteErrorCode;
 import com.ssafy.e102.domain.route.exception.RouteException;
 import com.ssafy.e102.domain.route.repository.RouteSessionRepository;
 import com.ssafy.e102.domain.route.service.RouteProjectionGeometryService;
+import com.ssafy.e102.domain.route.service.RouteSessionCommandService;
 import com.ssafy.e102.domain.route.service.WalkRouteCandidate;
 import com.ssafy.e102.domain.route.service.WalkRoutePayloadService;
 import com.ssafy.e102.domain.route.service.WalkRouteProfileService;
@@ -36,8 +40,11 @@ import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 @Service
 public class HazardReportRerouteService {
 
+	private static final int SRID = 4326;
+
 	private final HazardReportRepository hazardReportRepository;
 	private final RouteSessionRepository routeSessionRepository;
+	private final RouteSessionCommandService routeSessionCommandService;
 	private final RouteProjectionGeometryService routeProjectionGeometryService;
 	private final HazardReportAvoidAreaBuilder hazardReportAvoidAreaBuilder;
 	private final HazardReportRerouteCustomModelFactory hazardReportRerouteCustomModelFactory;
@@ -45,12 +52,13 @@ public class HazardReportRerouteService {
 	private final WalkRoutePayloadService walkRoutePayloadService;
 	private final WalkRouteUserProfileQueryService walkRouteUserProfileQueryService;
 	private final WalkRouteProfileService walkRouteProfileService;
-	@SuppressWarnings("unused")
 	private final ObjectMapper objectMapper;
+	private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), SRID);
 
 	public HazardReportRerouteService(
 		HazardReportRepository hazardReportRepository,
 		RouteSessionRepository routeSessionRepository,
+		RouteSessionCommandService routeSessionCommandService,
 		RouteProjectionGeometryService routeProjectionGeometryService,
 		HazardReportAvoidAreaBuilder hazardReportAvoidAreaBuilder,
 		HazardReportRerouteCustomModelFactory hazardReportRerouteCustomModelFactory,
@@ -61,6 +69,7 @@ public class HazardReportRerouteService {
 		ObjectMapper objectMapper) {
 		this.hazardReportRepository = hazardReportRepository;
 		this.routeSessionRepository = routeSessionRepository;
+		this.routeSessionCommandService = routeSessionCommandService;
 		this.routeProjectionGeometryService = routeProjectionGeometryService;
 		this.hazardReportAvoidAreaBuilder = hazardReportAvoidAreaBuilder;
 		this.hazardReportRerouteCustomModelFactory = hazardReportRerouteCustomModelFactory;
@@ -113,7 +122,14 @@ public class HazardReportRerouteService {
 					currentRoute.routeOption(),
 					profile,
 					reroutedPath));
-			return new HazardReportRerouteResponse(true, withRouteId(reroutedRoute, newRouteId(request.routeId())));
+			RouteSummaryResponse reroutedRouteWithId = withRouteId(reroutedRoute, newRouteId(request.routeId()));
+			routeSessionCommandService.saveActiveSessionIfAbsent(
+				userId,
+				reroutedRouteWithId.routeId(),
+				toPoint(request.currentPoint()),
+				routeSession.getEndPoint(),
+				objectMapper.valueToTree(reroutedRouteWithId));
+			return new HazardReportRerouteResponse(true, reroutedRouteWithId);
 		} catch (RouteException exception) {
 			if (exception.getErrorCode() == RouteErrorCode.ROUTE_NOT_FOUND) {
 				return new HazardReportRerouteResponse(false, null);
@@ -136,6 +152,12 @@ public class HazardReportRerouteService {
 			throw new RouteException(RouteErrorCode.ROUTE_SESSION_NOT_FOUND);
 		}
 		return new GeoPointRequest(endPoint.getY(), endPoint.getX());
+	}
+
+	private Point toPoint(GeoPointRequest pointRequest) {
+		Point point = geometryFactory.createPoint(new Coordinate(pointRequest.lng(), pointRequest.lat()));
+		point.setSRID(SRID);
+		return point;
 	}
 
 	private RouteSummaryResponse withRouteId(RouteSummaryResponse route, String routeId) {

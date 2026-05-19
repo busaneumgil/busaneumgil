@@ -423,7 +423,10 @@ class HazardReportServiceTest {
 			ReportStatus.APPROVED,
 			35.1,
 			129.1,
-			List.of("hazard-reports/user-1/20260514/image-1.jpg"));
+			List.of(
+				"hazard-reports/user-1/20260514/image-1.jpg",
+				"hazard-reports/user-1/20260514/image-2.jpg",
+				"hazard-reports/user-1/20260514/image-3.jpg"));
 		HazardReport approvedWithoutImages = hazardReport(
 			user(UUID.randomUUID()),
 			13L,
@@ -439,6 +442,10 @@ class HazardReportServiceTest {
 			.thenReturn(List.of(approvedWithImages, approvedWithoutImages));
 		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-1.jpg"))
 			.thenReturn("https://storage.example.com/read?key=image-1");
+		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-2.jpg"))
+			.thenReturn("https://storage.example.com/read?key=image-2");
+		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-3.jpg"))
+			.thenReturn("https://storage.example.com/read?key=image-3");
 
 		HazardMarkerListResponse response = hazardReportService.getApprovedHazardMarkers(35.095, 129.095, 35.105, 129.105);
 
@@ -448,8 +455,74 @@ class HazardReportServiceTest {
 		assertThat(response.markers().get(0).lat()).isEqualTo(35.1);
 		assertThat(response.markers().get(0).lng()).isEqualTo(129.1);
 		assertThat(response.markers().get(0).imageUrls())
-			.containsExactly("https://storage.example.com/read?key=image-1");
+			.containsExactly(
+				"https://storage.example.com/read?key=image-1",
+				"https://storage.example.com/read?key=image-2",
+				"https://storage.example.com/read?key=image-3");
 		assertThat(response.markers().get(1).imageUrls()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("marker image URL generation failure skips only the broken image")
+	void getApprovedHazardMarkersSkipsBrokenImageUrl() {
+		HazardReport approvedWithImages = hazardReport(
+			user(UUID.randomUUID()),
+			12L,
+			ReportType.RAMP,
+			ReportStatus.APPROVED,
+			35.1,
+			129.1,
+			List.of(
+				"hazard-reports/user-1/20260514/image-1.jpg",
+				"hazard-reports/user-1/20260514/image-2.jpg",
+				"hazard-reports/user-1/20260514/image-3.jpg"));
+		PageRequest pageRequest = PageRequest.of(0, 100);
+		when(hazardReportRepository.findApprovedWithinBounds(129.095, 35.095, 129.105, 35.105, pageRequest))
+			.thenReturn(List.of(approvedWithImages));
+		when(hazardReportRepository.findAllByReportIdIn(List.of(12L)))
+			.thenReturn(List.of(approvedWithImages));
+		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-1.jpg"))
+			.thenReturn("https://storage.example.com/read?key=image-1");
+		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-2.jpg"))
+			.thenThrow(new HazardReportException(HazardReportErrorCode.INVALID_HAZARD_REPORT_IMAGE_URL));
+		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-1/20260514/image-3.jpg"))
+			.thenReturn("https://storage.example.com/read?key=image-3");
+
+		HazardMarkerListResponse response = hazardReportService.getApprovedHazardMarkers(35.095, 129.095, 35.105, 129.105);
+
+		assertThat(response.markers()).hasSize(1);
+		assertThat(response.markers().get(0).imageUrls())
+			.containsExactly(
+				"https://storage.example.com/read?key=image-1",
+				"https://storage.example.com/read?key=image-3");
+	}
+
+	@Test
+	@DisplayName("marker remains visible when every image URL generation fails")
+	void getApprovedHazardMarkersKeepsMarkerWhenAllImageUrlsFail() {
+		HazardReport approvedWithImages = hazardReport(
+			user(UUID.randomUUID()),
+			12L,
+			ReportType.RAMP,
+			ReportStatus.APPROVED,
+			35.1,
+			129.1,
+			List.of(
+				"hazard-reports/user-1/20260514/image-1.jpg",
+				"hazard-reports/user-1/20260514/image-2.jpg"));
+		PageRequest pageRequest = PageRequest.of(0, 100);
+		when(hazardReportRepository.findApprovedWithinBounds(129.095, 35.095, 129.105, 35.105, pageRequest))
+			.thenReturn(List.of(approvedWithImages));
+		when(hazardReportRepository.findAllByReportIdIn(List.of(12L)))
+			.thenReturn(List.of(approvedWithImages));
+		when(hazardReportImageUploadService.createReadUrl(any()))
+			.thenThrow(new HazardReportException(HazardReportErrorCode.INVALID_HAZARD_REPORT_IMAGE_URL));
+
+		HazardMarkerListResponse response = hazardReportService.getApprovedHazardMarkers(35.095, 129.095, 35.105, 129.105);
+
+		assertThat(response.markers()).hasSize(1);
+		assertThat(response.markers().get(0).reportId()).isEqualTo(12L);
+		assertThat(response.markers().get(0).imageUrls()).isEmpty();
 	}
 
 	@Test

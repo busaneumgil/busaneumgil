@@ -290,7 +290,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `navigation waits for route start before realtime guidance even near the route line`() =
+    fun `navigation enters realtime guidance from route line even when origin is detached`() =
         runTest {
             val locationManager = FakeCurrentLocationManager()
             val viewModel = createViewModel(locationManager = locationManager)
@@ -322,10 +322,10 @@ class NavigationViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(NavigationOriginSegmentIndex, viewModel.uiState.value.segmentSync.activeSegmentIndex)
-            assertEquals("출발", viewModel.uiState.value.stepCard.heroTitle)
-            assertEquals("경로 시작 지점까지 이동하세요", viewModel.uiState.value.stepCard.heroDescription)
-            assertTrue(spokenBriefings.isEmpty())
+            assertEquals(1, viewModel.uiState.value.segmentSync.activeSegmentIndex)
+            assertEquals("곧 우회전입니다", viewModel.uiState.value.stepCard.heroTitle)
+            assertEquals("목적지까지 약 8분", viewModel.uiState.value.stepCard.heroDescription)
+            assertTrue(spokenBriefings.isNotEmpty())
             collector.cancel()
         }
 

@@ -167,6 +167,8 @@ class NavigationViewModel(
     private var destinationArrivalStableSinceEpochMillis: Long? = null
     private var hasSpokenDestinationSoon: Boolean = false
     private var nodeTransitionCandidate: NavigationNodeTransitionCandidate? = null
+    private val routeMatcher = NavigationRouteMatcher()
+    private var latestRouteMatch: NavigationRouteMatchResult? = null
     private var latestLocationCoordinate: GeoCoordinate? = null
     private var latestNavigationPose: NavigationPose? = null
     private var latestHeadingDegrees: Double? = null
@@ -244,6 +246,7 @@ class NavigationViewModel(
         resetDestinationArrivalStability()
         hasSpokenDestinationSoon = false
         resetNodeTransitionStability()
+        latestRouteMatch = null
         latestLocationCoordinate = null
         latestNavigationPose = null
         latestHeadingDegrees = null
@@ -487,14 +490,26 @@ class NavigationViewModel(
         val previousCoordinate = latestLocationCoordinate
         val previousProgressCoordinate = latestProgress?.coordinate
         val currentCoordinate = seedLatestLocationSnapshot(snapshot, currentSession.route)
-        val progressCoordinate = currentSession.route.resolveProgressCoordinate(currentCoordinate)
+        val routeMatch =
+            routeMatcher.match(
+                route = currentSession.route,
+                snapshot = snapshot,
+                previousMatch = latestRouteMatch,
+            )
+        latestRouteMatch = routeMatch
+        val progressCoordinate = routeMatch?.matchedCoordinate ?: currentSession.route.resolveProgressCoordinate(currentCoordinate)
         latestProgress =
             currentSession.route
-                .evaluateProgress(current = progressCoordinate, rawCurrent = currentCoordinate)
+                .evaluateProgress(
+                    current = progressCoordinate,
+                    rawCurrent = currentCoordinate,
+                    routeMatch = routeMatch,
+                )
                 ?.withStableNodeTransition(
                     route = currentSession.route,
                     previousCoordinate = previousProgressCoordinate ?: previousCoordinate,
                     currentCoordinate = currentCoordinate,
+                    routeMatch = routeMatch,
                     recordedAtEpochMillis = snapshot.recordedAtEpochMillis,
                 )
         val destinationCoordinate = navigationRequest?.destination?.coordinate ?: currentCoordinate
@@ -634,11 +649,13 @@ class NavigationViewModel(
     ): NavigationGuidanceMode {
         val isInsideRealtimeEntryDistance =
             progress.distanceToRouteMeters <= NAVIGATION_ROUTE_REALTIME_ENTER_DISTANCE_METERS
+        val hasOnRouteMatch = progress.routeMatchState == NavigationRouteMatchState.OnRoute
         val isOutsideRouteDetailDistance =
             progress.distanceToRouteMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS
         val hasRenderableRealtimeProgress = route.hasRenderableRealtimeProgress(progress)
         val isWaitingForInitialRouteStart =
             !hasJoinedRealtimeRouteLine &&
+                !hasOnRouteMatch &&
                 route.shouldWaitForInitialRouteStartJoin(
                     origin = origin,
                     current = progress.coordinate,
@@ -646,7 +663,7 @@ class NavigationViewModel(
 
         return when (guidanceMode) {
             NavigationGuidanceMode.Realtime -> {
-                if (isOutsideRouteDetailDistance || !hasRenderableRealtimeProgress) {
+                if (progress.routeMatchState == NavigationRouteMatchState.OffRoute || isOutsideRouteDetailDistance || !hasRenderableRealtimeProgress) {
                     guidanceMode = NavigationGuidanceMode.RouteDetail
                     resetRouteJoinStability()
                 } else if (isInsideRealtimeEntryDistance) {
@@ -657,7 +674,7 @@ class NavigationViewModel(
             NavigationGuidanceMode.RouteDetail -> {
                 if (isWaitingForInitialRouteStart) {
                     resetRouteJoinStability()
-                } else if (isInsideRealtimeEntryDistance && hasRenderableRealtimeProgress) {
+                } else if (isInsideRealtimeEntryDistance && hasOnRouteMatch && hasRenderableRealtimeProgress) {
                     routeJoinStableUpdateCount += 1
                     val stableSince =
                         routeJoinStableSinceEpochMillis
@@ -700,11 +717,16 @@ class NavigationViewModel(
         route: RouteCandidate,
         previousCoordinate: GeoCoordinate?,
         currentCoordinate: GeoCoordinate,
+        routeMatch: NavigationRouteMatchResult?,
         recordedAtEpochMillis: Long,
     ): NavigationProgressSnapshot {
         if (guidanceMode != NavigationGuidanceMode.Realtime) {
             resetNodeTransitionStability()
             return this
+        }
+        if (routeMatch?.state == NavigationRouteMatchState.OffRoute) {
+            resetNodeTransitionStability()
+            return copy(activeSegmentIndex = this@NavigationViewModel.activeSegmentIndex)
         }
         if (distanceToRouteMeters >= NAVIGATION_ROUTE_DETAIL_EXIT_DISTANCE_METERS) {
             resetNodeTransitionStability()
@@ -1548,11 +1570,7 @@ class NavigationViewModel(
         progress: NavigationProgressSnapshot,
         snapshot: LocationSnapshot,
     ) {
-        val accuracyMeters = snapshot.accuracyMeters
-        val isOffRoute =
-            accuracyMeters != null &&
-                accuracyMeters <= REROUTE_MAX_GPS_ACCURACY_METERS &&
-                progress.distanceToRouteMeters >= REROUTE_DEVIATION_DISTANCE_METERS
+        val isOffRoute = progress.routeMatchState == NavigationRouteMatchState.OffRoute
         deviationState =
             deviationState.next(
                 isOffRoute = isOffRoute,
@@ -1578,6 +1596,7 @@ class NavigationViewModel(
             }.onSuccess { rerouteData ->
                 rerouteData.route?.let { reroutedRoute ->
                     routeSession = routeSession?.withReroutedRoute(reroutedRoute)
+                    latestRouteMatch = null
                     resetAutomaticTtsHistory()
                     latestProgress = reroutedRoute.evaluateProgress(currentCoordinate)
                     val remainingMetrics =
@@ -1787,6 +1806,8 @@ private data class NavigationProgressSnapshot(
     val rawCoordinate: GeoCoordinate,
     val activeSegmentIndex: Int,
     val activeLegIndex: Int,
+    val routeMatchState: NavigationRouteMatchState = NavigationRouteMatchState.OnRoute,
+    val routeMatchConfidence: Double = 1.0,
     val distanceToRouteMeters: Double,
     val distanceAlongPolylineMeters: Double,
     val routePolylineDistanceMeters: Double,
@@ -1907,14 +1928,14 @@ private fun RouteLeg.toNavigationTransitInfo(
     )
 }
 
-private data class RoutePolylineProjection(
+internal data class RoutePolylineProjection(
     val distanceToPolylineMeters: Double,
     val distanceAlongPolylineMeters: Double,
     val totalPolylineDistanceMeters: Double,
     val projectedCoordinate: GeoCoordinate,
 )
 
-private data class RouteSegmentProjection(
+internal data class RouteSegmentProjection(
     val distanceToSegmentMeters: Double,
     val distanceAlongSegmentMeters: Double,
     val projectedCoordinate: GeoCoordinate,
@@ -2000,10 +2021,11 @@ private fun RouteCandidate.totalDurationSeconds(): Int =
 private fun RouteCandidate.evaluateProgress(
     current: GeoCoordinate,
     rawCurrent: GeoCoordinate = current,
+    routeMatch: NavigationRouteMatchResult? = null,
 ): NavigationProgressSnapshot? {
     val routePoints = navigationPolylinePoints()
-    val projection = projectOntoPolylineMeters(current = current, polyline = routePoints) ?: return null
-    val rawProjection = projectOntoPolylineMeters(current = rawCurrent, polyline = routePoints) ?: projection
+    val projection = routeMatch?.matchedProjection ?: projectOntoPolylineMeters(current = current, polyline = routePoints) ?: return null
+    val rawProjection = routeMatch?.rawProjection ?: projectOntoPolylineMeters(current = rawCurrent, polyline = routePoints) ?: projection
     val progressRatio =
         if (projection.totalPolylineDistanceMeters <= 0.0) {
             0.0
@@ -2019,6 +2041,8 @@ private fun RouteCandidate.evaluateProgress(
         rawCoordinate = rawCurrent,
         activeSegmentIndex = resolveActiveSegmentIndex(projection),
         activeLegIndex = resolveActiveLegIndex(progressRatio),
+        routeMatchState = routeMatch?.state ?: NavigationRouteMatchState.OnRoute,
+        routeMatchConfidence = routeMatch?.confidence ?: 1.0,
         distanceToRouteMeters = rawProjection.distanceToPolylineMeters,
         distanceAlongPolylineMeters = projection.distanceAlongPolylineMeters,
         routePolylineDistanceMeters = projection.totalPolylineDistanceMeters,
@@ -2371,7 +2395,7 @@ private fun resolveActiveIndex(
     return sanitizedWeights.lastIndex
 }
 
-private fun RouteCandidate.navigationPolylinePoints(): List<GeoCoordinate> {
+internal fun RouteCandidate.navigationPolylinePoints(): List<GeoCoordinate> {
     if (previewPolyline.isRenderable) return previewPolyline.points
     if (geometry.isRenderable) return geometry.points
 
@@ -2424,14 +2448,14 @@ private fun RouteCandidate.hasTransitLeg(): Boolean =
 private fun RoutePolyline.totalDistanceWeight(): Double? =
     points.totalPolylineDistanceMeters().takeIf { distanceMeters -> distanceMeters > 0.0 }
 
-private fun List<GeoCoordinate>.totalPolylineDistanceMeters(): Double =
+internal fun List<GeoCoordinate>.totalPolylineDistanceMeters(): Double =
     if (size < 2) {
         0.0
     } else {
         zipWithNext().sumOf { (start, end) -> haversineDistanceMeters(start, end) }
     }
 
-private fun projectOntoPolylineMeters(
+internal fun projectOntoPolylineMeters(
     current: GeoCoordinate,
     polyline: List<GeoCoordinate>,
 ): RoutePolylineProjection? {

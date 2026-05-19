@@ -109,6 +109,8 @@ class SavedRouteScreenPolicyTest {
             "Saved bookmark cards should keep the larger target corner but remove card shadow.",
             source.contains("private val SavedBookmarkCardCornerRadius = 24.dp") &&
                 source.contains("private val SavedBookmarkCardElevation = 0.dp") &&
+                savedPlaceSection.contains("EumBorderSubtle.copy(alpha = 0.65f)") &&
+                routeBookmarkSection.contains("EumBorderSubtle.copy(alpha = 0.65f)") &&
                 savedPlaceSection.contains("shadowElevation = SavedBookmarkCardElevation") &&
                 routeBookmarkSection.contains("shadowElevation = SavedBookmarkCardElevation") &&
                 !savedPlaceSection.contains("val cardElevation =") &&
@@ -122,6 +124,34 @@ class SavedRouteScreenPolicyTest {
                 routeBookmarkSection.contains(".fillMaxWidth()") &&
                 routeBookmarkSection.contains("SavedBookmarkPrimaryCtaHeight") &&
                 routeBookmarkSection.contains("isOutlined = false"),
+        )
+    }
+
+    @Test
+    fun `saved bookmark edit action only appears when selected tab has content`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun SavedRouteScreen(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkSectionHeader")
+        val topBarActionEnabledSection =
+            screenSection
+                .substringAfter("isActionEnabled =")
+                .substringBefore("onActionClick =")
+
+        assertTrue(
+            "Bookmark edit action should be tied to the currently selected tab so empty place or route tabs do not expose edit.",
+            screenSection.contains("val hasSelectedTabContent =") &&
+                screenSection.contains("SavedBookmarkTab.PLACE -> uiState.placeContent.places.isNotEmpty()") &&
+                screenSection.contains("SavedBookmarkTab.ROUTE -> uiState.routeContent.routes.isNotEmpty()") &&
+                topBarActionEnabledSection.contains("hasSelectedTabContent"),
+        )
+        assertFalse(
+            "Bookmark edit action should not stay enabled just because the other tab has content.",
+            topBarActionEnabledSection.contains("uiState.placeContent.places.isNotEmpty()") ||
+                topBarActionEnabledSection.contains("uiState.routeContent.routes.isNotEmpty()"),
         )
     }
 
@@ -193,10 +223,6 @@ class SavedRouteScreenPolicyTest {
             source
                 .substringAfter("private fun SavedPlaceListItem(")
                 .substringBefore("@Composable\nprivate fun SavedRouteBookmarkListItem")
-        val routeBookmarkSection =
-            source
-                .substringAfter("private fun SavedRouteBookmarkListItem(")
-                .substringBefore("@Composable\nprivate fun SavedBookmarkEditBottomBar")
         val routeWaypointInfoSection =
             source
                 .substringAfter("private fun SavedRouteWaypointInfoRow(")
@@ -278,6 +304,10 @@ class SavedRouteScreenPolicyTest {
             "Saved-route edit mode should use a sticky bottom delete CTA instead of per-card delete buttons.",
             editBottomBarSection.contains("R.string.saved_route_delete_selected") &&
                 source.contains("SavedRouteUiAction.DeleteSelectedClicked"),
+        )
+        assertTrue(
+            "Outlined saved-route navigation buttons should use the same subtle border family as the report tab.",
+            source.contains("EumBorderSubtle.copy(alpha = 0.75f)"),
         )
         assertTrue(
             "Saved-route no-ripple CTA helper should disable ripple indication explicitly.",

@@ -65,6 +65,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -77,6 +78,11 @@ fun SavedRouteScreen(
 ) {
     val selectedRemovalCount =
         uiState.pendingPlaceRemovalIds.size + uiState.pendingRouteRemovalIds.size
+    val hasSelectedTabContent =
+        when (uiState.selectedTab) {
+            SavedBookmarkTab.PLACE -> uiState.placeContent.places.isNotEmpty()
+            SavedBookmarkTab.ROUTE -> uiState.routeContent.routes.isNotEmpty()
+        }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -86,8 +92,7 @@ fun SavedRouteScreen(
                     if (uiState.isEditMode) {
                         !uiState.isApplyingEditChanges
                     } else {
-                        uiState.placeContent.places.isNotEmpty() ||
-                            uiState.routeContent.routes.isNotEmpty()
+                        hasSelectedTabContent
                     },
                 onActionClick = {
                     onAction(
@@ -863,7 +868,7 @@ private fun NoRippleSavedRouteNavigationButton(
         }
     val border =
         if (isOutlined) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.36f))
+            BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.75f))
         } else {
             null
         }
@@ -935,7 +940,7 @@ private fun SavedPlaceListItem(
         if (isPendingRemoval) {
             BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.28f))
         } else {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f))
         }
     val containerColor =
         if (isPendingRemoval) {
@@ -1182,7 +1187,7 @@ private fun SavedRouteBookmarkListItem(
         if (isPendingRemoval) {
             BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.28f))
         } else {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f))
         }
     val containerColor =
         if (isPendingRemoval) {

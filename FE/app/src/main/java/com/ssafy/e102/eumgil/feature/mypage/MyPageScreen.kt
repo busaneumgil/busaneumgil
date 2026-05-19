@@ -175,7 +175,8 @@ private fun ProfileOverviewCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 4.dp,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier =
@@ -246,7 +247,7 @@ private fun ProfileOverviewCard(
                         .fillMaxWidth()
                         .heightIn(min = 44.dp),
                 shape = RoundedCornerShape(EumRadius.medium),
-                border = BorderStroke(1.dp, EumPrimary600),
+                border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.75f)),
                 colors =
                     ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.surface,
@@ -465,8 +466,8 @@ private fun QuickActionCard(
                 .clickable(role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(EumRadius.medium),
         color = containerColor,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.surface),
-        shadowElevation = 3.dp,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier =
@@ -489,7 +490,7 @@ private fun QuickActionCard(
                 Text(
                     text = stringResource(id = titleRes),
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     color = EumTextPrimary,
                     maxLines = 1,
                     softWrap = false,
@@ -514,7 +515,8 @@ private fun MainMenuCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(EumRadius.large),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 4.dp,
+        border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f)),
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier =
@@ -599,7 +601,7 @@ private fun MyPageMenuRow(
             text = title,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             color = EumTextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -905,4 +907,4 @@ private fun resolveModeDescription(uiState: MyPageUiState): String =
             MyPageUserMode.UNKNOWN -> stringResource(id = R.string.my_page_mode_unknown_description)
         }
 
-private val MyPageBackground = Color(0xFFF8FAFC)
+private val MyPageBackground = Color.White

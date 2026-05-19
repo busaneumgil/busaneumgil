@@ -528,7 +528,12 @@ private class KakaoMapViewportController {
                         } ?: false
                     }
                     readyMap.setOnPoiClickListener { _, position, layerId, poiId ->
-                        if (layerId.isClickableMarkerLayer() && poiId.isNotBlank()) {
+                        if (layerId == KAKAO_MARKER_LAYER_ID && poiId.isNotBlank()) {
+                            dispatchMarkerTap(
+                                markerId = poiId,
+                                position = position,
+                            )
+                        } else if (layerId == KAKAO_APPROVED_REPORT_MARKER_LAYER_ID && poiId.isNotBlank()) {
                             dispatchMarkerTap(
                                 markerId = poiId,
                                 position = position,

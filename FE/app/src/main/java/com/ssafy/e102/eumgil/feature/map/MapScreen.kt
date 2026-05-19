@@ -346,8 +346,7 @@ fun MapScreen(
                     state =
                         if (uiState.approvedReportSheetState.isVisible &&
                             uiState.routeEndpointMapPickerState == null &&
-                            uiState.isVoiceSearchVisible.not()
-                        ) {
+                            uiState.isVoiceSearchVisible.not()) {
                             uiState.approvedReportSheetState
                         } else {
                             ApprovedReportSheetState()

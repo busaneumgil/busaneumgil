@@ -213,7 +213,11 @@ class MapViewModel(
             )
         } else {
             if (latestPermissionState is LocationPermissionState.Granted) {
-                startLocationLookup(forceRestart = true)
+                if (isRouteStarted) {
+                    locationLookupState = LocationLookupState.TimedOut
+                } else {
+                    startLocationLookup(forceRestart = true)
+                }
             } else {
                 stopLocationLookup()
             }
@@ -491,6 +495,13 @@ class MapViewModel(
             renderSelectedFacilityState()
             return
         }
+        val placesRepository = placesRepository
+        if (placesRepository == null) {
+            mapTapDetailRequestId += 1L
+            clearSelectedFacilitySelection()
+            renderSelectedFacilityState()
+            return
+        }
         mapTapDetailRequestId += 1L
         val requestId = mapTapDetailRequestId
         selectedMapPinCoordinate = coordinate
@@ -498,10 +509,9 @@ class MapViewModel(
         selectedMapTapDetail = null
         selectedMapTapNameHint = payload.nameHint?.takeIf { it.isNotBlank() }
         mapTapDetailErrorMessage = null
-        isMapTapDetailLoading = placesRepository != null
+        isMapTapDetailLoading = true
         renderSelectedFacilityState()
 
-        val placesRepository = placesRepository ?: return
         mapTapDetailLookupJob?.cancel()
         mapTapDetailLookupJob =
             viewModelScope.launch {
@@ -1339,11 +1349,16 @@ class MapViewModel(
 
         currentLocationManager.startLocationUpdates()
         currentLocationManager.refreshLatestLocation()
-        latestLocation = currentLocationManager.latestLocation.value.toFreshCurrentLocationOrNull()
+        val latestRawLocation = currentLocationManager.latestLocation.value
+        latestLocation = latestRawLocation.toFreshCurrentLocationOrNull()
 
         val snapshot = latestLocation
         if (snapshot == null) {
-            startLocationLookup(forceRestart = forceLookupRestart)
+            if (latestRawLocation == null) {
+                startLocationLookup(forceRestart = forceLookupRestart)
+            } else {
+                locationLookupState = LocationLookupState.TimedOut
+            }
             applyFallbackCameraTarget()
             return
         }
@@ -1437,7 +1452,7 @@ class MapViewModel(
         if (!isRouteStarted || latestPermissionState !is LocationPermissionState.Granted || latestLocation != null) {
             return
         }
-        if (!forceRestart && locationLookupState == LocationLookupState.Searching) return
+        if (!forceRestart && locationLookupState != LocationLookupState.Idle) return
 
         locationLookupTimeoutJob?.cancel()
         locationLookupState = LocationLookupState.Searching

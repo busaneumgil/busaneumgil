@@ -20,8 +20,16 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
 import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
+import com.ssafy.e102.domain.admin.service.AdminMapService;
 import com.ssafy.e102.domain.admin.service.AdminService;
 import com.ssafy.e102.domain.report.dto.request.AdminHazardRouteReviewSegmentDraftRequest;
 import com.ssafy.e102.domain.report.dto.request.StartHazardRouteReviewRequest;
@@ -43,6 +51,8 @@ import com.ssafy.e102.domain.route.type.WidthState;
 import com.ssafy.e102.domain.user.entity.User;
 import com.ssafy.e102.domain.user.type.PrimaryUserType;
 import com.ssafy.e102.domain.user.type.SocialProvider;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
+import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadStatus;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 import com.ssafy.e102.global.geo.dto.GeoPointRequest;
 
@@ -65,6 +75,9 @@ class AdminHazardRouteReviewServiceTest {
 	@Mock
 	private AdminAuditLogService adminAuditLogService;
 
+	@Mock
+	private AdminMapService adminMapService;
+
 	private AdminHazardRouteReviewService adminHazardRouteReviewService;
 	private GeoPointConverter geoPointConverter;
 
@@ -78,7 +91,20 @@ class AdminHazardRouteReviewServiceTest {
 			roadSegmentRepository,
 			adminService,
 			adminAuditLogService,
+			adminMapService,
+			new NoOpPlatformTransactionManager(),
 			FIXED_CLOCK);
+	}
+
+	@Test
+	@DisplayName("route review completion must not run inside the class-level read-only transaction")
+	void completeRouteReviewSuspendsClassLevelTransaction() throws Exception {
+		Transactional transactional = AdminHazardRouteReviewService.class
+			.getMethod("completeRouteReview", UUID.class, Long.class)
+			.getAnnotation(Transactional.class);
+
+		assertThat(transactional).isNotNull();
+		assertThat(transactional.propagation()).isEqualTo(Propagation.NOT_SUPPORTED);
 	}
 
 	@Test
@@ -195,12 +221,27 @@ class AdminHazardRouteReviewServiceTest {
 		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdAndStageOrderByReviewIdDesc(
 			1L,
 			HazardRouteReviewStage.IN_PROGRESS)).thenReturn(Optional.of(review));
+		when(adminMapService.applyRouteReviewSegmentDraftsInCurrentTransaction(
+			org.mockito.ArgumentMatchers.eq(userId),
+			org.mockito.ArgumentMatchers.eq(review.getGu()),
+			org.mockito.ArgumentMatchers.eq(review.getDong()),
+			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()))).thenReturn(true);
+		when(adminMapService.resolveRouteReviewRoutingApplyResult(true))
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
 
 		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.completeRouteReview(userId, 1L);
 
 		assertThat(response.stage()).isEqualTo(HazardRouteReviewStage.COMPLETED);
 		assertThat(response.reportStatus()).isEqualTo(ReportStatus.APPROVED);
 		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.APPROVED);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
+		assertThat(response.routingApplyMessage()).isEqualTo("reloaded");
+		verify(adminMapService).applyRouteReviewSegmentDraftsInCurrentTransaction(
+			org.mockito.ArgumentMatchers.eq(userId),
+			org.mockito.ArgumentMatchers.eq(review.getGu()),
+			org.mockito.ArgumentMatchers.eq(review.getDong()),
+			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()));
+		verify(adminMapService).resolveRouteReviewRoutingApplyResult(true);
 	}
 
 	@Test
@@ -212,6 +253,13 @@ class AdminHazardRouteReviewServiceTest {
 		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdAndStageOrderByReviewIdDesc(
 			1L,
 			HazardRouteReviewStage.IN_PROGRESS)).thenReturn(Optional.of(review));
+		when(adminMapService.applyRouteReviewSegmentDraftsInCurrentTransaction(
+			org.mockito.ArgumentMatchers.eq(userId),
+			org.mockito.ArgumentMatchers.eq(review.getGu()),
+			org.mockito.ArgumentMatchers.eq(review.getDong()),
+			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()))).thenReturn(true);
+		when(adminMapService.resolveRouteReviewRoutingApplyResult(true))
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
 
 		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.completeRouteReview(userId, 1L);
 
@@ -219,6 +267,55 @@ class AdminHazardRouteReviewServiceTest {
 		assertThat(response.reportStatus()).isEqualTo(ReportStatus.APPROVED);
 		assertThat(hazardReport.getProcessedByUserId()).isEqualTo(userId);
 		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.APPROVED);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
+	}
+
+	@Test
+	@DisplayName("route review complete returns FAILED when GraphHopper overlay reload fails")
+	void completeRouteReviewReturnsFailedRoutingApplyStatus() {
+		UUID userId = UUID.randomUUID();
+		HazardReport hazardReport = rejectedHazardReport(1L);
+		HazardReportRouteReview review = inProgressReview(hazardReport, userId, HazardRouteReviewIntent.APPROVE);
+		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdAndStageOrderByReviewIdDesc(
+			1L,
+			HazardRouteReviewStage.IN_PROGRESS)).thenReturn(Optional.of(review));
+		when(adminMapService.applyRouteReviewSegmentDraftsInCurrentTransaction(
+			org.mockito.ArgumentMatchers.eq(userId),
+			org.mockito.ArgumentMatchers.eq(review.getGu()),
+			org.mockito.ArgumentMatchers.eq(review.getDong()),
+			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()))).thenReturn(true);
+		when(adminMapService.resolveRouteReviewRoutingApplyResult(true))
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.FAILED, "reload failed"));
+
+		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.completeRouteReview(userId, 1L);
+
+		assertThat(response.stage()).isEqualTo(HazardRouteReviewStage.COMPLETED);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.FAILED);
+		assertThat(response.routingApplyMessage()).isEqualTo("reload failed");
+	}
+
+	@Test
+	@DisplayName("route review complete returns SKIPPED when drafts have no routing overlay values")
+	void completeRouteReviewReturnsSkippedWhenNoOverlayDraftIsApplied() {
+		UUID userId = UUID.randomUUID();
+		HazardReport hazardReport = rejectedHazardReport(1L);
+		HazardReportRouteReview review = inProgressReviewWithoutOverlayValues(hazardReport, userId);
+		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdAndStageOrderByReviewIdDesc(
+			1L,
+			HazardRouteReviewStage.IN_PROGRESS)).thenReturn(Optional.of(review));
+		when(adminMapService.applyRouteReviewSegmentDraftsInCurrentTransaction(
+			org.mockito.ArgumentMatchers.eq(userId),
+			org.mockito.ArgumentMatchers.eq(review.getGu()),
+			org.mockito.ArgumentMatchers.eq(review.getDong()),
+			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()))).thenReturn(false);
+		when(adminMapService.resolveRouteReviewRoutingApplyResult(false))
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "no routing overlay fields requested"));
+
+		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.completeRouteReview(userId, 1L);
+
+		assertThat(response.stage()).isEqualTo(HazardRouteReviewStage.COMPLETED);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.SKIPPED);
+		assertThat(response.routingApplyMessage()).contains("overlay");
 	}
 
 	@Test
@@ -296,6 +393,28 @@ class AdminHazardRouteReviewServiceTest {
 		return review;
 	}
 
+	private HazardReportRouteReview inProgressReviewWithoutOverlayValues(
+		HazardReport hazardReport,
+		UUID reviewerUserId) {
+		HazardReportRouteReview review = HazardReportRouteReview.start(
+			hazardReport,
+			HazardRouteReviewIntent.APPROVE,
+			reviewerUserId,
+			"gu",
+			"dong",
+			LocalDateTime.now(FIXED_CLOCK));
+		review.replaceSegmentDrafts(List.of(com.ssafy.e102.domain.report.entity.HazardReportRouteReviewSegmentDraft.create(
+			41231L,
+			null,
+			null,
+			AccessibilityState.UNKNOWN,
+			null,
+			null,
+			null,
+			AccessibilityState.UNKNOWN)));
+		return review;
+	}
+
 	private HazardReport hazardReport(Long reportId, ReportStatus status) {
 		HazardReport hazardReport = HazardReport.create(
 			user(UUID.randomUUID()),
@@ -317,5 +436,21 @@ class AdminHazardRouteReviewServiceTest {
 		User user = User.create(SocialProvider.KAKAO, "kakao-user-id", PrimaryUserType.LOW_VISION, null);
 		ReflectionTestUtils.setField(user, "userId", userId);
 		return user;
+	}
+
+	private static final class NoOpPlatformTransactionManager implements PlatformTransactionManager {
+
+		@Override
+		public TransactionStatus getTransaction(TransactionDefinition definition) {
+			return new SimpleTransactionStatus();
+		}
+
+		@Override
+		public void commit(TransactionStatus status) {
+		}
+
+		@Override
+		public void rollback(TransactionStatus status) {
+		}
 	}
 }

@@ -2,6 +2,7 @@ import type {
   AdminHazardRouteReview,
   AdminHazardRouteReviewIntent,
   AdminRoadSegmentAttributesUpdateRequest,
+  AdminRoutingApplyStatus,
   HazardReportStatus,
   UpdateAdminHazardRouteReviewRequest,
 } from "../types";
@@ -23,6 +24,8 @@ export interface HazardRouteReviewRecord {
   completedAt: string | null;
   selectedSegmentEdgeId: string | null;
   segmentDrafts: Record<string, AdminRoadSegmentAttributesUpdateRequest>;
+  routingApplyStatus?: AdminRoutingApplyStatus | null;
+  routingApplyMessage?: string | null;
 }
 
 export interface HazardDisplayStatus {
@@ -57,6 +60,8 @@ export function loadStoredHazardRouteReview(reportId: number): HazardRouteReview
       completedAt: typeof parsed.completedAt === "string" ? parsed.completedAt : null,
       selectedSegmentEdgeId: typeof parsed.selectedSegmentEdgeId === "string" ? parsed.selectedSegmentEdgeId : null,
       segmentDrafts: parsed.segmentDrafts && typeof parsed.segmentDrafts === "object" ? parsed.segmentDrafts : {},
+      routingApplyStatus: isAdminRoutingApplyStatus(parsed.routingApplyStatus) ? parsed.routingApplyStatus : null,
+      routingApplyMessage: typeof parsed.routingApplyMessage === "string" ? parsed.routingApplyMessage : null,
     };
   } catch {
     return null;
@@ -97,6 +102,8 @@ export function startHazardRouteReview({
     completedAt: null,
     selectedSegmentEdgeId: existing?.selectedSegmentEdgeId ?? null,
     segmentDrafts: existing?.segmentDrafts ?? {},
+    routingApplyStatus: existing?.routingApplyStatus ?? null,
+    routingApplyMessage: existing?.routingApplyMessage ?? null,
   };
 }
 
@@ -113,6 +120,8 @@ export function hydrateHazardRouteReviewRecord(review?: AdminHazardRouteReview |
     startedAt: review.startedAt,
     updatedAt: review.updatedAt,
     completedAt: review.completedAt,
+    routingApplyStatus: review.routingApplyStatus ?? null,
+    routingApplyMessage: review.routingApplyMessage ?? null,
     selectedSegmentEdgeId: review.selectedSegmentEdgeId == null ? null : String(review.selectedSegmentEdgeId),
     segmentDrafts: review.segmentDrafts.reduce<Record<string, AdminRoadSegmentAttributesUpdateRequest>>((drafts, segmentDraft) => {
       drafts[String(segmentDraft.edgeId)] = {
@@ -188,6 +197,36 @@ export function completeHazardRouteReview(review: HazardRouteReviewRecord, now: 
   };
 }
 
+export function routeReviewCompletionMessage(status?: AdminRoutingApplyStatus | null) {
+  switch (status) {
+    case "APPLIED":
+      return "검수 완료 및 경로 반영이 완료되었습니다.";
+    case "APPLIED_WITH_WARNING":
+      return "검수는 완료됐고 일부 경로 반영 경고가 있습니다. 운영 상태를 확인해 주세요.";
+    case "FAILED":
+      return "검수는 완료됐지만 경로 즉시 반영에 실패했습니다. 운영 상태를 확인해 주세요.";
+    case "SKIPPED":
+      return "검수는 완료됐고 즉시 반영 대상 변경은 없습니다.";
+    default:
+      return "검수가 완료되었습니다.";
+  }
+}
+
+export function routeReviewCompletionClassName(status?: AdminRoutingApplyStatus | null) {
+  switch (status) {
+    case "FAILED":
+      return "error-box";
+    case "APPLIED_WITH_WARNING":
+      return "warning-box";
+    case "APPLIED":
+      return "success-box";
+    case "SKIPPED":
+      return "info-box";
+    default:
+      return "info-box";
+  }
+}
+
 export function deriveHazardDisplayStatus(
   baseStatus: HazardReportStatus,
   review?: HazardRouteReviewRecord | null,
@@ -249,4 +288,11 @@ export function hazardRouteReviewIntentLabel(intent: HazardRouteReviewIntent) {
 
 function fromAdminHazardRouteReviewIntent(intent: AdminHazardRouteReviewIntent): HazardRouteReviewIntent {
   return intent === "RESTORE" ? "restore" : "approve";
+}
+
+function isAdminRoutingApplyStatus(value: unknown): value is AdminRoutingApplyStatus {
+  return value === "SKIPPED"
+    || value === "APPLIED"
+    || value === "APPLIED_WITH_WARNING"
+    || value === "FAILED";
 }

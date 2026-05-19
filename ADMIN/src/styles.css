@@ -3460,6 +3460,31 @@ textarea::placeholder {
   padding: 10px;
 }
 
+.success-box,
+.warning-box,
+.info-box {
+  border-radius: var(--radius-m);
+  padding: 10px;
+}
+
+.success-box {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.warning-box {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.info-box {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .audit-log-page {
   min-height: calc(100vh - 60px);
   padding: 14px;

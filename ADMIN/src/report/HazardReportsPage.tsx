@@ -45,6 +45,8 @@ import {
   hydrateHazardRouteReviewRecord,
   isHazardReviewActive,
   loadStoredHazardRouteReview,
+  routeReviewCompletionClassName,
+  routeReviewCompletionMessage,
   startHazardRouteReview,
   storeHazardRouteReview,
   toAdminHazardRouteReviewIntent,
@@ -254,6 +256,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [detailPaneMode, setDetailPaneMode] = useState<"detail" | "review">("detail");
   const [isCompletingRouteReview, setIsCompletingRouteReview] = useState(false);
+  const [routeReviewCompletionNotice, setRouteReviewCompletionNotice] = useState<{
+    message: string;
+    className: string;
+  } | null>(null);
   const [reportSessionMeta, setReportSessionMeta] = useState<Record<number, HazardReportSessionMeta>>(() => {
     if (!preview) {
       return {};
@@ -424,6 +430,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
   function handleSelectReport(reportId: number) {
     setSelectedReportId(reportId);
+    setRouteReviewCompletionNotice(null);
     markReportViewed(reportId);
   }
 
@@ -501,6 +508,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       markReportHandled(response.reportId);
       setSelectedReportId(response.reportId);
       setDetailPaneMode("detail");
+      setRouteReviewCompletionNotice({
+        message: routeReviewCompletionMessage(response.routingApplyStatus),
+        className: routeReviewCompletionClassName(response.routingApplyStatus),
+      });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] });
@@ -656,6 +667,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       setRouteReviewDraft(completedReview);
       markReportHandled(activeReport.reportId);
       setDetailPaneMode("detail");
+      setRouteReviewCompletionNotice({
+        message: routeReviewCompletionMessage("SKIPPED"),
+        className: routeReviewCompletionClassName("SKIPPED"),
+      });
     } finally {
       setIsCompletingRouteReview(false);
     }
@@ -1140,6 +1155,12 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
               {!preview && actionError && (
                 <p className="error-box">
                   {actionError.message}
+                </p>
+              )}
+
+              {routeReviewCompletionNotice && (
+                <p className={routeReviewCompletionNotice.className}>
+                  {routeReviewCompletionNotice.message}
                 </p>
               )}
 

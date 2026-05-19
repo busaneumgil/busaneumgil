@@ -38,6 +38,48 @@ with psycopg2.connect(
 PY
 }
 
+ensure_routing_segment_overrides_schema() {
+  run_db_python <<'PY'
+import os
+import psycopg2
+
+url = os.environ["DB_URL"].replace("jdbc:postgresql://", "")
+host_port, db_name = url.split("/", 1)
+host, port = host_port.split(":", 1)
+
+with psycopg2.connect(
+    host=host,
+    port=port,
+    dbname=db_name,
+    user=os.environ["DB_USERNAME"],
+    password=os.environ["DB_PASSWORD"],
+    sslmode=os.environ.get("DB_SSLMODE", "require"),
+) as conn:
+    conn.autocommit = True
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS routing_segment_overrides (
+                edge_id BIGINT PRIMARY KEY,
+                walk_access VARCHAR(30),
+                stairs_state VARCHAR(30),
+                width_state VARCHAR(30),
+                braille_block_state VARCHAR(30),
+                CONSTRAINT fk_routing_segment_overrides_edge_id
+                    FOREIGN KEY (edge_id)
+                    REFERENCES road_segments (edge_id)
+                    ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute("ALTER TABLE routing_segment_overrides ALTER COLUMN walk_access DROP NOT NULL")
+        cursor.execute("ALTER TABLE routing_segment_overrides ADD COLUMN IF NOT EXISTS stairs_state VARCHAR(30)")
+        cursor.execute("ALTER TABLE routing_segment_overrides ADD COLUMN IF NOT EXISTS width_state VARCHAR(30)")
+        cursor.execute("ALTER TABLE routing_segment_overrides ADD COLUMN IF NOT EXISTS braille_block_state VARCHAR(30)")
+        print("routing_segment_overrides current-state schema ready")
+PY
+}
+
 drop_empty_incompatible_road_tables() {
   run_db_python <<'PY'
 import os
@@ -217,6 +259,9 @@ required_columns = {
     "routing_segment_overrides": (
         "edge_id",
         "walk_access",
+        "stairs_state",
+        "width_state",
+        "braille_block_state",
     ),
 }
 
@@ -256,6 +301,19 @@ with psycopg2.connect(
             if missing_columns:
                 raise SystemExit(f"missing {table} columns: {', '.join(missing_columns)}")
 
+        cursor.execute(
+            """
+            SELECT is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'routing_segment_overrides'
+              AND column_name = 'walk_access'
+            """
+        )
+        walk_access_nullable = cursor.fetchone()
+        if walk_access_nullable is None or walk_access_nullable[0] != "YES":
+            raise SystemExit("routing_segment_overrides.walk_access must be nullable")
+
         for table in required_tables:
             cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
             count = cursor.fetchone()[0]
@@ -267,4 +325,5 @@ resolve_prod_db_url
 ensure_postgis_extension
 drop_empty_incompatible_road_tables
 run_jpa_schema_update
+ensure_routing_segment_overrides_schema
 verify_road_schema

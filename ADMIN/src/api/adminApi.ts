@@ -221,8 +221,20 @@ export async function fetchAdminUsers(accessToken: string): Promise<AdminUserRes
   return response.users;
 }
 
-export async function fetchAdminDashboardSummary(accessToken: string): Promise<AdminDashboardSummaryResponse> {
-  return requestAdminJson<AdminDashboardSummaryResponse>("/admin/dashboard/summary", accessToken);
+export async function fetchAdminDashboardSummary({
+  accessToken,
+  from,
+  to,
+}: {
+  accessToken: string;
+  from?: string;
+  to?: string;
+}): Promise<AdminDashboardSummaryResponse> {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return requestAdminJson<AdminDashboardSummaryResponse>(`/admin/dashboard/summary${suffix}`, accessToken);
 }
 
 export async function fetchAdminDashboardBottlenecks({

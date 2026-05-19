@@ -278,6 +278,10 @@ export function canStartHazardRestore(
   return baseStatus === "APPROVED";
 }
 
+export function isHazardRestorePending(review?: HazardRouteReviewRecord | null) {
+  return review?.intent === "restore" && (review.stage === "IN_PROGRESS" || review.stage === "COMPLETED");
+}
+
 export function isHazardReviewActive(review?: HazardRouteReviewRecord | null) {
   return review?.stage === "IN_PROGRESS";
 }

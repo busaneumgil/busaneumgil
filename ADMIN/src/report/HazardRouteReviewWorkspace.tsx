@@ -115,7 +115,7 @@ export function HazardRouteReviewWorkspace({
   return (
     <div className="hazard-review-shell">
       <div className="hazard-inline-banner hazard-review-banner">
-        <span>좌측 신고 리스트를 벗어나도 현재 검수 초안은 자동 저장됩니다. 세그먼트를 선택해 통행 가능 여부와 보행 속성을 먼저 확정해 주세요.</span>
+        <span>좌측 제보 리스트를 벗어나도 현재 검수 초안은 자동 저장됩니다. 세그먼트를 선택해 통행 가능 여부와 보행 속성을 먼저 확정해 주세요.</span>
       </div>
 
       <section className="hazard-detail-card hazard-review-map-card">
@@ -125,7 +125,7 @@ export function HazardRouteReviewWorkspace({
             <span>{areaScopeLabel ? `${areaScopeLabel} 좌표 주변 세그먼트 검수` : "좌표 기준 검수 범위를 준비하는 중입니다."}</span>
           </div>
           <div className="hazard-review-map-card__meta">
-            <span>신고 좌표</span>
+            <span>제보 좌표</span>
             <strong>{formatHazardCoordinates(reportPoint)}</strong>
           </div>
         </div>
@@ -145,12 +145,13 @@ export function HazardRouteReviewWorkspace({
             toolbarMode="routeAttributeLegend"
             focusMarker={{
               point: reportPoint,
-              label: "신고",
+              label: "제보 위치",
             }}
             preferredView={{
               point: reportPoint,
               level: 4,
             }}
+            forceDetailedSegments
           />
         </div>
       </section>
@@ -160,7 +161,7 @@ export function HazardRouteReviewWorkspace({
           <h3>검수 기준</h3>
           <dl className="hazard-detail-list">
             <ReviewRow label="처리 흐름" value={review.intent === "restore" ? "원상복구 처리" : "승인 처리"} />
-            <ReviewRow label="신고 유형" value={reportTypeLabel} />
+            <ReviewRow label="제보 유형" value={reportTypeLabel} />
             <ReviewRow label="위치" value={locationAddress ?? "좌표 기준 위치 확인 중"} secondary={locationRegion || undefined} />
             <ReviewRow label="좌표" value={formatHazardCoordinates(reportPoint)} />
             <ReviewRow label="검수 현황" value={`검수 세그먼트 ${reviewedSegmentCount}건`} secondary={`마지막 저장 ${formatReviewStamp(review.updatedAt)}`} />
@@ -218,7 +219,7 @@ export function HazardRouteReviewWorkspace({
           ) : (
             <div className="hazard-review-empty">
               <strong>검수할 세그먼트를 선택해 주세요.</strong>
-              <span>신고 좌표 주변 도로를 클릭하면 통행 가능 여부와 계단/점자블록/보도폭을 조정할 수 있습니다.</span>
+              <span>제보 좌표 주변 도로를 클릭하면 통행 가능 여부와 계단/점자블록/보도폭을 조정할 수 있습니다.</span>
             </div>
           )}
         </section>
@@ -227,11 +228,11 @@ export function HazardRouteReviewWorkspace({
       <div className="hazard-review-actionbar">
         <div className="hazard-review-actionbar__summary">
           <strong>{hazardRouteReviewIntentLabel(review.intent)}</strong>
-          <span>{canComplete ? `검수 세그먼트 ${reviewedSegmentCount}건이 저장되었습니다. 완료 시 사용자 재탐색부터 경로 계산에 반영됩니다.` : "최소 1개 세그먼트를 검수해야 처리 완료를 진행할 수 있습니다."}</span>
+          <span>{canComplete ? `검수 세그먼트 ${reviewedSegmentCount}건이 저장되었습니다. 완료 후 전체 DB 반영 대기 목록에 포함됩니다.` : "최소 1개 세그먼트를 검수해야 완료할 수 있습니다."}</span>
         </div>
         <div className="hazard-review-actionbar__buttons">
           <button type="button" className="hazard-action-button secondary" onClick={onBack}>
-            신고 상세로
+            제보 상세로
           </button>
           <button
             type="button"
@@ -239,7 +240,7 @@ export function HazardRouteReviewWorkspace({
             disabled={!canComplete || completing}
             onClick={onComplete}
           >
-            {completing ? "처리 중" : "검수 완료 및 즉시 반영"}
+            {completing ? "처리 중" : "검수 완료"}
           </button>
         </div>
       </div>

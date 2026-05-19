@@ -46,6 +46,7 @@ interface SegmentMapProps {
     point: GeoPoint;
     level?: number;
   } | null;
+  forceDetailedSegments?: boolean;
   toolbarMode?: "editor" | "roadSegmentLegend" | "segmentFeatureLegend" | "routeAttributeLegend";
   draftEditCount?: number;
   onUndoDraftEdit?: () => void;
@@ -135,6 +136,7 @@ export function SegmentMap({
   routePoints,
   focusMarker = null,
   preferredView = null,
+  forceDetailedSegments = false,
   toolbarMode = "editor",
   draftEditCount = 0,
   onUndoDraftEdit,
@@ -203,7 +205,7 @@ export function SegmentMap({
     brailleBlock: true,
     stairs: true,
   });
-  const detailedSegmentsVisible = mapLevel <= DETAIL_SEGMENT_MAX_LEVEL;
+  const detailedSegmentsVisible = forceDetailedSegments || mapLevel <= DETAIL_SEGMENT_MAX_LEVEL;
 
   useEffect(() => {
     onDraftEditRef.current = onDraftEdit;
@@ -1093,8 +1095,13 @@ function createRoutePointOverlay(point: GeoPoint, label: string, type: "start" |
 function createFocusMarkerOverlay(point: GeoPoint, label: string, map: KakaoMap): KakaoOverlay | null {
   if (!window.kakao?.maps) return null;
   const marker = document.createElement("div");
-  marker.className = "route-point-marker report";
-  marker.textContent = label;
+  marker.className = "route-focus-marker";
+  marker.title = label;
+
+  const core = document.createElement("span");
+  core.className = "route-focus-marker__core";
+  marker.appendChild(core);
+
   return new window.kakao.maps.CustomOverlay({
     map,
     position: new window.kakao.maps.LatLng(point.lat, point.lng),

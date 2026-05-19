@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { attachKakaoWheelZoom, loadKakaoMap, type KakaoMap, type KakaoOverlay } from "./kakaoLoader";
 import {
   bottleneckLayerMode,
@@ -16,11 +16,13 @@ import type { GeoPoint } from "../types";
 interface AdminBottleneckKakaoMapProps {
   hotspots: BottleneckHotspot[];
   routeSegments: BottleneckRouteSegment[];
+  presentationMode?: "heatmap" | "segment";
 }
 
 export function AdminBottleneckKakaoMap({
   hotspots,
   routeSegments,
+  presentationMode = "heatmap",
 }: AdminBottleneckKakaoMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const heatCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -28,12 +30,21 @@ export function AdminBottleneckKakaoMap({
   const overlaysRef = useRef<KakaoOverlay[]>([]);
   const detachWheelZoomRef = useRef<(() => void) | null>(null);
   const fittedBoundsKeyRef = useRef("");
+  const heatmapRafRef = useRef<number | null>(null);
+  const heatCanvasPanLayerRef = useRef<HTMLElement | null>(null);
+  const heatCanvasBasePanRef = useRef({ x: 0, y: 0 });
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapLevel, setMapLevel] = useState(6);
   const [renderVersion, setRenderVersion] = useState(0);
 
-  const layerMode = bottleneckLayerMode(mapLevel);
+  const layerMode = useMemo(() => {
+    const baseMode = bottleneckLayerMode(mapLevel);
+    if (presentationMode === "segment" && baseMode === "cluster") {
+      return "summary";
+    }
+    return baseMode;
+  }, [mapLevel, presentationMode]);
   const boundsPoints = useMemo(
     () => collectBottleneckBoundsPoints(hotspots, routeSegments),
     [hotspots, routeSegments],
@@ -42,6 +53,74 @@ export function AdminBottleneckKakaoMap({
     () => boundsPoints.map((point) => `${point.lat.toFixed(6)},${point.lng.toFixed(6)}`).join("|"),
     [boundsPoints],
   );
+
+  function scheduleHeatmapRender() {
+    if (heatmapRafRef.current != null) return;
+    heatmapRafRef.current = window.requestAnimationFrame(() => {
+      heatmapRafRef.current = null;
+      setRenderVersion((value) => value + 1);
+    });
+  }
+
+  function resolveHeatCanvasPanLayer() {
+    const container = containerRef.current;
+    const rootLayer = container?.firstElementChild;
+    const panLayer = rootLayer?.firstElementChild;
+    return panLayer instanceof HTMLElement ? panLayer : null;
+  }
+
+  function readPanLayerOffset(element: HTMLElement | null) {
+    if (!element) return null;
+    const x = Number.parseFloat(element.style.left || "0");
+    const y = Number.parseFloat(element.style.top || "0");
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x, y };
+  }
+
+  function captureHeatCanvasBasePan() {
+    if (!heatCanvasPanLayerRef.current || !heatCanvasPanLayerRef.current.isConnected) {
+      heatCanvasPanLayerRef.current = resolveHeatCanvasPanLayer();
+    }
+    const offset = readPanLayerOffset(heatCanvasPanLayerRef.current);
+    heatCanvasBasePanRef.current = offset ?? { x: 0, y: 0 };
+  }
+
+  function syncHeatCanvasPanTransform() {
+    const canvas = heatCanvasRef.current;
+    if (!canvas) return;
+
+    if (!heatCanvasPanLayerRef.current || !heatCanvasPanLayerRef.current.isConnected) {
+      heatCanvasPanLayerRef.current = resolveHeatCanvasPanLayer();
+    }
+
+    const panLayer = heatCanvasPanLayerRef.current;
+    if (!panLayer) {
+      canvas.style.transform = "";
+      return;
+    }
+
+    const currentOffset = readPanLayerOffset(panLayer);
+    if (!currentOffset) {
+      canvas.style.transform = "";
+      return;
+    }
+
+    const deltaX = currentOffset.x - heatCanvasBasePanRef.current.x;
+    const deltaY = currentOffset.y - heatCanvasBasePanRef.current.y;
+    if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) {
+      canvas.style.transform = "";
+      return;
+    }
+
+    canvas.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+  }
+
+  function resetHeatCanvasPanTransform() {
+    if (heatCanvasRef.current) {
+      heatCanvasRef.current.style.transform = "";
+    }
+  }
+
   useEffect(() => {
     let disposed = false;
 
@@ -58,10 +137,23 @@ export function AdminBottleneckKakaoMap({
         detachWheelZoomRef.current = attachKakaoWheelZoom(containerRef.current, () => mapRef.current, setMapLevel);
         window.kakao.maps.event.addListener(mapRef.current, "zoom_changed", () => {
           setMapLevel(mapRef.current?.getLevel?.() ?? 6);
-          setRenderVersion((value) => value + 1);
+          resetHeatCanvasPanTransform();
+          scheduleHeatmapRender();
+        });
+        window.kakao.maps.event.addListener(mapRef.current, "center_changed", () => {
+          syncHeatCanvasPanTransform();
+        });
+        window.kakao.maps.event.addListener(mapRef.current, "drag", () => {
+          syncHeatCanvasPanTransform();
         });
         window.kakao.maps.event.addListener(mapRef.current, "idle", () => {
-          setRenderVersion((value) => value + 1);
+          heatCanvasPanLayerRef.current = resolveHeatCanvasPanLayer();
+          captureHeatCanvasBasePan();
+          scheduleHeatmapRender();
+        });
+        window.requestAnimationFrame(() => {
+          heatCanvasPanLayerRef.current = resolveHeatCanvasPanLayer();
+          captureHeatCanvasBasePan();
         });
         setMapReady(true);
       })
@@ -69,6 +161,12 @@ export function AdminBottleneckKakaoMap({
 
     return () => {
       disposed = true;
+      if (heatmapRafRef.current != null) {
+        window.cancelAnimationFrame(heatmapRafRef.current);
+        heatmapRafRef.current = null;
+      }
+      heatCanvasPanLayerRef.current = null;
+      heatCanvasBasePanRef.current = { x: 0, y: 0 };
       detachWheelZoomRef.current?.();
       overlaysRef.current.forEach((overlay) => overlay.setMap(null));
       overlaysRef.current = [];
@@ -114,6 +212,16 @@ export function AdminBottleneckKakaoMap({
   }, [hotspots, layerMode, mapReady, routeSegments]);
 
   useEffect(() => {
+    if (presentationMode !== "heatmap" && heatCanvasRef.current) {
+      const canvas = heatCanvasRef.current;
+      const context = canvas.getContext("2d");
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+      resetHeatCanvasPanTransform();
+    }
+  }, [presentationMode]);
+
+  useLayoutEffect(() => {
+    if (presentationMode !== "heatmap") return;
     if (!mapReady || !mapRef.current || !heatCanvasRef.current || !containerRef.current || !window.kakao?.maps) return;
     drawHeatmapCanvas({
       canvas: heatCanvasRef.current,
@@ -123,7 +231,8 @@ export function AdminBottleneckKakaoMap({
       mode: layerMode,
       routeSegments,
     });
-  }, [hotspots, layerMode, mapReady, renderVersion, routeSegments]);
+    resetHeatCanvasPanTransform();
+  }, [hotspots, layerMode, mapReady, presentationMode, renderVersion, routeSegments]);
 
   useEffect(() => {
     if (!mapReady || fittedBoundsKeyRef.current === boundsKey) return;
@@ -188,7 +297,11 @@ export function AdminBottleneckKakaoMap({
   return (
     <div className="admin-kakao-map">
       <div ref={containerRef} className="admin-kakao-map__canvas" aria-label="카카오 지도 기반 병목 구간 시각화" />
-      <canvas ref={heatCanvasRef} className="admin-kakao-map__heat-canvas" aria-hidden="true" />
+      <canvas
+        ref={heatCanvasRef}
+        className={`admin-kakao-map__heat-canvas ${presentationMode === "segment" ? "is-hidden" : ""}`}
+        aria-hidden="true"
+      />
       {!mapReady && <div className="admin-kakao-map__loading">Kakao 지도 SDK를 불러오는 중입니다.</div>}
       <div className="map-zoom-control admin-kakao-map__zoom">
         <button type="button" aria-label="지도 확대" onClick={() => zoom(-1)}>+</button>
@@ -197,7 +310,7 @@ export function AdminBottleneckKakaoMap({
       <button className="map-locate-button admin-kakao-map__fit" type="button" aria-label="병목 구간 전체 보기" onClick={() => fitMapBounds(boundsPoints)}>
         <span aria-hidden="true">⌾</span>
       </button>
-      <HeatmapLegend />
+      {presentationMode === "heatmap" ? <HeatmapLegend /> : <SegmentLegend />}
     </div>
   );
 }
@@ -542,6 +655,16 @@ function HeatmapLegend() {
       <span>느림</span>
       <i />
       <span>빠름</span>
+    </div>
+  );
+}
+
+function SegmentLegend() {
+  return (
+    <div className="heatmap-legend heatmap-legend-segment">
+      <span><i className="segment-tone segment-tone-fast" aria-hidden="true" />통행 여유</span>
+      <span><i className="segment-tone segment-tone-medium" aria-hidden="true" />주의 구간</span>
+      <span><i className="segment-tone segment-tone-slow" aria-hidden="true" />병목 구간</span>
     </div>
   );
 }

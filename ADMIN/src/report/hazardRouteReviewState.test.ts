@@ -6,6 +6,7 @@ import {
   deriveHazardDisplayStatus,
   hazardRouteReviewIntentLabel,
   hydrateHazardRouteReviewRecord,
+  isHazardRestorePending,
   loadStoredHazardRouteReview,
   routeReviewCompletionClassName,
   routeReviewCompletionMessage,
@@ -93,6 +94,28 @@ describe("hazard route review workflow state", () => {
       now: "2026-05-18T03:20:00.000Z",
     }), "2026-05-18T03:35:00.000Z"))).toBe(true);
     expect(hazardRouteReviewIntentLabel("restore")).toBe("원상복구 검수");
+  });
+
+  it("distinguishes restore pending from merely restorable approved reports", () => {
+    expect(isHazardRestorePending()).toBe(false);
+
+    const approveReview = completeHazardRouteReview(startHazardRouteReview({
+      reportId: 8,
+      intent: "approve",
+      reviewerUserId: "admin-restore-check",
+      now: "2026-05-18T04:00:00.000Z",
+    }), "2026-05-18T04:10:00.000Z");
+
+    const restoreReview = startHazardRouteReview({
+      reportId: 9,
+      intent: "restore",
+      reviewerUserId: "admin-restore-check",
+      now: "2026-05-18T04:20:00.000Z",
+    });
+
+    expect(isHazardRestorePending(approveReview)).toBe(false);
+    expect(isHazardRestorePending(restoreReview)).toBe(true);
+    expect(isHazardRestorePending(completeHazardRouteReview(restoreReview, "2026-05-18T04:30:00.000Z"))).toBe(true);
   });
 
   it("allows approve review for pending and rejected reports", () => {

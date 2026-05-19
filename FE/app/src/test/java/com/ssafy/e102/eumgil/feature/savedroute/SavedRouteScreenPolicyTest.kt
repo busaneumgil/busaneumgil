@@ -265,6 +265,43 @@ class SavedRouteScreenPolicyTest {
     }
 
     @Test
+    fun `bookmark loading states render inline feedback without card chrome`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val placeLoadingSection =
+            source
+                .substringAfter("private fun SavedPlaceContent(")
+                .substringBefore("SavedBookmarkContentState.EMPTY ->")
+        val routeLoadingSection =
+            source
+                .substringAfter("private fun SavedRouteBookmarkContent(")
+                .substringBefore("SavedBookmarkContentState.EMPTY ->")
+        val loadingStateSection =
+            source
+                .substringAfter("private fun SavedBookmarkLoadingState(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkStateCard")
+
+        assertTrue(
+            "Saved bookmark loading branches should use the inline loading state instead of the card state component.",
+            placeLoadingSection.contains("SavedBookmarkLoadingState(") &&
+                routeLoadingSection.contains("SavedBookmarkLoadingState("),
+        )
+        assertFalse(
+            "Saved bookmark loading branches should not request the card loading mode.",
+            placeLoadingSection.contains("SavedBookmarkStateCard(") ||
+                routeLoadingSection.contains("SavedBookmarkStateCard(") ||
+                source.contains("isLoading = true"),
+        )
+        assertTrue(
+            "Inline bookmark loading feedback should keep a progress indicator and polite live region without a Surface card.",
+            loadingStateSection.contains("CircularProgressIndicator()") &&
+                loadingStateSection.contains("LiveRegionMode.Polite") &&
+                !loadingStateSection.contains("Surface("),
+        )
+    }
+
+    @Test
     fun `saved route shows labeled origin and destination rows with stretched path decoration`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")

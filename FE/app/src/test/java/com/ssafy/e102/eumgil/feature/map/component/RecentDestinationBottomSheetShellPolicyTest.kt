@@ -21,13 +21,14 @@ class RecentDestinationBottomSheetShellPolicyTest {
             source.contains("map_recent_destination_expand"),
         )
         assertTrue(
-            "View-all CTA should include a chevron-like greater-than marker.",
-            source.contains("text = \">\""),
+            "View-all CTA should include a chevron icon instead of a raw text marker.",
+            source.contains("R.drawable.ic_route_card_chevron"),
         )
         assertTrue(
-            "Expanded recent destination sheet should expose a collapse action.",
+            "Expanded recent destination sheet should expose a collapse action with the chevron rotated upward.",
             source.contains("map_recent_destination_collapse") &&
-                source.contains("text = \"^\""),
+                source.contains(".rotate(") &&
+                source.contains("-90f"),
         )
         assertTrue(
             "View-all CTA should use the design convention blue accent token.",

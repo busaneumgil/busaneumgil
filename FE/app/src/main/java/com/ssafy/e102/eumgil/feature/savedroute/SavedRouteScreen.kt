@@ -446,10 +446,9 @@ private fun SavedPlaceContent(
 ) {
     when (content.screenState) {
         SavedBookmarkContentState.LOADING ->
-            SavedBookmarkStateCard(
+            SavedBookmarkLoadingState(
                 title = stringResource(id = R.string.saved_route_place_loading_title),
                 description = stringResource(id = R.string.saved_route_place_loading_description),
-                isLoading = true,
                 modifier = modifier.fillMaxWidth(),
             )
         SavedBookmarkContentState.EMPTY ->
@@ -528,10 +527,9 @@ private fun SavedRouteBookmarkContent(
 ) {
     when (content.screenState) {
         SavedBookmarkContentState.LOADING ->
-            SavedBookmarkStateCard(
+            SavedBookmarkLoadingState(
                 title = stringResource(id = R.string.saved_route_route_loading_title),
                 description = stringResource(id = R.string.saved_route_route_loading_description),
-                isLoading = true,
                 modifier = modifier.fillMaxWidth(),
             )
         SavedBookmarkContentState.EMPTY ->
@@ -648,6 +646,37 @@ private fun SavedBookmarkEmptyState(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SavedBookmarkLoadingState(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .semantics { liveRegion = LiveRegionMode.Polite }
+                .padding(horizontal = EumSpacing.large, vertical = 36.dp),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator()
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

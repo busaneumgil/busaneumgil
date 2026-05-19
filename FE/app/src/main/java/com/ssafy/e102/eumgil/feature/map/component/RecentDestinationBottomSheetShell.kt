@@ -54,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.onSizeChanged
@@ -245,38 +246,38 @@ fun RecentDestinationBottomSheetShell(
                                 isDragging = false
                             },
                         ) {
-                            if (isExpanded) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = stringResource(id = R.string.map_recent_destination_collapse),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                    )
-                                    Text(
-                                        text = "^",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                    )
-                                }
-                            } else {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = stringResource(id = R.string.map_recent_destination_expand),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                    )
-                                    Text(
-                                        text = ">",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                    )
-                                }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text =
+                                        stringResource(
+                                            id =
+                                                if (isExpanded) {
+                                                    R.string.map_recent_destination_collapse
+                                                } else {
+                                                    R.string.map_recent_destination_expand
+                                                },
+                                        ),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                )
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_route_card_chevron),
+                                    contentDescription = null,
+                                    modifier =
+                                        Modifier
+                                            .size(16.dp)
+                                            .rotate(
+                                                if (isExpanded) {
+                                                    -90f
+                                                } else {
+                                                    0f
+                                                },
+                                            ),
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                )
                             }
                         }
                     }

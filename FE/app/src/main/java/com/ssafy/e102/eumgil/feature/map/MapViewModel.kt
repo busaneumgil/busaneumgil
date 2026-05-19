@@ -75,6 +75,8 @@ class MapViewModel(
     private val authSessionRepository: AuthSessionRepository? = null,
     private val searchRepository: SearchRepository = NoOpSearchRepository,
     private val placesRepository: PlacesRepository? = null,
+    private val nowEpochMillis: () -> Long = System::currentTimeMillis,
+    private val enableLocationRecoveryWatchdog: Boolean = false,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = mutableUiState.asStateFlow()
@@ -105,6 +107,9 @@ class MapViewModel(
     private var isRouteStarted = false
     private var locationLookupState: LocationLookupState = LocationLookupState.Idle
     private var locationLookupTimeoutJob: Job? = null
+    private var locationRecoveryJob: Job? = null
+    private var lastFreshLocationObservedAtEpochMillis: Long? = latestLocation?.let { nowEpochMillis() }
+    private var locationRecoveryRestartAttemptCount = 0
     private var isRecenterButtonActive = false
     private var lastPlacesBrowseAnchorSource: PlacesBrowseAnchorSource? = null
     private var placesBrowseRequestSequence: Long = 0L
@@ -163,6 +168,7 @@ class MapViewModel(
         isRecenterButtonActive = false
         routeEndpointMapPickerState = null
         stopLocationLookup()
+        stopLocationRecoveryWatchdog()
         currentLocationManager.stopLocationUpdates()
     }
 
@@ -248,6 +254,7 @@ class MapViewModel(
 
     override fun onCleared() {
         stopLocationLookup()
+        stopLocationRecoveryWatchdog()
         mapTapDetailLookupJob?.cancel()
         currentLocationManager.stopLocationUpdates()
         mutableUiEvent.close()
@@ -436,6 +443,11 @@ class MapViewModel(
         )
         if (routeEndpointMapPickerState != null) return
         if (payload.clickType == MapTapClickType.ADDRESS) {
+            clearSelectedFacilitySelection()
+            renderSelectedFacilityState()
+            return
+        }
+        if (placesRepository == null) {
             clearSelectedFacilitySelection()
             renderSelectedFacilityState()
             return
@@ -1115,11 +1127,15 @@ class MapViewModel(
 
                 if (freshLocation == null) {
                     isRecenterButtonActive = false
-                    if (latestPermissionState is LocationPermissionState.Granted && isRouteStarted) {
+                    if (hadLocation && isRouteStarted) {
+                        locationLookupState = LocationLookupState.TimedOut
+                    } else if (latestPermissionState is LocationPermissionState.Granted && isRouteStarted) {
                         startLocationLookup(forceRestart = false)
                     }
                     applyFallbackCameraTarget()
                 } else {
+                    lastFreshLocationObservedAtEpochMillis = nowEpochMillis()
+                    locationRecoveryRestartAttemptCount = 0
                     stopLocationLookup()
                     if (placesRepository != null && lastPlacesBrowseAnchorSource != PlacesBrowseAnchorSource.CURRENT_LOCATION) {
                         loadLivePlaceBrowseState(
@@ -1130,7 +1146,8 @@ class MapViewModel(
                     if (shouldSyncCameraToCurrentLocation()) {
                         val shouldIncrementRequestId =
                             !hadLocation ||
-                                mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION
+                                mutableUiState.value.cameraTarget.source != MapCameraSource.CURRENT_LOCATION ||
+                                isRecenterButtonActive
 
                         syncCameraToCurrentLocation(
                             snapshot = freshLocation,
@@ -1152,6 +1169,7 @@ class MapViewModel(
     private fun handlePermissionBlocked() {
         isRecenterButtonActive = false
         stopLocationLookup()
+        stopLocationRecoveryWatchdog()
         currentLocationManager.stopLocationUpdates()
         applyFallbackCameraTarget()
     }
@@ -1277,13 +1295,19 @@ class MapViewModel(
     private fun startLocationTracking(forceLookupRestart: Boolean) {
         if (!isRouteStarted) return
 
+        startLocationRecoveryWatchdog()
         currentLocationManager.startLocationUpdates()
         currentLocationManager.refreshLatestLocation()
-        latestLocation = currentLocationManager.latestLocation.value.toFreshCurrentLocationOrNull()
+        val rawLocation = currentLocationManager.latestLocation.value
+        latestLocation = rawLocation.toFreshCurrentLocationOrNull()
 
         val snapshot = latestLocation
         if (snapshot == null) {
-            startLocationLookup(forceRestart = forceLookupRestart)
+            if (rawLocation == null) {
+                startLocationLookup(forceRestart = forceLookupRestart)
+            } else {
+                locationLookupState = LocationLookupState.TimedOut
+            }
             applyFallbackCameraTarget()
             return
         }
@@ -1297,8 +1321,47 @@ class MapViewModel(
         }
     }
 
+    private fun startLocationRecoveryWatchdog() {
+        if (!enableLocationRecoveryWatchdog) return
+        if (locationRecoveryJob != null) return
+
+        locationRecoveryJob =
+            viewModelScope.launch {
+                while (true) {
+                    delay(LOCATION_RECOVERY_REFRESH_INTERVAL_MILLIS)
+                    if (!isRouteStarted || latestPermissionState !is LocationPermissionState.Granted) continue
+
+                    currentLocationManager.refreshLatestLocation()
+
+                    val lastObservedAt = lastFreshLocationObservedAtEpochMillis ?: 0L
+                    val missingDurationMillis = nowEpochMillis() - lastObservedAt
+                    val restartThresholdMillis =
+                        (
+                            LOCATION_RECOVERY_RESTART_BASE_INTERVAL_MILLIS *
+                                (locationRecoveryRestartAttemptCount + 1)
+                        ).coerceAtMost(LOCATION_RECOVERY_RESTART_MAX_INTERVAL_MILLIS)
+
+                    if (missingDurationMillis >= restartThresholdMillis) {
+                        locationRecoveryRestartAttemptCount += 1
+                        currentLocationManager.startLocationUpdates()
+                        currentLocationManager.refreshLatestLocation()
+                    }
+                }
+            }
+    }
+
+    private fun stopLocationRecoveryWatchdog() {
+        locationRecoveryJob?.cancel()
+        locationRecoveryJob = null
+        locationRecoveryRestartAttemptCount = 0
+    }
+
     private fun startLocationLookup(forceRestart: Boolean) {
         if (!isRouteStarted || latestPermissionState !is LocationPermissionState.Granted || latestLocation != null) {
+            return
+        }
+        if (forceRestart && mutableUiState.value.cameraTarget.source == MapCameraSource.CURRENT_LOCATION) {
+            locationLookupState = LocationLookupState.TimedOut
             return
         }
         if (!forceRestart && locationLookupState == LocationLookupState.Searching) return
@@ -1875,7 +1938,7 @@ class MapViewModel(
         }
 
     private fun LocationSnapshot?.toFreshCurrentLocationOrNull(): LocationSnapshot? =
-        this?.takeIf { snapshot -> snapshot.isFreshCurrentLocation() }
+        this?.takeIf { snapshot -> snapshot.isFreshCurrentLocation(nowEpochMillis = nowEpochMillis()) }
 
     private enum class LocationLookupState {
         Idle,
@@ -1904,6 +1967,9 @@ class MapViewModel(
                 MapShortcutFilterKey.PUBLIC_OFFICE,
             )
         private const val LOCATION_LOOKUP_TIMEOUT_MILLIS = 5_000L
+        private const val LOCATION_RECOVERY_REFRESH_INTERVAL_MILLIS = 10_000L
+        private const val LOCATION_RECOVERY_RESTART_BASE_INTERVAL_MILLIS = 30_000L
+        private const val LOCATION_RECOVERY_RESTART_MAX_INTERVAL_MILLIS = 120_000L
         private const val MAP_BROWSE_RADIUS_METERS = 1_000
         private const val MAX_MAP_HOME_RECENT_DESTINATIONS = 10
         private const val BOOKMARK_LOAD_ERROR_MESSAGE = "북마크 상태를 확인하지 못했습니다."
@@ -1939,6 +2005,7 @@ class MapViewModel(
                             authSessionRepository = authSessionRepository,
                             searchRepository = searchRepository,
                             placesRepository = placesRepository,
+                            enableLocationRecoveryWatchdog = true,
                         ) as T
                     }
 

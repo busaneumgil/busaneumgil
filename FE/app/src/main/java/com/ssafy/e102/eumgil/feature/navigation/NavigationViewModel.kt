@@ -33,6 +33,9 @@ import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
+import com.ssafy.e102.eumgil.data.repository.ReportDraftData
+import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
+import com.ssafy.e102.eumgil.data.repository.ReportRepository
 import com.ssafy.e102.eumgil.data.repository.RouteRepository
 import com.ssafy.e102.eumgil.data.repository.RouteTransitRefreshData
 import com.ssafy.e102.eumgil.data.repository.toBookmarkDataOrNull
@@ -135,6 +138,7 @@ class NavigationViewModel(
     private val locationPermissionManager: LocationPermissionManager? = null,
     private val bookmarkRepository: BookmarkRepository,
     private val routeRepository: RouteRepository = NoOpRouteRepository,
+    private val reportRepository: ReportRepository = NoOpReportRepository,
     initialLowVisionMode: Boolean = false,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(NavigationUiState())
@@ -159,6 +163,7 @@ class NavigationViewModel(
     private var isTransitRefreshInFlight: Boolean = false
     private var isRerouteInFlight: Boolean = false
     private var isEndNavigationInFlight: Boolean = false
+    private var pendingHazardReportRerouteId: Long? = null
     private var guidanceMode: NavigationGuidanceMode = NavigationGuidanceMode.RouteDetail
     private var routeJoinStableUpdateCount: Int = 0
     private var routeJoinStableSinceEpochMillis: Long? = null
@@ -239,6 +244,7 @@ class NavigationViewModel(
         isTransitRefreshInFlight = false
         isRerouteInFlight = false
         isEndNavigationInFlight = false
+        pendingHazardReportRerouteId = null
         guidanceMode = NavigationGuidanceMode.RouteDetail
         routeJoinStableUpdateCount = 0
         routeJoinStableSinceEpochMillis = null
@@ -341,6 +347,7 @@ class NavigationViewModel(
                 requestCurrentLocationRefresh()
                 requestInitialBriefingIfNeeded()
             }
+            is NavigationUiAction.HazardReportSubmitted -> handleHazardReportSubmitted(action.reportId)
             NavigationUiAction.BackClicked -> requestExitNavigationConfirmation()
             NavigationUiAction.RouteDetailClicked -> {
                 uiState.value.selectedRouteOption?.let { routeOption ->
@@ -587,6 +594,7 @@ class NavigationViewModel(
             guidanceMode = guidanceMode,
         )
         publishNavigationState()
+        processPendingHazardReportReroute()
         maybeSpeakRealtimeGuidanceAutomatically()
     }
 
@@ -1595,37 +1603,92 @@ class NavigationViewModel(
                 )
             }.onSuccess { rerouteData ->
                 rerouteData.route?.let { reroutedRoute ->
-                    routeSession = routeSession?.withReroutedRoute(reroutedRoute)
-                    latestRouteMatch = null
-                    resetAutomaticTtsHistory()
-                    latestProgress = reroutedRoute.evaluateProgress(currentCoordinate)
-                    val remainingMetrics =
-                        latestProgress?.let { progress ->
-                            reroutedRoute.resolveRemainingMetrics(
-                                progress = progress,
-                                destination = navigationRequest?.destination?.coordinate ?: currentCoordinate,
-                                useLowVisionWalkingPace = isLowVisionMode,
-                            )
-                        }
-                    latestRemainingDistanceMeters =
-                        remainingMetrics?.distanceMeters ?: reroutedRoute.totalDistanceMeters()
-                    latestEstimatedMinutes =
-                        remainingMetrics?.estimatedMinutes ?: reroutedRoute.summary.estimatedTimeMinutes
-                    latestRemainingMetricsSource =
-                        remainingMetrics?.source ?: NavigationRemainingMetricsSource.ProjectedRoute
-                    latestTransitPresentation =
-                        routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
-                    val reroutedSegmentIndex = latestProgress?.activeSegmentIndex ?: 0
-                    activeSegmentIndex = reroutedSegmentIndex
-                    focusedSegmentIndex = reroutedSegmentIndex
-                    isInspectingSegments = false
-                    hasPendingActiveChange = false
-                    lastLowVisionRouteChangeAlertSegmentIndex = null
+                    applyReroutedRoute(
+                        currentSession = currentSession,
+                        reroutedRoute = reroutedRoute,
+                        currentCoordinate = currentCoordinate,
+                    )
                 }
                 publishNavigationState()
             }
             isRerouteInFlight = false
+            processPendingHazardReportReroute()
         }
+    }
+
+    private fun handleHazardReportSubmitted(reportId: Long) {
+        if (isLowVisionMode) return
+        pendingHazardReportRerouteId = reportId
+        processPendingHazardReportReroute()
+    }
+
+    private fun processPendingHazardReportReroute() {
+        if (isLowVisionMode || isRerouteInFlight) return
+
+        val reportId = pendingHazardReportRerouteId ?: return
+        val currentSession = routeSession ?: return
+        val routeId = currentSession.routeId ?: return
+        val currentCoordinate = latestLocationCoordinate ?: return
+
+        pendingHazardReportRerouteId = null
+        isRerouteInFlight = true
+        viewModelScope.launch {
+            val rerouteResult =
+                runCatching {
+                    reportRepository.rerouteAfterHazardReport(
+                        reportId = reportId,
+                        routeId = routeId,
+                        currentPoint = currentCoordinate,
+                    )
+                }.getOrNull()
+
+            if (rerouteResult?.rerouted == true && rerouteResult.route != null) {
+                applyReroutedRoute(
+                    currentSession = currentSession,
+                    reroutedRoute = rerouteResult.route,
+                    currentCoordinate = currentCoordinate,
+                )
+                publishNavigationState()
+            } else {
+                emitUiEvent(NavigationUiEvent.ShowDuribalCallDialog)
+            }
+
+            isRerouteInFlight = false
+            processPendingHazardReportReroute()
+        }
+    }
+
+    private fun applyReroutedRoute(
+        currentSession: NavigationRouteSession,
+        reroutedRoute: RouteCandidate,
+        currentCoordinate: GeoCoordinate,
+    ) {
+        routeSession = currentSession.withReroutedRoute(reroutedRoute)
+        latestRouteMatch = null
+        resetAutomaticTtsHistory()
+        latestProgress = reroutedRoute.evaluateProgress(currentCoordinate)
+        val remainingMetrics =
+            latestProgress?.let { progress ->
+                reroutedRoute.resolveRemainingMetrics(
+                    progress = progress,
+                    destination = navigationRequest?.destination?.coordinate ?: currentCoordinate,
+                    useLowVisionWalkingPace = isLowVisionMode,
+                )
+            }
+        latestRemainingDistanceMeters =
+            remainingMetrics?.distanceMeters ?: reroutedRoute.totalDistanceMeters()
+        latestEstimatedMinutes =
+            remainingMetrics?.estimatedMinutes ?: reroutedRoute.summary.estimatedTimeMinutes
+        latestRemainingMetricsSource =
+            remainingMetrics?.source ?: NavigationRemainingMetricsSource.ProjectedRoute
+        latestTransitPresentation =
+            routeSession?.resolveTransitPresentation(latestProgress?.activeLegIndex ?: 0)
+        val reroutedSegmentIndex = latestProgress?.activeSegmentIndex ?: 0
+        activeSegmentIndex = reroutedSegmentIndex
+        focusedSegmentIndex = reroutedSegmentIndex
+        isInspectingSegments = false
+        hasPendingActiveChange = false
+        lastLowVisionRouteChangeAlertSegmentIndex = null
     }
 
     companion object {
@@ -1635,6 +1698,7 @@ class NavigationViewModel(
             locationPermissionManager: LocationPermissionManager? = null,
             bookmarkRepository: BookmarkRepository,
             routeRepository: RouteRepository,
+            reportRepository: ReportRepository,
             isLowVisionMode: Boolean = false,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -1646,6 +1710,7 @@ class NavigationViewModel(
                         locationPermissionManager = locationPermissionManager,
                         bookmarkRepository = bookmarkRepository,
                         routeRepository = routeRepository,
+                        reportRepository = reportRepository,
                         initialLowVisionMode = isLowVisionMode,
                     ) as T
             }
@@ -4137,6 +4202,26 @@ private object NoOpRouteRepository : RouteRepository {
         sessionId: String,
         score: Int,
     ) = error("NavigationViewModel does not submit ratings.")
+}
+
+private object NoOpReportRepository : ReportRepository {
+    override fun observeReportHistory() =
+        error("NavigationViewModel does not observe report history.")
+
+    override suspend fun getLatestDraft(): ReportDraftData =
+        error("NavigationViewModel does not read report drafts.")
+
+    override suspend fun saveDraft(draft: ReportDraftData): ReportDraftData =
+        error("NavigationViewModel does not save report drafts.")
+
+    override suspend fun deleteDraft(draftId: String) =
+        error("NavigationViewModel does not delete report drafts.")
+
+    override suspend fun saveOutbox(outbox: ReportOutboxData): ReportOutboxData =
+        error("NavigationViewModel does not save report outbox.")
+
+    override suspend fun submitOutboxToServer(outboxId: String) =
+        error("NavigationViewModel does not submit report outbox.")
 }
 
 private fun GeoCoordinate?.toDebugCoordinate(): String =

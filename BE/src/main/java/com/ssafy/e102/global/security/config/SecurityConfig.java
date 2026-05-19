@@ -82,7 +82,7 @@ public class SecurityConfig {
 				.authenticated()
 				.requestMatchers("/hazard-reports", "/hazard-reports/**")
 				.authenticated()
-				.requestMatchers("/hazard/markers", "/hazard/markers/**")
+				.requestMatchers("/hazard/markers", "/hazard/markers/**", "/hazard/*/reroute", "/hazard/**/reroute")
 				.authenticated()
 				.requestMatchers("/admin", "/admin/**")
 				.hasRole("ADMIN")

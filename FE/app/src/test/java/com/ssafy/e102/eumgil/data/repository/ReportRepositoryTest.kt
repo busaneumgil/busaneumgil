@@ -12,6 +12,7 @@ import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsApiException
 import com.ssafy.e102.eumgil.data.remote.datasource.HazardReportsRemoteDataSource
 import com.ssafy.e102.eumgil.data.remote.dto.HazardMarkerDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardMarkersResponseDto
+import com.ssafy.e102.eumgil.data.remote.dto.HazardReportRerouteResponseDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPageDto
@@ -25,6 +26,58 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ReportRepositoryTest {
+    @Test
+    fun `hazard report reroute retries with refreshed token after unauthorized`() =
+        runTest {
+            val authSessionRepository =
+                TestAuthSessionRepository(
+                    initialState =
+                        AuthGateState(
+                            authSession =
+                                AuthSession(
+                                    accessToken = "expired-access-token",
+                                    refreshToken = "refresh-token",
+                                ),
+                            isProfileCompleted = true,
+                        ),
+                )
+            val authRemoteDataSource =
+                FakeReportAuthRemoteDataSource(
+                    reissueResponse =
+                        ReissueResponseDto(
+                            accessToken = "new-access-token",
+                            refreshToken = "new-refresh-token",
+                        ),
+                )
+            val remoteDataSource =
+                FakeHazardReportsRemoteDataSource(
+                    rerouteResponse = HazardReportRerouteResponseDto(rerouted = false, route = null),
+                    failFirstHazardRerouteRequestWithUnauthorized = true,
+                )
+            val repository =
+                DefaultReportRepository(
+                    reportDraftDao = FakeReportDraftDao(),
+                    reportOutboxDao = FakeReportOutboxDao(),
+                    hazardReportsRemoteDataSource = remoteDataSource,
+                    accessTokenProvider = { "legacy-access-token" },
+                    authSessionRepository = authSessionRepository,
+                    authRemoteDataSource = authRemoteDataSource,
+                )
+
+            val result =
+                repository.rerouteAfterHazardReport(
+                    reportId = 12L,
+                    routeId = "rr_active_123",
+                    currentPoint = ReportRerouteCurrentPoint,
+                )
+
+            assertEquals(listOf("expired-access-token", "new-access-token"), remoteDataSource.hazardRerouteRequestTokens)
+            assertEquals(1, authRemoteDataSource.reissueCallCount)
+            assertEquals("refresh-token", authRemoteDataSource.latestRefreshToken)
+            assertEquals(false, result.rerouted)
+            assertEquals(null, result.route)
+        }
+
     @Test
     fun `approved hazard markers retry with refreshed token after unauthorized`() =
         runTest {
@@ -270,10 +323,13 @@ private class FakeHazardReportsRemoteDataSource(
     private val detail: HazardReportDetailDto? = null,
     private val markerResponse: HazardMarkersResponseDto = HazardMarkersResponseDto(emptyList()),
     private val failFirstMarkerRequestWithUnauthorized: Boolean = false,
+    private val rerouteResponse: HazardReportRerouteResponseDto = HazardReportRerouteResponseDto(rerouted = false, route = null),
+    private val failFirstHazardRerouteRequestWithUnauthorized: Boolean = false,
 ) : HazardReportsRemoteDataSource(HttpJsonClient(baseUrl = "http://test.invalid")) {
     var listRequestCount = 0
         private set
     val markerRequestTokens = mutableListOf<String?>()
+    val hazardRerouteRequestTokens = mutableListOf<String?>()
 
     override suspend fun getApprovedHazardMarkers(
         swLat: Double,
@@ -291,6 +347,23 @@ private class FakeHazardReportsRemoteDataSource(
             )
         }
         return markerResponse
+    }
+
+    override suspend fun rerouteAfterHazardReport(
+        reportId: Long,
+        accessToken: String,
+        routeId: String,
+        currentPoint: HazardReportPointDto,
+    ): HazardReportRerouteResponseDto {
+        hazardRerouteRequestTokens += accessToken
+        if (failFirstHazardRerouteRequestWithUnauthorized && hazardRerouteRequestTokens.size == 1) {
+            throw HazardReportsApiException(
+                httpStatusCode = 401,
+                status = "A4010",
+                message = "unauthorized",
+            )
+        }
+        return rerouteResponse
     }
 
     override suspend fun getMyHazardReports(
@@ -365,3 +438,8 @@ private fun hazardReportListItem(
         createdAt = "2026-04-28T17:00:00",
         representativeImageUrl = null,
     )
+
+private val ReportRerouteCurrentPoint = com.ssafy.e102.eumgil.core.model.GeoCoordinate(
+    latitude = 35.1796,
+    longitude = 129.0756,
+)

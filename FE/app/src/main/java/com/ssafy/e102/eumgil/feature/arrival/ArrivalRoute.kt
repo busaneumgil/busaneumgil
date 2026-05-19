@@ -78,6 +78,7 @@ private fun rememberNavigationGuidanceViewModel(): NavigationViewModel {
                 currentHeadingManager = appContainer.currentHeadingManager,
                 bookmarkRepository = appContainer.bookmarkRepository,
                 routeRepository = appContainer.routeRepository,
+                reportRepository = appContainer.reportRepository,
             )
         }
 

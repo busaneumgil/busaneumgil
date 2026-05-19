@@ -163,7 +163,8 @@ public class OpenApiConfig {
 
 	@Bean
 	public GroupedOpenApi reportApi() {
-		return groupedApi(REPORT_TAG, "/hazard-reports", "/hazard-reports/**", "/hazard/markers", "/hazard/markers/**");
+		return groupedApi(REPORT_TAG, "/hazard-reports", "/hazard-reports/**", "/hazard/markers", "/hazard/markers/**",
+			"/hazard/**");
 	}
 
 	@Bean

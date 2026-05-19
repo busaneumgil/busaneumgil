@@ -10,6 +10,8 @@ import com.ssafy.e102.eumgil.data.remote.dto.HazardReportDetailDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportListItemDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPageDto
 import com.ssafy.e102.eumgil.data.remote.dto.HazardReportPointDto
+import com.ssafy.e102.eumgil.data.remote.dto.HazardReportRerouteResponseDto
+import com.ssafy.e102.eumgil.data.route.toRouteDto
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -146,6 +148,35 @@ open class HazardReportsRemoteDataSource private constructor(
         val responseJson = response.body.toJsonObjectOrNull()
         val dataJson = response.requireDataJson(responseJson)
         return dataJson.toHazardMarkersResponseDto()
+    }
+
+    open suspend fun rerouteAfterHazardReport(
+        reportId: Long,
+        accessToken: String,
+        routeId: String,
+        currentPoint: HazardReportPointDto,
+    ): HazardReportRerouteResponseDto {
+        val requestJson =
+            JSONObject()
+                .put("routeId", routeId)
+                .put(
+                    "currentPoint",
+                    JSONObject()
+                        .put("lat", currentPoint.lat)
+                        .put("lng", currentPoint.lng),
+                )
+        val response =
+            postExecutor(
+                "/hazard/$reportId/reroute",
+                requestJson.toString(),
+                bearerHeader(accessToken),
+            )
+        val responseJson = response.body.toJsonObjectOrNull()
+        val dataJson = response.requireDataJson(responseJson)
+        return HazardReportRerouteResponseDto(
+            rerouted = dataJson.optBoolean("rerouted"),
+            route = dataJson.optJSONObject("route")?.toRouteDto(),
+        )
     }
 
     private fun bearerHeader(accessToken: String): Map<String, String> = mapOf("Authorization" to "Bearer $accessToken")

@@ -2226,7 +2226,7 @@ function routingApplyNotice(status?: string | null) {
       };
     case "APPLIED":
       return {
-        message: "경로 반영이 완료되었습니다.",
+        message: "검수 완료 즉시 반영 완료되었습니다.",
         className: "success-box",
       };
     default:

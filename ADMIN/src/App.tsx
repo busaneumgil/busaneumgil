@@ -658,6 +658,20 @@ function AdminApp() {
     retry: false,
   });
 
+  useEffect(() => {
+    if (!selectedSegment || !payloadQuery.data) return;
+    const updatedSegment = payloadQuery.data.segments.features.find(
+      (feature) => String(feature.properties.edgeId) === String(selectedSegment.properties.edgeId),
+    );
+    if (!updatedSegment) {
+      setSelectedSegment(null);
+      return;
+    }
+    if (updatedSegment !== selectedSegment) {
+      setSelectedSegment(updatedSegment);
+    }
+  }, [payloadQuery.data, selectedSegment]);
+
   const bridgeQuery = useQuery({
     queryKey: ["admin-road-network-bridges", selectedGu, selectedDong, accessToken],
     queryFn: () => fetchAdminRoadNetworkBridges({ gu: selectedGu, dong: selectedDong, accessToken }),
@@ -689,6 +703,22 @@ function AdminApp() {
     setFacilityPickedLocation(null);
     setFacilityLocationPickEnabled(false);
   }, [page, selectedFacility, selectedFacilityCategorySet]);
+
+  useEffect(() => {
+    if (page !== "facilities" || !selectedFacility || !filteredFacilityPayload) return;
+    const updatedFacility = filteredFacilityPayload.facilities.features.find(
+      (feature) => String(feature.properties.placeId) === String(selectedFacility.properties.placeId),
+    );
+    if (!updatedFacility) {
+      setSelectedFacility(null);
+      setFacilityPickedLocation(null);
+      setFacilityLocationPickEnabled(false);
+      return;
+    }
+    if (updatedFacility !== selectedFacility) {
+      setSelectedFacility(updatedFacility);
+    }
+  }, [filteredFacilityPayload, page, selectedFacility]);
 
   const selectedFacilityPlaceId = selectedFacility ? Number(selectedFacility.properties.placeId) : null;
 

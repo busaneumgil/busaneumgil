@@ -214,7 +214,7 @@ export function routeReviewCompletionMessage(status?: AdminRoutingApplyStatus | 
     case "PENDING":
       return "검수 완료, 경로 반영 필요 상태입니다.";
     case "APPLIED":
-      return "경로 반영이 완료되었습니다.";
+      return "검수 완료 즉시 반영 완료되었습니다.";
     case "APPLIED_WITH_WARNING":
       return "경로 반영은 수행됐지만 일부 경고가 있습니다. 운영 상태를 확인해 주세요.";
     case "FAILED":

@@ -162,6 +162,15 @@ export function RouteTuningPage({
         },
         accessToken,
       );
+      setAttributeDraft({
+        walkAccess: normalizeAccessibility(response.segment.walkAccess),
+        brailleBlockState: normalizeAccessibility(response.segment.brailleBlockState),
+        audioSignalState: normalizeAccessibility(response.segment.audioSignalState),
+        widthState: normalizeWidth(response.segment.widthState),
+        surfaceState: normalizeSurface(response.segment.surfaceState),
+        stairsState: normalizeAccessibility(response.segment.stairsState),
+        signalState: normalizeAccessibility(response.segment.signalState),
+      });
       setMessage(response.routingApplyMessage ?? resolveSegmentSaveMessage(response.routingApplyStatus));
       onSegmentUpdated();
       void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });

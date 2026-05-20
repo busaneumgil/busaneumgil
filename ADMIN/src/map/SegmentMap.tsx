@@ -1054,7 +1054,7 @@ export function SegmentMap({
                 : detailRenderStatus.capped
                   ? `${detailRenderStatus.features.length}/${detailRenderStatus.scopedCount} segments 렌더링 · 중요 속성과 화면 중심 우선 표시 중`
                 : detailRenderStatus.scopedCount < visibleSegmentCount
-                  ? `${detailRenderStatus.features.length}/${visibleSegmentCount} segments 렌더링 · 현재 화면 ${detailRenderStatus.scopedCount}건`
+                  ? `${detailRenderStatus.features.length}/${visibleSegmentCount} segments 렌더링 · 화면 보호를 위해 일부만 표시 중 · 현재 화면 ${detailRenderStatus.scopedCount}건`
                 : `${visibleSegmentCount} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · 영역 ${polygonPointCount}/5점` : ""}${snapMessage ? ` · ${snapMessage}` : ""}`}
       </div>
     </section>

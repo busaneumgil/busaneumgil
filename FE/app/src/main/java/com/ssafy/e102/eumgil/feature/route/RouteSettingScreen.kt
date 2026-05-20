@@ -161,6 +161,7 @@ fun RouteSettingScreen(
     onDuribalConfirm: () -> Unit = {},
     pendingLowFloorReservation: LowFloorBusReservation? = null,
     isLowFloorReservationRequesting: Boolean = false,
+    completedLowFloorReservationKeys: Set<String> = emptySet(),
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit = {},
     onLowFloorReservationDismiss: () -> Unit = {},
     onLowFloorReservationConfirm: () -> Unit = {},
@@ -238,6 +239,7 @@ fun RouteSettingScreen(
                 } else if (uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
                     RouteSettingTransitResultPane(
                         uiState = uiState,
+                        completedLowFloorReservationKeys = completedLowFloorReservationKeys,
                         onLowFloorReservationClick = onLowFloorReservationClick,
                         onDuribalCallClick = onDuribalCallClick,
                         onDuribalCancelClick = { isDuribalPromptDismissed = true },
@@ -332,6 +334,7 @@ fun RouteDetailScreen(
     onCurrentLocationClick: () -> Unit = {},
     pendingLowFloorReservation: LowFloorBusReservation? = null,
     isLowFloorReservationRequesting: Boolean = false,
+    completedLowFloorReservationKeys: Set<String> = emptySet(),
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit = {},
     onLowFloorReservationDismiss: () -> Unit = {},
     onLowFloorReservationConfirm: () -> Unit = {},
@@ -481,6 +484,7 @@ fun RouteDetailScreen(
                         onTopVisibleStepChanged = { index ->
                             focusedDetailStepIndex = index
                         },
+                        completedLowFloorReservationKeys = completedLowFloorReservationKeys,
                         onLowFloorReservationClick = onLowFloorReservationClick,
                         modifier =
                             Modifier
@@ -747,6 +751,7 @@ private fun RouteDetailMapBottomSheet(
     origin: RouteLocationUiState,
     onStepClick: (Int) -> Unit,
     onCloseClick: () -> Unit,
+    completedLowFloorReservationKeys: Set<String> = emptySet(),
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -806,12 +811,14 @@ private fun RouteDetailMapBottomSheet(
                 RouteDetailTransitActionRow(steps = selectedRoute.detailSteps)
                 LowFloorReservationSection(
                     reservations = selectedRoute.lowFloorReservations,
+                    completedReservationKeys = completedLowFloorReservationKeys,
                     onReservationClick = onLowFloorReservationClick,
                 )
                 RouteDetailStepsSection(
                     origin = origin,
                     steps = selectedRoute.detailSteps,
                     fallbackMessage = selectedRoute.detailFallbackMessage,
+                    completedLowFloorReservationKeys = completedLowFloorReservationKeys,
                     onStepClick = onStepClick,
                 )
             }
@@ -828,6 +835,7 @@ private fun RouteDetailSidePanel(
     onExpandedChange: (Boolean) -> Unit,
     onStepClick: (Int) -> Unit,
     onTopVisibleStepChanged: (Int) -> Unit,
+    completedLowFloorReservationKeys: Set<String>,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -852,6 +860,7 @@ private fun RouteDetailSidePanel(
                 badges = selectedRoute.badges,
                 fallbackMessage = selectedRoute.detailFallbackMessage,
                 lowFloorReservations = selectedRoute.lowFloorReservations,
+                completedLowFloorReservationKeys = completedLowFloorReservationKeys,
                 onStepClick = { index ->
                     onStepClick(index)
                 },
@@ -879,6 +888,7 @@ private fun RouteDetailTimelinePanelContent(
     badges: List<RouteOptionBadge>,
     fallbackMessage: String?,
     lowFloorReservations: List<LowFloorBusReservation>,
+    completedLowFloorReservationKeys: Set<String>,
     onStepClick: (Int) -> Unit,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     modifier: Modifier = Modifier,
@@ -973,6 +983,7 @@ private fun RouteDetailTimelinePanelContent(
             item(key = "route-detail-low-floor-reservations") {
                 LowFloorReservationSection(
                     reservations = lowFloorReservations,
+                    completedReservationKeys = completedLowFloorReservationKeys,
                     onReservationClick = onLowFloorReservationClick,
                 )
             }
@@ -1231,6 +1242,7 @@ private fun RouteDetailTransitActionRow(
 @Composable
 private fun LowFloorReservationSection(
     reservations: List<LowFloorBusReservation>,
+    completedReservationKeys: Set<String> = emptySet(),
     onReservationClick: (LowFloorBusReservation) -> Unit,
 ) {
     if (reservations.isEmpty()) {
@@ -1256,6 +1268,7 @@ private fun LowFloorReservationSection(
             reservations.take(MAX_LOW_FLOOR_RESERVATION_COUNT).forEach { reservation ->
                 LowFloorReservationRow(
                     reservation = reservation,
+                    isCompleted = reservation.stableReservationKey() in completedReservationKeys,
                     onReservationClick = onReservationClick,
                 )
             }
@@ -1266,6 +1279,7 @@ private fun LowFloorReservationSection(
 @Composable
 private fun LowFloorReservationRow(
     reservation: LowFloorBusReservation,
+    isCompleted: Boolean,
     onReservationClick: (LowFloorBusReservation) -> Unit,
 ) {
     Row(
@@ -1303,11 +1317,31 @@ private fun LowFloorReservationRow(
             )
         }
         Button(
-            onClick = { onReservationClick(reservation) },
+            onClick = {
+                if (!isCompleted) {
+                    onReservationClick(reservation)
+                }
+            },
+            enabled = !isCompleted,
             shape = RoundedCornerShape(EumRadius.small),
+            colors =
+                ButtonDefaults.buttonColors(
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
             modifier = Modifier.height(RouteInlineButtonHeight),
         ) {
-            Text(text = stringResource(id = R.string.route_setting_low_floor_reservation_action))
+            Text(
+                text =
+                    stringResource(
+                        id =
+                            if (isCompleted) {
+                                R.string.route_setting_low_floor_reservation_completed
+                            } else {
+                                R.string.route_setting_low_floor_reservation_action
+                            },
+                    ),
+            )
         }
     }
 }
@@ -1620,6 +1654,7 @@ private fun RouteDetailStepsSection(
     steps: List<RouteDetailStepUiState>,
     fallbackMessage: String?,
     lowFloorReservations: List<LowFloorBusReservation> = emptyList(),
+    completedLowFloorReservationKeys: Set<String> = emptySet(),
     onStepClick: (Int) -> Unit = {},
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -1698,6 +1733,7 @@ private fun RouteDetailStepsSection(
         }
         LowFloorReservationSection(
             reservations = lowFloorReservations,
+            completedReservationKeys = completedLowFloorReservationKeys,
             onReservationClick = onLowFloorReservationClick,
         )
     }
@@ -3407,6 +3443,7 @@ private fun RouteMapZoomControlButton(
 @Composable
 private fun RouteSettingTransitResultPane(
     uiState: RouteSettingUiState,
+    completedLowFloorReservationKeys: Set<String>,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     onDuribalCallClick: () -> Unit,
     onDuribalCancelClick: () -> Unit,
@@ -3436,6 +3473,7 @@ private fun RouteSettingTransitResultPane(
         ) {
             RouteOptionSection(
                 uiState = uiState,
+                completedLowFloorReservationKeys = completedLowFloorReservationKeys,
                 onLowFloorReservationClick = onLowFloorReservationClick,
                 onDuribalCallClick = onDuribalCallClick,
                 onDuribalCancelClick = onDuribalCancelClick,
@@ -3450,6 +3488,7 @@ private fun RouteSettingTransitResultPane(
 @Composable
 private fun RouteOptionSection(
     uiState: RouteSettingUiState,
+    completedLowFloorReservationKeys: Set<String>,
     onLowFloorReservationClick: (LowFloorBusReservation) -> Unit,
     onDuribalCallClick: () -> Unit,
     onDuribalCancelClick: () -> Unit,
@@ -3501,6 +3540,7 @@ private fun RouteOptionSection(
                     uiState.selectedRoute?.let { selectedRoute ->
                         LowFloorReservationSection(
                             reservations = selectedRoute.lowFloorReservations,
+                            completedReservationKeys = completedLowFloorReservationKeys,
                             onReservationClick = onLowFloorReservationClick,
                         )
                     }

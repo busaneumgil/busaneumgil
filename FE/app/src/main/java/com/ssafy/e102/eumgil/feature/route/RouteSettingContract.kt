@@ -188,6 +188,10 @@ data class RouteDetailStepUiState(
     val transitOptionLabels: List<RouteTransitOptionLabelUiState> = emptyList(),
 )
 
+internal fun LowFloorBusReservation.stableReservationKey(): String =
+    listOf(stopName, arsNo, routeNo, vehicleNo)
+        .joinToString(separator = "|")
+
 data class RouteSettingCtaUiState(
     val label: String = "안내 시작",
     val supportingText: String = "경로 요약을 불러오는 동안 CTA를 잠시 비활성화합니다.",

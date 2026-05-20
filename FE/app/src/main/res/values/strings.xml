@@ -665,6 +665,7 @@
     <string name="route_setting_low_floor_reservation_summary">%1$s번 · 차량번호 %2$s</string>
     <string name="route_setting_low_floor_reservation_meta">%1$s · 약 %2$d분 뒤 · %3$d정류장 전</string>
     <string name="route_setting_low_floor_reservation_action">예약</string>
+    <string name="route_setting_low_floor_reservation_completed">예약완료</string>
     <string name="route_setting_low_floor_reservation_dialog_title">저상버스 예약 요청</string>
     <string name="route_setting_low_floor_reservation_dialog_message">%1$s 정류장에 도착 예정인 %2$s번 저상버스(차량번호 %3$s)를 예약 요청합니다.\n약 %4$d분 뒤, %5$d정류장 전 차량이며 요청을 보내면 운전자 단말기에 전달됩니다.</string>
     <string name="route_setting_low_floor_reservation_dialog_confirm">예약 요청</string>

@@ -792,6 +792,33 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `low floor reservation button stays disabled after successful request`() {
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val entrySource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingEntryRoute.kt")
+                .readText()
+        val lowFloorRowSection =
+            screenSource
+                .substringAfter("private fun LowFloorReservationRow(")
+                .substringBefore("@Composable\nprivate fun LowFloorReservationConfirmDialog")
+
+        assertTrue(
+            "Successful low-floor reservations should be remembered by stable vehicle key and passed down to the screen.",
+            entrySource.contains("completedLowFloorReservationKeys") &&
+                entrySource.contains("reservation.stableReservationKey()") &&
+                entrySource.contains("completedLowFloorReservationKeys + completedKey") &&
+                screenSource.contains("completedReservationKeys = completedLowFloorReservationKeys"),
+        )
+        assertTrue(
+            "Completed low-floor reservation rows should disable the action and show a completed label.",
+            lowFloorRowSection.contains("enabled = !isCompleted") &&
+                lowFloorRowSection.contains("route_setting_low_floor_reservation_completed"),
+        )
+    }
+
+    @Test
     fun `route failure replaces map with a clean duribal fallback screen`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")

@@ -849,6 +849,17 @@ class RouteSettingViewModelTest {
             )
             assertEquals(
                 listOf(
+                    "현재 위치에서 선택한 경로 안내를 시작합니다.",
+                    "목적지까지 약 8분",
+                    "목적지까지 약 6분",
+                    "목적지까지 약 5분",
+                    "목적지까지 약 3분",
+                    "안내가 완료되었습니다",
+                ),
+                detailSteps.map(RouteDetailStepUiState::description),
+            )
+            assertEquals(
+                listOf(
                     RouteDetailStepKind.START,
                     RouteDetailStepKind.STRAIGHT,
                     RouteDetailStepKind.TURN_LEFT,
@@ -859,7 +870,7 @@ class RouteSettingViewModelTest {
                 detailSteps.map(RouteDetailStepUiState::kind),
             )
             assertEquals(
-                "목적지까지 약 8분",
+                "목적지까지 약 5분",
                 detailSteps[3].description,
             )
             assertEquals("음향 신호", detailSteps[3].badgeLabel)

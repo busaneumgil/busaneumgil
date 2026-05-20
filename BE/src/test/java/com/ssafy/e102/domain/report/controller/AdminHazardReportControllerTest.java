@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -28,6 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDetailResponse;
+import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDeleteResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportListResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardRouteReviewResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportStatusResponse;
@@ -157,6 +159,21 @@ class AdminHazardReportControllerTest {
 			.andExpect(jsonPath("$.data.status").value("REJECTED"));
 
 		verify(adminHazardReportService).rejectHazardReport(1L, userId);
+	}
+
+	@Test
+	@DisplayName("관리자 제보 삭제는 삭제된 제보 ID를 반환한다")
+	void deleteHazardReport() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(adminHazardReportService.deleteHazardReport(1L, userId))
+			.thenReturn(new AdminHazardReportDeleteResponse(1L));
+
+		mockMvc.perform(delete("/admin/hazard-reports/1").principal(authentication))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.reportId").value(1));
+
+		verify(adminHazardReportService).deleteHazardReport(1L, userId);
 	}
 
 	@Test

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  canDeleteHazardReport,
   canRejectHazardReport,
   canStartHazardApprove,
   canStartHazardRestore,
@@ -74,6 +75,29 @@ describe("hazard route review workflow state", () => {
       tone: "green",
     });
 
+    expect(deriveHazardDisplayStatus("APPROVED")).toMatchObject({
+      key: "RESTORE_PENDING",
+      label: "원상복구 대기",
+      tone: "purple",
+    });
+
+    expect(deriveHazardDisplayStatus("APPROVED", completeHazardRouteReview(review, "2026-05-18T03:11:00.000Z"))).toMatchObject({
+      key: "RESTORE_PENDING",
+      label: "원상복구 대기",
+      tone: "purple",
+    });
+
+    expect(deriveHazardDisplayStatus("APPROVED", startHazardRouteReview({
+      reportId: 7,
+      intent: "restore",
+      reviewerUserId: "admin-2",
+      now: "2026-05-18T03:11:30.000Z",
+    }))).toMatchObject({
+      key: "IN_PROGRESS",
+      label: "원상복구 진행중",
+      tone: "blue",
+    });
+
     expect(deriveHazardDisplayStatus("APPROVED", completeHazardRouteReview({
       ...review,
       intent: "restore",
@@ -115,7 +139,7 @@ describe("hazard route review workflow state", () => {
 
     expect(isHazardRestorePending(approveReview)).toBe(false);
     expect(isHazardRestorePending(restoreReview)).toBe(true);
-    expect(isHazardRestorePending(completeHazardRouteReview(restoreReview, "2026-05-18T04:30:00.000Z"))).toBe(true);
+    expect(isHazardRestorePending(completeHazardRouteReview(restoreReview, "2026-05-18T04:30:00.000Z"))).toBe(false);
   });
 
   it("allows approve review for pending and rejected reports", () => {
@@ -133,18 +157,40 @@ describe("hazard route review workflow state", () => {
     expect(canStartHazardApprove("REJECTED", completeHazardRouteReview(review, "2026-05-18T03:55:00.000Z"))).toBe(false);
   });
 
-  it("keeps reject available while an approve review is in progress", () => {
-    const review = startHazardRouteReview({
+  it("keeps reject available for pending reports while any review is in progress", () => {
+    const approveReview = startHazardRouteReview({
       reportId: 14,
       intent: "approve",
       reviewerUserId: "admin-reject",
       now: "2026-05-18T05:00:00.000Z",
     });
+    const staleRestoreReview = startHazardRouteReview({
+      reportId: 14,
+      intent: "restore",
+      reviewerUserId: "admin-reject",
+      now: "2026-05-18T05:01:00.000Z",
+    });
 
     expect(canRejectHazardReport("PENDING")).toBe(true);
-    expect(canRejectHazardReport("PENDING", review)).toBe(true);
-    expect(canRejectHazardReport("APPROVED", review)).toBe(false);
-    expect(canRejectHazardReport("REJECTED", review)).toBe(false);
+    expect(canRejectHazardReport("PENDING", approveReview)).toBe(true);
+    expect(canRejectHazardReport("PENDING", staleRestoreReview)).toBe(true);
+    expect(canRejectHazardReport("APPROVED", approveReview)).toBe(false);
+    expect(canRejectHazardReport("REJECTED", approveReview)).toBe(false);
+  });
+
+  it("allows deleting processed reports but keeps active reviews protected", () => {
+    const restoreReview = startHazardRouteReview({
+      reportId: 16,
+      intent: "restore",
+      reviewerUserId: "admin-delete",
+      now: "2026-05-18T05:20:00.000Z",
+    });
+
+    expect(canDeleteHazardReport("PENDING")).toBe(false);
+    expect(canDeleteHazardReport("APPROVED")).toBe(true);
+    expect(canDeleteHazardReport("REJECTED")).toBe(true);
+    expect(canDeleteHazardReport("APPROVED", restoreReview)).toBe(false);
+    expect(canDeleteHazardReport("APPROVED", completeHazardRouteReview(restoreReview, "2026-05-18T05:25:00.000Z"))).toBe(true);
   });
 
   it("drops in-progress approve review display after the report is rejected", () => {

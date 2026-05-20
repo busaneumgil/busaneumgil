@@ -2,6 +2,7 @@ package com.ssafy.e102.domain.report.controller;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.report.dto.request.StartHazardRouteReviewRequest;
 import com.ssafy.e102.domain.report.dto.request.UpdateHazardRouteReviewRequest;
+import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDeleteResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportListResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardRouteReviewResponse;
@@ -85,6 +87,18 @@ public class AdminHazardReportController {
 		@Parameter(description = "반려할 제보 ID") @PathVariable @Positive
 		Long reportId) {
 		return ApiResponse.success(adminHazardReportService.rejectHazardReport(
+			reportId,
+			principal == null ? null : principal.userId()));
+	}
+
+	@Operation(summary = "제보 삭제", description = "승인 완료 또는 반려된 도로 상태 제보를 관리 목록에서 삭제한다. 도로 세그먼트와 라우팅 오버레이는 변경하지 않는다.")
+	@DeleteMapping("/{reportId}")
+	public ApiResponse<AdminHazardReportDeleteResponse> deleteHazardReport(
+		@Parameter(hidden = true) @AuthenticationPrincipal
+		AuthPrincipal principal,
+		@Parameter(description = "삭제할 제보 ID") @PathVariable @Positive
+		Long reportId) {
+		return ApiResponse.success(adminHazardReportService.deleteHazardReport(
 			reportId,
 			principal == null ? null : principal.userId()));
 	}

@@ -4,6 +4,7 @@ import {
   applyAdminRoutingOverrides,
   approveAdminHazardReport,
   completeAdminHazardRouteReview,
+  deleteAdminHazardReport,
   fetchAdminRoutingApplyState,
   fetchAdminDashboardSummary,
   fetchAdminHazardReportDetail,
@@ -41,6 +42,7 @@ import {
   type HazardReverseGeocodeResult,
 } from "./hazardReportPresentation";
 import {
+  canDeleteHazardReport,
   canRejectHazardReport,
   canStartHazardApprove,
   canStartHazardRestore,
@@ -61,7 +63,7 @@ import {
   type HazardRouteReviewRecord,
 } from "./hazardRouteReviewState";
 
-type HazardFilterKey = "" | HazardReportStatus | "RESTORE_PENDING";
+type HazardFilterKey = "" | HazardReportStatus;
 type HazardBadgeTone = "blue" | "orange" | "green" | "red" | "purple" | "gray";
 
 const reportStatusLabel: Record<HazardReportStatus, string> = {
@@ -82,6 +84,9 @@ const reportTypeLabel: Record<HazardReportType, string> = {
 const percentFormatter = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 1,
 });
+
+const HAZARD_ROUTE_REVIEW_RADIUS_METER = 300;
+const HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT = 500;
 
 type PreviewHazardRecord = {
   summary: AdminHazardReportSummary;
@@ -230,7 +235,6 @@ const previewSummary = {
     rejectedReports: 42,
   },
   dbSyncPendingCount: 5,
-  restorePendingCount: 2,
   latestSnapshotAt: "2024-05-01T14:30:00",
 };
 
@@ -312,11 +316,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   });
   const cursor = cursorStack[cursorStack.length - 1] ?? null;
   const hasToken = Boolean(accessToken);
-  const queryStatus = status === "RESTORE_PENDING" ? "APPROVED" : status;
 
   const reportsQuery = useQuery({
-    queryKey: ["admin-hazard-reports", queryStatus, cursor, accessToken],
-    queryFn: () => fetchAdminHazardReports({ status: queryStatus, cursor, size: 10, accessToken }),
+    queryKey: ["admin-hazard-reports", status, cursor, accessToken],
+    queryFn: () => fetchAdminHazardReports({ status, cursor, size: 10, accessToken }),
     enabled: !preview && hasToken,
     retry: false,
   });
@@ -372,10 +375,6 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const filteredReports = useMemo(() => {
     const normalizedKeyword = searchQuery.trim().toLowerCase();
     return (reportListData?.content ?? []).filter((report) => {
-      if (status === "RESTORE_PENDING" && !isHazardRestoreEligible(report, routeReviewDrafts[report.reportId])) {
-        return false;
-      }
-
       if (!normalizedKeyword) {
         return true;
       }
@@ -391,7 +390,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
       return haystack.includes(normalizedKeyword);
     });
-  }, [reportListData, routeReviewDrafts, searchQuery, status]);
+  }, [reportListData, searchQuery]);
 
   useEffect(() => {
     if (!filteredReports.length) {
@@ -504,6 +503,18 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       markReportHandled(response.reportId);
       clearRouteReviewDraft(response.reportId);
       setSelectedReportId(response.reportId);
+      setDetailPaneMode("detail");
+      void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (reportId: number) => deleteAdminHazardReport(reportId, accessToken),
+    onSuccess: (response) => {
+      clearRouteReviewDraft(response.reportId);
+      setSelectedReportId(null);
       setDetailPaneMode("detail");
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
@@ -637,12 +648,19 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       "admin-hazard-route-review-network",
       routeReviewAreaScope?.gu,
       routeReviewAreaScope?.dong,
+      reportPoint?.lat,
+      reportPoint?.lng,
+      HAZARD_ROUTE_REVIEW_RADIUS_METER,
       accessToken,
     ],
     queryFn: () => fetchAdminRoadNetworkPayload({
       gu: routeReviewAreaScope?.gu,
       dong: routeReviewAreaScope?.dong,
+      centerLat: reportPoint?.lat,
+      centerLng: reportPoint?.lng,
+      radiusMeter: HAZARD_ROUTE_REVIEW_RADIUS_METER,
       accessToken,
+      limit: HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT,
     }),
     enabled: !preview
       && hasToken
@@ -666,21 +684,30 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     && canRejectHazardReport(detail.status, activeReviewDraft)
     && !approveMutation.isPending
     && !rejectMutation.isPending
+    && !deleteMutation.isPending
     && !preview,
   );
+  const canDelete = Boolean(
+    detail && canDeleteHazardReport(detail.status, activeReviewDraft)
+    && !deleteMutation.isPending
+    && !preview,
+  );
+  const showsDeleteAction = detail ? canDeleteHazardReport(detail.status, null) : false;
   const canRestore = Boolean(detail && canStartHazardRestore(detail.status, activeReviewDraft));
   const isRouteReviewMode = Boolean(activeReport && activeReviewDraft && activeReviewDraft.stage === "IN_PROGRESS" && detailPaneMode === "review");
   const actionError = approveMutation.error instanceof Error
     ? approveMutation.error
     : rejectMutation.error instanceof Error
       ? rejectMutation.error
-      : startRouteReviewMutation.error instanceof Error
-        ? startRouteReviewMutation.error
-        : updateRouteReviewMutation.error instanceof Error
-          ? updateRouteReviewMutation.error
-          : completeRouteReviewMutation.error instanceof Error
-            ? completeRouteReviewMutation.error
-            : null;
+      : deleteMutation.error instanceof Error
+        ? deleteMutation.error
+        : startRouteReviewMutation.error instanceof Error
+          ? startRouteReviewMutation.error
+          : updateRouteReviewMutation.error instanceof Error
+            ? updateRouteReviewMutation.error
+            : completeRouteReviewMutation.error instanceof Error
+              ? completeRouteReviewMutation.error
+              : null;
 
   useEffect(() => {
     setSelectedImageIndex(0);
@@ -785,18 +812,14 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const pendingCount = reportSummary?.pendingReports ?? countReportsByStatus(reportListData?.content, "PENDING");
   const approvedCount = reportSummary?.approvedReports ?? countReportsByStatus(reportListData?.content, "APPROVED");
   const rejectedCount = reportSummary?.rejectedReports ?? countReportsByStatus(reportListData?.content, "REJECTED");
-  const restorePendingCount = preview
-    ? countRestorableReports(reportListData?.content, routeReviewDrafts)
-    : Math.max(approvedCount - countCompletedRestoreReviews(routeReviewDrafts), 0);
   const dbSyncPendingCount = preview
     ? previewSummary.dbSyncPendingCount
     : (routingApplyState?.dirty || routingApplyState?.applying) ? approvedCount : 0;
-  const totalSyncPendingCount = dbSyncPendingCount + restorePendingCount;
   const currentPage = cursorStack.length;
   const paginationItems = buildVisiblePageNumbers(currentPage, Boolean(reportListData?.hasNext));
   const detailTrackingId = activeReport ? formatHazardTrackingId(activeReport.createdAt, activeReport.reportId) : null;
   const detailHistory = activeReport ? buildHazardTimeline(activeReport, adminPrincipal.userId, activeReviewDraft) : [];
-  const hasDbSyncQueue = totalSyncPendingCount > 0;
+  const hasDbSyncQueue = dbSyncPendingCount > 0;
   const latestReportStamp = preview
     ? previewSummary.latestSnapshotAt
     : activeReport?.createdAt
@@ -859,7 +882,6 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                 { key: "PENDING" as HazardFilterKey, label: "대기", count: pendingCount },
                 { key: "APPROVED" as HazardFilterKey, label: "승인", count: approvedCount },
                 { key: "REJECTED" as HazardFilterKey, label: "반려", count: rejectedCount },
-                { key: "RESTORE_PENDING" as HazardFilterKey, label: "원상복구 대기", count: restorePendingCount },
               ].map((tab) => (
                 <button
                   key={tab.label}
@@ -984,8 +1006,8 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
           <div className={`hazard-bulk-bar ${hasDbSyncQueue ? "" : "empty"}`}>
             <div className="hazard-bulk-bar__summary">
-              <strong>{hasDbSyncQueue ? `전체 경로 반영 필요 ${totalSyncPendingCount}건` : "지금 반영할 항목이 없습니다."}</strong>
-              <span>경로 반영 필요 {dbSyncPendingCount}건 · 원상복구 대기 {restorePendingCount}건</span>
+              <strong>{hasDbSyncQueue ? `전체 경로 반영 필요 ${dbSyncPendingCount}건` : "지금 반영할 항목이 없습니다."}</strong>
+              <span>경로 반영 필요 {dbSyncPendingCount}건</span>
               <small>{latestReportStamp ? `마지막 집계 ${formatLongDateTime(latestReportStamp)}` : "마지막 집계 준비 중"}</small>
             </div>
             <button
@@ -1247,15 +1269,22 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   )}
                   <button
                     type="button"
-                    className="hazard-action-button reject"
-                    disabled={!canReject}
+                    className={`hazard-action-button ${showsDeleteAction ? "delete" : "reject"}`}
+                    disabled={showsDeleteAction ? !canDelete : !canReject}
                     onClick={() => {
                       if (preview) return;
+                      if (showsDeleteAction) {
+                        if (!confirm("처리된 제보를 삭제할까요? 제보와 검수 이력만 삭제되고 세그먼트/라우팅 상태는 유지됩니다.")) {
+                          return;
+                        }
+                        deleteMutation.mutate(detail.reportId);
+                        return;
+                      }
                       rejectMutation.mutate(detail.reportId);
                     }}
                   >
-                    <HazardUiIcon name="close" />
-                    반려
+                    <HazardUiIcon name={showsDeleteAction ? "trash" : "close"} />
+                    {showsDeleteAction ? "삭제" : "반려"}
                   </button>
                   <button
                     type="button"
@@ -1619,6 +1648,7 @@ function HazardUiIcon({
     | "back"
     | "check"
     | "close"
+    | "trash"
     | "refresh"
     | "calendar"
     | "search"
@@ -1659,6 +1689,14 @@ function HazardUiIcon({
       return (
         <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M5.8 5.8 14.2 14.2M14.2 5.8 5.8 14.2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "trash":
+      return (
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M7 5.2V4.6A1.6 1.6 0 0 1 8.6 3h2.8A1.6 1.6 0 0 1 13 4.6v.6M4.5 5.2h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="m6.1 7.4.6 8A1.7 1.7 0 0 0 8.4 17h3.2a1.7 1.7 0 0 0 1.7-1.6l.6-8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M8.7 9.1v5.2M11.3 9.1v5.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
         </svg>
       );
     case "refresh":
@@ -1878,27 +1916,9 @@ function summarizeRecoveryStatus(status: HazardReportStatus, review?: HazardRout
     return { label: "-", tone: "gray" as HazardBadgeTone };
   }
   if (status === "APPROVED") {
-    return { label: "가능", tone: "purple" as HazardBadgeTone };
+    return { label: "대기", tone: "purple" as HazardBadgeTone };
   }
   return { label: "-", tone: "gray" as HazardBadgeTone };
-}
-
-function isHazardRestoreEligible(
-  report: Pick<AdminHazardReportSummary, "reportId" | "status">,
-  review?: HazardRouteReviewRecord | null,
-) {
-  return canStartHazardRestore(report.status, review);
-}
-
-function countRestorableReports(
-  reports: AdminHazardReportSummary[] | undefined,
-  drafts: Record<number, HazardRouteReviewRecord>,
-) {
-  return (reports ?? []).filter((report) => isHazardRestoreEligible(report, drafts[report.reportId])).length;
-}
-
-function countCompletedRestoreReviews(drafts: Record<number, HazardRouteReviewRecord>) {
-  return Object.values(drafts).filter((draft) => draft.stage === "COMPLETED" && draft.intent === "restore").length;
 }
 
 function statusToneFromReport(status: HazardReportStatus): HazardBadgeTone {

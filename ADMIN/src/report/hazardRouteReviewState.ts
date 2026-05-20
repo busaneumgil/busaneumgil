@@ -13,7 +13,7 @@ const hazardRouteReviewStoragePrefix = "busan-eumgil-ADMIN:hazard-route-review:"
 export type HazardRouteReviewIntent = "approve" | "restore";
 export type HazardRouteReviewStage = "IN_PROGRESS" | "COMPLETED";
 export type HazardRouteReviewTone = "blue" | "orange" | "green" | "red" | "purple" | "gray";
-export type HazardDisplayStatusKey = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "REJECTED" | "RESTORED";
+export type HazardDisplayStatusKey = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "REJECTED" | "RESTORE_PENDING" | "RESTORED";
 
 export interface HazardRouteReviewRecord {
   reportId: number;
@@ -254,15 +254,19 @@ export function deriveHazardDisplayStatus(
   review?: HazardRouteReviewRecord | null,
 ): HazardDisplayStatus {
   if (review?.stage === "IN_PROGRESS") {
-    return { key: "IN_PROGRESS", label: "진행중", tone: "blue" };
+    return {
+      key: "IN_PROGRESS",
+      label: review.intent === "restore" ? "원상복구 진행중" : "진행중",
+      tone: "blue",
+    };
   }
   if (review?.stage === "COMPLETED" && review.intent === "restore") {
     return { key: "RESTORED", label: "원상복구 완료", tone: "purple" };
   }
-  if (review?.stage === "COMPLETED" && review.intent === "approve") {
-    return { key: "COMPLETED", label: "완료", tone: "green" };
-  }
   if (baseStatus === "APPROVED") {
+    return { key: "RESTORE_PENDING", label: "원상복구 대기", tone: "purple" };
+  }
+  if (review?.stage === "COMPLETED" && review.intent === "approve") {
     return { key: "COMPLETED", label: "완료", tone: "green" };
   }
   if (baseStatus === "REJECTED") {
@@ -332,12 +336,19 @@ export function canStartHazardRestore(
 
 export function canRejectHazardReport(
   baseStatus: HazardReportStatus,
+  _review?: HazardRouteReviewRecord | null,
+) {
+  return baseStatus === "PENDING";
+}
+
+export function canDeleteHazardReport(
+  baseStatus: HazardReportStatus,
   review?: HazardRouteReviewRecord | null,
 ) {
-  if (baseStatus !== "PENDING") {
+  if (review?.stage === "IN_PROGRESS") {
     return false;
   }
-  return review?.stage !== "IN_PROGRESS" || review.intent === "approve";
+  return baseStatus === "APPROVED" || baseStatus === "REJECTED";
 }
 
 export function resolveActiveHazardRouteReview(
@@ -354,7 +365,7 @@ export function resolveActiveHazardRouteReview(
 }
 
 export function isHazardRestorePending(review?: HazardRouteReviewRecord | null) {
-  return review?.intent === "restore" && (review.stage === "IN_PROGRESS" || review.stage === "COMPLETED");
+  return review?.intent === "restore" && review.stage === "IN_PROGRESS";
 }
 
 export function isHazardReviewActive(review?: HazardRouteReviewRecord | null) {

@@ -10,6 +10,7 @@ import type {
   AdminRoutePreviewResponse,
   AdminDashboardSummaryResponse,
   AdminHazardReportDetail,
+  AdminHazardReportDeleteResponse,
   AdminHazardReportListResponse,
   AdminHazardReportStatusResponse,
   AdminMeResponse,
@@ -346,11 +347,17 @@ export async function updateAdminAreaAssignmentStatus(
 export async function fetchAdminRoadNetworkPayload({
   gu,
   dong,
+  centerLat,
+  centerLng,
+  radiusMeter,
   accessToken,
   limit,
 }: {
   gu?: string;
   dong?: string;
+  centerLat?: number;
+  centerLng?: number;
+  radiusMeter?: number;
   accessToken: string;
   limit?: number;
 }): Promise<SegmentPayload> {
@@ -361,6 +368,11 @@ export async function fetchAdminRoadNetworkPayload({
   }
   if (typeof limit === "number") {
     params.set("limit", String(limit));
+  }
+  if (typeof centerLat === "number" && typeof centerLng === "number" && typeof radiusMeter === "number") {
+    params.set("centerLat", String(centerLat));
+    params.set("centerLng", String(centerLng));
+    params.set("radiusMeter", String(radiusMeter));
   }
   const queryString = params.toString();
   return requestAdminJson<SegmentPayload>(
@@ -591,6 +603,15 @@ export async function rejectAdminHazardReport(
 ): Promise<AdminHazardReportStatusResponse> {
   return requestAdminJson<AdminHazardReportStatusResponse>(`/admin/hazard-reports/${reportId}/reject`, accessToken, {
     method: "PATCH",
+  });
+}
+
+export async function deleteAdminHazardReport(
+  reportId: number,
+  accessToken: string,
+): Promise<AdminHazardReportDeleteResponse> {
+  return requestAdminJson<AdminHazardReportDeleteResponse>(`/admin/hazard-reports/${reportId}`, accessToken, {
+    method: "DELETE",
   });
 }
 

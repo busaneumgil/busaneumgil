@@ -190,6 +190,13 @@ public class AdminHazardRouteReviewService {
 		return AdminHazardRouteReviewResponse.from(findLatestReview(reportId), reportStatus);
 	}
 
+	@Transactional
+	public void clearInProgressRouteReview(Long reportId) {
+		hazardReportRouteReviewRepository
+			.findTopByHazardReport_ReportIdAndStageOrderByReviewIdDesc(reportId, HazardRouteReviewStage.IN_PROGRESS)
+			.ifPresent(hazardReportRouteReviewRepository::delete);
+	}
+
 	private HazardReport getHazardReport(Long reportId) {
 		return hazardReportRepository.findWithImagesAndUserByReportId(reportId)
 			.orElseThrow(() -> new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_NOT_FOUND));

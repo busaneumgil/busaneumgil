@@ -234,8 +234,8 @@ class GraphHopperRouteClientTest {
 	}
 
 	@Test
-	@DisplayName("GraphHopper path detail에 walk_access=NO가 포함되면 RT4040으로 매핑한다")
-	void routeMapsWalkAccessNoToRouteNotFound() {
+	@DisplayName("GraphHopper path detail에 walk_access=NO가 포함돼도 path가 있으면 경로를 반환한다")
+	void routeSucceedsEvenWhenWalkAccessDetailContainsNo() {
 		server.expect(requestTo("http://graphhopper.test/route?profile=pedestrian_safe&point=35.12,128.936&"
 			+ "point=35.1315,128.8823&points_encoded=false&locale=ko-KR&details=edge_id&details=walk_access&"
 			+ "details=segment_type&details=signal_state&details=audio_signal_state&details=avg_slope_percent&details=width_state&details=surface_state&details=stairs_state"))
@@ -257,13 +257,14 @@ class GraphHopperRouteClientTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-		assertThatThrownBy(() -> client.route(new GraphHopperRouteRequest(
+		GraphHopperRoutePath path = client.route(new GraphHopperRouteRequest(
 			new GeoPointRequest(35.12, 128.936),
 			new GeoPointRequest(35.1315, 128.8823),
-			WalkRouteProfile.PEDESTRIAN_SAFE)))
-			.isInstanceOf(RouteException.class)
-			.extracting(exception -> ((RouteException)exception).getErrorCode())
-			.isEqualTo(RouteErrorCode.ROUTE_NOT_FOUND);
+			WalkRouteProfile.PEDESTRIAN_SAFE));
+
+		assertThat(path.distanceMeter()).isEqualByComparingTo(BigDecimal.valueOf(950.5));
+		assertThat(path.details().get("walk_access")).hasSize(1);
+		assertThat(path.details().get("walk_access").get(0).value()).isEqualTo("NO");
 	}
 
 	@Test

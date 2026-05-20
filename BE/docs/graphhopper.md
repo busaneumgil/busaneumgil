@@ -30,7 +30,8 @@
 ### 3. SAFE / SHORTEST 후보 비교
 
 - `WalkRouteGraphHopperSearchService`는 안전 중심 후보와 최단 중심 후보를 고정 순서로 조회한다.
-- `walk_access=NO`가 포함된 경로는 즉시 제외한다.
+- GraphHopper가 path를 반환하면 route availability는 그 계산 결과를 source of truth로 사용한다.
+- `path details.walk_access`는 base graph EV를 보여줄 수 있으므로 경로 가능 여부 판정에는 사용하지 않고, 응답/디버깅/안내 조립용으로만 유지한다.
 - 결과는 `RouteSearchCacheService`를 통해 Redis에 보관해 이후 선택, 재탐색, 안내 갱신에 재사용한다.
 
 ### 4. 위험 제보 기반 우회
@@ -54,7 +55,8 @@
 
 ### 잘못된 경로 후보 차단
 
-- `walk_access=NO` 세그먼트가 포함되면 응답을 버린다.
+- overlay reopen이 적용된 edge는 graph rebuild 전에도 custom model 계산에서 통과할 수 있다.
+- 이때 GraphHopper response detail에 base `walk_access=NO`가 남아 있어도 BE는 응답을 버리지 않는다.
 - 최소 이동 거리, 유효 geometry, 필수 path details 누락 여부를 서비스 레벨에서 한 번 더 검증한다.
 
 ### 운영 반영 안정성

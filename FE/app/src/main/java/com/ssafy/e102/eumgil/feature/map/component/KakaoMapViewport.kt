@@ -834,6 +834,7 @@ private class KakaoMapViewportController {
                     .toTypedArray()
             readyMap.moveCamera(
                 CameraUpdateFactory.fitMapPoints(routePoints, KAKAO_ROUTE_CAMERA_PADDING),
+                CameraAnimation.from(KAKAO_ZOOM_CAMERA_ANIMATION_DURATION_MILLIS),
             )
             lastRenderedCameraRequestId = cameraState.requestId
             lastRenderedCameraTarget = currentTarget

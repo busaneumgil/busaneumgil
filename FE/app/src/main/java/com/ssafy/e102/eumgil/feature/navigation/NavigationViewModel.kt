@@ -2809,8 +2809,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
             origin.coordinate
         } else {
-            selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
-                ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
+            selectedRoute.resolveSegmentRepresentativeCoordinate(focusedSegmentIndex)
                 ?: activeFocusCoordinate
         }
     val segmentRouteSegments =
@@ -3342,6 +3341,19 @@ private fun RouteCandidate.resolveSegmentFocusCoordinate(segmentIndex: Int): Geo
 
     val progressRatio = resolveSegmentMidProgressRatio(segmentIndex = segmentIndex, weights = segmentWeights())
     return fallbackPolyline.coordinateAtProgressRatio(progressRatio)
+}
+
+private fun RouteCandidate.resolveSegmentRepresentativeCoordinate(segmentIndex: Int): GeoCoordinate? {
+    val segment = segments.getOrNull(segmentIndex)
+    segment
+        ?.polyline
+        ?.takeIf(RoutePolyline::isRenderable)
+        ?.points
+        ?.toNavigationFocusCoordinate()
+        ?.let { return it }
+
+    return resolveSegmentStartCoordinate(segmentIndex)
+        ?: resolveSegmentFocusCoordinate(segmentIndex)
 }
 
 private fun RouteCandidate.resolveSegmentEndCoordinate(segmentIndex: Int): GeoCoordinate? {

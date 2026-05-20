@@ -78,6 +78,7 @@ fun NavigationSegmentRail(
                     items = scrubberItems,
                     focusedItemIndex = uiState.focusedSegmentIndex,
                     onFocusedItemChanged = onTopVisibleSegmentChanged,
+                    onItemClick = onSegmentTapped,
                     itemHeight = NavigationSegmentRailItemHeight,
                     trailingActionHeight = NavigationSegmentRailTopActionHeight,
                     dividerColor = NavigationSegmentRailDividerColor,

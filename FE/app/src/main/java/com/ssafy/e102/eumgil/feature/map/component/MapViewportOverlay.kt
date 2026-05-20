@@ -585,8 +585,8 @@ private fun MapCoordinate.toCurrentLocationFallbackCamera(bearingDegrees: Double
 private fun MapCoordinate.toFocusedFallbackCamera(): MapViewportFallbackCamera =
     MapViewportFallbackCamera(
         center = this,
-        latitudeSpan = 0.004,
-        longitudeSpan = 0.007,
+        latitudeSpan = 0.0035,
+        longitudeSpan = 0.0045,
     )
 
 private fun MapCameraTarget.toViewportFallbackCamera(): MapViewportFallbackCamera =

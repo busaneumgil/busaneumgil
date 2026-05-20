@@ -232,8 +232,9 @@ class KakaoMapViewportConfigurationTest {
                 source.contains("routeLineManager.addLayer("),
         )
         assertTrue(
-            "Route map camera should fit route geometry instead of staying on the default map center.",
+            "Route map camera should animate when fitting route geometry instead of snapping from the default map center.",
             source.contains("CameraUpdateFactory.fitMapPoints") &&
+                source.contains("CameraAnimation.from(KAKAO_ZOOM_CAMERA_ANIMATION_DURATION_MILLIS)") &&
                 source.contains("createKakaoRouteCameraRenderState"),
         )
         assertTrue(

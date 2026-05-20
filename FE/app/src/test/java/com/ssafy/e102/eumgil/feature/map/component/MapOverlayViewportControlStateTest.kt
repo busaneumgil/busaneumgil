@@ -112,4 +112,50 @@ class MapOverlayViewportControlStateTest {
         assertEquals(16, cameraTarget.zoomLevel)
         assertTrue(controlState.shouldFitProjection)
     }
+
+    @Test
+    fun `repeated zoom controls build from the pending camera target`() {
+        val controlState = MapOverlayViewportControlState()
+        val baseTarget =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1796, longitude = 129.0756),
+                source = MapCameraSource.SEARCH_RESULT,
+                requestId = 30L,
+                zoomLevel = 16,
+            )
+
+        controlState.updateBaseCameraTarget(baseTarget)
+        controlState.zoomIn()
+        controlState.zoomIn()
+
+        val cameraTarget = controlState.cameraTargetFor(baseTarget)
+        assertEquals(baseTarget.center, cameraTarget.center)
+        assertEquals(18, cameraTarget.zoomLevel)
+        assertFalse(controlState.shouldFitProjection)
+    }
+
+    @Test
+    fun `stale programmatic camera callback does not override a pending zoom target`() {
+        val controlState = MapOverlayViewportControlState()
+        val baseTarget =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1796, longitude = 129.0756),
+                source = MapCameraSource.SEARCH_RESULT,
+                requestId = 40L,
+                zoomLevel = 16,
+            )
+
+        controlState.updateBaseCameraTarget(baseTarget)
+        controlState.zoomIn()
+        controlState.onCameraMoveEnd(
+            center = MapCoordinate(latitude = 35.1900, longitude = 129.0900),
+            zoomLevel = 16,
+            isUserGesture = false,
+        )
+        controlState.zoomIn()
+
+        val cameraTarget = controlState.cameraTargetFor(baseTarget)
+        assertEquals(baseTarget.center, cameraTarget.center)
+        assertEquals(18, cameraTarget.zoomLevel)
+    }
 }

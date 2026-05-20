@@ -122,7 +122,8 @@ class RouteStepScrubberRailTest {
                 .substringAfter("onClick = {")
                 .substringBefore("},\n                    )")
 
-        assertTrue(clickSection.indexOf("state.animateTo(item.index)") < clickSection.indexOf("currentOnFocusedItemChanged(item.index)"))
+        assertTrue(clickSection.indexOf("state.animateTo(item.index)") < clickSection.indexOf("currentOnItemClick?.invoke(item.index)"))
+        assertTrue(clickSection.contains("?: currentOnFocusedItemChanged(item.index)"))
     }
 
     @Test

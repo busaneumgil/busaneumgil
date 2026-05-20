@@ -398,6 +398,7 @@ fun RouteDetailScreen(
                         }
                         focusedDetailStepIndex = markerId.routeDetailStepMarkerIndexOrNull()
                         if (focusedDetailStepIndex != null) {
+                            mapControlState.clearManualCamera()
                             isDetailSidePanelExpanded = false
                         }
                     },
@@ -473,6 +474,7 @@ fun RouteDetailScreen(
                         focusedStepIndex = focusedDetailStepIndex,
                         onExpandedChange = { expanded -> isDetailSidePanelExpanded = expanded },
                         onStepClick = { index ->
+                            mapControlState.clearManualCamera()
                             focusedDetailStepIndex = index
                             isDetailSidePanelExpanded = false
                         },
@@ -1092,6 +1094,7 @@ private fun RouteDetailIconRail(
         items = scrubberItems,
         focusedItemIndex = focusedStepIndex,
         onFocusedItemChanged = onTopVisibleStepChanged,
+        onItemClick = onStepClick,
         itemHeight = RouteDetailCollapsedRailItemSize,
         trailingActionHeight = RouteDetailCollapsedRailItemSize,
         dividerColor = RouteDetailGuideDividerColor,

@@ -160,6 +160,15 @@ internal class MapOverlayViewportControlState {
         zoomLevel: Int,
         isUserGesture: Boolean,
     ) {
+        val requestedTarget = baseCameraTarget?.let(::cameraTargetFor)
+        if (
+            !isUserGesture &&
+            (manualCameraTarget != null || recenterCameraTarget != null) &&
+            requestedTarget != null &&
+            !requestedTarget.isAlignedWithCameraCallback(center = center, zoomLevel = zoomLevel)
+        ) {
+            return
+        }
         latestObservedCamera =
             MapOverlayObservedCamera(
                 center = center,
@@ -204,13 +213,21 @@ internal class MapOverlayViewportControlState {
     fun recenterToCurrentLocation(currentLocation: MapCoordinate) {
         val baseTarget = baseCameraTarget ?: MapCameraTarget.DefaultBusan
         val observedCamera = latestObservedCamera
+        val currentTarget = manualCameraTarget ?: recenterCameraTarget ?: baseTarget
         manualCameraTarget = null
-        latestObservedCamera = null
+        latestObservedCamera =
+            MapOverlayObservedCamera(
+                center = currentLocation,
+                zoomLevel =
+                    observedCamera?.zoomLevel
+                        ?: currentTarget.zoomLevel
+                        ?: MapCameraSource.CURRENT_LOCATION.defaultZoomLevel(),
+            )
         recenterCameraTarget =
             baseTarget.copy(
                 center = currentLocation,
                 source = MapCameraSource.CURRENT_LOCATION,
-                zoomLevel = observedCamera?.zoomLevel ?: baseTarget.zoomLevel ?: MapCameraSource.CURRENT_LOCATION.defaultZoomLevel(),
+                zoomLevel = latestObservedCamera?.zoomLevel ?: MapCameraSource.CURRENT_LOCATION.defaultZoomLevel(),
                 bearingDegrees = baseTarget.bearingDegrees,
                 requestId = nextControlRequestId(),
                 shouldAnimateTransition = true,
@@ -219,19 +236,28 @@ internal class MapOverlayViewportControlState {
 
     private fun zoomBy(delta: Int) {
         val baseTarget = baseCameraTarget ?: MapCameraTarget.DefaultBusan
-        val currentTarget = manualCameraTarget ?: baseTarget
+        val currentTarget = manualCameraTarget ?: recenterCameraTarget ?: baseTarget
         val observedCamera = latestObservedCamera
-        val currentZoomLevel = observedCamera?.zoomLevel ?: currentTarget.resolvedZoomLevel()
+        val currentZoomLevel =
+            currentTarget.zoomLevel
+                ?: observedCamera?.zoomLevel
+                ?: currentTarget.resolvedZoomLevel()
         val nextZoomLevel =
             (currentZoomLevel + delta)
                 .coerceIn(KAKAO_MAP_MIN_ZOOM_LEVEL, KAKAO_MAP_MAX_ZOOM_LEVEL)
         if (nextZoomLevel == currentZoomLevel) return
+        val nextCenter = observedCamera?.center ?: currentTarget.center
         manualCameraTarget =
             currentTarget.copy(
-                center = observedCamera?.center ?: currentTarget.center,
+                center = nextCenter,
                 zoomLevel = nextZoomLevel,
                 requestId = nextControlRequestId(),
                 shouldAnimateTransition = true,
+            )
+        latestObservedCamera =
+            MapOverlayObservedCamera(
+                center = nextCenter,
+                zoomLevel = nextZoomLevel,
             )
         recenterCameraTarget = null
     }
@@ -345,3 +371,10 @@ private fun MapCoordinate.isApproximatelySameCoordinate(
     other: MapCoordinate,
     tolerance: Double = MAP_OVERLAY_CAMERA_CALLBACK_COORDINATE_TOLERANCE,
 ): Boolean = abs(latitude - other.latitude) <= tolerance && abs(longitude - other.longitude) <= tolerance
+
+private fun MapCameraTarget.isAlignedWithCameraCallback(
+    center: MapCoordinate,
+    zoomLevel: Int,
+): Boolean =
+    this.center.isApproximatelySameCoordinate(center) &&
+        resolvedZoomLevel() == zoomLevel

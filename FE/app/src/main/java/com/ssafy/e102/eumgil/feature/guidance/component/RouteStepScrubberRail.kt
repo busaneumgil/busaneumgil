@@ -53,6 +53,7 @@ fun RouteStepScrubberRail(
     focusedItemIndex: Int?,
     onFocusedItemChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    onItemClick: ((Int) -> Unit)? = null,
     itemHeight: Dp = RouteStepScrubberItemHeight,
     trailingActionHeight: Dp = RouteStepScrubberTrailingActionHeight,
     dividerColor: Color = RouteStepScrubberDividerColor,
@@ -61,6 +62,7 @@ fun RouteStepScrubberRail(
     val itemHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { itemHeight.toPx() }
     val resolvedFocusedIndex = items.resolveFocusedScrubberIndex(focusedItemIndex)
     val currentOnFocusedItemChanged by rememberUpdatedState(onFocusedItemChanged)
+    val currentOnItemClick by rememberUpdatedState(onItemClick)
     val coroutineScope = rememberCoroutineScope()
     val interactionSource = remember { MutableInteractionSource() }
     val isDragged by interactionSource.collectIsDraggedAsState()
@@ -169,7 +171,8 @@ fun RouteStepScrubberRail(
                                 lastScrubbedIndex = item.index
                                 try {
                                     state.animateTo(item.index)
-                                    currentOnFocusedItemChanged(item.index)
+                                    currentOnItemClick?.invoke(item.index)
+                                        ?: currentOnFocusedItemChanged(item.index)
                                 } finally {
                                     isProgrammaticScroll = false
                                 }

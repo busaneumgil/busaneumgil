@@ -1564,6 +1564,7 @@ class RouteSettingLayoutPolicyTest {
             "Route detail rail should use the shared scrubber so scroll position is the focused step source of truth.",
             railSection.contains("RouteStepScrubberRail(") &&
                 railSection.contains("onFocusedItemChanged = onTopVisibleStepChanged") &&
+                railSection.contains("onItemClick = onStepClick") &&
                 railSection.contains("dividerColor = RouteDetailGuideDividerColor"),
         )
         assertTrue(

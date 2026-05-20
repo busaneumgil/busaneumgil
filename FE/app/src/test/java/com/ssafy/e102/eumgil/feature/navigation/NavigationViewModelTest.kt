@@ -1431,7 +1431,7 @@ class NavigationViewModelTest {
         }
 
     @Test
-    fun `segment tap focuses map on the tapped segment start coordinate`() =
+    fun `segment tap focuses map on the tapped segment representative coordinate`() =
         runTest {
             val viewModel = createViewModel()
 
@@ -1443,7 +1443,7 @@ class NavigationViewModelTest {
 
             assertEquals(NavigationMapFocusMode.FOCUSED, viewModel.uiState.value.mapOverlay.mapFocusMode)
             assertEquals(
-                WALK_MID_POINT,
+                WALK_SECOND_SEGMENT_FOCUS_POINT,
                 viewModel.uiState.value.mapOverlay.focusCoordinate,
             )
         }
@@ -3852,6 +3852,7 @@ private val WALK_PRE_TURN_POINT = GeoCoordinate(latitude = 35.1796, longitude = 
 private val WALK_NEAR_TURN_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.07806)
 private val WALK_VERY_NEAR_TURN_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.07808)
 private val WALK_MID_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0781)
+private val WALK_SECOND_SEGMENT_FOCUS_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.07935)
 private val WALK_END_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.0806)
 private val WALK_DESTINATION_NEAR_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.08052)
 private val WALK_DESTINATION_OUTSIDE_AUTO_ARRIVAL_POINT = GeoCoordinate(latitude = 35.1796, longitude = 129.08035)

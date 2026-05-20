@@ -28,6 +28,7 @@ import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
 import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
 import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputBottomSheet
 import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputExperience
 import kotlinx.coroutines.flow.collect
@@ -39,7 +40,7 @@ fun MapRoute(
     onNavigateToSavedRoutes: () -> Unit,
     onNavigateToMyPage: () -> Unit,
     onNavigateToRouteSetting: (Boolean) -> Unit = {},
-    onNavigateToSearch: (RouteEditingTarget) -> Unit = {},
+    onNavigateToSearch: (RouteEditingTarget, SearchSelectionMode) -> Unit = { _, _ -> },
     onNavigateToSearchResults: (String, RouteEditingTarget) -> Unit = { _, _ -> },
     routeEndpointMapPickerTarget: RouteEditingTarget? = null,
     onRouteEndpointMapPickerTargetConsumed: () -> Unit = {},
@@ -153,7 +154,7 @@ fun MapRoute(
             when (event) {
                 is MapUiEvent.NavigateToRouteSetting ->
                     onNavigateToRouteSetting(event.locationPermissionPrechecked)
-                is MapUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget)
+                is MapUiEvent.NavigateToSearch -> onNavigateToSearch(event.editingTarget, event.selectionMode)
                 is MapUiEvent.OpenDialer -> context.startActivity(createDialIntent(event.phoneNumber))
                 MapUiEvent.RequestLocationPermission ->
                     activity?.let(appContainer.locationPermissionManager::requestLocationPermission)

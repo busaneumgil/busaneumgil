@@ -278,6 +278,9 @@ class SearchViewModel(
         destinationPreviewRepository.requestPreview(
             destination = destination,
             editingTarget = mutableUiState.value.editingTarget,
+            routeEndpointTarget =
+                mutableUiState.value.editingTarget
+                    .takeIf { mutableUiState.value.selectionMode == SearchSelectionMode.APPLY_TO_ROUTE },
             accessibilityTagKeys = result.accessibilityTagKeys,
             detailType =
                 if (result.isVerifiedPlace) {

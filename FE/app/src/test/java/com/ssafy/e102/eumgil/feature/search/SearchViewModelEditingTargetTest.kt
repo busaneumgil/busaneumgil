@@ -376,6 +376,7 @@ class SearchViewModelEditingTargetTest {
             advanceUntilIdle()
 
             assertEquals(RouteEditingTarget.DESTINATION, destinationPreviewRepository.pendingPreview.value?.editingTarget)
+            assertEquals(null, destinationPreviewRepository.pendingPreview.value?.routeEndpointTarget)
             assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
         }
 

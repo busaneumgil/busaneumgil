@@ -6,6 +6,8 @@
 현재 기준에서 `INF`는 AWS 구조, Jenkins 운영 설정, 모니터링 설정처럼 운영 관점에서 함께 봐야 하는 설정 자산을 관리한다.
 Terraform, S1 Jenkins, S1 운영도구 compose/proxy 설정은 코드 기준으로 관리한다.
 
+2026-05-20 실서버 확인 기준 최신 런타임 스냅샷은 `Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md`를 기준으로 한다.
+
 ## 결정 요약
 
 - 루트 디렉토리는 실행 진입점으로 사용한다. (루트 디렉토리는 INF가 아닌 INF의 상위 디렉토리를 말한다.)
@@ -32,6 +34,7 @@ Terraform, S1 Jenkins, S1 운영도구 compose/proxy 설정은 코드 기준으�
 INF/
 |-- README.md
 |-- aws/
+|-- graphhopper/
 |-- jenkins/
 |-- monitoring/
 `-- terraform/
@@ -66,6 +69,12 @@ Jenkins 운영에 필요한 설정 파일을 둔다.
 
 배포 흐름 설명 문서는 `Docs/인프라` 또는 `Docs/컨벤션`에서 관리한다.
 
+### `graphhopper/`
+
+GraphHopper runtime/build 이미지, 설정, custom model, overlay plugin 기준 파일을 둔다.
+
+현재 prod GraphHopper는 `S2`의 `graphhopper-blue`/`graphhopper-green` runtime slot으로 실행하며, Redis의 `graphhopper:active-slot` 계약을 통해 backend가 active slot을 선택한다.
+
 ### `monitoring/`
 
 모니터링 관련 설정 파일을 둔다.
@@ -75,7 +84,7 @@ Jenkins 운영에 필요한 설정 파일을 둔다.
 - 보조 모니터링은 `S1`의 `Grafana/PLG`를 사용한다.
 - `Portainer`, `SonarQube`도 `S1` 운영도구 stack으로 둔다.
 - `Portainer`는 외부 공개하지 않고 SSH 터널로만 접근한다.
-- `green`이 실제 prod를 받기 시작하면 운영도구는 중지 가능해야 한다.
+- `S2` prod의 로그 수집은 `monitoring/s2` promtail 템플릿을 기준으로 한다.
 - `Grafana/PLG`는 운영 보조 조회 용도이며, 핵심 장애 알람 체계를 대체하지 않는다.
 
 예시:
@@ -124,15 +133,16 @@ Jenkins 운영에 필요한 설정 파일을 둔다.
 
 - 운영 기준은 EC2 2대 구조다.
 - `S1`은 `dev/Jenkins/build runner + Grafana/Portainer/SonarQube/PLG` 역할을 가진다.
-- `S2`는 `primary prod runtime` 역할을 가진다.
+- `S2`는 `primary prod runtime` 역할을 가지며, backend/AI/admin/GraphHopper blue-green runtime을 실행한다.
 - `RDS`, `ElastiCache`는 관리형 서비스로 운영한다.
 - EC2 shell 접속은 `SSH`를 기본으로 하며, `22`는 관리자 고정 IP만 허용한다.
 - `RDS`, `ElastiCache` 같은 private resource 접근은 `SSM Session Manager` port forwarding 기준으로 잡는다.
 - `SSM Session Manager`는 SSH 장애 시 복구 채널로도 유지한다.
 - 서비스 API와 필요한 관리자 UI는 각 서버 `Nginx`의 `80/443` host-based routing으로 접근한다.
 - `Portainer`는 host-based routing에서 제외하고 SSH 터널로만 접근한다.
-- EC2에서 외부에 직접 여는 포트는 `22`만 두며, 관리자 고정 IP만 허용한다.
+- EC2에서 외부에 직접 여는 포트는 `80/443`과 `22`만 두며, `22`는 관리자 고정 IP만 허용한다.
 - `monitoring/`은 현재 `S1` 운영도구 자산 중심으로 정리한다.
+- S1 dev backend의 `/health/graphhopper`는 2026-05-20 확인 시 `DOWN`이지만, S1 GraphHopper runtime 직접 `/healthcheck`는 정상이다. dev backend GraphHopper health 설정과 Redis slot 초기화는 후속 정렬 항목이다.
 
 ## 정렬 완료 기준
 

@@ -103,13 +103,14 @@ terraform plan -out=prod.tfplan
 - Grafana, Portainer, SonarQube, PLG 같은 운영도구 도메인은 S1 고정 IP가 있으면 A 레코드로 연결하고, 고정 IP가 없으면 `s1_public_domain`으로 CNAME 연결한다.
 - Route53 record는 Hosted Zone ID가 입력된 경우에만 생성한다.
 
-## 2026-04-29 반영 상태
+## 2026-05-20 반영 상태
 
 - bootstrap remote state bucket과 DynamoDB lock table 생성 완료
 - prod Terraform backend는 S3 remote state 기준으로 초기화 완료
 - S2 prod primary, RDS, ElastiCache, S3, Route53 운영 리소스 apply 완료
-- `api.busaneumgil.com`, `ai.busaneumgil.com`은 S2 Elastic IP로 연결 완료
-- `admin.busaneumgil.com`은 관리자 웹 운영 전환 시 S2 Elastic IP로 연결한다.
+- `api.busaneumgil.com`, `ai.busaneumgil.com`, `admin.busaneumgil.com`은 S2 Elastic IP로 연결 완료
+- S2 prod runtime은 backend, AI Flask server, 관리자 웹, GraphHopper blue/green runtime을 실행한다.
+- 2026-05-20 확인 기준 `https://api.busaneumgil.com/health`, `https://api.busaneumgil.com/health/graphhopper`, `https://ai.busaneumgil.com/health`, `https://admin.busaneumgil.com/health`는 모두 정상 응답한다.
 - `jenkins/grafana/portainer/sonarqube/plg.busaneumgil.com`은 S1 도메인 CNAME으로 연결 완료
 - `api.dev.busaneumgil.com`, `ai.dev.busaneumgil.com`은 S1 dev stack CNAME으로 연결 완료
 - Terraform apply는 반드시 plan 검토 후 수동 승인으로 진행한다.

@@ -193,9 +193,10 @@ class NavigationScreenPolicyTest {
                 source.contains("uiState.segmentSync.railItems.forEach"),
         )
         assertTrue(
-            "Collapsed rail scrubber should reuse SegmentTapped so the anchored step drives the hero card and map focus.",
+            "Collapsed rail scrubber should separate icon taps from drag focus so explicit taps drive map focus.",
             source.contains("onTopVisibleSegmentChanged = { index ->") &&
                 railSource.contains("RouteStepScrubberRail(") &&
+                railSource.contains("onItemClick = onSegmentTapped") &&
                 scrubberSource.contains("snapshotFlow") &&
                 scrubberSource.contains("anchoredDraggable(") &&
                 railSource.contains("onTopVisibleSegmentChanged"),

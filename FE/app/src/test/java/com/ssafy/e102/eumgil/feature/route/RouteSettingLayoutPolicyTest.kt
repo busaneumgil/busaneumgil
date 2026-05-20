@@ -792,6 +792,33 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `low floor reservation button stays disabled after successful request`() {
+        val screenSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
+        val entrySource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingEntryRoute.kt")
+                .readText()
+        val lowFloorRowSection =
+            screenSource
+                .substringAfter("private fun LowFloorReservationRow(")
+                .substringBefore("@Composable\nprivate fun LowFloorReservationConfirmDialog")
+
+        assertTrue(
+            "Successful low-floor reservations should be remembered by stable vehicle key and passed down to the screen.",
+            entrySource.contains("completedLowFloorReservationKeys") &&
+                entrySource.contains("reservation.stableReservationKey()") &&
+                entrySource.contains("completedLowFloorReservationKeys + completedKey") &&
+                screenSource.contains("completedReservationKeys = completedLowFloorReservationKeys"),
+        )
+        assertTrue(
+            "Completed low-floor reservation rows should disable the action and show a completed label.",
+            lowFloorRowSection.contains("enabled = !isCompleted") &&
+                lowFloorRowSection.contains("route_setting_low_floor_reservation_completed"),
+        )
+    }
+
+    @Test
     fun `route failure replaces map with a clean duribal fallback screen`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -1564,6 +1591,7 @@ class RouteSettingLayoutPolicyTest {
             "Route detail rail should use the shared scrubber so scroll position is the focused step source of truth.",
             railSection.contains("RouteStepScrubberRail(") &&
                 railSection.contains("onFocusedItemChanged = onTopVisibleStepChanged") &&
+                railSection.contains("onItemClick = onStepClick") &&
                 railSection.contains("dividerColor = RouteDetailGuideDividerColor"),
         )
         assertTrue(
@@ -1571,6 +1599,12 @@ class RouteSettingLayoutPolicyTest {
             scrubberSource.contains("snapshotFlow") &&
                 scrubberSource.contains("resolveRouteStepScrubberIndex(") &&
                 scrubberSource.contains("currentOnFocusedItemChanged(index)"),
+        )
+        assertTrue(
+            "The shared scrubber must ignore its first offset observation so route-detail click focus is not reset back to the first item.",
+            scrubberSource.contains("var hasObservedInitialPosition = false") &&
+                scrubberSource.contains("!hasObservedInitialPosition") &&
+                scrubberSource.contains("index != currentResolvedFocusedIndex"),
         )
         assertFalse(
             "Route detail rail items must not force a fixed outer height because hidden top-card items need to collapse out of the rail.",

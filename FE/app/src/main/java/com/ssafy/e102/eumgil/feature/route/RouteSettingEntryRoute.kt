@@ -57,6 +57,7 @@ fun RouteSettingEntryRoute(
     var isDuribalConfirmDialogVisible by rememberSaveable { mutableStateOf(false) }
     var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
     var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
+    var completedLowFloorReservationKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
 
     BackHandler {
         onNavigateBack()
@@ -128,7 +129,12 @@ fun RouteSettingEntryRoute(
         },
         pendingLowFloorReservation = pendingLowFloorReservation,
         isLowFloorReservationRequesting = isLowFloorReservationRequesting,
-        onLowFloorReservationClick = { reservation -> pendingLowFloorReservation = reservation },
+        completedLowFloorReservationKeys = completedLowFloorReservationKeys.toSet(),
+        onLowFloorReservationClick = { reservation ->
+            if (reservation.stableReservationKey() !in completedLowFloorReservationKeys) {
+                pendingLowFloorReservation = reservation
+            }
+        },
         onLowFloorReservationDismiss = {
             if (!isLowFloorReservationRequesting) {
                 pendingLowFloorReservation = null
@@ -143,6 +149,12 @@ fun RouteSettingEntryRoute(
                             .getOrDefault(false)
                     isLowFloorReservationRequesting = false
                     pendingLowFloorReservation = null
+                    if (success) {
+                        val completedKey = reservation.stableReservationKey()
+                        if (completedKey !in completedLowFloorReservationKeys) {
+                            completedLowFloorReservationKeys = completedLowFloorReservationKeys + completedKey
+                        }
+                    }
                     Toast.makeText(
                         context,
                         if (success) {
@@ -179,6 +191,7 @@ fun RouteDetailEntryRoute(
     val coroutineScope = rememberCoroutineScope()
     var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
     var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
+    var completedLowFloorReservationKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
 
     BackHandler {
         onNavigateBack()
@@ -227,7 +240,12 @@ fun RouteDetailEntryRoute(
         },
         pendingLowFloorReservation = pendingLowFloorReservation,
         isLowFloorReservationRequesting = isLowFloorReservationRequesting,
-        onLowFloorReservationClick = { reservation -> pendingLowFloorReservation = reservation },
+        completedLowFloorReservationKeys = completedLowFloorReservationKeys.toSet(),
+        onLowFloorReservationClick = { reservation ->
+            if (reservation.stableReservationKey() !in completedLowFloorReservationKeys) {
+                pendingLowFloorReservation = reservation
+            }
+        },
         onLowFloorReservationDismiss = {
             if (!isLowFloorReservationRequesting) {
                 pendingLowFloorReservation = null
@@ -242,6 +260,12 @@ fun RouteDetailEntryRoute(
                             .getOrDefault(false)
                     isLowFloorReservationRequesting = false
                     pendingLowFloorReservation = null
+                    if (success) {
+                        val completedKey = reservation.stableReservationKey()
+                        if (completedKey !in completedLowFloorReservationKeys) {
+                            completedLowFloorReservationKeys = completedLowFloorReservationKeys + completedKey
+                        }
+                    }
                     Toast.makeText(
                         context,
                         if (success) {

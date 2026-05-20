@@ -2835,8 +2835,7 @@ private fun RouteNavigationRequest.toMapOverlayUiState(
         if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
             origin.coordinate
         } else {
-            selectedRoute.resolveSegmentStartCoordinate(focusedSegmentIndex)
-                ?: selectedRoute.resolveSegmentFocusCoordinate(focusedSegmentIndex)
+            selectedRoute.resolveSegmentRepresentativeCoordinate(focusedSegmentIndex)
                 ?: activeFocusCoordinate
         }
     val segmentRouteSegments =
@@ -3303,16 +3302,12 @@ private fun RouteCandidate.remainingMinutesFromSegmentIndex(
         totalDurationSeconds().takeIf { seconds -> seconds > 0 }
             ?: fallbackEstimatedMinutes?.takeIf { minutes -> minutes >= 0 }?.times(60)
             ?: return fallbackEstimatedMinutes
-
-    segments
-        .getOrNull(boundedIndex)
-        ?.durationFromRouteStartSeconds
-        ?.takeIf { seconds -> seconds >= 0 }
-        ?.let { elapsedSeconds ->
-            return (totalSeconds - elapsedSeconds)
-                .coerceAtLeast(0)
-                .toEtaMinutes()
-        }
+    val elapsedSeconds = segments.buildEffectiveElapsedSecondsByIndex(totalSeconds)[boundedIndex]
+    if (elapsedSeconds != null) {
+        return (totalSeconds - elapsedSeconds)
+            .coerceAtLeast(0)
+            .toEtaMinutes()
+    }
 
     val totalSegmentDistance = segments.sumOf { segment -> segment.distanceMeters.coerceAtLeast(0) }
     val routeDistance = totalSegmentDistance.takeIf { distance -> distance > 0 } ?: totalDistanceMeters()
@@ -3331,6 +3326,46 @@ private fun RouteCandidate.remainingMinutesFromSegmentIndex(
         .roundToInt()
         .coerceAtLeast(0)
         .toEtaMinutes()
+}
+
+private fun List<RouteSegment>.buildEffectiveElapsedSecondsByIndex(totalDurationSeconds: Int): Map<Int, Int> {
+    if (totalDurationSeconds <= 0) return emptyMap()
+    val totalDistance = sumOf { segment -> segment.distanceMeters.coerceAtLeast(0) }
+    var cumulativeDistance = 0
+    var previousServerElapsedSeconds: Int? = null
+
+    return mapIndexed { index, segment ->
+        val fallbackElapsedSeconds =
+            when {
+                totalDistance > 0 ->
+                    ((totalDurationSeconds.toLong() * cumulativeDistance.toLong()) / totalDistance.toLong()).toInt()
+                size > 1 ->
+                    ((totalDurationSeconds.toLong() * index.toLong()) / size.toLong()).toInt()
+                else -> 0
+            }
+        val serverElapsedSeconds =
+            segment.durationFromRouteStartSeconds
+                ?.takeIf { seconds -> seconds in 0..totalDurationSeconds }
+        val previousServerElapsed = previousServerElapsedSeconds
+        val isServerElapsedProgressing =
+            serverElapsedSeconds != null &&
+                (
+                    previousServerElapsed == null ||
+                        serverElapsedSeconds > previousServerElapsed ||
+                        segment.distanceMeters <= 0
+                )
+        val effectiveElapsedSeconds =
+            if (isServerElapsedProgressing && serverElapsedSeconds != null) {
+                serverElapsedSeconds
+            } else {
+                fallbackElapsedSeconds
+            }
+        if (isServerElapsedProgressing) {
+            previousServerElapsedSeconds = serverElapsedSeconds
+        }
+        cumulativeDistance += segment.distanceMeters.coerceAtLeast(0)
+        index to effectiveElapsedSeconds
+    }.toMap()
 }
 
 private fun RouteCandidate.resolveFocusedSegmentTransitInfo(
@@ -3414,6 +3449,19 @@ private fun RouteCandidate.resolveSegmentFocusCoordinate(segmentIndex: Int): Geo
 
     val progressRatio = resolveSegmentMidProgressRatio(segmentIndex = segmentIndex, weights = segmentWeights())
     return fallbackPolyline.coordinateAtProgressRatio(progressRatio)
+}
+
+private fun RouteCandidate.resolveSegmentRepresentativeCoordinate(segmentIndex: Int): GeoCoordinate? {
+    val segment = segments.getOrNull(segmentIndex)
+    segment
+        ?.polyline
+        ?.takeIf(RoutePolyline::isRenderable)
+        ?.points
+        ?.toNavigationFocusCoordinate()
+        ?.let { return it }
+
+    return resolveSegmentStartCoordinate(segmentIndex)
+        ?: resolveSegmentFocusCoordinate(segmentIndex)
 }
 
 private fun RouteCandidate.resolveSegmentEndCoordinate(segmentIndex: Int): GeoCoordinate? {

@@ -2241,12 +2241,18 @@ class RouteSettingViewModel(
             )
 
         if (hasUsableDetailSteps) {
+            val sortedSegments = segments.sortedBy(RouteSegment::sequence)
+            val routeDurationSeconds = summary.durationSeconds ?: summary.estimatedTimeMinutes * 60
+            val effectiveElapsedSecondsBySequence =
+                sortedSegments.buildEffectiveElapsedSecondsBySequence(routeDurationSeconds = routeDurationSeconds)
             steps +=
-                segments
-                    .sortedBy(RouteSegment::sequence)
-                    .mapIndexed { index, segment ->
-                        toDetailStepUiState(segment = segment, displayIndex = index + 2)
-                    }
+                sortedSegments.mapIndexed { index, segment ->
+                    toDetailStepUiState(
+                        segment = segment,
+                        displayIndex = index + 2,
+                        effectiveElapsedSeconds = effectiveElapsedSecondsBySequence[segment.sequence],
+                    )
+                }
         } else {
             steps +=
                 RouteDetailStepUiState(
@@ -2588,6 +2594,7 @@ private fun List<RouteSegment>.hasUsableDetailSteps(): Boolean =
 private fun RouteCandidate.toDetailStepUiState(
     segment: RouteSegment,
     displayIndex: Int,
+    effectiveElapsedSeconds: Int? = null,
 ): RouteDetailStepUiState {
     val kind = toRouteDetailStepKind(segment)
     val sourceLeg = segment.resolveSourceLeg(legs = legs)
@@ -2596,6 +2603,7 @@ private fun RouteCandidate.toDetailStepUiState(
         kind = kind,
         sourceLeg = sourceLeg,
         routeDurationSeconds = summary.durationSeconds ?: summary.estimatedTimeMinutes * 60,
+        effectiveElapsedSeconds = effectiveElapsedSeconds,
     )
 }
 
@@ -2604,11 +2612,18 @@ private fun RouteSegment.toDetailStepUiState(
     kind: RouteDetailStepKind,
     sourceLeg: RouteLeg? = null,
     routeDurationSeconds: Int? = null,
+    effectiveElapsedSeconds: Int? = null,
 ): RouteDetailStepUiState =
         RouteDetailStepUiState(
             indexLabel = displayIndex.toStepIndexLabel(),
             title = detailStepTitle(kind = kind),
-            description = detailStepDescription(kind = kind, sourceLeg = sourceLeg, routeDurationSeconds = routeDurationSeconds),
+            description =
+                detailStepDescription(
+                    kind = kind,
+                    sourceLeg = sourceLeg,
+                    routeDurationSeconds = routeDurationSeconds,
+                    effectiveElapsedSeconds = effectiveElapsedSeconds,
+                ),
             metaLabel = detailStepMetaLabel(kind = kind),
             badgeLabel = detailStepBadgeLabel(kind = kind),
             badgeTone = detailStepBadgeTone(kind = kind),
@@ -2683,11 +2698,16 @@ private fun RouteSegment.detailStepDescription(
     kind: RouteDetailStepKind,
     sourceLeg: RouteLeg? = null,
     routeDurationSeconds: Int? = null,
+    effectiveElapsedSeconds: Int? = null,
 ): String {
     val distanceLabel = distanceMeters.toDistanceLabel()
 
     if (kind != RouteDetailStepKind.BUS && kind != RouteDetailStepKind.SUBWAY && kind != RouteDetailStepKind.ALIGHT) {
-        return detailStepSupportingDescription(kind = kind, routeDurationSeconds = routeDurationSeconds)
+        return detailStepSupportingDescription(
+            kind = kind,
+            routeDurationSeconds = routeDurationSeconds,
+            effectiveElapsedSeconds = effectiveElapsedSeconds,
+        )
     }
 
     val guidanceFallback = guidanceMessage.takeIf { message -> message.hasVisibleHangul() }
@@ -2763,21 +2783,65 @@ private fun RouteSegment.detailStepDescription(
 private fun RouteSegment.detailStepSupportingDescription(
     kind: RouteDetailStepKind,
     routeDurationSeconds: Int?,
+    effectiveElapsedSeconds: Int? = null,
 ): String =
     when (kind) {
         RouteDetailStepKind.START -> DETAIL_STEP_START_DESCRIPTION
         RouteDetailStepKind.ARRIVAL -> DETAIL_STEP_DESTINATION_DESCRIPTION
         RouteDetailStepKind.FALLBACK -> ROUTE_DETAIL_FALLBACK_MESSAGE
-        else -> "목적지까지 약 ${remainingMinutesToDestination(routeDurationSeconds)}분"
+        else -> "목적지까지 약 ${remainingMinutesToDestination(routeDurationSeconds, effectiveElapsedSeconds)}분"
     }
 
 private fun RouteSegment.guidanceDisplayDistanceMeters(): Int =
     (guidanceDistanceMeters ?: distanceMeters).coerceAtLeast(0)
 
-private fun RouteSegment.remainingMinutesToDestination(routeDurationSeconds: Int?): Int {
+private fun RouteSegment.remainingMinutesToDestination(
+    routeDurationSeconds: Int?,
+    effectiveElapsedSeconds: Int? = null,
+): Int {
     val totalSeconds = routeDurationSeconds ?: return 0
-    val elapsedSeconds = durationFromRouteStartSeconds ?: 0
+    val elapsedSeconds = effectiveElapsedSeconds ?: durationFromRouteStartSeconds ?: 0
     return ((totalSeconds - elapsedSeconds).coerceAtLeast(0) + 59) / 60
+}
+
+private fun List<RouteSegment>.buildEffectiveElapsedSecondsBySequence(routeDurationSeconds: Int?): Map<Int, Int> {
+    val totalSeconds = routeDurationSeconds?.takeIf { seconds -> seconds > 0 } ?: return emptyMap()
+    val totalDistance = sumOf { segment -> segment.distanceMeters.coerceAtLeast(0) }
+    var cumulativeDistance = 0
+    var previousServerElapsedSeconds: Int? = null
+
+    return mapIndexed { index, segment ->
+        val fallbackElapsedSeconds =
+            when {
+                totalDistance > 0 ->
+                    ((totalSeconds.toLong() * cumulativeDistance.toLong()) / totalDistance.toLong()).toInt()
+                size > 1 ->
+                    ((totalSeconds.toLong() * index.toLong()) / size.toLong()).toInt()
+                else -> 0
+            }
+        val serverElapsedSeconds =
+            segment.durationFromRouteStartSeconds
+                ?.takeIf { seconds -> seconds in 0..totalSeconds }
+        val previousServerElapsed = previousServerElapsedSeconds
+        val isServerElapsedProgressing =
+            serverElapsedSeconds != null &&
+                (
+                    previousServerElapsed == null ||
+                        serverElapsedSeconds > previousServerElapsed ||
+                        segment.distanceMeters <= 0
+                )
+        val effectiveElapsedSeconds: Int =
+            if (isServerElapsedProgressing && serverElapsedSeconds != null) {
+                serverElapsedSeconds
+            } else {
+                fallbackElapsedSeconds
+            }
+        if (isServerElapsedProgressing) {
+            previousServerElapsedSeconds = serverElapsedSeconds
+        }
+        cumulativeDistance += segment.distanceMeters.coerceAtLeast(0)
+        segment.sequence to effectiveElapsedSeconds
+    }.toMap()
 }
 
 private fun RouteSegment.crosswalkGuidanceTitle(): String =

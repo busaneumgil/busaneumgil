@@ -120,6 +120,7 @@ class NavigationSegmentRailLayoutTest {
 
         assertTrue(source.contains("RouteStepScrubberRail("))
         assertTrue(source.contains("onFocusedItemChanged = onTopVisibleSegmentChanged"))
+        assertTrue(source.contains("onItemClick = onSegmentTapped"))
         assertTrue(source.contains("NavigationSegmentRailItemHeight = 72.dp"))
         assertTrue(source.contains("NavigationSegmentRailTopActionHeight = NavigationSegmentRailItemHeight"))
         assertTrue(source.contains("val dividerColor = NavigationSegmentRailDividerColor"))
@@ -139,7 +140,7 @@ class NavigationSegmentRailLayoutTest {
                 scrubberSource.contains("currentOnFocusedItemChanged(index)"),
         )
         assertTrue(
-            "The scroll-to-top action should focus the first guide card through the same route-step callback path.",
+            "The scroll-to-top action should focus the first guide card through the explicit segment tap path.",
             source.contains("onTopVisibleSegmentChanged(firstIndex)") &&
                 source.contains("onSegmentTapped(firstIndex)"),
         )

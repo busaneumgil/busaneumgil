@@ -849,6 +849,17 @@ class RouteSettingViewModelTest {
             )
             assertEquals(
                 listOf(
+                    "현재 위치에서 선택한 경로 안내를 시작합니다.",
+                    "목적지까지 약 8분",
+                    "목적지까지 약 6분",
+                    "목적지까지 약 5분",
+                    "목적지까지 약 3분",
+                    "안내가 완료되었습니다",
+                ),
+                detailSteps.map(RouteDetailStepUiState::description),
+            )
+            assertEquals(
+                listOf(
                     RouteDetailStepKind.START,
                     RouteDetailStepKind.STRAIGHT,
                     RouteDetailStepKind.TURN_LEFT,
@@ -859,7 +870,7 @@ class RouteSettingViewModelTest {
                 detailSteps.map(RouteDetailStepUiState::kind),
             )
             assertEquals(
-                "목적지까지 약 8분",
+                "목적지까지 약 5분",
                 detailSteps[3].description,
             )
             assertEquals("음향 신호", detailSteps[3].badgeLabel)
@@ -2611,16 +2622,19 @@ private fun directionalRouteRepository(): RouteRepository =
                                             RouteSegment(
                                                 sequence = 1,
                                                 distanceMeters = 120,
+                                                durationFromRouteStartSeconds = 0,
                                                 guidanceMessage = "직진 120m 구간입니다.",
                                             ),
                                             RouteSegment(
                                                 sequence = 2,
                                                 distanceMeters = 80,
+                                                durationFromRouteStartSeconds = 0,
                                                 guidanceMessage = "좌회전 후 80m 이동하세요.",
                                             ),
                                             RouteSegment(
                                                 sequence = 3,
                                                 distanceMeters = 60,
+                                                durationFromRouteStartSeconds = 0,
                                                 safetyFlags =
                                                     RouteSegmentSafetyFlags(
                                                         hasCrosswalk = true,
@@ -2632,6 +2646,7 @@ private fun directionalRouteRepository(): RouteRepository =
                                             RouteSegment(
                                                 sequence = 4,
                                                 distanceMeters = 150,
+                                                durationFromRouteStartSeconds = 0,
                                                 guidanceMessage = "우회전 후 목적지 방향으로 이동하세요.",
                                             ),
                                         ),

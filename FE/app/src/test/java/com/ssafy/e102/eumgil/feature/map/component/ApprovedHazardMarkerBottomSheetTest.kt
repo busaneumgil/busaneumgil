@@ -194,10 +194,21 @@ class ApprovedHazardMarkerBottomSheetTest {
 
         assertTrue(source.contains("approvedHazardHeaderWarningIcon"))
         assertTrue(source.contains("approvedHazardNoImagePlaceholder"))
-        assertTrue(source.contains("Modifier.offset(y = (-20).dp)"))
+        assertTrue(source.contains("Modifier.offset(y = (-10).dp)"))
         assertTrue(source.contains("Color(0xFFD9D9D9)"))
         assertTrue(source.contains("Color(0xFFFFFFFF)"))
         assertTrue(source.contains("Color(0xFFE5E7EB)"))
+    }
+
+    @Test
+    fun `sheet uses attached bottom edge treatment and drag dismisses through onDismiss`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/ApprovedHazardMarkerBottomSheet.kt")
+                .readText()
+
+        assertTrue(source.contains("edgeTreatment = MapBottomSheetEdgeTreatment.AttachedToBottomBar"))
+        assertTrue(source.contains(".draggable("))
+        assertTrue(source.contains("onDismiss()"))
     }
 
     private fun marker(imageUrls: List<String>) =

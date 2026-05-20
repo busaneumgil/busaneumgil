@@ -38,8 +38,8 @@ class MapViewportOverlayBackdropPolicyTest {
                 .substringBefore("MapViewportPointKind.CAMERA_FOCUS ->")
 
         assertTrue(markerSection.contains("containerColor = Color(0xFFFFD84D)"))
-        assertTrue(markerSection.contains("borderColor = Color(0xFFE0B312)"))
-        assertTrue(markerSection.contains("contentColor = Color(0xFF7A4F00)"))
+        assertTrue(markerSection.contains("borderColor = Color(0xFF111827)"))
+        assertTrue(markerSection.contains("contentColor = Color(0xFF111827)"))
         assertTrue(markerSection.contains("shape = ViewportPointMarkerShape.TRIANGLE_WARNING"))
         assertTrue(markerSection.contains("label = \"!\""))
     }

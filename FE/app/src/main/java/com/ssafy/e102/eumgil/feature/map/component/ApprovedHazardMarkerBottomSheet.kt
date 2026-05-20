@@ -1,6 +1,10 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -10,6 +14,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +45,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,7 +55,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.res.painterResource
@@ -56,6 +67,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil.compose.SubcomposeAsyncImage
@@ -66,6 +78,7 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.data.repository.ApprovedHazardMarker
 import com.ssafy.e102.eumgil.feature.report.displayLabel
 import com.ssafy.e102.eumgil.feature.report.toReportTypeOrNull
+import kotlin.math.roundToInt
 
 @Composable
 internal fun ApprovedHazardMarkerBottomSheet(
@@ -74,15 +87,45 @@ internal fun ApprovedHazardMarkerBottomSheet(
     modifier: Modifier = Modifier,
 ) {
     var viewerState by remember { mutableStateOf(ApprovedHazardMarkerImageViewerState()) }
+    val density = LocalDensity.current
+    val dragSettleVelocityThresholdPx = with(density) { 320.dp.toPx() }
+    val dismissThresholdMinPx = with(density) { 72.dp.toPx() }
+    val handleInteractionSource = remember { MutableInteractionSource() }
     LaunchedEffect(marker?.reportId) {
         if (marker == null) {
             viewerState = viewerState.close()
         }
     }
     BoxWithConstraints(
-        modifier = modifier.zIndex(ApprovedHazardMarkerOverlayZIndex),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .zIndex(ApprovedHazardMarkerOverlayZIndex),
     ) {
         val sheetMaxHeight = maxHeight * 0.72f
+        var sheetHeightPx by remember(marker?.reportId) { mutableIntStateOf(0) }
+        var sheetOffsetPx by remember(marker?.reportId) { mutableFloatStateOf(0f) }
+        var isDragging by remember(marker?.reportId) { mutableStateOf(false) }
+        val maxSheetOffsetPx = sheetHeightPx.toFloat().coerceAtLeast(0f)
+        val dismissThresholdPx = (sheetHeightPx * 0.35f).coerceAtLeast(dismissThresholdMinPx)
+        val animatedSheetOffsetPx by animateFloatAsState(
+            targetValue = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx),
+            animationSpec =
+                if (isDragging) {
+                    snap()
+                } else {
+                    spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    )
+                },
+            label = "approvedHazardSheetOffset",
+        )
+        val dragState =
+            rememberDraggableState { delta ->
+                isDragging = true
+                sheetOffsetPx = (sheetOffsetPx + delta).coerceIn(0f, maxSheetOffsetPx)
+            }
         AnimatedVisibility(
             visible = marker != null,
             enter = slideInVertically { fullHeight -> fullHeight } + fadeIn(),
@@ -97,9 +140,33 @@ internal fun ApprovedHazardMarkerBottomSheet(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .heightIn(max = sheetMaxHeight),
-                handleModifier = Modifier.height(MapBottomSheetHandleHeight),
+                        .heightIn(max = sheetMaxHeight)
+                        .onSizeChanged { size ->
+                            sheetHeightPx = size.height
+                            sheetOffsetPx = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
+                        }.offset { IntOffset(x = 0, y = animatedSheetOffsetPx.roundToInt()) },
+                handleModifier =
+                    Modifier
+                        .height(MapBottomSheetHandleHeight)
+                        .clickable(
+                            interactionSource = handleInteractionSource,
+                            indication = null,
+                            onClick = onDismiss,
+                        ).draggable(
+                            state = dragState,
+                            orientation = Orientation.Vertical,
+                            onDragStopped = { velocity ->
+                                isDragging = false
+                                if (
+                                    velocity >= dragSettleVelocityThresholdPx ||
+                                    sheetOffsetPx >= dismissThresholdPx
+                                ) {
+                                    onDismiss()
+                                }
+                                sheetOffsetPx = 0f
+                            },
+                        ),
+                edgeTreatment = MapBottomSheetEdgeTreatment.AttachedToBottomBar,
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -118,7 +185,8 @@ internal fun ApprovedHazardMarkerBottomSheet(
                             Surface(
                                 modifier = Modifier.size(44.dp),
                                 shape = RoundedCornerShape(EumRadius.scaleM),
-                                color = MaterialTheme.colorScheme.errorContainer,
+                                color = Color(0xFFFFFFFF),
+                                border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
                             ) {
                                 Box(
                                     modifier = Modifier.testTag("approvedHazardHeaderWarningIcon"),
@@ -145,7 +213,7 @@ internal fun ApprovedHazardMarkerBottomSheet(
                         }
                         IconButton(
                             onClick = onDismiss,
-                            modifier = Modifier.offset(y = (-20).dp),
+                            modifier = Modifier.offset(y = (-10).dp),
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_action_close),
@@ -262,14 +330,14 @@ private fun ApprovedHazardWarningIcon(
         )
         drawPath(
             path = path,
-            color = Color(0xFFE0B312),
+            color = Color(0xFF111827),
             style =
                 Stroke(
                     width = strokeWidth,
                     join = StrokeJoin.Round,
                 ),
         )
-        val symbolColor = Color(0xFF7A4F00)
+        val symbolColor = Color(0xFF111827)
         drawLine(
             color = symbolColor,
             start = Offset(size.width / 2f, size.height * 0.33f),

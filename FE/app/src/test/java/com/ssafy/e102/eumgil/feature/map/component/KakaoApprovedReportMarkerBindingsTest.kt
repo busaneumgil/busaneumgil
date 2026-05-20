@@ -27,7 +27,7 @@ class KakaoApprovedReportMarkerBindingsTest {
         assertEquals("approved-report:42", marker?.markerId)
         assertEquals(32, marker?.sizeDp)
         assertNull(marker?.iconResId)
-        assertEquals(0xFFE0B312.toInt(), marker?.strokeColorArgb)
+        assertEquals(0xFF111827.toInt(), marker?.strokeColorArgb)
         assertEquals("approved-report:42", marker?.clickTargetId)
     }
 
@@ -67,12 +67,12 @@ class KakaoApprovedReportMarkerBindingsTest {
     }
 
     @Test
-    fun `approved report marker bitmap uses the shared triangle warning symbol color`() {
+    fun `approved report marker bitmap uses the shared black warning symbol color`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
                 .readText()
 
-        assertTrue(source.contains("APPROVED_REPORT_MARKER_SYMBOL = -8761600"))
+        assertTrue(source.contains("APPROVED_REPORT_MARKER_SYMBOL = -15658713"))
     }
 
     @Test

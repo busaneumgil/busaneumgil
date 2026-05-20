@@ -858,8 +858,8 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
             ViewportPointMarkerSpec(
                 label = "!",
                 containerColor = Color(0xFFFFD84D),
-                contentColor = Color(0xFF7A4F00),
-                borderColor = Color(0xFFE0B312),
+                contentColor = Color(0xFF111827),
+                borderColor = Color(0xFF111827),
                 size = 40.dp,
                 shape = ViewportPointMarkerShape.TRIANGLE_WARNING,
                 fontSize = 18.sp,

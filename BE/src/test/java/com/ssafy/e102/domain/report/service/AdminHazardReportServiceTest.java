@@ -197,6 +197,7 @@ class AdminHazardReportServiceTest {
 
 		assertThat(response.reportId()).isEqualTo(1L);
 		assertThat(response.status()).isEqualTo(ReportStatus.REJECTED);
+		verify(adminHazardRouteReviewService).clearInProgressRouteReview(1L);
 	}
 
 	@Test

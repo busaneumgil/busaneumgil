@@ -61,7 +61,7 @@ import {
   type HazardRouteReviewRecord,
 } from "./hazardRouteReviewState";
 
-type HazardFilterKey = "" | HazardReportStatus | "RESTORE_PENDING";
+type HazardFilterKey = "" | HazardReportStatus;
 type HazardBadgeTone = "blue" | "orange" | "green" | "red" | "purple" | "gray";
 
 const reportStatusLabel: Record<HazardReportStatus, string> = {
@@ -233,7 +233,6 @@ const previewSummary = {
     rejectedReports: 42,
   },
   dbSyncPendingCount: 5,
-  restorePendingCount: 2,
   latestSnapshotAt: "2024-05-01T14:30:00",
 };
 
@@ -315,11 +314,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   });
   const cursor = cursorStack[cursorStack.length - 1] ?? null;
   const hasToken = Boolean(accessToken);
-  const queryStatus = status === "RESTORE_PENDING" ? "APPROVED" : status;
 
   const reportsQuery = useQuery({
-    queryKey: ["admin-hazard-reports", queryStatus, cursor, accessToken],
-    queryFn: () => fetchAdminHazardReports({ status: queryStatus, cursor, size: 10, accessToken }),
+    queryKey: ["admin-hazard-reports", status, cursor, accessToken],
+    queryFn: () => fetchAdminHazardReports({ status, cursor, size: 10, accessToken }),
     enabled: !preview && hasToken,
     retry: false,
   });
@@ -375,10 +373,6 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const filteredReports = useMemo(() => {
     const normalizedKeyword = searchQuery.trim().toLowerCase();
     return (reportListData?.content ?? []).filter((report) => {
-      if (status === "RESTORE_PENDING" && !isHazardRestoreEligible(report, routeReviewDrafts[report.reportId])) {
-        return false;
-      }
-
       if (!normalizedKeyword) {
         return true;
       }
@@ -394,7 +388,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
       return haystack.includes(normalizedKeyword);
     });
-  }, [reportListData, routeReviewDrafts, searchQuery, status]);
+  }, [reportListData, searchQuery]);
 
   useEffect(() => {
     if (!filteredReports.length) {
@@ -793,18 +787,14 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const pendingCount = reportSummary?.pendingReports ?? countReportsByStatus(reportListData?.content, "PENDING");
   const approvedCount = reportSummary?.approvedReports ?? countReportsByStatus(reportListData?.content, "APPROVED");
   const rejectedCount = reportSummary?.rejectedReports ?? countReportsByStatus(reportListData?.content, "REJECTED");
-  const restorePendingCount = preview
-    ? countRestorableReports(reportListData?.content, routeReviewDrafts)
-    : Math.max(approvedCount - countCompletedRestoreReviews(routeReviewDrafts), 0);
   const dbSyncPendingCount = preview
     ? previewSummary.dbSyncPendingCount
     : (routingApplyState?.dirty || routingApplyState?.applying) ? approvedCount : 0;
-  const totalSyncPendingCount = dbSyncPendingCount + restorePendingCount;
   const currentPage = cursorStack.length;
   const paginationItems = buildVisiblePageNumbers(currentPage, Boolean(reportListData?.hasNext));
   const detailTrackingId = activeReport ? formatHazardTrackingId(activeReport.createdAt, activeReport.reportId) : null;
   const detailHistory = activeReport ? buildHazardTimeline(activeReport, adminPrincipal.userId, activeReviewDraft) : [];
-  const hasDbSyncQueue = totalSyncPendingCount > 0;
+  const hasDbSyncQueue = dbSyncPendingCount > 0;
   const latestReportStamp = preview
     ? previewSummary.latestSnapshotAt
     : activeReport?.createdAt
@@ -867,7 +857,6 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                 { key: "PENDING" as HazardFilterKey, label: "대기", count: pendingCount },
                 { key: "APPROVED" as HazardFilterKey, label: "승인", count: approvedCount },
                 { key: "REJECTED" as HazardFilterKey, label: "반려", count: rejectedCount },
-                { key: "RESTORE_PENDING" as HazardFilterKey, label: "원상복구 대기", count: restorePendingCount },
               ].map((tab) => (
                 <button
                   key={tab.label}
@@ -992,8 +981,8 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
           <div className={`hazard-bulk-bar ${hasDbSyncQueue ? "" : "empty"}`}>
             <div className="hazard-bulk-bar__summary">
-              <strong>{hasDbSyncQueue ? `전체 경로 반영 필요 ${totalSyncPendingCount}건` : "지금 반영할 항목이 없습니다."}</strong>
-              <span>경로 반영 필요 {dbSyncPendingCount}건 · 원상복구 대기 {restorePendingCount}건</span>
+              <strong>{hasDbSyncQueue ? `전체 경로 반영 필요 ${dbSyncPendingCount}건` : "지금 반영할 항목이 없습니다."}</strong>
+              <span>경로 반영 필요 {dbSyncPendingCount}건</span>
               <small>{latestReportStamp ? `마지막 집계 ${formatLongDateTime(latestReportStamp)}` : "마지막 집계 준비 중"}</small>
             </div>
             <button
@@ -1886,27 +1875,9 @@ function summarizeRecoveryStatus(status: HazardReportStatus, review?: HazardRout
     return { label: "-", tone: "gray" as HazardBadgeTone };
   }
   if (status === "APPROVED") {
-    return { label: "가능", tone: "purple" as HazardBadgeTone };
+    return { label: "대기", tone: "purple" as HazardBadgeTone };
   }
   return { label: "-", tone: "gray" as HazardBadgeTone };
-}
-
-function isHazardRestoreEligible(
-  report: Pick<AdminHazardReportSummary, "reportId" | "status">,
-  review?: HazardRouteReviewRecord | null,
-) {
-  return canStartHazardRestore(report.status, review);
-}
-
-function countRestorableReports(
-  reports: AdminHazardReportSummary[] | undefined,
-  drafts: Record<number, HazardRouteReviewRecord>,
-) {
-  return (reports ?? []).filter((report) => isHazardRestoreEligible(report, drafts[report.reportId])).length;
-}
-
-function countCompletedRestoreReviews(drafts: Record<number, HazardRouteReviewRecord>) {
-  return Object.values(drafts).filter((draft) => draft.stage === "COMPLETED" && draft.intent === "restore").length;
 }
 
 function statusToneFromReport(status: HazardReportStatus): HazardBadgeTone {

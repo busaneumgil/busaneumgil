@@ -112,6 +112,7 @@ public class AdminHazardReportService {
 	public AdminHazardReportStatusResponse rejectHazardReport(Long reportId, UUID actorUserId) {
 		LocalDateTime now = LocalDateTime.now(clock);
 		updateHazardReportStatus(reportId, ReportStatus.PENDING, ReportStatus.REJECTED, actorUserId, now);
+		adminHazardRouteReviewService.clearInProgressRouteReview(reportId);
 		adminAuditLogService.record(
 			actorUserId,
 			"HAZARD_REPORT_STATUS_UPDATE",

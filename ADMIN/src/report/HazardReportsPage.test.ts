@@ -20,4 +20,14 @@ describe("HazardReportsPage manual routing apply wiring", () => {
     expect(source).toContain("clearRouteReviewDraft(response.reportId)");
     expect(source).not.toContain('disabled={!canReject || activeReviewDraft?.stage === "IN_PROGRESS"}');
   });
+
+  it("keeps approved reports in the approved tab instead of a separate restore-pending queue", () => {
+    expect(source).toContain('type HazardFilterKey = "" | HazardReportStatus;');
+    expect(source).not.toContain('"RESTORE_PENDING" as HazardFilterKey');
+    expect(source).not.toContain('status === "RESTORE_PENDING"');
+    expect(source).not.toContain("restorePendingCount");
+    expect(source).not.toContain("countRestorableReports");
+    expect(source).not.toContain("countCompletedRestoreReviews");
+    expect(source).toContain("const hasDbSyncQueue = dbSyncPendingCount > 0");
+  });
 });

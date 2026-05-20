@@ -101,14 +101,25 @@ fun ReportRoute(
             )
         }
 
+    LaunchedEffect(entryPoint, viewModel) {
+        if (!startNewRequest) {
+            viewModel.onAction(
+                ReportUiAction.RouteEntered(
+                    entryPoint = entryPoint,
+                    startNew = false,
+                ),
+            )
+        }
+    }
+
     LaunchedEffect(entryPoint, startNewRequest, viewModel) {
-        viewModel.onAction(
-            ReportUiAction.RouteEntered(
-                entryPoint = entryPoint,
-                startNew = startNewRequest,
-            ),
-        )
         if (startNewRequest) {
+            viewModel.onAction(
+                ReportUiAction.RouteEntered(
+                    entryPoint = entryPoint,
+                    startNew = true,
+                ),
+            )
             onStartNewRequestConsumed()
         }
     }

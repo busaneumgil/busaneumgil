@@ -116,6 +116,29 @@ class ReportRouteUiEventChannelTest {
         )
     }
 
+    @Test
+    fun `start new request consume does not dispatch normal route enter again`() {
+        val source = reportRouteSource()
+
+        assertTrue(
+            "Normal route entry should be keyed only by entryPoint so consuming startNewRequest=false does not re-enter Home.",
+            source.contains("LaunchedEffect(entryPoint, viewModel)") &&
+                source.contains("if (!startNewRequest)") &&
+                source.contains("startNew = false"),
+        )
+        assertTrue(
+            "Start-new route entry should be handled in a separate true-only effect before consuming the request.",
+            source.contains("LaunchedEffect(entryPoint, startNewRequest, viewModel)") &&
+                source.contains("if (startNewRequest)") &&
+                source.contains("startNew = true") &&
+                source.contains("onStartNewRequestConsumed()"),
+        )
+        assertTrue(
+            "ReportRoute must not pass startNewRequest directly to RouteEntered because consume false would replay RouteEntered(startNew=false).",
+            !source.contains("startNew = startNewRequest"),
+        )
+    }
+
     private fun reportRouteSource(): String =
         File("src/main/java/com/ssafy/e102/eumgil/feature/report/ReportRoute.kt").readText()
 

@@ -183,18 +183,13 @@ public class AdminMapService {
 					centerLat,
 					radiusMeter,
 					limit);
-				segmentCount = roadSegmentRepository.countIntersectingAreaWithinRadius(
-					gu,
-					dong,
-					centerLng,
-					centerLat,
-					radiusMeter);
+				segmentCount = roadSegments.size();
 			} else {
-				roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
+				roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong, limit);
 				segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
 			}
 		} else if (hasGu(gu)) {
-			roadSegments = roadSegmentRepository.findAllIntersectingGu(gu);
+			roadSegments = roadSegmentRepository.findAllIntersectingGu(gu, limit);
 			segmentCount = roadSegmentRepository.countIntersectingGu(gu);
 		} else {
 			Page<RoadSegment> page = roadSegmentRepository.findAll(PageRequest.of(0, limit, ROAD_SEGMENT_SORT));

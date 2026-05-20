@@ -126,12 +126,9 @@ public class HazardReportRouteReview extends BaseEntity {
 		completedAt = requireTimestamp(now);
 	}
 
-	public void validateOwnedBy(UUID userId) {
-		if (userId == null || !reviewerUserId.equals(userId)) {
-			throw new HazardReportException(
-				HazardReportErrorCode.HAZARD_ROUTE_REVIEW_CONFLICT,
-				"다른 관리자가 진행 중인 검수는 이어서 처리할 수 없습니다.");
-		}
+	public void continueBy(UUID userId) {
+		validateInProgress();
+		reviewerUserId = requireReviewerUserId(userId);
 	}
 
 	private void validateInProgress() {

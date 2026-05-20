@@ -294,7 +294,7 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
-    fun `facility detail preview uses preview editing target for a single route action`() {
+    fun `facility detail preview uses optional route endpoint target for route action mode`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
         val actionContentSection =
@@ -303,17 +303,17 @@ class MapFacilityDetailSheetConfigurationTest {
                 .substringBefore("facilityDetailSheetUiState.bookmarkErrorMessage")
 
         assertTrue(
-            "Search-result previews should reuse their preview editing target so home destination previews show only the destination action.",
+            "Search-result previews should use an optional route endpoint target so home place previews can show both origin and destination actions.",
             actionContentSection.contains("facilityDetailSheetUiState.previewRouteEndpointTarget") &&
                 actionContentSection.contains("?: facilityDetailSheetUiState.routeEndpointPickerTarget") &&
                 actionContentSection.indexOf("val pickerTarget =") <
                 actionContentSection.indexOf("if (pickerTarget != null)"),
         )
         assertTrue(
-            "Map preview sheets should pass the preview editing target even after their place detail has been hydrated.",
-            source.contains("previewRouteEndpointTarget = sheetState.destinationPreview?.editingTarget") &&
+            "Map preview sheets should pass only the explicit route endpoint target even after their place detail has been hydrated.",
+            source.contains("previewRouteEndpointTarget = sheetState.destinationPreview?.routeEndpointTarget") &&
                 source.contains(
-                    "previewRouteEndpointTarget = uiState.facilityDetailSheetState.destinationPreview?.editingTarget",
+                    "previewRouteEndpointTarget = uiState.facilityDetailSheetState.destinationPreview?.routeEndpointTarget",
                 ),
         )
     }

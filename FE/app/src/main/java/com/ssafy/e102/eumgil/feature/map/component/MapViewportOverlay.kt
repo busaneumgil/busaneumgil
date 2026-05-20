@@ -59,6 +59,7 @@ internal data class MapViewportPointOverlay(
     val includeInProjection: Boolean = true,
     val clickTargetId: String? = null,
     val transitMarker: MapViewportTransitMarker? = null,
+    val reportTypeApiValue: String? = null,
 )
 
 internal enum class MapViewportPointKind {
@@ -189,6 +190,7 @@ internal fun createMapMarkerViewportOverlayState(
                             contentDescription = "주의 제보: ${report.reportTypeLabel}",
                             includeInProjection = false,
                             clickTargetId = clickTargetId,
+                            reportTypeApiValue = report.reportTypeApiValue,
                         )
                     },
                 )

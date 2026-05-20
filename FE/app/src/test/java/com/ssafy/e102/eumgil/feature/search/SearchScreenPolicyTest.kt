@@ -7,12 +7,12 @@ import org.junit.Test
 
 class SearchScreenPolicyTest {
     @Test
-    fun `destination search entry title uses destination copy`() {
+    fun `home search entry title uses place search copy`() {
         val stringsSource = File("src/main/res/values/strings.xml").readText()
 
         assertTrue(
-            "Home destination search should title the search screen as destination search instead of generic place search.",
-            stringsSource.contains("<string name=\"search_screen_title\">도착지 검색</string>"),
+            "Home search should title the search screen as place search because result taps open a detail preview first.",
+            stringsSource.contains("<string name=\"search_screen_title\">장소 검색</string>"),
         )
     }
 

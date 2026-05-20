@@ -10,9 +10,13 @@
 - 인증: GitLab OAuth
 - 권한: Matrix Authorization
 - dev 배포 잡: `e102-dev-deploy`
+- prod 배포 잡: `e102-prod-deploy`
 - GraphHopper 자동 갱신 잡: `e102-graphhopper-refresh`
+- monitoring 배포 잡: `e102-monitoring-deploy`
+- 관측 브리프 잡: `e102-observability-hourly-brief`
 - 대상 브랜치: `develop`
-- 배포 대상: S1 dev Docker Compose stack
+- dev 배포 대상: S1 dev Docker Compose stack
+- prod 배포 대상: S2 prod Docker Compose stack
 
 ## 설정 자산
 
@@ -48,12 +52,16 @@ PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
 Jenkins container는 `.env.jenkins` 값을 환경변수로 읽고, init groovy가 `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url` 같은 운영 보조 credential을 동기화한다. 배포용 `.env.dev`와 `.env.prod`는 Jenkins Secret file credential이 원본이며, host 파일 mount로 동기화하지 않는다.
 시간별 observability brief는 `e102-dev-log-analysis-webhook-url`, `e102-prod-log-analysis-webhook-url` credential을 통해 `E102_로그분석채널`용 dev/prod 분리 webhook을 사용한다.
 
-## 2026-04-29 반영 상태
+## 2026-05-20 반영 상태
 
 - Jenkins는 `https://jenkins.busaneumgil.com/` 루트 경로로 접근한다.
 - 과거 `/jenkins/` 경로는 루트로 redirect한다.
 - dev backend는 `https://api.dev.busaneumgil.com/`로 접근한다.
 - dev AI는 `https://ai.dev.busaneumgil.com/`로 접근한다.
+- prod backend/AI/admin은 S2에서 `https://api.busaneumgil.com/`, `https://ai.busaneumgil.com/`, `https://admin.busaneumgil.com/`로 접근한다.
+- `e102-prod-deploy`는 S2에 backend/AI/admin을 배포하고, 운영 기준으로 `DEPLOY_GRAPHHOPPER=true`를 기본값으로 둔다.
+- `e102-graphhopper-refresh`는 3시간 주기로 S2 GraphHopper inactive slot을 갱신하며, 2026-05-20 확인 기준 최근 `jenkins-52`, `jenkins-53`, `jenkins-54` refresh report가 모두 `SUCCESS`다.
+- S1 dev backend의 `/health/graphhopper`는 2026-05-20 확인 시 `DOWN`이지만, S1 GraphHopper runtime 직접 `/healthcheck`는 정상이다. dev backend GraphHopper health 설정과 Redis slot 초기화는 후속 정렬 항목이다.
 - `api.dev.busaneumgil.com`, `ai.dev.busaneumgil.com` 인증서는 S1 host certbot standalone 방식으로 발급했고, S1 Docker nginx proxy에서 `/etc/letsencrypt`를 read-only mount해 사용한다.
 - Docker nginx config는 bind mount이므로 `nginx.conf` 교체 후 `jenkins-proxy` 컨테이너를 recreate해야 한다.
 

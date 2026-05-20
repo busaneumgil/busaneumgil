@@ -2,6 +2,8 @@
 
 `INF/monitoring/s1`은 S1 서버에서 운영하는 보조 운영도구 stack의 기준 설정이다.
 
+2026-05-20 실서버 확인 기준 최신 런타임 스냅샷은 `Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md`를 기준으로 한다.
+
 ## 구성
 
 - `Portainer`: 외부 공개 없이 SSH 터널 전용으로 접근한다.
@@ -122,13 +124,17 @@ Secret 위치와 GitLab Application 생성 기준은 `Docs/인프라/2026-04-29_
 - promtail은 Docker stdout/stderr를 읽어 `environment=prod`, `runtime_stack=s2-prod` 라벨로 보낸다.
 - 이 경로는 `로그 2차 조회` 목적이다.
 
-## 2026-04-29 반영 상태
+## 2026-05-20 반영 상태
 
 - Grafana: `https://grafana.busaneumgil.com/`에서 GitLab OAuth 로그인 적용
 - SonarQube: `https://sonarqube.busaneumgil.com/`에서 GitLab OAuth 로그인 적용
 - GitLab group 제한은 실제 OAuth group claim 기준으로 `ssafy_14th`를 사용한다.
 - PLG 보조 조회는 `https://plg.busaneumgil.com/`로 Grafana에 연결한다.
 - Portainer는 `https://portainer.busaneumgil.com/`에서 404를 반환하고, SSH 터널 전용으로만 접근한다.
+- S1에는 `e102-prometheus`, `e102-grafana`, `e102-loki`, `e102-promtail`, `e102-blackbox-exporter`, `e102-node-exporter`, `e102-cadvisor`, `e102-redis-exporter`가 실행 중이다.
+- S2에는 `e102-prod-promtail`, `e102-prod-blackbox-exporter`, `e102-portainer-agent`가 실행 중이다. 현재 저장소의 S2 기준 자산은 `INF/monitoring/s2` promtail 템플릿이며, S2 blackbox/Portainer agent 설정은 운영 반영 상태로 기록하고 별도 코드화가 필요하다.
+- prod 공개 health는 2026-05-20 확인 기준 `api`, `ai`, `admin`, backend `db/redis/graphhopper` 모두 정상이다.
+- S1 dev backend의 `/health/graphhopper`는 2026-05-20 확인 시 `DOWN`이지만, S1 GraphHopper runtime 직접 `/healthcheck`는 정상이다. dev dashboard/blackbox 판정에서 이 차이를 오탐으로 해석하지 않도록 후속 정렬이 필요하다.
 
 ```bash
 make portainer-tunnel

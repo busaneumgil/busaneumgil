@@ -12,6 +12,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
+import com.ssafy.e102.eumgil.feature.report.reportTypeMarkerIconRes
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -167,12 +168,14 @@ internal data class KakaoOverlayMarkerRenderState(
     val markerId: String,
     val coordinate: MapCoordinate,
     val kind: KakaoOverlayMarkerKind,
+    @DrawableRes val iconResId: Int? = null,
     val anchorPointX: Float,
     val anchorPointY: Float,
     val sizeDp: Int,
     val zIndex: Float,
     val fillColorArgb: Int,
     val strokeColorArgb: Int,
+    val isSelected: Boolean = false,
     val rotationDegrees: Float = 0f,
     val label: String? = null,
     val secondaryLabel: String? = null,
@@ -1017,15 +1020,17 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
     return when (kind) {
         MapViewportPointKind.APPROVED_REPORT ->
             KakaoOverlayMarkerRenderState(
-                markerId = overlayId,
+                markerId = clickTargetId ?: overlayId,
                 coordinate = coordinate,
                 kind = KakaoOverlayMarkerKind.APPROVED_REPORT,
+                iconResId = reportTypeMarkerIconRes(reportTypeApiValue),
                 anchorPointX = 0.5f,
                 anchorPointY = 0.5f,
-                sizeDp = 28,
+                sizeDp = 32,
                 zIndex = 4.2f,
                 fillColorArgb = KAKAO_APPROVED_REPORT_MARKER_FILL,
                 strokeColorArgb = KAKAO_APPROVED_REPORT_MARKER_STROKE,
+                isSelected = isSelected,
                 clickTargetId = clickTargetId,
             )
 
@@ -1317,7 +1322,7 @@ private const val KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_SCREEN_RELATIVE = "
 private const val KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_MAP_ABSOLUTE = "map-absolute"
 private val KAKAO_ROUTE_DIRECTION_ARROW_TRANSFORM_METHOD = TransformMethod.AbsoluteRotation
 private val KAKAO_APPROVED_REPORT_MARKER_FILL = 0xFFFFD84D.toInt()
-private val KAKAO_APPROVED_REPORT_MARKER_STROKE = 0xFF7A4F00.toInt()
+private val KAKAO_APPROVED_REPORT_MARKER_STROKE = 0xFFE0B312.toInt()
 
 private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineStyleSpec {
     val palette = tone.toKakaoRouteLinePalette()

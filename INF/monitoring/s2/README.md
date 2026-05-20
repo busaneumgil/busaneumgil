@@ -2,6 +2,8 @@
 
 `INF/monitoring/s2`는 S2 운영 서버에서 `prod` Docker 로그를 `S1 Loki`로 보내기 위한 최소 템플릿이다.
 
+2026-05-20 확인 기준 S2에는 `e102-prod-promtail`, `e102-prod-blackbox-exporter`, `e102-portainer-agent`가 실행 중이다. 이 폴더는 그중 prod 로그 수집용 promtail 기준 템플릿을 관리한다.
+
 ## 목표
 
 - `prod` 서비스 로그를 `Grafana Explore`와 `E102 운영 관측 개요` 대시보드에서 바로 찾을 수 있게 한다.

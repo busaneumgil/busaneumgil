@@ -1,6 +1,7 @@
 # GraphHopper DB LineString build/deploy runbook
 
 > 작성일: 2026-05-06
+> 최종 수정일: 2026-05-20
 > 기준 이슈: `S14P31E102-547`
 > 기준 문서: `Docs/ERD/ERD_v4.md`, `Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md`
 
@@ -123,7 +124,9 @@ Jenkins prod pipeline은 `INF/jenkins/pipelines/e102-prod-deploy.Jenkinsfile`을
 - `DEPLOY_GRAPHHOPPER=true`: GraphHopper runtime까지 기동
 - `ROLLBACK=true`: 이전 app image tag와 이전 graph-cache로 rollback
 
-초기에는 `BUILD_GRAPHHOPPER=false`, `DEPLOY_GRAPHHOPPER=false`로 backend/AI prod 배포를 먼저 안정화한다. 경로 데이터가 DB에 준비되면 두 값을 켜서 GraphHopper를 포함한다.
+2026-05-20 운영 기준 일반 app 배포는 `BUILD_GRAPHHOPPER=false`, `DEPLOY_GRAPHHOPPER=true`를 기본값으로 둔다. backend/AI/admin은 매 배포마다 갱신하지만, GraphHopper graph-cache를 매번 새로 만들지는 않는다.
+
+GraphHopper cache 갱신은 Jenkins `e102-graphhopper-refresh`가 3시간마다 S2의 inactive slot에서 수행한다. 최근 성공 여부는 S2 `.deploy-state/graphhopper-refresh-reports/*.json` report와 `https://api.busaneumgil.com/health/graphhopper`를 함께 확인한다.
 
 ## 7. smoke test
 
@@ -137,9 +140,19 @@ bash scripts/deploy/prod-smoke.sh
 
 - backend: `http://127.0.0.1:8080/v3/api-docs`
 - AI: `http://127.0.0.1:5000/health`
-- GraphHopper: `http://127.0.0.1:8990/healthcheck`
+- GraphHopper active: `http://127.0.0.1:8080/health/graphhopper`
+- GraphHopper blue raw: `http://127.0.0.1:18990/healthcheck`
+- GraphHopper green raw: `http://127.0.0.1:18992/healthcheck`
 
 GraphHopper smoke는 `DEPLOY_GRAPHHOPPER=true`일 때만 실행한다.
+
+public ingress 기준으로는 아래를 확인한다.
+
+```bash
+curl -fsS https://api.busaneumgil.com/health/graphhopper
+curl -fsS https://api.busaneumgil.com/graphhopper-blue/healthcheck
+curl -fsS https://api.busaneumgil.com/graphhopper-green/healthcheck
+```
 
 길안내 API의 실제 route smoke는 `Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md`의 `POST /routes/search/walk`, `POST /routes/search/transit` 구현이 완료된 뒤 추가한다.
 

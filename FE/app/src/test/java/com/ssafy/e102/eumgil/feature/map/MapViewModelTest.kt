@@ -43,6 +43,7 @@ import com.ssafy.e102.eumgil.data.repository.RouteEditingTarget
 import com.ssafy.e102.eumgil.data.repository.SearchRepository
 import com.ssafy.e102.eumgil.data.repository.TestAuthSessionRepository
 import com.ssafy.e102.eumgil.feature.map.component.createKakaoCameraRenderState
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import com.ssafy.e102.eumgil.feature.map.model.MapCameraSource
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapDefaults
@@ -125,6 +126,35 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `home search entry opens place preview search mode`() =
+        runTest {
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onAction(MapUiAction.SearchEntryClicked)
+            advanceUntilIdle()
+
+            val event =
+                withTimeoutOrNull(100) {
+                    viewModel.uiEvent.first()
+                }
+
+            assertEquals(
+                MapUiEvent.NavigateToSearch(
+                    editingTarget = RouteEditingTarget.DESTINATION,
+                    selectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
+                ),
+                event,
+            )
+        }
+
+    @Test
     fun `route endpoint status click opens search for requested endpoint`() =
         runTest {
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
@@ -147,7 +177,13 @@ class MapViewModelTest {
 
             assertEquals(RouteEditingTarget.ORIGIN, destinationSelectionRepository.editingTarget.value)
             assertEquals(RouteEditingTarget.ORIGIN, viewModel.uiState.value.routeEditingTarget)
-            assertEquals(MapUiEvent.NavigateToSearch(RouteEditingTarget.ORIGIN), event)
+            assertEquals(
+                MapUiEvent.NavigateToSearch(
+                    editingTarget = RouteEditingTarget.ORIGIN,
+                    selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+                ),
+                event,
+            )
         }
 
     @Test

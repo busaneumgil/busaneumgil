@@ -53,6 +53,7 @@ data class MapFacilityDetailSheetState(
     val mapTapDetail: MapTappedPlaceDetail? = null,
     val mapTapNameHint: String? = null,
     val destinationPreview: DestinationPreviewRequest? = null,
+    val presentation: MapFacilityDetailSheetPresentation = MapFacilityDetailSheetPresentation.EXPANDED,
     val isMapTapDetailLoading: Boolean = false,
     val mapTapDetailErrorMessage: String? = null,
     val isBookmarked: Boolean = false,
@@ -66,6 +67,11 @@ data class MapFacilityDetailSheetState(
                 destinationPreview != null ||
                 isMapTapDetailLoading ||
                 mapTapDetailErrorMessage != null
+}
+
+enum class MapFacilityDetailSheetPresentation {
+    EXPANDED,
+    COMPACT,
 }
 
 data class MapTapPayload(
@@ -97,6 +103,10 @@ sealed interface MapUiAction {
     data object ZoomOutClicked : MapUiAction
 
     data object FacilityDetailDismissed : MapUiAction
+
+    data object FacilityDetailExpanded : MapUiAction
+
+    data object BackgroundMapTapped : MapUiAction
 
     data class ApprovedReportMarkerTapped(
         val reportId: Long,

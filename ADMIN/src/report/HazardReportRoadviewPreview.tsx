@@ -13,7 +13,7 @@ type RoadviewStatus = "loading" | "ready" | "empty" | "error";
 export function HazardReportRoadviewPreview({
   point,
   label,
-  helperMessage = "지도를 클릭해 가까운 로드뷰 지점을 다시 선택해보세요.",
+  helperMessage = "",
 }: HazardReportRoadviewPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const roadviewRef = useRef<KakaoRoadview | null>(null);
@@ -47,7 +47,7 @@ export function HazardReportRoadviewPreview({
 
           if (!panoId) {
             setStatus("empty");
-            setMessage(`주변에서 Kakao 로드뷰를 찾지 못했습니다. ${helperMessage}`);
+            setMessage(helperMessage ? `주변에서 Kakao 로드뷰를 찾지 못했습니다. ${helperMessage}` : "주변에서 Kakao 로드뷰를 찾지 못했습니다.");
             return;
           }
 

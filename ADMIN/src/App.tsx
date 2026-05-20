@@ -462,7 +462,7 @@ function AdminApp() {
   const roadviewContainerRef = useRef<HTMLDivElement | null>(null);
   const [roadviewDock, setRoadviewDock] = useState<RoadviewDockState>({
     open: false,
-    message: "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.",
+    message: "",
   });
   const [selectedFacility, setSelectedFacility] = useState<FacilityFeature | null>(null);
   const [selectedFacilityCategories, setSelectedFacilityCategories] = useState<PlaceCategory[]>(() => [...placeCategories]);
@@ -542,10 +542,7 @@ function AdminApp() {
   useEffect(() => {
     setRoadviewDock({
       open: false,
-      message:
-        page === "facilities"
-            ? "편의시설 점을 클릭하면 근처 Roadview를 엽니다."
-            : "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.",
+      message: "",
     });
   }, [page, selectedGu, selectedDong]);
 
@@ -1494,7 +1491,7 @@ function AdminApp() {
                   </div>
                   <div className="roadview-body">
                     <div ref={roadviewContainerRef} className="roadview-container" />
-                    {roadviewDock.message && <div className="roadview-empty">{roadviewDock.message}</div>}
+                    {roadviewDock.open && roadviewDock.message && <div className="roadview-empty">{roadviewDock.message}</div>}
                   </div>
                 </div>
               </section>
@@ -1624,7 +1621,7 @@ function AdminApp() {
                   </div>
                   <div className="roadview-body">
                     <div ref={roadviewContainerRef} className="roadview-container" />
-                    {roadviewDock.message && <div className="roadview-empty">{roadviewDock.message}</div>}
+                    {roadviewDock.open && roadviewDock.message && <div className="roadview-empty">{roadviewDock.message}</div>}
                   </div>
                 </div>
               </section>

@@ -22,8 +22,8 @@ interface FacilityMapProps {
   onPickLocation?: (point: { lat: number; lng: number }) => void;
 }
 
-const ROADVIEW_DEFAULT_MESSAGE = "편의시설 점을 클릭하면 근처 Roadview를 엽니다.";
-const ROADVIEW_MAP_CLICK_MESSAGE = "지도에서 클릭한 지점 근처 Roadview를 엽니다.";
+const ROADVIEW_DEFAULT_MESSAGE = "";
+const ROADVIEW_MAP_CLICK_MESSAGE = "";
 
 export function FacilityMap({
   payload,

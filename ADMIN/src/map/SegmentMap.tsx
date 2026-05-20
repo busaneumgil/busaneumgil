@@ -65,7 +65,7 @@ export interface RoadviewDockState {
   onClose?: () => void;
 }
 
-const ROADVIEW_DEFAULT_MESSAGE = "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.";
+const ROADVIEW_DEFAULT_MESSAGE = "";
 const DETAIL_SEGMENT_MAX_LEVEL = 4;
 const FORCED_DETAIL_SEGMENT_MAX_COUNT = 1500;
 const DETAIL_SEGMENT_RENDER_MAX_COUNT = 1500;

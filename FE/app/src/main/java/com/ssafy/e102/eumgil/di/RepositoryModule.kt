@@ -285,10 +285,14 @@ object RepositoryModule {
         remoteDataSource: VoiceAnalyzeRemoteDataSource,
         mockDataSource: MockVoiceAnalyzeRemoteDataSource,
         sourcePolicy: RepositorySourcePolicy,
+        authSessionRepository: AuthSessionRepository? = null,
+        authRemoteDataSource: AuthRemoteDataSource? = null,
     ): VoiceAnalyzeRepository =
         DefaultVoiceAnalyzeRepository(
             remoteDataSource = remoteDataSource,
             mockDataSource = mockDataSource,
             sourcePolicy = sourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
 }

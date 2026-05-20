@@ -31,6 +31,7 @@ data class ReportOutboxEntity(
     // v10 — Task 5.5: presigned 업로드 성공 후 BE로 보낼 안정 저장값(`objectKey`) 목록.
     // 형식: JSON 문자열 배열 ["hazard-reports/...", ...]. null이면 아직 업로드 안 됨.
     val imageObjectKeysJson: String? = null,
+    val thumbnailObjectKeysJson: String? = null,
     val status: String,
     val serverReportId: Long? = null,
     val lastFailureReason: String? = null,

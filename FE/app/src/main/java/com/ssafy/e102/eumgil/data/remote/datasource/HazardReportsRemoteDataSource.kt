@@ -63,6 +63,7 @@ open class HazardReportsRemoteDataSource private constructor(
                         .put("lng", request.reportPoint.lng),
                 )
                 .put("imageObjectKeys", JSONArray(request.imageObjectKeys))
+                .put("thumbnailObjectKeys", JSONArray(request.thumbnailObjectKeys))
 
         val headers =
             buildMap {
@@ -155,6 +156,7 @@ open class HazardReportsRemoteDataSource private constructor(
         accessToken: String,
         routeId: String,
         currentPoint: HazardReportPointDto,
+        activeLegSequence: Int? = null,
     ): HazardReportRerouteResponseDto {
         val requestJson =
             JSONObject()
@@ -165,6 +167,9 @@ open class HazardReportsRemoteDataSource private constructor(
                         .put("lat", currentPoint.lat)
                         .put("lng", currentPoint.lng),
                 )
+                .apply {
+                    activeLegSequence?.let { put("activeLegSequence", it) }
+                }
         val response =
             postExecutor(
                 "/hazard/$reportId/reroute",
@@ -234,6 +239,8 @@ open class HazardReportsRemoteDataSource private constructor(
             reportType = requireString("reportType"),
             lat = optDouble("lat"),
             lng = optDouble("lng"),
+            description = optNullableString("description"),
+            thumbnailUrls = optJSONArray("thumbnailUrls")?.toStringList().orEmpty(),
             imageUrls = optJSONArray("imageUrls")?.toStringList().orEmpty(),
         )
 

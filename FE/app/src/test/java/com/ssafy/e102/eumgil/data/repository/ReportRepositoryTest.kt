@@ -69,9 +69,11 @@ class ReportRepositoryTest {
                     reportId = 12L,
                     routeId = "rr_active_123",
                     currentPoint = ReportRerouteCurrentPoint,
+                    activeLegSequence = 3,
                 )
 
             assertEquals(listOf("expired-access-token", "new-access-token"), remoteDataSource.hazardRerouteRequestTokens)
+            assertEquals(listOf(3, 3), remoteDataSource.hazardRerouteRequestActiveLegSequences)
             assertEquals(1, authRemoteDataSource.reissueCallCount)
             assertEquals("refresh-token", authRemoteDataSource.latestRefreshToken)
             assertEquals(false, result.rerouted)
@@ -112,6 +114,8 @@ class ReportRepositoryTest {
                                         reportType = "STAIRS_STEP",
                                         lat = 35.1796,
                                         lng = 129.0756,
+                                        description = "공사 자재가 인도를 막고 있습니다.",
+                                        thumbnailUrls = listOf("https://example.com/17-1-thumb.jpg"),
                                         imageUrls = listOf("https://example.com/17-1.jpg"),
                                     ),
                                 ),
@@ -145,6 +149,8 @@ class ReportRepositoryTest {
             assertEquals("new-refresh-token", authSessionRepository.getAuthGateState().authSession?.refreshToken)
             assertEquals(1, markers.size)
             assertEquals(17L, markers.single().reportId)
+            assertEquals(listOf("https://example.com/17-1-thumb.jpg"), markers.single().thumbnailUrls)
+            assertEquals("공사 자재가 인도를 막고 있습니다.", markers.single().description)
         }
 
     @Test
@@ -330,6 +336,7 @@ private class FakeHazardReportsRemoteDataSource(
         private set
     val markerRequestTokens = mutableListOf<String?>()
     val hazardRerouteRequestTokens = mutableListOf<String?>()
+    val hazardRerouteRequestActiveLegSequences = mutableListOf<Int?>()
 
     override suspend fun getApprovedHazardMarkers(
         swLat: Double,
@@ -354,8 +361,10 @@ private class FakeHazardReportsRemoteDataSource(
         accessToken: String,
         routeId: String,
         currentPoint: HazardReportPointDto,
+        activeLegSequence: Int?,
     ): HazardReportRerouteResponseDto {
         hazardRerouteRequestTokens += accessToken
+        hazardRerouteRequestActiveLegSequences += activeLegSequence
         if (failFirstHazardRerouteRequestWithUnauthorized && hazardRerouteRequestTokens.size == 1) {
             throw HazardReportsApiException(
                 httpStatusCode = 401,

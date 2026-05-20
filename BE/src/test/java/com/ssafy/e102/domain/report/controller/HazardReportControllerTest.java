@@ -95,6 +95,31 @@ class HazardReportControllerTest {
 	}
 
 	@Test
+	void createPresignedUploadUrls() throws Exception {
+		UUID userId = UUID.randomUUID();
+		UsernamePasswordAuthenticationToken authentication = authentication(userId);
+		when(hazardReportImageUploadService.createUploadUrls(eq(userId), any()))
+			.thenReturn(List.of(
+				new CreateHazardReportImageUploadUrlResponse(
+					"https://storage.example.com/upload/1",
+					"hazard-reports/%s/20260514/image-1.jpg".formatted(userId),
+					Instant.parse("2026-05-14T01:10:00Z")),
+				new CreateHazardReportImageUploadUrlResponse(
+					"https://storage.example.com/upload/2",
+					"hazard-reports/%s/20260514/image-2.jpg".formatted(userId),
+					Instant.parse("2026-05-14T01:10:00Z"))));
+
+		mockMvc.perform(post("/hazard-reports/images/presigned-upload/batch")
+			.principal(authentication)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"files\":[{\"fileName\":\"image-1.jpg\",\"contentType\":\"image/jpeg\",\"contentLength\":1024},{\"fileName\":\"image-2.jpg\",\"contentType\":\"image/jpeg\",\"contentLength\":2048}]}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("S2000"))
+			.andExpect(jsonPath("$.data.uploads[0].uploadUrl").value("https://storage.example.com/upload/1"))
+			.andExpect(jsonPath("$.data.uploads[1].objectKey").value("hazard-reports/%s/20260514/image-2.jpg".formatted(userId)));
+	}
+
+	@Test
 	@DisplayName("도로 상태 제보 등록은 현재 사용자와 요청 본문으로 생성 응답을 반환한다")
 	void createHazardReport() throws Exception {
 		UUID userId = UUID.randomUUID();
@@ -111,7 +136,8 @@ class HazardReportControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"reportType\":\"SIDEWALK_MISSING\",\"description\":\"보행 가능한 인도가 없습니다.\","
 				+ "\"reportPoint\":{\"lat\":35.1686,\"lng\":129.0576},"
-				+ "\"imageObjectKeys\":[\"hazard-reports/%s/20260514/image-1.jpg\"]}".formatted(userId)))
+				+ "\"imageObjectKeys\":[\"hazard-reports/%s/20260514/image-1.jpg\"],"
+				+ "\"thumbnailObjectKeys\":[\"hazard-reports/%s/20260514/image-1-thumb.jpg\"]}".formatted(userId, userId)))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value("S2010"))
 			.andExpect(jsonPath("$.data.reportId").value(1));
@@ -139,7 +165,8 @@ class HazardReportControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"reportType\":\"SIDEWALK_MISSING\",\"description\":\"보행 가능한 인도가 없습니다.\","
 				+ "\"reportPoint\":{\"lat\":35.1686,\"lng\":129.0576},"
-				+ "\"imageObjectKeys\":[]}"))
+				+ "\"imageObjectKeys\":[],"
+				+ "\"thumbnailObjectKeys\":[]}"))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value("S2010"))
 			.andExpect(jsonPath("$.data.reportId").value(1));
@@ -266,6 +293,8 @@ class HazardReportControllerTest {
 						ReportType.RAMP,
 						35.1,
 						129.1,
+						"보행로에 임시 장애물이 있습니다.",
+						List.of("https://example.com/reports/12/image-1-thumb.jpg"),
 						List.of("https://example.com/reports/12/image-1.jpg")))));
 
 		mockMvc.perform(get("/hazard/markers/")
@@ -280,6 +309,8 @@ class HazardReportControllerTest {
 			.andExpect(jsonPath("$.data.markers[0].reportType").value("RAMP"))
 			.andExpect(jsonPath("$.data.markers[0].lat").value(35.1))
 			.andExpect(jsonPath("$.data.markers[0].lng").value(129.1))
+			.andExpect(jsonPath("$.data.markers[0].description").value("보행로에 임시 장애물이 있습니다."))
+			.andExpect(jsonPath("$.data.markers[0].thumbnailUrls[0]").value("https://example.com/reports/12/image-1-thumb.jpg"))
 			.andExpect(jsonPath("$.data.markers[0].imageUrls[0]").value("https://example.com/reports/12/image-1.jpg"));
 
 		verify(hazardReportService).getApprovedHazardMarkers(35.095, 129.095, 35.105, 129.105);

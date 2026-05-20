@@ -1707,8 +1707,16 @@ class RouteSettingLayoutPolicyTest {
             routeSettingSection.indexOf("RouteSettingBottomBar(") < routeSettingSection.indexOf("ApprovedHazardMarkerBottomSheet("),
         )
         assertTrue(
+            "The route preview hazard sheet should sit above the route start CTA instead of covering it.",
+            routeSettingSection.contains("bottomInset = routeSettingBottomBarOverlayClearance(extraSpacing = 0.dp)"),
+        )
+        assertTrue(
             "The route detail screen should also keep the hazard viewer as the last sibling above side panels and the start CTA.",
             routeDetailSection.indexOf("RouteSettingBottomBar(") < routeDetailSection.indexOf("ApprovedHazardMarkerBottomSheet("),
+        )
+        assertTrue(
+            "The route detail hazard sheet should use the same bottom bar clearance as the preview screen.",
+            routeDetailSection.contains("bottomInset = routeSettingBottomBarOverlayClearance(extraSpacing = 0.dp)"),
         )
     }
 

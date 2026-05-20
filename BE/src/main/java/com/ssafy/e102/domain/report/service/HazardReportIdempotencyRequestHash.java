@@ -29,6 +29,11 @@ final class HazardReportIdempotencyRequestHash {
 		for (String imageObjectKey : imageObjectKeys) {
 			appendPart(canonical, imageObjectKey);
 		}
+		List<String> thumbnailObjectKeys = request.thumbnailObjectKeys() == null ? List.of() : request.thumbnailObjectKeys();
+		canonical.append(thumbnailObjectKeys.size()).append('|');
+		for (String thumbnailObjectKey : thumbnailObjectKeys) {
+			appendPart(canonical, thumbnailObjectKey);
+		}
 		return sha256(canonical.toString());
 	}
 

@@ -2761,6 +2761,7 @@ private class FakeNavigationReportRepository(
         reportId: Long,
         routeId: String,
         currentPoint: GeoCoordinate,
+        activeLegSequence: Int?,
     ): HazardReportRerouteResult {
         hazardRerouteCalls += Triple(reportId, routeId, currentPoint)
         rerouteFailure?.let { throw it }

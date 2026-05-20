@@ -301,6 +301,7 @@ fun RouteSettingScreen(
         ApprovedHazardMarkerBottomSheet(
             marker = hazardMarkerState.selectedMarker,
             onDismiss = hazardMarkerState::dismissSelection,
+            bottomInset = routeSettingBottomBarOverlayClearance(extraSpacing = 0.dp),
             modifier = Modifier.matchParentSize(),
         )
     }
@@ -511,6 +512,7 @@ fun RouteDetailScreen(
             ApprovedHazardMarkerBottomSheet(
                 marker = hazardMarkerState.selectedMarker,
                 onDismiss = hazardMarkerState::dismissSelection,
+                bottomInset = routeSettingBottomBarOverlayClearance(extraSpacing = 0.dp),
                 modifier = Modifier.matchParentSize(),
             )
         }

@@ -268,6 +268,7 @@ class HazardReportServiceTest {
 				ReportType.SIDEWALK_MISSING,
 				"보행 가능한 인도가 없습니다.",
 				new GeoPointRequest(35.1686, 129.0576),
+				List.of(),
 				List.of()));
 
 		assertThat(response.reportId()).isEqualTo(1L);
@@ -292,7 +293,8 @@ class HazardReportServiceTest {
 				ReportType.SIDEWALK_MISSING,
 				"보행 가능한 인도가 없습니다.",
 				new GeoPointRequest(35.1686, 129.0576),
-				imageObjectKeys)))
+				imageObjectKeys,
+				List.of())))
 			.isInstanceOf(HazardReportException.class)
 			.extracting("errorCode")
 			.isEqualTo(HazardReportErrorCode.INVALID_HAZARD_REPORT_IMAGE_URL);
@@ -312,6 +314,7 @@ class HazardReportServiceTest {
 				ReportType.SIDEWALK_MISSING,
 				null,
 				new GeoPointRequest(35.1686, 129.0576),
+				null,
 				null)))
 			.hasMessage("사용자를 찾을 수 없습니다.");
 
@@ -454,6 +457,7 @@ class HazardReportServiceTest {
 		assertThat(response.markers().get(0).reportType()).isEqualTo(ReportType.RAMP);
 		assertThat(response.markers().get(0).lat()).isEqualTo(35.1);
 		assertThat(response.markers().get(0).lng()).isEqualTo(129.1);
+		assertThat(response.markers().get(0).description()).isEqualTo(approvedWithImages.getDescription());
 		assertThat(response.markers().get(0).imageUrls())
 			.containsExactly(
 				"https://storage.example.com/read?key=image-1",
@@ -604,7 +608,8 @@ class HazardReportServiceTest {
 			ReportType.SIDEWALK_MISSING,
 			"보행 가능한 인도가 없습니다.",
 			new GeoPointRequest(35.1686, 129.0576),
-			List.of("hazard-reports/user-1/20260514/image-1.jpg"));
+			List.of("hazard-reports/user-1/20260514/image-1.jpg"),
+			List.of("hazard-reports/user-1/20260514/image-1-thumb.jpg"));
 	}
 
 	private String idempotencyRequestHash(CreateHazardReportRequest request) {

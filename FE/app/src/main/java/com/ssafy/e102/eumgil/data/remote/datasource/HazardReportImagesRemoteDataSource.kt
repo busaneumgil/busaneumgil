@@ -2,6 +2,8 @@ package com.ssafy.e102.eumgil.data.remote.datasource
 
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
 import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
+import com.ssafy.e102.eumgil.data.remote.dto.PresignedUploadBatchRequestDto
+import com.ssafy.e102.eumgil.data.remote.dto.PresignedUploadBatchResponseDto
 import com.ssafy.e102.eumgil.data.remote.dto.PresignedUploadRequestDto
 import com.ssafy.e102.eumgil.data.remote.dto.PresignedUploadResponseDto
 import java.net.HttpURLConnection
@@ -49,6 +51,48 @@ open class HazardReportImagesRemoteDataSource(
             uploadUrl = data.requireString("uploadUrl"),
             objectKey = data.requireString("objectKey"),
             expiresAt = data.requireString("expiresAt"),
+        )
+    }
+
+    open suspend fun requestPresignedUploadBatch(
+        accessToken: String,
+        request: PresignedUploadBatchRequestDto,
+    ): PresignedUploadBatchResponseDto {
+        val requestJson =
+            JSONObject().put(
+                "files",
+                org.json.JSONArray().apply {
+                    request.files.forEach { file ->
+                        put(
+                            JSONObject()
+                                .put("fileName", file.fileName)
+                                .put("contentType", file.contentType)
+                                .put("contentLength", file.contentLength),
+                        )
+                    }
+                },
+            )
+
+        val response =
+            httpJsonClient.postJson(
+                path = PRESIGNED_UPLOAD_BATCH_PATH,
+                body = requestJson.toString(),
+                headers = mapOf("Authorization" to "Bearer $accessToken"),
+            )
+
+        if (response.statusCode !in 200..299) throw response.toApiException()
+        val data = JSONObject(response.body).optJSONObject("data") ?: throw response.toApiException()
+        val uploadsJson = data.optJSONArray("uploads") ?: throw response.toApiException()
+        return PresignedUploadBatchResponseDto(
+            uploads =
+                List(uploadsJson.length()) { index ->
+                    val upload = uploadsJson.getJSONObject(index)
+                    PresignedUploadResponseDto(
+                        uploadUrl = upload.requireString("uploadUrl"),
+                        objectKey = upload.requireString("objectKey"),
+                        expiresAt = upload.requireString("expiresAt"),
+                    )
+                },
         )
     }
 
@@ -104,6 +148,7 @@ open class HazardReportImagesRemoteDataSource(
 
     private companion object {
         private const val PRESIGNED_UPLOAD_PATH = "/hazard-reports/images/presigned-upload"
+        private const val PRESIGNED_UPLOAD_BATCH_PATH = "/hazard-reports/images/presigned-upload/batch"
         // S3는 binary 업로드라 일반 JSON 호출보다 timeout을 넉넉히 둔다.
         private const val UPLOAD_CONNECT_TIMEOUT_MS = 10_000
         private const val UPLOAD_READ_TIMEOUT_MS = 30_000

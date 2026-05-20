@@ -85,6 +85,17 @@ ALTER TABLE routing_segment_overrides
 ALTER TABLE road_segments
     ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
 
+CREATE INDEX IF NOT EXISTS idx_road_segments_geom_gist
+    ON road_segments
+    USING GIST (geom);
+
+CREATE INDEX IF NOT EXISTS idx_admin_areas_geom_gist
+    ON admin_areas
+    USING GIST (geom);
+
+CREATE INDEX IF NOT EXISTS idx_segment_features_edge_id
+    ON segment_features (edge_id);
+
 CREATE TABLE IF NOT EXISTS routing_apply_states (
     state_key VARCHAR(60) PRIMARY KEY,
     dirty BOOLEAN NOT NULL DEFAULT FALSE,
@@ -178,3 +189,6 @@ CREATE TABLE IF NOT EXISTS hazard_report_route_review_segment_drafts (
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_hazard_report_route_review_segment_drafts_review_edge
     ON hazard_report_route_review_segment_drafts (review_id, edge_id);
+
+ALTER TABLE IF EXISTS hazard_report_images
+    ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;

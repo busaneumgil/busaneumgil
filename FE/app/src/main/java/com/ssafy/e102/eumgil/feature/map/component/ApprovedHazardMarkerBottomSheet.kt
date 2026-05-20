@@ -32,11 +32,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,15 +61,14 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil.compose.SubcomposeAsyncImage
@@ -84,6 +85,7 @@ import kotlin.math.roundToInt
 internal fun ApprovedHazardMarkerBottomSheet(
     marker: ApprovedHazardMarker?,
     onDismiss: () -> Unit = {},
+    bottomInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     var viewerState by remember { mutableStateOf(ApprovedHazardMarkerImageViewerState()) }
@@ -133,7 +135,9 @@ internal fun ApprovedHazardMarkerBottomSheet(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+                    .padding(bottom = bottomInset),
         ) {
             val resolvedMarker = marker ?: return@AnimatedVisibility
             MapBottomSheetSurface(
@@ -172,6 +176,7 @@ internal fun ApprovedHazardMarkerBottomSheet(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
                 ) {
+                    val thumbnailGallery = resolvedMarker.thumbnailUrls.ifEmpty { resolvedMarker.imageUrls }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
@@ -192,7 +197,9 @@ internal fun ApprovedHazardMarkerBottomSheet(
                                     modifier = Modifier.testTag("approvedHazardHeaderWarningIcon"),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    ApprovedHazardWarningIcon(
+                                    Image(
+                                        painter = painterResource(id = R.drawable.ic_approved_hazard_warning),
+                                        contentDescription = null,
                                         modifier = Modifier.size(24.dp),
                                     )
                                 }
@@ -211,15 +218,15 @@ internal fun ApprovedHazardMarkerBottomSheet(
                                 )
                             }
                         }
-                        IconButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.offset(y = (-10).dp),
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_action_close),
-                                contentDescription = stringResource(id = R.string.map_facility_detail_close),
-                            )
-                        }
+                    }
+
+                    resolvedMarker.description?.takeIf { description -> description.isNotBlank() }?.let { description ->
+                        Text(
+                            text = description,
+                            modifier = Modifier.testTag("approvedHazardDescription"),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
 
                     if (resolvedMarker.imageUrls.isEmpty()) {
@@ -229,7 +236,7 @@ internal fun ApprovedHazardMarkerBottomSheet(
                             horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
                         ) {
                             itemsIndexed(
-                                items = resolvedMarker.imageUrls,
+                                items = thumbnailGallery,
                                 key = { index, imageUrl -> "$index-$imageUrl" },
                             ) { index, imageUrl ->
                                 HazardMarkerPhotoCard(
@@ -310,55 +317,13 @@ private fun CameraUnavailablePlaceholderIcon(
 }
 
 @Composable
-private fun ApprovedHazardWarningIcon(
-    modifier: Modifier = Modifier,
-) {
-    Canvas(modifier = modifier) {
-        val strokeWidth = size.minDimension * 0.1f
-        val halfStroke = strokeWidth / 2f
-        val padding = size.minDimension * 0.08f
-        val path =
-            Path().apply {
-                moveTo(size.width / 2f, padding + halfStroke)
-                lineTo(size.width - padding - halfStroke, size.height - padding - halfStroke)
-                lineTo(padding + halfStroke, size.height - padding - halfStroke)
-                close()
-            }
-        drawPath(
-            path = path,
-            color = Color(0xFFFFD84D),
-        )
-        drawPath(
-            path = path,
-            color = Color(0xFF111827),
-            style =
-                Stroke(
-                    width = strokeWidth,
-                    join = StrokeJoin.Round,
-                ),
-        )
-        val symbolColor = Color(0xFF111827)
-        drawLine(
-            color = symbolColor,
-            start = Offset(size.width / 2f, size.height * 0.33f),
-            end = Offset(size.width / 2f, size.height * 0.58f),
-            strokeWidth = strokeWidth * 0.72f,
-            cap = StrokeCap.Round,
-        )
-        drawCircle(
-            color = symbolColor,
-            radius = strokeWidth * 0.32f,
-            center = Offset(size.width / 2f, size.height * 0.72f),
-        )
-    }
-}
-
-@Composable
 private fun HazardMarkerPhotoCard(
     imageUrl: String,
     index: Int,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val thumbnailSizePx = with(LocalDensity.current) { 136.dp.roundToPx() }
     Surface(
         modifier =
             Modifier
@@ -371,9 +336,10 @@ private fun HazardMarkerPhotoCard(
     ) {
         SubcomposeAsyncImage(
             model =
-                ImageRequest.Builder(LocalContext.current)
+                ImageRequest.Builder(context)
                     .data(imageUrl)
-                    .crossfade(true)
+                    .size(thumbnailSizePx)
+                    .crossfade(false)
                     .build(),
             contentDescription = stringResource(id = R.string.approved_hazard_marker_thumbnail_content_description, index + 1),
             modifier = Modifier.fillMaxSize().aspectRatio(1f),

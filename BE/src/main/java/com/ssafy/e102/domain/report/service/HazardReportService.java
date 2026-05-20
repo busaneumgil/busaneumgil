@@ -130,6 +130,7 @@ public class HazardReportService {
 
 		getUser(userId);
 		hazardReportImageUploadService.validateImageObjectKeys(userId, request.imageObjectKeys());
+		hazardReportImageUploadService.validateThumbnailObjectKeys(userId, request.thumbnailObjectKeys());
 		String address = resolveAddress(request.reportPoint());
 		String idempotencyRequestHash = requestHash;
 		HazardReportIdResponse response = writeTransaction.execute(status -> createHazardReportInTransaction(
@@ -166,7 +167,8 @@ public class HazardReportService {
 			request.description(),
 			address,
 			geoPointConverter.toPoint(request.reportPoint()),
-			request.imageObjectKeys());
+			request.imageObjectKeys(),
+			request.thumbnailObjectKeys());
 		hazardReport.applyIdempotency(
 			normalizedIdempotencyKey,
 			requestHash,
@@ -266,7 +268,17 @@ public class HazardReportService {
 			hazardReport.getReportType(),
 			reportPoint.getY(),
 			reportPoint.getX(),
+			hazardReport.getDescription(),
+			createMarkerThumbnailReadUrls(hazardReport),
 			createMarkerImageReadUrls(hazardReport));
+	}
+
+	private List<String> createMarkerThumbnailReadUrls(HazardReport hazardReport) {
+		return hazardReport.getImages()
+			.stream()
+			.map(image -> toMarkerThumbnailReadUrl(hazardReport.getReportId(), image))
+			.filter(Objects::nonNull)
+			.toList();
 	}
 
 	private List<String> createMarkerImageReadUrls(HazardReport hazardReport) {
@@ -283,6 +295,19 @@ public class HazardReportService {
 		} catch (RuntimeException exception) {
 			log.warn("승인 제보 마커 이미지 URL 생성 실패. reportId={}, objectKey={}", reportId, image.getImageObjectKey(), exception);
 			return null;
+		}
+	}
+
+	private String toMarkerThumbnailReadUrl(Long reportId, HazardReportImage image) {
+		String thumbnailObjectKey = image.getThumbnailObjectKey();
+		if (thumbnailObjectKey == null || thumbnailObjectKey.isBlank()) {
+			return toMarkerImageReadUrl(reportId, image);
+		}
+		try {
+			return hazardReportImageUploadService.createReadUrl(thumbnailObjectKey);
+		} catch (RuntimeException exception) {
+			log.warn("승인 제보 마커 썸네일 URL 생성 실패. reportId={}, thumbnailObjectKey={}", reportId, thumbnailObjectKey, exception);
+			return toMarkerImageReadUrl(reportId, image);
 		}
 	}
 

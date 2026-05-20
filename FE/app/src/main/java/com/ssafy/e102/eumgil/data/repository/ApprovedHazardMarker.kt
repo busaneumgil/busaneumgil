@@ -6,6 +6,8 @@ data class ApprovedHazardMarker(
     val reportId: Long,
     val reportType: String,
     val coordinate: GeoCoordinate,
+    val description: String? = null,
+    val thumbnailUrls: List<String> = emptyList(),
     val imageUrls: List<String>,
 )
 

@@ -34,6 +34,9 @@ public class HazardReportImage {
 	@Column(name = "image_url", nullable = false, columnDefinition = "TEXT")
 	private String imageObjectKey;
 
+	@Column(name = "thumbnail_url", columnDefinition = "TEXT")
+	private String thumbnailObjectKey;
+
 	@Column(name = "display_order", nullable = false)
 	private short displayOrder;
 
@@ -44,10 +47,12 @@ public class HazardReportImage {
 	public static HazardReportImage create(
 		HazardReport hazardReport,
 		String imageObjectKey,
+		String thumbnailObjectKey,
 		int displayOrder) {
 		HazardReportImage hazardReportImage = new HazardReportImage();
 		hazardReportImage.hazardReport = requireHazardReport(hazardReport);
 		hazardReportImage.imageObjectKey = normalizeImageObjectKey(imageObjectKey);
+		hazardReportImage.thumbnailObjectKey = normalizeThumbnailObjectKey(thumbnailObjectKey);
 		hazardReportImage.displayOrder = (short)displayOrder;
 		return hazardReportImage;
 	}
@@ -64,6 +69,13 @@ public class HazardReportImage {
 			throw invalidRequest("제보 이미지 object key는 필수입니다.");
 		}
 		return imageObjectKey.trim();
+	}
+
+	private static String normalizeThumbnailObjectKey(String thumbnailObjectKey) {
+		if (thumbnailObjectKey == null || thumbnailObjectKey.isBlank()) {
+			return null;
+		}
+		return thumbnailObjectKey.trim();
 	}
 
 	private static HazardReportException invalidRequest(String message) {

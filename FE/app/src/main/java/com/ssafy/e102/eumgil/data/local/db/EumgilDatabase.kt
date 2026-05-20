@@ -39,7 +39,7 @@ abstract class EumgilDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "eumgil.db"
-        const val DATABASE_VERSION = 10
+        const val DATABASE_VERSION = 11
 
         @Volatile
         private var instance: EumgilDatabase? = null

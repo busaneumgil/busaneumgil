@@ -495,6 +495,10 @@ class NavigationScreenPolicyTest {
             "The full-screen hazard image viewer should mount after the navigation bottom bar so it can cover the entire screen chrome.",
             screenSection.indexOf("NavigationBottomBar(") < screenSection.indexOf("ApprovedHazardMarkerBottomSheet("),
         )
+        assertTrue(
+            "The navigation hazard sheet should reserve the local bottom bar clearance so the CTA remains visible.",
+            screenSection.contains("bottomInset = navigationHazardSheetBottomInset()"),
+        )
     }
 
     @Test

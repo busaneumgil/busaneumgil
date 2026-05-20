@@ -101,6 +101,7 @@ internal fun shouldSkipKakaoCameraSync(
     renderedTarget: MapCameraTarget?,
     requestedTarget: MapCameraTarget,
 ): Boolean {
+    if (requestedTarget.shouldAnimateTransition) return false
     val previous = renderedTarget ?: return false
     return previous.center.isNearCameraTarget(requestedTarget.center) &&
         previous.resolvedZoomLevel() == requestedTarget.resolvedZoomLevel() &&

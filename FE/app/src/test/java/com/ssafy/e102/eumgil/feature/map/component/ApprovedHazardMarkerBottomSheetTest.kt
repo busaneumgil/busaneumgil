@@ -2,10 +2,10 @@ package com.ssafy.e102.eumgil.feature.map.component
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -85,14 +85,16 @@ class ApprovedHazardMarkerBottomSheetTest {
     }
 
     @Test
-    fun `bottom sheet shows empty image state when marker has no photos`() {
+    fun `bottom sheet shows square empty image placeholder when marker has no photos`() {
         composeRule.setContent {
             BusanEumgilTheme {
                 ApprovedHazardMarkerBottomSheet(marker = marker(imageUrls = emptyList()))
             }
         }
 
-        assertTrue(composeRule.onAllNodesWithText("사진 없음").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(composeRule.onAllNodesWithTag("approvedHazardNoImagePlaceholder").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(composeRule.onAllNodesWithTag("approvedHazardHeaderWarningIcon").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(composeRule.onAllNodesWithText("사진 없음").fetchSemanticsNodes().isEmpty())
         assertTrue(composeRule.onAllNodesWithContentDescription("승인 제보 사진 1").fetchSemanticsNodes().isEmpty())
     }
 
@@ -182,6 +184,20 @@ class ApprovedHazardMarkerBottomSheetTest {
         assertTrue(viewerSection.contains("approvedHazardViewerBackdrop"))
         assertTrue(viewerSection.contains(".clickable("))
         assertTrue(viewerSection.contains("onClick = onDismiss"))
+    }
+
+    @Test
+    fun `sheet header keeps the close button lifted and no image placeholder uses the square camera empty state`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/ApprovedHazardMarkerBottomSheet.kt")
+                .readText()
+
+        assertTrue(source.contains("approvedHazardHeaderWarningIcon"))
+        assertTrue(source.contains("approvedHazardNoImagePlaceholder"))
+        assertTrue(source.contains("Modifier.offset(y = (-20).dp)"))
+        assertTrue(source.contains("Color(0xFFD9D9D9)"))
+        assertTrue(source.contains("Color(0xFFFFFFFF)"))
+        assertTrue(source.contains("Color(0xFFE5E7EB)"))
     }
 
     private fun marker(imageUrls: List<String>) =

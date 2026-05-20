@@ -12,7 +12,6 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
-import com.ssafy.e102.eumgil.feature.report.reportTypeMarkerIconRes
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -1023,7 +1022,6 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
                 markerId = clickTargetId ?: overlayId,
                 coordinate = coordinate,
                 kind = KakaoOverlayMarkerKind.APPROVED_REPORT,
-                iconResId = reportTypeMarkerIconRes(reportTypeApiValue),
                 anchorPointX = 0.5f,
                 anchorPointY = 0.5f,
                 sizeDp = 32,

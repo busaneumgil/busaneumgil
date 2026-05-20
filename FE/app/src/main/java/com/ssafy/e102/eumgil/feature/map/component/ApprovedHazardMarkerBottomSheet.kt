@@ -5,11 +5,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -43,13 +44,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil.compose.SubcomposeAsyncImage
@@ -59,7 +65,6 @@ import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.data.repository.ApprovedHazardMarker
 import com.ssafy.e102.eumgil.feature.report.displayLabel
-import com.ssafy.e102.eumgil.feature.report.markerIconRes
 import com.ssafy.e102.eumgil.feature.report.toReportTypeOrNull
 
 @Composable
@@ -115,10 +120,11 @@ internal fun ApprovedHazardMarkerBottomSheet(
                                 shape = RoundedCornerShape(EumRadius.scaleM),
                                 color = MaterialTheme.colorScheme.errorContainer,
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Image(
-                                        painter = painterResource(id = resolvedMarker.reportTypeIconRes),
-                                        contentDescription = null,
+                                Box(
+                                    modifier = Modifier.testTag("approvedHazardHeaderWarningIcon"),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    ApprovedHazardWarningIcon(
                                         modifier = Modifier.size(24.dp),
                                     )
                                 }
@@ -137,7 +143,10 @@ internal fun ApprovedHazardMarkerBottomSheet(
                                 )
                             }
                         }
-                        IconButton(onClick = onDismiss) {
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.offset(y = (-20).dp),
+                        ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_action_close),
                                 contentDescription = stringResource(id = R.string.map_facility_detail_close),
@@ -146,18 +155,7 @@ internal fun ApprovedHazardMarkerBottomSheet(
                     }
 
                     if (resolvedMarker.imageUrls.isEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(EumRadius.scaleM),
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        ) {
-                            Text(
-                                text = stringResource(id = R.string.approved_hazard_marker_no_images),
-                                modifier = Modifier.padding(EumSpacing.medium),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        HazardMarkerEmptyPhotoPlaceholder()
                     } else {
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(EumSpacing.small),
@@ -185,6 +183,104 @@ internal fun ApprovedHazardMarkerBottomSheet(
         ApprovedHazardMarkerImageViewer(
             state = viewerState,
             onDismiss = { viewerState = viewerState.close() },
+        )
+    }
+}
+
+@Composable
+private fun HazardMarkerEmptyPhotoPlaceholder() {
+    Surface(
+        modifier =
+            Modifier
+                .size(136.dp)
+                .testTag("approvedHazardNoImagePlaceholder"),
+        shape = RoundedCornerShape(EumRadius.scaleM),
+        color = Color(0xFFFFFFFF),
+        border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            CameraUnavailablePlaceholderIcon(
+                modifier = Modifier.size(52.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CameraUnavailablePlaceholderIcon(
+    modifier: Modifier = Modifier,
+) {
+    val mutedColor = Color(0xFFD9D9D9)
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidth = size.minDimension * 0.08f
+            val radius = (size.minDimension / 2f) - strokeWidth
+            drawCircle(
+                color = mutedColor,
+                radius = radius,
+                center = center,
+                style = Stroke(width = strokeWidth),
+            )
+            drawLine(
+                color = mutedColor,
+                start = Offset(size.width * 0.24f, size.height * 0.24f),
+                end = Offset(size.width * 0.76f, size.height * 0.76f),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round,
+            )
+        }
+        Icon(
+            painter = painterResource(id = R.drawable.ic_permission_camera),
+            contentDescription = null,
+            tint = mutedColor,
+            modifier = Modifier.size(26.dp),
+        )
+    }
+}
+
+@Composable
+private fun ApprovedHazardWarningIcon(
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        val strokeWidth = size.minDimension * 0.1f
+        val halfStroke = strokeWidth / 2f
+        val padding = size.minDimension * 0.08f
+        val path =
+            Path().apply {
+                moveTo(size.width / 2f, padding + halfStroke)
+                lineTo(size.width - padding - halfStroke, size.height - padding - halfStroke)
+                lineTo(padding + halfStroke, size.height - padding - halfStroke)
+                close()
+            }
+        drawPath(
+            path = path,
+            color = Color(0xFFFFD84D),
+        )
+        drawPath(
+            path = path,
+            color = Color(0xFFE0B312),
+            style =
+                Stroke(
+                    width = strokeWidth,
+                    join = StrokeJoin.Round,
+                ),
+        )
+        val symbolColor = Color(0xFF7A4F00)
+        drawLine(
+            color = symbolColor,
+            start = Offset(size.width / 2f, size.height * 0.33f),
+            end = Offset(size.width / 2f, size.height * 0.58f),
+            strokeWidth = strokeWidth * 0.72f,
+            cap = StrokeCap.Round,
+        )
+        drawCircle(
+            color = symbolColor,
+            radius = strokeWidth * 0.32f,
+            center = Offset(size.width / 2f, size.height * 0.72f),
         )
     }
 }
@@ -387,6 +483,3 @@ private const val ApprovedHazardMarkerOverlayZIndex = 10f
 
 private val ApprovedHazardMarker.reportTypeLabel: String
     get() = reportType.toReportTypeOrNull()?.displayLabel ?: reportType
-
-private val ApprovedHazardMarker.reportTypeIconRes: Int
-    get() = reportType.toReportTypeOrNull()?.markerIconRes ?: R.drawable.ic_report_other

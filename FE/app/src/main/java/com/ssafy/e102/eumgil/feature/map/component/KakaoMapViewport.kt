@@ -1687,8 +1687,8 @@ private const val KAKAO_ROUTE_CAMERA_PADDING = 84
 private const val KAKAO_PROJECTED_MARKER_MAX_RETRY_FRAMES = 6
 private const val APPROVED_REPORT_MARKER_FILL = -10163 // 0xFFFFD84D
 private const val APPROVED_REPORT_MARKER_STROKE = -2051310 // 0xFFE0B312
-private const val APPROVED_REPORT_MARKER_ICON_TINT = -1 // 0xFFFFFFFF
 private const val APPROVED_REPORT_MARKER_SELECTED_RING = -1 // 0xFFFFFFFF
+private const val APPROVED_REPORT_MARKER_SYMBOL = -8761600 // 0xFF7A4F00
 
 private fun String?.isClickableMarkerLayer(): Boolean =
     this == KAKAO_MARKER_LAYER_ID || this == KAKAO_APPROVED_REPORT_MARKER_LAYER_ID
@@ -1901,11 +1901,12 @@ private class KakaoOverlayMarkerStyleCache(
     ): Bitmap {
         val sizePx = dpToPx(marker.sizeDp.toFloat())
         val bitmapSizePx = sizePx.roundToInt().coerceAtLeast(1)
-        val borderWidthPx = dpToPx(if (marker.isSelected) 2.5f else 1.5f).coerceAtLeast(1f)
-        val iconSizePx = dpToPx(18f)
+        val borderWidthPx = dpToPx(if (marker.isSelected) 3f else 2f).coerceAtLeast(1f)
+        val halfStroke = borderWidthPx / 2f
+        val padding = dpToPx(2f)
         val bitmap = Bitmap.createBitmap(bitmapSizePx, bitmapSizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val outerPaint =
+        val outerFillPaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
                 color = if (marker.isSelected) APPROVED_REPORT_MARKER_SELECTED_RING else marker.strokeColorArgb
@@ -1921,42 +1922,37 @@ private class KakaoOverlayMarkerStyleCache(
                 this.strokeWidth = borderWidthPx
                 color = marker.strokeColorArgb
             }
-        val center = sizePx / 2f
-        canvas.drawCircle(center, center, center, outerPaint)
-        canvas.drawCircle(center, center, center - borderWidthPx, fillPaint)
-        canvas.drawCircle(center, center, center - borderWidthPx, strokePaint)
-        drawApprovedReportIcon(
-            canvas = canvas,
-            iconResId = marker.iconResId ?: R.drawable.ic_report_other,
-            sizePx = sizePx,
-            iconSizePx = iconSizePx,
+        val path =
+            AndroidPath().apply {
+                moveTo(sizePx / 2f, padding + halfStroke)
+                lineTo(sizePx - padding - halfStroke, sizePx - padding - halfStroke)
+                lineTo(padding + halfStroke, sizePx - padding - halfStroke)
+                close()
+            }
+        canvas.drawPath(path, outerFillPaint)
+        canvas.drawPath(path, fillPaint)
+        canvas.drawPath(path, strokePaint)
+        val symbolPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                color = APPROVED_REPORT_MARKER_SYMBOL
+                strokeWidth = borderWidthPx * 0.7f
+                strokeCap = Paint.Cap.ROUND
+            }
+        canvas.drawLine(
+            sizePx / 2f,
+            sizePx * 0.33f,
+            sizePx / 2f,
+            sizePx * 0.58f,
+            symbolPaint,
         )
+        val dotPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = APPROVED_REPORT_MARKER_SYMBOL
+            }
+        canvas.drawCircle(sizePx / 2f, sizePx * 0.72f, borderWidthPx * 0.35f, dotPaint)
         return bitmap
-    }
-
-    private fun drawApprovedReportIcon(
-        canvas: Canvas,
-        @DrawableRes iconResId: Int,
-        sizePx: Float,
-        iconSizePx: Float,
-    ) {
-        val iconDrawable =
-            AppCompatResources
-                .getDrawable(context, iconResId)
-                ?.mutate()
-                ?: return
-        DrawableCompat.setTint(iconDrawable, APPROVED_REPORT_MARKER_ICON_TINT)
-        val iconLeft = ((sizePx - iconSizePx) / 2f).toInt()
-        val iconTop = ((sizePx - iconSizePx) / 2f).toInt()
-        val iconSizeIntPx = iconSizePx.roundToInt()
-        iconDrawable.bounds =
-            Rect(
-                iconLeft,
-                iconTop,
-                iconLeft + iconSizeIntPx,
-                iconTop + iconSizeIntPx,
-            )
-        iconDrawable.draw(canvas)
     }
 
     private fun createFocusHaloBitmap(

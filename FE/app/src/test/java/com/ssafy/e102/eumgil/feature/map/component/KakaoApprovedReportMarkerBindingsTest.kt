@@ -1,9 +1,9 @@
 package com.ssafy.e102.eumgil.feature.map.component
 
-import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -26,13 +26,13 @@ class KakaoApprovedReportMarkerBindingsTest {
         assertEquals(KakaoOverlayMarkerKind.APPROVED_REPORT, marker?.kind)
         assertEquals("approved-report:42", marker?.markerId)
         assertEquals(32, marker?.sizeDp)
-        assertEquals(R.drawable.ic_report_ramp, marker?.iconResId)
+        assertNull(marker?.iconResId)
         assertEquals(0xFFE0B312.toInt(), marker?.strokeColorArgb)
         assertEquals("approved-report:42", marker?.clickTargetId)
     }
 
     @Test
-    fun `approved report point falls back to other icon when report type is unknown`() {
+    fun `approved report point keeps the shared warning marker even when report type is unknown`() {
         val point =
             MapViewportPointOverlay(
                 overlayId = "approved-report:99",
@@ -45,7 +45,7 @@ class KakaoApprovedReportMarkerBindingsTest {
 
         val marker = point.toKakaoProjectedPointMarkerState()
 
-        assertEquals(R.drawable.ic_report_other, marker?.iconResId)
+        assertNull(marker?.iconResId)
     }
 
     @Test
@@ -67,12 +67,12 @@ class KakaoApprovedReportMarkerBindingsTest {
     }
 
     @Test
-    fun `approved report marker bitmap uses white icon tint`() {
+    fun `approved report marker bitmap uses the shared triangle warning symbol color`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
                 .readText()
 
-        assertTrue(source.contains("APPROVED_REPORT_MARKER_ICON_TINT = -1"))
+        assertTrue(source.contains("APPROVED_REPORT_MARKER_SYMBOL = -8761600"))
     }
 
     @Test

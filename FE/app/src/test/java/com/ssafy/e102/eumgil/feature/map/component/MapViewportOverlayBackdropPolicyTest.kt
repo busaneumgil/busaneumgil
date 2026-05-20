@@ -28,7 +28,7 @@ class MapViewportOverlayBackdropPolicyTest {
     }
 
     @Test
-    fun `approved report fallback marker uses round warning style with white icon and gold stroke`() {
+    fun `approved report fallback marker uses shared triangle warning style`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/MapViewportOverlayBackdrop.kt")
                 .readText()
@@ -39,8 +39,8 @@ class MapViewportOverlayBackdropPolicyTest {
 
         assertTrue(markerSection.contains("containerColor = Color(0xFFFFD84D)"))
         assertTrue(markerSection.contains("borderColor = Color(0xFFE0B312)"))
-        assertTrue(markerSection.contains("contentColor = Color.White"))
-        assertTrue(markerSection.contains("shape = ViewportPointMarkerShape.CIRCLE"))
-        assertTrue(markerSection.contains("iconResId = reportTypeMarkerIconRes(reportTypeApiValue)"))
+        assertTrue(markerSection.contains("contentColor = Color(0xFF7A4F00)"))
+        assertTrue(markerSection.contains("shape = ViewportPointMarkerShape.TRIANGLE_WARNING"))
+        assertTrue(markerSection.contains("label = \"!\""))
     }
 }

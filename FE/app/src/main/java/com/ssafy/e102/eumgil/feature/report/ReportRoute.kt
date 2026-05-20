@@ -102,18 +102,24 @@ fun ReportRoute(
         }
 
     LaunchedEffect(entryPoint, viewModel) {
-        viewModel.onAction(ReportUiAction.RouteEntered(entryPoint))
+        if (!startNewRequest) {
+            viewModel.onAction(
+                ReportUiAction.RouteEntered(
+                    entryPoint = entryPoint,
+                    startNew = false,
+                ),
+            )
+        }
     }
 
-    LaunchedEffect(viewModel) {
-        // 탭 재진입 시 완료 화면이면 자동으로 새 제보 시작 상태로 초기화 (T10).
-        // 작성 중·실패 상태는 보존되어야 하므로 ViewModel에서 분기 처리한다.
-        viewModel.onAction(ReportUiAction.TabReentered)
-    }
-
-    LaunchedEffect(startNewRequest, viewModel) {
+    LaunchedEffect(entryPoint, startNewRequest, viewModel) {
         if (startNewRequest) {
-            viewModel.onAction(ReportUiAction.StartNewReportClicked)
+            viewModel.onAction(
+                ReportUiAction.RouteEntered(
+                    entryPoint = entryPoint,
+                    startNew = true,
+                ),
+            )
             onStartNewRequestConsumed()
         }
     }
@@ -149,7 +155,6 @@ fun ReportRoute(
                     view.announceForAccessibility(event.message)
                 }
                 ReportUiEvent.ScrollToFirstError -> scrollState.animateScrollTo(0)
-                is ReportUiEvent.ShowDraftDiscardDialog -> Unit
                 ReportUiEvent.RequestLocationPermission -> {
                     // Activity가 살아있어야 launcher 사용 가능. Manager가 이미 Granted/Unavailable
                     // 상태이면 자체적으로 no-op으로 처리하므로 안전.

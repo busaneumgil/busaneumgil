@@ -285,7 +285,6 @@ public class GraphHopperRouteClient {
 		if (request.enforceSnapDistanceLimit()) {
 			validateSnapDistance(request, path);
 		}
-		validateWalkAccess(path);
 		List<GraphHopperCoordinate> coordinates = path.coordinates();
 		if (coordinates.isEmpty()) {
 			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
@@ -310,15 +309,6 @@ public class GraphHopperRouteClient {
 		return GeoDistanceCalculator.distanceMeter(
 			requestedPoint,
 			new GeoPointRequest(snappedCoordinate.lat().doubleValue(), snappedCoordinate.lng().doubleValue()));
-	}
-
-	private void validateWalkAccess(GraphHopperPathResponse path) {
-		if (path.pathDetails()
-			.getOrDefault("walk_access", List.of())
-			.stream()
-			.anyMatch(detail -> "NO".equalsIgnoreCase(detail.value()))) {
-			throw new RouteException(RouteErrorCode.ROUTE_NOT_FOUND);
-		}
 	}
 
 	private boolean hasTimeoutCause(Throwable throwable) {

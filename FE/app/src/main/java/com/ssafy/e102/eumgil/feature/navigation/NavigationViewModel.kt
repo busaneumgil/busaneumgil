@@ -30,6 +30,7 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchData
 import com.ssafy.e102.eumgil.core.model.RouteSearchQuery
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSegmentSafetyFlags
+import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
 import com.ssafy.e102.eumgil.data.repository.BookmarkRepository
@@ -1655,6 +1656,13 @@ class NavigationViewModel(
         val currentSession = routeSession ?: return
         val routeId = currentSession.routeId ?: return
         val currentCoordinate = latestLocationCoordinate ?: return
+        val currentProgress = latestProgress ?: currentSession.route.evaluateProgress(currentCoordinate)
+
+        if (!shouldAttemptHazardReportReroute(currentSession.route, currentProgress?.activeLegIndex)) {
+            pendingHazardReportRerouteId = null
+            emitUiEvent(NavigationUiEvent.ShowDuribalCallDialog)
+            return
+        }
 
         pendingHazardReportRerouteId = null
         isRerouteInFlight = true
@@ -1681,6 +1689,20 @@ class NavigationViewModel(
 
             isRerouteInFlight = false
             processPendingHazardReportReroute()
+        }
+    }
+
+    private fun shouldAttemptHazardReportReroute(
+        route: RouteCandidate,
+        activeLegIndex: Int?,
+    ): Boolean {
+        return when (route.transportMode) {
+            RouteTransportMode.WALK -> true
+            RouteTransportMode.PUBLIC_TRANSIT -> {
+                val activeLeg = activeLegIndex?.let(route.legs::getOrNull) ?: return false
+                activeLeg.role == RouteLegRole.WALK_TO_TRANSIT ||
+                    activeLeg.role == RouteLegRole.WALK_TO_DESTINATION
+            }
         }
     }
 

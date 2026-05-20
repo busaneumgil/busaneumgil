@@ -101,7 +101,10 @@ class NavigationViewModelTest {
             viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
             advanceUntilIdle()
 
-            assertEquals(listOf(Triple(42L, "walk-route-1", WALK_MID_POINT)), reportRepository.hazardRerouteCalls)
+            assertEquals(
+                listOf(HazardRerouteCall(42L, "walk-route-1", WALK_MID_POINT, 1)),
+                reportRepository.hazardRerouteCalls,
+            )
             assertEquals("rr_rerouted_walk_1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
         }
 
@@ -162,7 +165,10 @@ class NavigationViewModelTest {
             viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
             advanceUntilIdle()
 
-            assertEquals(listOf(Triple(42L, "walk-route-1", WALK_MID_POINT)), reportRepository.hazardRerouteCalls)
+            assertEquals(
+                listOf(HazardRerouteCall(42L, "walk-route-1", WALK_MID_POINT, 1)),
+                reportRepository.hazardRerouteCalls,
+            )
             assertEquals("walk-route-1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
             assertEquals(NavigationUiEvent.ShowDuribalCallDialog, eventDeferred.await())
         }
@@ -228,7 +234,10 @@ class NavigationViewModelTest {
             routeRepository.completeReroute()
             advanceUntilIdle()
 
-            assertEquals(listOf(Triple(42L, "walk-route-1", OFF_ROUTE_CANDIDATE_POINT)), reportRepository.hazardRerouteCalls)
+            assertEquals(
+                listOf(HazardRerouteCall(42L, "walk-route-1", OFF_ROUTE_CANDIDATE_POINT, 1)),
+                reportRepository.hazardRerouteCalls,
+            )
         }
 
     @Test
@@ -305,7 +314,9 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                listOf(Triple(42L, "partial-transit-walk-route-1", PARTIAL_TRANSIT_WALK_PROGRESS_POINT)),
+                listOf(
+                    HazardRerouteCall(42L, "partial-transit-walk-route-1", PARTIAL_TRANSIT_WALK_PROGRESS_POINT, 1),
+                ),
                 reportRepository.hazardRerouteCalls,
             )
             assertEquals("pt-rerouted-boarding", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
@@ -339,7 +350,14 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                listOf(Triple(42L, "partial-transit-walk-route-1", PARTIAL_TRANSIT_FINAL_WALK_PROGRESS_POINT)),
+                listOf(
+                    HazardRerouteCall(
+                        42L,
+                        "partial-transit-walk-route-1",
+                        PARTIAL_TRANSIT_FINAL_WALK_PROGRESS_POINT,
+                        3,
+                    ),
+                ),
                 reportRepository.hazardRerouteCalls,
             )
             assertEquals("pt-rerouted-destination", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
@@ -2840,7 +2858,7 @@ private class FakeNavigationReportRepository(
     private val rerouteResult: HazardReportRerouteResult = HazardReportRerouteResult(rerouted = false, route = null),
     private val rerouteFailure: Throwable? = null,
 ) : ReportRepository {
-    val hazardRerouteCalls = mutableListOf<Triple<Long, String, GeoCoordinate>>()
+    val hazardRerouteCalls = mutableListOf<HazardRerouteCall>()
 
     override fun observeReportHistory() = kotlinx.coroutines.flow.flowOf(emptyList<com.ssafy.e102.eumgil.data.repository.ReportOutboxData>())
 
@@ -2858,12 +2876,20 @@ private class FakeNavigationReportRepository(
         reportId: Long,
         routeId: String,
         currentPoint: GeoCoordinate,
+        activeLegSequence: Int?,
     ): HazardReportRerouteResult {
-        hazardRerouteCalls += Triple(reportId, routeId, currentPoint)
+        hazardRerouteCalls += HazardRerouteCall(reportId, routeId, currentPoint, activeLegSequence)
         rerouteFailure?.let { throw it }
         return rerouteResult
     }
 }
+
+private data class HazardRerouteCall(
+    val reportId: Long,
+    val routeId: String,
+    val currentPoint: GeoCoordinate,
+    val activeLegSequence: Int?,
+)
 
 private fun testWalkNavigationRequest(): RouteNavigationRequest =
     RouteNavigationRequest(

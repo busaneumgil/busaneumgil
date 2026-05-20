@@ -1657,6 +1657,7 @@ class NavigationViewModel(
         val routeId = currentSession.routeId ?: return
         val currentCoordinate = latestLocationCoordinate ?: return
         val currentProgress = latestProgress ?: currentSession.route.evaluateProgress(currentCoordinate)
+        val activeLegSequence = currentProgress?.activeLegIndex?.let(currentSession.route.legs::getOrNull)?.sequence
 
         if (!shouldAttemptHazardReportReroute(currentSession.route, currentProgress?.activeLegIndex)) {
             pendingHazardReportRerouteId = null
@@ -1673,6 +1674,7 @@ class NavigationViewModel(
                         reportId = reportId,
                         routeId = routeId,
                         currentPoint = currentCoordinate,
+                        activeLegSequence = activeLegSequence,
                     )
                 }.getOrNull()
 

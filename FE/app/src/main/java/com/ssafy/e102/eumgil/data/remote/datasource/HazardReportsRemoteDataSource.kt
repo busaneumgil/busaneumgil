@@ -155,6 +155,7 @@ open class HazardReportsRemoteDataSource private constructor(
         accessToken: String,
         routeId: String,
         currentPoint: HazardReportPointDto,
+        activeLegSequence: Int? = null,
     ): HazardReportRerouteResponseDto {
         val requestJson =
             JSONObject()
@@ -165,6 +166,9 @@ open class HazardReportsRemoteDataSource private constructor(
                         .put("lat", currentPoint.lat)
                         .put("lng", currentPoint.lng),
                 )
+                .apply {
+                    activeLegSequence?.let { put("activeLegSequence", it) }
+                }
         val response =
             postExecutor(
                 "/hazard/$reportId/reroute",

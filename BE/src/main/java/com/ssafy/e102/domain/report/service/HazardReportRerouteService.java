@@ -160,7 +160,7 @@ public class HazardReportRerouteService {
 		HazardReport hazardReport,
 		RouteSession routeSession,
 		RouteSummaryResponse currentRoute) {
-		TransitWalkLegTarget target = resolveTransitWalkLegTarget(currentRoute, routeSession, request.currentPoint());
+		TransitWalkLegTarget target = resolveTransitWalkLegTarget(currentRoute, routeSession, request);
 		if (target == null) {
 			return new HazardReportRerouteResponse(false, null);
 		}
@@ -227,8 +227,8 @@ public class HazardReportRerouteService {
 	private TransitWalkLegTarget resolveTransitWalkLegTarget(
 		RouteSummaryResponse currentRoute,
 		RouteSession routeSession,
-		GeoPointRequest currentPoint) {
-		RouteLegResponse activeLeg = resolveActiveLeg(currentRoute, currentPoint);
+		HazardReportRerouteRequest request) {
+		RouteLegResponse activeLeg = resolveActiveLeg(currentRoute, request);
 		if (activeLeg == null || activeLeg.type() != TransportMode.WALK) {
 			return null;
 		}
@@ -250,7 +250,15 @@ public class HazardReportRerouteService {
 		return null;
 	}
 
-	private RouteLegResponse resolveActiveLeg(RouteSummaryResponse currentRoute, GeoPointRequest currentPoint) {
+	private RouteLegResponse resolveActiveLeg(RouteSummaryResponse currentRoute, HazardReportRerouteRequest request) {
+		if (request.activeLegSequence() != null) {
+			return currentRoute.legs()
+				.stream()
+				.filter(leg -> leg.sequence() == request.activeLegSequence())
+				.findFirst()
+				.orElse(null);
+		}
+
 		RouteLegResponse nearestLeg = null;
 		double nearestDistanceMeter = Double.MAX_VALUE;
 		for (RouteLegResponse leg : currentRoute.legs()) {
@@ -258,10 +266,10 @@ public class HazardReportRerouteService {
 				continue;
 			}
 			RouteProjectionGeometryService.ProjectedRoutePoint projection =
-				routeProjectionGeometryService.projectRoutePoint(singleLegRoute(currentRoute, leg), currentPoint);
+				routeProjectionGeometryService.projectRoutePoint(singleLegRoute(currentRoute, leg), request.currentPoint());
 			double distanceMeter = GeoDistanceCalculator.distanceMeter(
-				currentPoint.lat(),
-				currentPoint.lng(),
+				request.currentPoint().lat(),
+				request.currentPoint().lng(),
 				projection.projectedCoordinate().y,
 				projection.projectedCoordinate().x);
 			if (distanceMeter < nearestDistanceMeter) {

@@ -84,6 +84,7 @@ data class HazardMarkerDto(
 data class HazardReportRerouteRequestDto(
     val routeId: String,
     val currentPoint: HazardReportPointDto,
+    val activeLegSequence: Int? = null,
 )
 
 data class HazardReportRerouteResponseDto(

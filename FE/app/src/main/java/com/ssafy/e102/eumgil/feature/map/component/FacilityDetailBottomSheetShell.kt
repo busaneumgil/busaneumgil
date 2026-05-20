@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
+import com.ssafy.e102.eumgil.feature.map.MapFacilityDetailSheetPresentation
 import kotlin.math.roundToInt
 
 @Immutable
@@ -70,6 +71,7 @@ data class FacilityDetailBottomSheetShellState(
     val title: String = "",
     val address: String = "",
     val phoneNumber: String? = null,
+    val presentation: MapFacilityDetailSheetPresentation = MapFacilityDetailSheetPresentation.EXPANDED,
     val hasDetailContent: Boolean = false,
 )
 
@@ -78,6 +80,7 @@ fun FacilityDetailBottomSheetShell(
     state: FacilityDetailBottomSheetShellState,
     modifier: Modifier = Modifier,
     onPhoneClick: (() -> Unit)? = null,
+    onExpandRequest: () -> Unit = {},
     detailContent: @Composable ColumnScope.() -> Unit,
     headerActionContent: (@Composable () -> Unit)? = null,
     actionContent: @Composable ColumnScope.() -> Unit,
@@ -86,11 +89,14 @@ fun FacilityDetailBottomSheetShell(
     val dragSettleVelocityThresholdPx = with(density) { 320.dp.toPx() }
     val collapseThresholdMinPx = with(density) { 72.dp.toPx() }
     val handleInteractionSource = remember { MutableInteractionSource() }
+    val sheetInteractionSource = remember { MutableInteractionSource() }
     val phoneInteractionSource = remember { MutableInteractionSource() }
     var sheetHeightPx by remember(state.isVisible) { mutableIntStateOf(0) }
     var sheetOffsetPx by remember(state.isVisible) { mutableFloatStateOf(0f) }
     var isDragging by remember(state.isVisible) { mutableStateOf(false) }
     var isCollapsed by remember(state.isVisible) { mutableStateOf(false) }
+    val isCompactPresentation = state.presentation == MapFacilityDetailSheetPresentation.COMPACT
+    val isContentCollapsed = isCompactPresentation || isCollapsed
     val sheetToggleDescription = stringResource(id = R.string.map_facility_detail_sheet_toggle)
 
     BoxWithConstraints(
@@ -98,6 +104,12 @@ fun FacilityDetailBottomSheetShell(
     ) {
         val detailScrollState = rememberScrollState()
         val sheetMaxHeight = maxHeight * 0.9f
+        val sheetMinHeight =
+            if (isCompactPresentation) {
+                FacilityDetailCompactMinHeight
+            } else {
+                FacilityDetailCollapsedMinHeight
+            }
         val detailContentMaxHeight = maxHeight * FacilityDetailContentMaxHeightFraction
         val maxSheetOffsetPx = sheetHeightPx.toFloat().coerceAtLeast(0f)
         val collapseThresholdPx = (sheetHeightPx * 0.25f).coerceAtLeast(collapseThresholdMinPx)
@@ -118,19 +130,28 @@ fun FacilityDetailBottomSheetShell(
             rememberDraggableState { delta ->
                 isDragging = true
                 if (delta < 0f) {
-                    isCollapsed = false
+                    if (isCompactPresentation) {
+                        onExpandRequest()
+                    } else {
+                        isCollapsed = false
+                    }
                     sheetOffsetPx = 0f
-                } else {
+                } else if (!isCompactPresentation) {
                     sheetOffsetPx = (sheetOffsetPx + delta).coerceIn(0f, maxSheetOffsetPx)
                 }
             }
 
-        LaunchedEffect(state.isVisible, maxSheetOffsetPx) {
+        LaunchedEffect(state.isVisible, state.presentation, maxSheetOffsetPx) {
             if (!state.isVisible) {
                 isDragging = false
                 sheetOffsetPx = 0f
                 isCollapsed = false
             } else {
+                if (isCompactPresentation) {
+                    isDragging = false
+                    isCollapsed = false
+                    sheetOffsetPx = 0f
+                }
                 sheetOffsetPx = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
             }
         }
@@ -160,12 +181,23 @@ fun FacilityDetailBottomSheetShell(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(min = FacilityDetailCollapsedMinHeight, max = sheetMaxHeight)
+                        .heightIn(min = sheetMinHeight, max = sheetMaxHeight)
                         .onSizeChanged { size ->
                             sheetHeightPx = size.height
                             sheetOffsetPx = sheetOffsetPx.coerceIn(0f, maxSheetOffsetPx)
                         }
-                        .offset { IntOffset(x = 0, y = animatedSheetOffsetPx.roundToInt()) },
+                        .offset { IntOffset(x = 0, y = animatedSheetOffsetPx.roundToInt()) }
+                        .then(
+                            if (isCompactPresentation) {
+                                Modifier.clickable(
+                                    interactionSource = sheetInteractionSource,
+                                    indication = null,
+                                    onClick = onExpandRequest,
+                                )
+                            } else {
+                                Modifier
+                            },
+                        ),
                 handleModifier =
                     Modifier
                         .height(MapBottomSheetHandleHeight)
@@ -178,7 +210,11 @@ fun FacilityDetailBottomSheetShell(
                             indication = null,
                             onClick = {
                                 isDragging = false
-                                isCollapsed = !isCollapsed
+                                if (isCompactPresentation) {
+                                    onExpandRequest()
+                                } else {
+                                    isCollapsed = !isCollapsed
+                                }
                                 sheetOffsetPx = 0f
                             },
                         )
@@ -187,9 +223,11 @@ fun FacilityDetailBottomSheetShell(
                             orientation = Orientation.Vertical,
                             onDragStopped = { velocity ->
                                 isDragging = false
-                                isCollapsed =
-                                    velocity >= dragSettleVelocityThresholdPx ||
-                                    sheetOffsetPx >= collapseThresholdPx
+                                if (!isCompactPresentation) {
+                                    isCollapsed =
+                                        velocity >= dragSettleVelocityThresholdPx ||
+                                        sheetOffsetPx >= collapseThresholdPx
+                                }
                                 sheetOffsetPx = 0f
                             },
                         ),
@@ -218,10 +256,10 @@ fun FacilityDetailBottomSheetShell(
                                 text = state.title,
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = if (isCollapsed) 1 else 2,
+                                maxLines = if (isContentCollapsed) 1 else 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            if (!isCollapsed && state.metaLabel.isNotBlank()) {
+                            if (!isContentCollapsed && state.metaLabel.isNotBlank()) {
                                 Text(
                                     text = state.metaLabel,
                                     style = MaterialTheme.typography.bodySmall,
@@ -230,7 +268,7 @@ fun FacilityDetailBottomSheetShell(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            if (!isCollapsed && state.address.isNotBlank()) {
+                            if (!isContentCollapsed && state.address.isNotBlank()) {
                                 Text(
                                     text = state.address,
                                     style = MaterialTheme.typography.bodyMedium,
@@ -239,7 +277,7 @@ fun FacilityDetailBottomSheetShell(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            if (!isCollapsed) {
+                            if (!isContentCollapsed) {
                                 val phoneNumber = state.phoneNumber?.takeIf { it.isNotBlank() }
                                 if (phoneNumber != null && onPhoneClick != null) {
                                     val phoneActionDescription =
@@ -289,13 +327,15 @@ fun FacilityDetailBottomSheetShell(
                             horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            headerActionContent?.let { content ->
-                                content()
+                            if (!isCompactPresentation) {
+                                headerActionContent?.let { content ->
+                                    content()
+                                }
                             }
                         }
                     }
 
-                    if (state.hasDetailContent && !isCollapsed) {
+                    if (state.hasDetailContent && !isContentCollapsed) {
                         Column(
                             modifier =
                                 Modifier
@@ -307,19 +347,22 @@ fun FacilityDetailBottomSheetShell(
                         )
                     }
 
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .navigationBarsPadding(),
-                        verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-                        content = actionContent,
-                    )
+                    if (!isCompactPresentation) {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .navigationBarsPadding(),
+                            verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
+                            content = actionContent,
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+private val FacilityDetailCompactMinHeight = 112.dp
 private val FacilityDetailCollapsedMinHeight = 188.dp
 private const val FacilityDetailContentMaxHeightFraction = 0.32f

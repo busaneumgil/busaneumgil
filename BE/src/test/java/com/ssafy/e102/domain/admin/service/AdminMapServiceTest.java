@@ -110,7 +110,7 @@ class AdminMapServiceTest {
 	@DisplayName("관리자 보행 네트워크는 area scope 기준 segment와 node를 반환한다")
 	void getRoadNetworkReturnsAreaSegmentsAndNodes() {
 		RoadSegment roadSegment = roadSegment(1L);
-		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동"))
+		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동", 10))
 			.thenReturn(List.of(roadSegment));
 		when(roadSegmentRepository.countIntersectingArea("강서구", "명지동")).thenReturn(1L);
 		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());
@@ -125,6 +125,7 @@ class AdminMapServiceTest {
 		assertThat(response.roadNodes().features()).hasSize(2);
 		assertThat(response.segments().features().get(0).geometry().coordinates().get(0))
 			.containsExactly(129.0, 35.0);
+		verify(roadSegmentRepository).findAllIntersectingArea("강서구", "명지동", 10);
 	}
 
 	@Test
@@ -133,8 +134,6 @@ class AdminMapServiceTest {
 		RoadSegment roadSegment = roadSegment(1L);
 		when(roadSegmentRepository.findAllIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200, 1500))
 			.thenReturn(List.of(roadSegment));
-		when(roadSegmentRepository.countIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200))
-			.thenReturn(1L);
 		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());
 		when(roadNodeRepository.findAllById(any())).thenReturn(List.of(
 			roadNode(10L, 129.0, 35.0),
@@ -145,7 +144,7 @@ class AdminMapServiceTest {
 		assertThat(response.summary().segmentCount()).isEqualTo(1);
 		assertThat(response.summary().visibleSegmentCount()).isEqualTo(1);
 		verify(roadSegmentRepository).findAllIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200, 1500);
-		verify(roadSegmentRepository).countIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200);
+		verify(roadSegmentRepository, never()).countIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200);
 		verify(roadSegmentRepository, never()).findAllIntersectingArea("강서구", "명지동");
 	}
 

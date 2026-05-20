@@ -145,20 +145,24 @@ class KakaoMapViewportConfigurationTest {
     }
 
     @Test
-    fun `background single taps are ignored before entering the map detail dispatch chain`() {
+    fun `background single taps are routed to background callback before detail dispatch chain`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
                 .readText()
 
         assertTrue(
-            "Terrain taps on the bare map should be ignored at the viewport layer so blank road/background presses do not open the place detail flow.",
-            Regex("""setOnTerrainClickListener\s*\{\s*_,\s*position,\s*_\s*->\s*ignoreBackgroundSingleTap\(\s*source = "terrain",\s*position = position,\s*\)""")
+            "Terrain taps on the bare map should be routed to the background callback instead of opening the place detail flow.",
+            Regex("""setOnTerrainClickListener\s*\{\s*_,\s*position,\s*_\s*->\s*dispatchBackgroundMapTap\(\s*source = "terrain",\s*position = position,\s*\)""")
                 .containsMatchIn(source),
         )
         assertTrue(
-            "Generic map clicks with no POI payload should also stop at the viewport layer instead of flowing into MapTapped detail lookup.",
-            Regex("""else if \(poi == null\)\s*\{\s*ignoreBackgroundSingleTap\(\s*source = "map",\s*position = position,\s*\)""")
+            "Generic map clicks with no POI payload should also route to the background callback instead of flowing into MapTapped detail lookup.",
+            Regex("""else if \(poi == null\)\s*\{\s*dispatchBackgroundMapTap\(\s*source = "map",\s*position = position,\s*\)""")
                 .containsMatchIn(source),
+        )
+        assertTrue(
+            "Kakao background taps should invoke the dedicated background click handler so the ViewModel can clear preview state.",
+            source.contains("backgroundClickHandler?.invoke()"),
         )
         assertFalse(
             "Terrain taps should no longer dispatch ADDRESS map taps from the viewport.",

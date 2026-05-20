@@ -105,6 +105,8 @@ class MapViewModel(
     private var selectedMapTapDetail: MapTappedPlaceDetail? = null
     private var selectedMapTapNameHint: String? = null
     private var selectedDestinationPreview: DestinationPreviewRequest? = null
+    private var facilityDetailSheetPresentation: MapFacilityDetailSheetPresentation =
+        MapFacilityDetailSheetPresentation.EXPANDED
     private var isMapTapDetailLoading = false
     private var mapTapDetailErrorMessage: String? = null
     private var mapTapDetailRequestId: Long = 0L
@@ -247,8 +249,10 @@ class MapViewModel(
         when (action) {
             is MapUiAction.ApprovedReportMarkerTapped -> handleApprovedReportMarkerTapped(action.reportId)
             MapUiAction.ApprovedReportSheetDismissed -> dismissApprovedReportSheet()
+            MapUiAction.BackgroundMapTapped -> handleBackgroundMapTapped()
             MapUiAction.FacilityBookmarkClicked -> toggleSelectedFacilityBookmark()
             MapUiAction.FacilityDetailDismissed -> dismissFacilityDetailSheet()
+            MapUiAction.FacilityDetailExpanded -> expandFacilityDetailSheet()
             MapUiAction.FacilityPhoneClicked -> handleFacilityPhoneClicked()
             is MapUiAction.RouteEndpointMapPickerEntered -> enterRouteEndpointMapPicker(action.editingTarget)
             MapUiAction.RouteEndpointMapPickerDismissed -> dismissRouteEndpointMapPicker()
@@ -530,6 +534,7 @@ class MapViewModel(
         val requestId = mapTapDetailRequestId
         selectedMapPinCoordinate = coordinate
         clearSelectedFacilitySelection(clearMapTapSelection = false)
+        facilityDetailSheetPresentation = MapFacilityDetailSheetPresentation.EXPANDED
         selectedMapTapDetail = null
         selectedMapTapNameHint = payload.nameHint?.takeIf { it.isNotBlank() }
         mapTapDetailErrorMessage = null
@@ -685,6 +690,21 @@ class MapViewModel(
             return
         }
         if (!clearSelectedFacilitySelection()) return
+        renderSelectedFacilityState()
+    }
+
+    private fun expandFacilityDetailSheet() {
+        if (facilityDetailSheetPresentation == MapFacilityDetailSheetPresentation.EXPANDED) return
+        if (!currentFacilityDetailSheetState().isVisible) return
+
+        facilityDetailSheetPresentation = MapFacilityDetailSheetPresentation.EXPANDED
+        renderSelectedFacilityState()
+    }
+
+    private fun handleBackgroundMapTapped() {
+        if (routeEndpointMapPickerState != null) return
+        if (!clearSelectedFacilitySelection()) return
+
         renderSelectedFacilityState()
     }
 
@@ -1102,6 +1122,7 @@ class MapViewModel(
         selectedDestinationPreview = previewRequest
         selectedMapTapDetail = previewRequest.toMapTappedPlaceDetail()
         selectedMapTapNameHint = destination.name
+        facilityDetailSheetPresentation = MapFacilityDetailSheetPresentation.EXPANDED
         isMapTapDetailLoading = false
         mapTapDetailErrorMessage = null
         selectedMarkerId = null
@@ -1372,10 +1393,8 @@ class MapViewModel(
             return
         }
 
-        // Automatic camera sync can report the preview pin as offscreen before the viewport stabilizes.
-        if (isUserGesture && isSelectedMapPinVisibleInViewport == false && clearOffscreenSelectedMapPinState()) {
+        if (isUserGesture && isSelectedMapPinVisibleInViewport == false && compactOffscreenSelectedMapPinSheet()) {
             renderSelectedFacilityState()
-            renderUiState()
         }
     }
 
@@ -1826,13 +1845,14 @@ class MapViewModel(
         selectedFacilityDetail = null
         selectedFacilityBookmarkState = SelectedFacilityBookmarkState()
         selectedDestinationPreview = null
+        facilityDetailSheetPresentation = MapFacilityDetailSheetPresentation.EXPANDED
         if (clearMapTapSelection) {
             clearMapTapSelectionState(clearPin = true)
         }
         return true
     }
 
-    private fun clearOffscreenSelectedMapPinState(): Boolean {
+    private fun compactOffscreenSelectedMapPinSheet(): Boolean {
         val hasSelectedMapPinState =
             selectedMapPinCoordinate != null ||
                 selectedDestinationPreview != null ||
@@ -1840,8 +1860,9 @@ class MapViewModel(
                 isMapTapDetailLoading ||
                 mapTapDetailErrorMessage != null
         if (!hasSelectedMapPinState) return false
+        if (facilityDetailSheetPresentation == MapFacilityDetailSheetPresentation.COMPACT) return false
 
-        clearMapTapSelectionState(clearPin = true)
+        facilityDetailSheetPresentation = MapFacilityDetailSheetPresentation.COMPACT
         return true
     }
 
@@ -1855,6 +1876,7 @@ class MapViewModel(
         selectedMapTapDetail = null
         selectedMapTapNameHint = null
         selectedDestinationPreview = null
+        facilityDetailSheetPresentation = MapFacilityDetailSheetPresentation.EXPANDED
         isMapTapDetailLoading = false
         mapTapDetailErrorMessage = null
     }
@@ -1874,6 +1896,7 @@ class MapViewModel(
         val previousFacilityId = selectedFacilityDetail?.facilityId
         if (markerId != null) {
             clearMapTapSelectionState(clearPin = true)
+            facilityDetailSheetPresentation = MapFacilityDetailSheetPresentation.EXPANDED
         }
         selectedMarkerId = markerId
         selectedFacilityDetail = detail
@@ -1903,6 +1926,7 @@ class MapViewModel(
             mapTapDetail = selectedMapTapDetail,
             mapTapNameHint = selectedMapTapNameHint,
             destinationPreview = selectedDestinationPreview,
+            presentation = facilityDetailSheetPresentation,
             isMapTapDetailLoading = isMapTapDetailLoading,
             mapTapDetailErrorMessage = mapTapDetailErrorMessage,
             isBookmarked = selectedFacilityBookmarkState.isBookmarked,

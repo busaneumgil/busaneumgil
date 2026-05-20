@@ -130,6 +130,10 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 				aa.dong = :dong
 				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
 			)
+			and rs.geom && ST_Expand(
+				ST_SetSRID(ST_MakePoint(:lng, :lat), 4326),
+				cast(:radiusMeter as double precision) / 111320.0
+			)
 			and ST_DWithin(
 				rs.geom::geography,
 				ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
@@ -161,6 +165,10 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 			and (
 				aa.dong = :dong
 				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+			)
+			and rs.geom && ST_Expand(
+				ST_SetSRID(ST_MakePoint(:lng, :lat), 4326),
+				cast(:radiusMeter as double precision) / 111320.0
 			)
 			and ST_DWithin(
 				rs.geom::geography,

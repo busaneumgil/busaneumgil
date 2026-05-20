@@ -66,6 +66,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -82,6 +83,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -249,6 +253,9 @@ fun RouteSettingScreen(
                         },
                         onOptionDetailClick = { routeOption ->
                             onAction(RouteSettingUiAction.RouteOptionDetailClicked(routeOption))
+                        },
+                        onRefresh = {
+                            onAction(RouteSettingUiAction.RouteRefreshClicked)
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -3458,37 +3465,93 @@ private fun RouteSettingTransitResultPane(
     showDuribalCallPrompt: Boolean,
     onOptionClick: (RouteOption) -> Unit,
     onOptionDetailClick: (RouteOption) -> Unit,
+    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()
+    val scrollState = rememberScrollState()
+    val pullRefreshConnection =
+        rememberTransitRoutePullRefreshConnection(
+            scrollState = scrollState,
+            isRefreshing = uiState.isRouteRefreshing,
+            onRefresh = onRefresh,
+        )
     Surface(
         modifier = modifier.fillMaxSize(),
         color = Color.White,
         shadowElevation = 0.dp,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(
-                        start = EumSpacing.small,
-                        end = EumSpacing.small,
-                        top = RouteSettingSheetVerticalPadding,
-                        bottom = bottomBarOverlayClearance,
-                    ),
-            verticalArrangement = Arrangement.spacedBy(RouteSettingSheetGap),
-        ) {
-            RouteOptionSection(
-                uiState = uiState,
-                completedLowFloorReservationKeys = completedLowFloorReservationKeys,
-                onLowFloorReservationClick = onLowFloorReservationClick,
-                onDuribalCallClick = onDuribalCallClick,
-                onDuribalCancelClick = onDuribalCancelClick,
-                showDuribalCallPrompt = showDuribalCallPrompt,
-                onOptionClick = onOptionClick,
-                onOptionDetailClick = onOptionDetailClick,
-            )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .nestedScroll(pullRefreshConnection)
+                        .verticalScroll(scrollState)
+                        .padding(
+                            start = EumSpacing.small,
+                            end = EumSpacing.small,
+                            top = RouteSettingSheetVerticalPadding,
+                            bottom = bottomBarOverlayClearance,
+                        ),
+                verticalArrangement = Arrangement.spacedBy(RouteSettingSheetGap),
+            ) {
+                RouteOptionSection(
+                    uiState = uiState,
+                    completedLowFloorReservationKeys = completedLowFloorReservationKeys,
+                    onLowFloorReservationClick = onLowFloorReservationClick,
+                    onDuribalCallClick = onDuribalCallClick,
+                    onDuribalCancelClick = onDuribalCancelClick,
+                    showDuribalCallPrompt = showDuribalCallPrompt,
+                    onOptionClick = onOptionClick,
+                    onOptionDetailClick = onOptionDetailClick,
+                )
+            }
+            if (uiState.isRouteRefreshing) {
+                CircularProgressIndicator(
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = EumSpacing.small)
+                            .size(RouteTransitPullRefreshIndicatorSize),
+                    strokeWidth = RouteTransitPullRefreshIndicatorStrokeWidth,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberTransitRoutePullRefreshConnection(
+    scrollState: androidx.compose.foundation.ScrollState,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+): NestedScrollConnection {
+    val latestOnRefresh by rememberUpdatedState(onRefresh)
+    val thresholdPx =
+        with(LocalDensity.current) {
+            RouteTransitPullRefreshThreshold.toPx()
+        }
+    var pullDistancePx by remember { mutableStateOf(0f) }
+
+    return remember(scrollState, isRefreshing, thresholdPx) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                if (source != NestedScrollSource.Drag) return Offset.Zero
+                if (available.y > 0f && scrollState.value == 0 && !isRefreshing) {
+                    pullDistancePx += available.y
+                    if (pullDistancePx >= thresholdPx) {
+                        pullDistancePx = 0f
+                        latestOnRefresh()
+                    }
+                } else if (available.y < 0f) {
+                    pullDistancePx = (pullDistancePx + available.y).coerceAtLeast(0f)
+                }
+                return Offset.Zero
+            }
         }
     }
 }
@@ -5458,6 +5521,9 @@ private val RouteDetailBottomSheetHandleHeight = 5.dp
 private val RouteDetailTimelineBarHeight = 34.dp
 private val RouteDetailFocusedRowColor = Color(0xFFE5E7EB)
 private val RouteDetailRefreshButtonSize = 44.dp
+private val RouteTransitPullRefreshThreshold = 72.dp
+private val RouteTransitPullRefreshIndicatorSize = 24.dp
+private val RouteTransitPullRefreshIndicatorStrokeWidth = 2.5.dp
 private val RouteDetailWaypointPinWidth = 22.dp
 private val RouteDetailWaypointPinHeight = 24.dp
 private val RouteDetailCollapsedRailWidth = 58.dp

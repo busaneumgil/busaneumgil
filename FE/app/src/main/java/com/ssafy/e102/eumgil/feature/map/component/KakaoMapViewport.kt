@@ -856,7 +856,17 @@ private class KakaoMapViewportController {
             return
         }
         lastRenderedRouteCameraSignature = null
-        if (lastRenderedCameraRequestId == cameraState.requestId) return
+        if (
+            lastRenderedCameraRequestId == cameraState.requestId ||
+            shouldSkipKakaoCameraSync(
+                renderedTarget = lastRenderedCameraTarget,
+                requestedTarget = currentTarget,
+            )
+        ) {
+            lastRenderedCameraRequestId = cameraState.requestId
+            lastRenderedCameraTarget = currentTarget
+            return
+        }
         val cameraUpdate =
             if (cameraState.bearingDegrees != null) {
                 CameraUpdateFactory.newCameraPosition(

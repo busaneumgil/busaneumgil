@@ -105,4 +105,42 @@ class KakaoMapCameraAnimationBindingsTest {
         assertEquals(previous.requestId, synced.requestId)
         assertTrue(shouldAnimateKakaoCameraTransition(previousTarget = synced, nextTarget = nextZoom))
     }
+
+    @Test
+    fun `camera sync skips duplicate move when only request id changed after user gesture`() {
+        val rendered =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1812, longitude = 129.0814),
+                source = MapCameraSource.SEARCH_RESULT,
+                requestId = 7L,
+                zoomLevel = 17,
+            )
+        val requested = rendered.copy(requestId = 8L)
+
+        assertTrue(
+            shouldSkipKakaoCameraSync(
+                renderedTarget = rendered,
+                requestedTarget = requested,
+            ),
+        )
+    }
+
+    @Test
+    fun `camera sync still runs when zoom actually changes`() {
+        val rendered =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1812, longitude = 129.0814),
+                source = MapCameraSource.SEARCH_RESULT,
+                requestId = 7L,
+                zoomLevel = 17,
+            )
+        val requested = rendered.copy(requestId = 8L, zoomLevel = 18)
+
+        assertFalse(
+            shouldSkipKakaoCameraSync(
+                renderedTarget = rendered,
+                requestedTarget = requested,
+            ),
+        )
+    }
 }

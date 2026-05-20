@@ -168,7 +168,12 @@ class AppContainer(
         UserRemoteDataSource(httpJsonClient = httpJsonClient)
     }
     private val voiceAnalyzeRemoteDataSource by lazy(LazyThreadSafetyMode.NONE) {
-        KtorVoiceAnalyzeRemoteDataSource(httpJsonClient = httpJsonClient)
+        KtorVoiceAnalyzeRemoteDataSource(
+            httpJsonClient = httpJsonClient,
+            accessTokenProvider = {
+                authSessionRepository.getAuthGateState().authSession?.accessToken
+            },
+        )
     }
 
     private val placesMockDataSource by lazy(LazyThreadSafetyMode.NONE) { PlacesMockDataSource() }
@@ -359,6 +364,8 @@ class AppContainer(
             remoteDataSource = voiceAnalyzeRemoteDataSource,
             mockDataSource = mockVoiceAnalyzeRemoteDataSource,
             sourcePolicy = repositorySourcePolicy,
+            authSessionRepository = authSessionRepository,
+            authRemoteDataSource = authRemoteDataSource,
         )
     }
 

@@ -2,13 +2,17 @@ package com.ssafy.e102.eumgil.data.remote.datasource
 
 import android.util.Log
 import com.ssafy.e102.eumgil.data.remote.HttpJsonClient
+import com.ssafy.e102.eumgil.data.remote.HttpJsonResponse
 import com.ssafy.e102.eumgil.data.remote.dto.VoiceAnalyzeHistoryDto
 import com.ssafy.e102.eumgil.data.remote.dto.VoiceAnalyzeResponseDto
 import org.json.JSONArray
 import org.json.JSONObject
 
 class KtorVoiceAnalyzeRemoteDataSource(
-    private val httpJsonClient: HttpJsonClient,
+    httpJsonClient: HttpJsonClient,
+    private val accessTokenProvider: suspend () -> String? = { null },
+    private val postRequestExecutor: suspend (String, String, Map<String, String>) -> HttpJsonResponse =
+        httpJsonClient::postJson,
 ) : VoiceAnalyzeRemoteDataSource {
 
     override suspend fun analyze(
@@ -39,10 +43,7 @@ class KtorVoiceAnalyzeRemoteDataSource(
                     }
                     .toString()
 
-            val response = httpJsonClient.postJson(
-                path = "/voice/analyze",
-                body = body,
-            )
+            val response = postRequestExecutor("/voice/analyze", body, authHeaders())
 
             val responseJson = response.body.toJsonObjectOrNull()
             val dataJson =
@@ -78,6 +79,12 @@ class KtorVoiceAnalyzeRemoteDataSource(
 
     private fun String.toJsonObjectOrNull(): JSONObject? =
         runCatching { JSONObject(this) }.getOrNull()
+
+    private suspend fun authHeaders(): Map<String, String> =
+        accessTokenProvider()
+            ?.takeIf(String::isNotBlank)
+            ?.let { accessToken -> mapOf("Authorization" to "Bearer $accessToken") }
+            ?: emptyMap()
 }
 
 class VoiceAnalyzeApiException(

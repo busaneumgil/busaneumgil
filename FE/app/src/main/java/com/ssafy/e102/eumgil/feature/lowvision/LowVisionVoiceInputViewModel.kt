@@ -14,6 +14,7 @@ import com.ssafy.e102.eumgil.core.stt.AudioRecorder
 import com.ssafy.e102.eumgil.core.stt.SherpaManager
 import com.ssafy.e102.eumgil.core.stt.SttManager
 import com.ssafy.e102.eumgil.core.stt.VadManager
+import com.ssafy.e102.eumgil.data.remote.datasource.VoiceAnalyzeApiException
 import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,8 +62,11 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
         private const val TAG = "LowVisionVoiceInputVM"
         private const val SILENCE_FRAMES_FOR_STOP = 30    // 발화 후 무음 끊김 기준 (30 × 32ms = 960ms)
         private const val NO_SPEECH_TIMEOUT_FRAMES = 300  // 발화 없음 타임아웃 (300 × 32ms = 9.6초)
+        private const val MAX_ANALYZE_RETRY_COUNT = 2
+        private const val HTTP_UNAUTHORIZED = 401
         private const val ROLE_USER = "user"
         private const val ROLE_ASSISTANT = "assistant"
+        private const val RETRY_MESSAGE = "다시 시도해주세요"
     }
 
     private val voiceAnalyzeRepository: VoiceAnalyzeRepository by lazy {
@@ -85,6 +89,7 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
 
     /** 현재 화면 route — AI 서버 context 전달용. Route에서 업데이트된다. */
     private var currentRoute: String? = null
+    private var analyzeRetryCount = 0
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -254,6 +259,7 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
 
             when {
                 result.intent == VoiceAnalyzeIntent.ASK -> {
+                    analyzeRetryCount = 0
                     Log.d(TAG, "=== ASK → TTS 출력 후 재녹음 ===")
                     _uiState.value = _uiState.value.copy(
                         confirmationMessage = result.confirmationMessage,
@@ -264,11 +270,11 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
                 result.confirmed == false -> {
                     Log.d(TAG, "=== 부정 응답 → 히스토리 초기화 후 재녹음 ===")
                     conversationHistory.clear()
-                    _uiState.value = _uiState.value.copy(confirmationMessage = null)
-                    startRecording()
+                    requestRetryRecording(result.confirmationMessage)
                 }
 
                 result.confirmed == null && result.intent != VoiceAnalyzeIntent.UNKNOWN -> {
+                    analyzeRetryCount = 0
                     Log.d(TAG, "=== 확인 요청 단계: '${result.confirmationMessage}' ===")
                     _uiState.value = _uiState.value.copy(
                         confirmationMessage = result.confirmationMessage,
@@ -277,6 +283,7 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
                 }
 
                 result.confirmed == true -> {
+                    analyzeRetryCount = 0
                     Log.d(TAG, "=== 확인 완료: intent=${result.intent} ===")
                     when (result.intent) {
                         VoiceAnalyzeIntent.PLACE_SEARCH ->
@@ -301,7 +308,7 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
                         else -> {
                             Log.d(TAG, "=== confirmed=true 미처리 intent → 히스토리 초기화 후 재녹음 ===")
                             conversationHistory.clear()
-                            startRecording()
+                            requestRetryRecording(result.confirmationMessage)
                         }
                     }
                 }
@@ -309,17 +316,37 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
                 else -> {
                     Log.d(TAG, "=== 예외 케이스(UNKNOWN 포함) → 히스토리 초기화 후 재녹음 ===")
                     conversationHistory.clear()
-                    _uiState.value = _uiState.value.copy(confirmationMessage = null)
-                    startRecording()
+                    requestRetryRecording(result.confirmationMessage)
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "음성 분석 실패 — 재녹음: ${e.message}", e)
+            if (e is VoiceAnalyzeApiException && e.httpStatusCode == HTTP_UNAUTHORIZED) {
+                conversationHistory.clear()
+                _uiState.value = _uiState.value.copy(confirmationMessage = null)
+                _uiEvent.send(LowVisionVoiceInputEvent.RecordingCancelled)
+                return
+            }
             // 분석 실패 시 히스토리 초기화 후 재녹음
             conversationHistory.clear()
-            _uiState.value = _uiState.value.copy(confirmationMessage = null)
-            withContext(Dispatchers.Main) { startRecording() }
+            withContext(Dispatchers.Main) { requestRetryRecording() }
         }
+    }
+
+    private suspend fun requestRetryRecording(message: String? = null) {
+        analyzeRetryCount += 1
+        if (analyzeRetryCount > MAX_ANALYZE_RETRY_COUNT) {
+            Log.d(TAG, "=== 음성 분석 재시도 한도 초과 → 홈으로 복귀 ===")
+            analyzeRetryCount = 0
+            _uiState.value = _uiState.value.copy(confirmationMessage = null)
+            _uiEvent.send(LowVisionVoiceInputEvent.RecordingCancelled)
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            confirmationMessage = message.takeUnless { it.isNullOrBlank() } ?: RETRY_MESSAGE,
+            ttsNonce = _uiState.value.ttsNonce + 1,
+        )
     }
 
     override fun onCleared() {

@@ -294,6 +294,29 @@ export function canStartHazardRestore(
   return baseStatus === "APPROVED";
 }
 
+export function canRejectHazardReport(
+  baseStatus: HazardReportStatus,
+  review?: HazardRouteReviewRecord | null,
+) {
+  if (baseStatus !== "PENDING") {
+    return false;
+  }
+  return review?.stage !== "IN_PROGRESS" || review.intent === "approve";
+}
+
+export function resolveActiveHazardRouteReview(
+  baseStatus: HazardReportStatus,
+  review?: HazardRouteReviewRecord | null,
+) {
+  if (!review) {
+    return null;
+  }
+  if (baseStatus === "REJECTED" && review.stage === "IN_PROGRESS") {
+    return null;
+  }
+  return review;
+}
+
 export function isHazardRestorePending(review?: HazardRouteReviewRecord | null) {
   return review?.intent === "restore" && (review.stage === "IN_PROGRESS" || review.stage === "COMPLETED");
 }

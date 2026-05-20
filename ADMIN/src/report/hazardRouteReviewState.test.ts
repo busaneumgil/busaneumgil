@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  canRejectHazardReport,
   canStartHazardApprove,
   canStartHazardRestore,
   completeHazardRouteReview,
@@ -8,6 +9,7 @@ import {
   hydrateHazardRouteReviewRecord,
   isHazardRestorePending,
   loadStoredHazardRouteReview,
+  resolveActiveHazardRouteReview,
   routeReviewCompletionClassName,
   routeReviewCompletionMessage,
   startHazardRouteReview,
@@ -128,6 +130,32 @@ describe("hazard route review workflow state", () => {
     expect(canStartHazardApprove("APPROVED")).toBe(false);
     expect(canStartHazardApprove("REJECTED", review)).toBe(false);
     expect(canStartHazardApprove("REJECTED", completeHazardRouteReview(review, "2026-05-18T03:55:00.000Z"))).toBe(false);
+  });
+
+  it("keeps reject available while an approve review is in progress", () => {
+    const review = startHazardRouteReview({
+      reportId: 14,
+      intent: "approve",
+      reviewerUserId: "admin-reject",
+      now: "2026-05-18T05:00:00.000Z",
+    });
+
+    expect(canRejectHazardReport("PENDING")).toBe(true);
+    expect(canRejectHazardReport("PENDING", review)).toBe(true);
+    expect(canRejectHazardReport("APPROVED", review)).toBe(false);
+    expect(canRejectHazardReport("REJECTED", review)).toBe(false);
+  });
+
+  it("drops in-progress approve review display after the report is rejected", () => {
+    const review = startHazardRouteReview({
+      reportId: 15,
+      intent: "approve",
+      reviewerUserId: "admin-reject",
+      now: "2026-05-18T05:10:00.000Z",
+    });
+
+    expect(resolveActiveHazardRouteReview("PENDING", review)).toBe(review);
+    expect(resolveActiveHazardRouteReview("REJECTED", review)).toBeNull();
   });
 
   it("hydrates latest server route review into local workflow state", () => {

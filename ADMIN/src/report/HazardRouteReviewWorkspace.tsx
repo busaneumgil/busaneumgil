@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAdminRoadSegment } from "../api/adminApi";
 import { SegmentMap } from "../map/SegmentMap";
 import type {
   AccessibilityState,
@@ -52,6 +54,9 @@ interface HazardRouteReviewWorkspaceProps {
   onReviewChange: (review: HazardRouteReviewRecord) => void;
   onComplete: () => void;
   completing: boolean;
+  accessToken: string;
+  areaGu?: string | null;
+  areaDong?: string | null;
 }
 
 export function HazardRouteReviewWorkspace({
@@ -76,6 +81,9 @@ export function HazardRouteReviewWorkspace({
   onReviewChange,
   onComplete,
   completing,
+  accessToken,
+  areaGu,
+  areaDong,
 }: HazardRouteReviewWorkspaceProps) {
   const roadviewContainerRef = useRef<HTMLDivElement | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<SegmentFeature | null>(null);
@@ -92,24 +100,37 @@ export function HazardRouteReviewWorkspace({
     setSelectedSegment(matchedSegment);
   }, [networkPayload, review.selectedSegmentEdgeId]);
 
+  const reviewedSegmentCount = Object.keys(review.segmentDrafts).length;
+  const canComplete = reviewedSegmentCount > 0;
+  const selectedSegmentEdgeId = selectedSegment ? String(selectedSegment.properties.edgeId) : review.selectedSegmentEdgeId;
+  const selectedSegmentDetailQuery = useQuery({
+    queryKey: ["admin-hazard-route-review-segment", selectedSegmentEdgeId, areaGu, areaDong, accessToken],
+    queryFn: () => fetchAdminRoadSegment({
+      edgeId: selectedSegmentEdgeId!,
+      gu: areaGu!,
+      dong: areaDong ?? undefined,
+      accessToken,
+    }),
+    enabled: selectedSegmentEdgeId !== null && Boolean(accessToken && areaGu),
+    retry: false,
+  });
+  const selectedSegmentForMap = selectedSegmentDetailQuery.data ?? selectedSegment;
+  const selectedSegmentForAttributes = selectedSegmentDetailQuery.data
+    ?? (selectedSegmentDetailQuery.isFetching ? null : selectedSegment);
   const selectedSegmentDraft = useMemo(() => {
-    if (!selectedSegment) {
+    if (!selectedSegmentForAttributes) {
       return null;
     }
 
-    const storedDraft = review.segmentDrafts[String(selectedSegment.properties.edgeId)] ?? {};
+    const storedDraft = review.segmentDrafts[String(selectedSegmentForAttributes.properties.edgeId)] ?? {};
     return {
-      walkAccess: normalizeAccessibility(storedDraft.walkAccess ?? selectedSegment.properties.walkAccess),
-      stairsState: normalizeAccessibility(storedDraft.stairsState ?? selectedSegment.properties.stairsState),
-      brailleBlockState: normalizeAccessibility(storedDraft.brailleBlockState ?? selectedSegment.properties.brailleBlockState),
-      widthState: normalizeWidth(storedDraft.widthState ?? selectedSegment.properties.widthState),
+      walkAccess: normalizeAccessibility(storedDraft.walkAccess ?? selectedSegmentForAttributes.properties.walkAccess),
+      stairsState: normalizeAccessibility(storedDraft.stairsState ?? selectedSegmentForAttributes.properties.stairsState),
+      brailleBlockState: normalizeAccessibility(storedDraft.brailleBlockState ?? selectedSegmentForAttributes.properties.brailleBlockState),
+      widthState: normalizeWidth(storedDraft.widthState ?? selectedSegmentForAttributes.properties.widthState),
     };
-  }, [review.segmentDrafts, selectedSegment]);
-
-  const reviewedSegmentCount = Object.keys(review.segmentDrafts).length;
-  const canComplete = reviewedSegmentCount > 0;
-  const selectedSegmentEdgeId = selectedSegment ? String(selectedSegment.properties.edgeId) : null;
-  const segmentCardClassName = selectedSegment
+  }, [review.segmentDrafts, selectedSegmentForAttributes]);
+  const segmentCardClassName = selectedSegmentForAttributes
     ? "hazard-detail-card hazard-review-segment-card selected"
     : "hazard-detail-card hazard-review-segment-card";
 
@@ -119,10 +140,10 @@ export function HazardRouteReviewWorkspace({
   }
 
   function updateSelectedSegmentDraft(patch: Partial<AdminRoadSegmentAttributesUpdateRequest>) {
-    if (!selectedSegment || !selectedSegmentDraft) return;
+    if (!selectedSegmentForAttributes || !selectedSegmentDraft) return;
     onReviewChange(updateHazardRouteReviewSegmentDraft(
       review,
-      selectedSegment.properties.edgeId,
+      selectedSegmentForAttributes.properties.edgeId,
       {
         ...selectedSegmentDraft,
         ...patch,
@@ -162,7 +183,7 @@ export function HazardRouteReviewWorkspace({
             error={networkError}
             draftEdits={[]}
             onDraftEdit={() => undefined}
-            selectedSegment={selectedSegment}
+            selectedSegment={selectedSegmentForMap}
             onSelectSegment={handleSelectSegment}
             roadviewContainerRef={roadviewContainerRef}
             onRoadviewChange={() => undefined}
@@ -203,14 +224,20 @@ export function HazardRouteReviewWorkspace({
         <section className={segmentCardClassName}>
           <h3>세그먼트 검수</h3>
           <p className="hazard-review-helper">지도에서 세그먼트를 누르면 해당 edge의 핵심 통행 속성을 바로 검수할 수 있습니다.</p>
+          {selectedSegmentEdgeId && selectedSegmentDetailQuery.isFetching && (
+            <p className="muted">선택 segment의 DB 최신값을 확인하는 중입니다.</p>
+          )}
+          {selectedSegmentEdgeId && selectedSegmentDetailQuery.error && (
+            <p className="error-box">선택 segment의 최신 DB 값을 불러오지 못해 지도 데이터 기준으로 표시합니다.</p>
+          )}
 
-          {selectedSegment && selectedSegmentDraft ? (
+          {selectedSegmentForAttributes && selectedSegmentDraft ? (
             <>
               <dl className="hazard-review-segment-meta">
-                <ReviewMeta label="edge" value={String(selectedSegment.properties.edgeId)} />
-                <ReviewMeta label="길이" value={formatDistanceValue(selectedSegment.properties.lengthMeter, "m")} />
-                <ReviewMeta label="보도 폭" value={formatDistanceValue(selectedSegment.properties.widthMeter, "m")} />
-                <ReviewMeta label="평균 경사" value={formatDistanceValue(selectedSegment.properties.avgSlopePercent, "%")} />
+                <ReviewMeta label="edge" value={String(selectedSegmentForAttributes.properties.edgeId)} />
+                <ReviewMeta label="길이" value={formatDistanceValue(selectedSegmentForAttributes.properties.lengthMeter, "m")} />
+                <ReviewMeta label="보도 폭" value={formatDistanceValue(selectedSegmentForAttributes.properties.widthMeter, "m")} />
+                <ReviewMeta label="평균 경사" value={formatDistanceValue(selectedSegmentForAttributes.properties.avgSlopePercent, "%")} />
               </dl>
 
               <div className="hazard-review-field-grid">

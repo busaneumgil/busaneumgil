@@ -40,13 +40,16 @@ import {
   type HazardReverseGeocodeResult,
 } from "./hazardReportPresentation";
 import {
+  canRejectHazardReport,
   canStartHazardApprove,
   canStartHazardRestore,
+  clearStoredHazardRouteReview,
   completeHazardRouteReview,
   deriveHazardDisplayStatus,
   hydrateHazardRouteReviewRecord,
   isHazardReviewActive,
   loadStoredHazardRouteReview,
+  resolveActiveHazardRouteReview,
   routeReviewCompletionClassName,
   routeReviewCompletionMessage,
   startHazardRouteReview,
@@ -468,6 +471,15 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     }));
   }
 
+  function clearRouteReviewDraft(reportId: number) {
+    clearStoredHazardRouteReview(reportId);
+    setRouteReviewDrafts((current) => {
+      const nextDrafts = { ...current };
+      delete nextDrafts[reportId];
+      return nextDrafts;
+    });
+  }
+
   function handleSelectReport(reportId: number) {
     setSelectedReportId(reportId);
     setRouteReviewCompletionNotice(null);
@@ -491,7 +503,9 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     mutationFn: (reportId: number) => rejectAdminHazardReport(reportId, accessToken),
     onSuccess: (response) => {
       markReportHandled(response.reportId);
+      clearRouteReviewDraft(response.reportId);
       setSelectedReportId(response.reportId);
+      setDetailPaneMode("detail");
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] });
@@ -575,11 +589,24 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
   const detail = preview ? previewRecord?.detail ?? null : detailQuery.data;
   const serverReviewDraft = useMemo(
-    () => (detail ? hydrateHazardRouteReviewRecord(detail.latestRouteReview) : null),
+    () => {
+      if (!detail) {
+        return null;
+      }
+      return resolveActiveHazardRouteReview(
+        detail.status,
+        hydrateHazardRouteReviewRecord(detail.latestRouteReview),
+      );
+    },
     [detail],
   );
   const activeReport = detail ?? selectedReport;
-  const activeReviewDraft = activeReport ? routeReviewDrafts[activeReport.reportId] ?? serverReviewDraft ?? null : null;
+  const activeReviewDraft = activeReport
+    ? resolveActiveHazardRouteReview(
+      activeReport.status,
+      routeReviewDrafts[activeReport.reportId] ?? null,
+    ) ?? serverReviewDraft ?? null
+    : null;
   const previewImages = detail?.imageUrls ?? (selectedReport?.representativeImageUrl ? [selectedReport.representativeImageUrl] : []);
   const selectedImageUrl = pickHazardPrimaryImage(previewImages, selectedImageIndex);
   const reportPoint = activeReport?.reportPoint ?? null;
@@ -642,8 +669,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const canStartApprove = Boolean(detail && canStartHazardApprove(detail.status, activeReviewDraft));
   const canReject = Boolean(
     detail
-    && detail.status === "PENDING"
-    && !isHazardReviewActive(activeReviewDraft)
+    && canRejectHazardReport(detail.status, activeReviewDraft)
     && !approveMutation.isPending
     && !rejectMutation.isPending
     && !preview,
@@ -1040,6 +1066,9 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   onReviewChange={handleRouteReviewChange}
                   onComplete={completeRouteReviewFlow}
                   completing={isCompletingRouteReview || completeRouteReviewMutation.isPending}
+                  accessToken={accessToken}
+                  areaGu={routeReviewAreaScope?.gu}
+                  areaDong={routeReviewAreaScope?.dong}
                 />
               ) : (
                 <>
@@ -1221,7 +1250,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   <button
                     type="button"
                     className="hazard-action-button reject"
-                    disabled={!canReject || activeReviewDraft?.stage === "IN_PROGRESS"}
+                    disabled={!canReject}
                     onClick={() => {
                       if (preview) return;
                       rejectMutation.mutate(detail.reportId);

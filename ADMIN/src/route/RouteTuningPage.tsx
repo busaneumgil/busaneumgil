@@ -101,7 +101,9 @@ export function RouteTuningPage({
     enabled: selectedSegmentEdgeId !== null && Boolean(accessToken && gu),
     retry: false,
   });
-  const selectedSegmentForAttributes = selectedSegmentDetailQuery.data ?? selectedSegment;
+  const selectedSegmentForMap = selectedSegmentDetailQuery.data ?? selectedSegment;
+  const selectedSegmentForAttributes = selectedSegmentDetailQuery.data
+    ?? (selectedSegmentDetailQuery.isFetching ? null : selectedSegment);
 
   const applyRoutingMutation = useMutation({
     mutationFn: () => applyAdminRoutingOverrides(accessToken),
@@ -228,7 +230,7 @@ export function RouteTuningPage({
         error={error}
         draftEdits={[]}
         onDraftEdit={() => undefined}
-        selectedSegment={routePickEnabled ? null : selectedSegmentForAttributes}
+        selectedSegment={routePickEnabled ? null : selectedSegmentForMap}
         onSelectSegment={onSelectSegment}
         roadviewContainerRef={roadviewContainerRef}
         onRoadviewChange={onRoadviewChange}

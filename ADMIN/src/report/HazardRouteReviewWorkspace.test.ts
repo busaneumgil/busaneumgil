@@ -23,4 +23,14 @@ describe("HazardRouteReviewWorkspace copy", () => {
     expect(source).toContain("상태 새로고침 중");
     expect(source).toContain("검수 완료 중");
   });
+
+  it("loads the clicked segment attributes from the single-segment DB endpoint", () => {
+    expect(source).toContain("fetchAdminRoadSegment");
+    expect(source).toContain('queryKey: ["admin-hazard-route-review-segment"');
+    expect(source).toContain("selectedSegmentForMap = selectedSegmentDetailQuery.data ?? selectedSegment");
+    expect(source).toContain("selectedSegmentDetailQuery.isFetching ? null : selectedSegment");
+    expect(source).toContain("selectedSegmentForAttributes.properties.walkAccess");
+    expect(pageSource).toContain("areaGu={routeReviewAreaScope?.gu}");
+    expect(pageSource).toContain("areaDong={routeReviewAreaScope?.dong}");
+  });
 });

@@ -14,4 +14,10 @@ describe("HazardReportsPage manual routing apply wiring", () => {
     expect(source).toContain("const HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT = 500");
     expect(source).toContain('&& detailPaneMode === "review"');
   });
+
+  it("keeps the reject action available during approve review progress", () => {
+    expect(source).toContain("canRejectHazardReport(detail.status, activeReviewDraft)");
+    expect(source).toContain("clearRouteReviewDraft(response.reportId)");
+    expect(source).not.toContain('disabled={!canReject || activeReviewDraft?.stage === "IN_PROGRESS"}');
+  });
 });

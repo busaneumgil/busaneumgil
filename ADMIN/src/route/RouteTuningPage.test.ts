@@ -17,6 +17,7 @@ describe("RouteTuningPage copy", () => {
   it("loads the selected segment detail from the single-segment DB endpoint", () => {
     expect(source).toContain("fetchAdminRoadSegment");
     expect(source).toContain('queryKey: ["admin-road-segment"');
-    expect(source).toContain("selectedSegmentDetailQuery.data ?? selectedSegment");
+    expect(source).toContain("selectedSegmentForMap = selectedSegmentDetailQuery.data ?? selectedSegment");
+    expect(source).toContain("selectedSegmentDetailQuery.isFetching ? null : selectedSegment");
   });
 });

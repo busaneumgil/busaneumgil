@@ -13,8 +13,6 @@ import com.ssafy.e102.eumgil.core.model.GeoCoordinate
 import com.ssafy.e102.eumgil.core.location.LocationPermissionState
 import com.ssafy.e102.eumgil.core.location.LocationSnapshot
 import com.ssafy.e102.eumgil.core.location.isFreshCurrentLocation
-import com.ssafy.e102.eumgil.data.repository.ReportDraftData
-import com.ssafy.e102.eumgil.data.repository.ReportDraftPhotoData
 import com.ssafy.e102.eumgil.data.repository.ReportHistoryData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxData
 import com.ssafy.e102.eumgil.data.repository.ReportOutboxPhotoData
@@ -55,8 +53,6 @@ class ReportViewModel(
     private val mutableUiEvent = MutableSharedFlow<ReportUiEvent>()
     val uiEvent: SharedFlow<ReportUiEvent> = mutableUiEvent.asSharedFlow()
 
-    private var latestDraft: ReportDraftData? = null
-
     // ─── 현재 위치 one-shot resolution 상태 ───────────────────────────────
     // 권한 요청 대기 중인지. true인 동안 RefreshLocationPermission 액션으로 흐름 재개·종료.
     private var pendingCurrentLocationRequest = false
@@ -68,7 +64,6 @@ class ReportViewModel(
     init {
         observeNetworkAvailability()
         observeReportOverview()
-        loadLatestDraft()
     }
 
     /**
@@ -104,11 +99,6 @@ class ReportViewModel(
         when (action) {
             is ReportUiAction.RouteEntered -> handleRouteEntered(action.entryPoint, action.startNew)
             ReportUiAction.BackClicked -> handleBackClicked()
-            ReportUiAction.DraftDiscardClicked -> discardDraft()
-            ReportUiAction.DraftResumeClicked -> resumeDraft()
-            ReportUiAction.SaveDraftClicked -> saveDraft()
-            is ReportUiAction.DiscardDraftAndStartNew -> handleDiscardDraftAndStartNew(action.type)
-            ReportUiAction.ResumeDraftFromDialog -> resumeDraft()
 
             is ReportUiAction.ReportTypeSelected -> selectReportType(action.type)
             ReportUiAction.ReportTypeBlurred -> touchReportType()
@@ -139,7 +129,6 @@ class ReportViewModel(
             ReportUiAction.StartNewReportClicked -> {
                 resetForm(
                     currentStep = ReportStep.TypeSelection,
-                    preserveDraftAffordance = false,
                 )
             }
             ReportUiAction.BackToMapClicked -> {
@@ -165,7 +154,6 @@ class ReportViewModel(
         resetForm(
             entryPoint = entryPoint,
             currentStep = if (startNew) ReportStep.TypeSelection else ReportStep.Home,
-            preserveDraftAffordance = !startNew,
         )
     }
 
@@ -195,100 +183,6 @@ class ReportViewModel(
         }
     }
 
-    private fun loadLatestDraft() {
-        viewModelScope.launch {
-            runCatching { reportRepository.getLatestDraft() }
-                .onSuccess { draft ->
-                    latestDraft = draft
-                    if (draft != null) {
-                        mutableUiState.update { state ->
-                            state.copy(
-                                draftId = draft.draftId,
-                                hasExistingDraft = true,
-                            )
-                        }
-                    }
-                }
-        }
-    }
-
-    private fun saveDraft() {
-        val currentState = mutableUiState.value
-        if (!currentState.isDraftSavable) return
-
-        val savedSnapshot = currentState.toDraftSnapshot()
-
-        mutableUiState.update { state ->
-            state.copy(draftSaveState = ReportDraftSaveState.Saving)
-        }
-
-        viewModelScope.launch {
-            runCatching { reportRepository.saveDraft(currentState.toDraftData(latestDraft)) }
-                .onSuccess { draft ->
-                    latestDraft = draft
-                    var isCurrentSnapshot = false
-                    mutableUiState.update { state ->
-                        isCurrentSnapshot = state.toDraftSnapshot() == savedSnapshot
-                        state.copy(
-                            draftId = draft.draftId,
-                            hasExistingDraft = true,
-                            draftSaveState =
-                                if (isCurrentSnapshot) {
-                                    ReportDraftSaveState.Saved(
-                                        draftId = draft.draftId,
-                                        savedAtMillis = draft.updatedAtMillis,
-                                    )
-                                } else {
-                                    ReportDraftSaveState.Idle
-                                },
-                        )
-                    }
-                    if (isCurrentSnapshot) {
-                        emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보 내용을 저장했습니다."))
-                    }
-                }.onFailure {
-                    mutableUiState.update { state ->
-                        state.copy(
-                            draftSaveState =
-                                ReportDraftSaveState.Failed(
-                                    reason = ReportFailureReason.LocalSaveFailed,
-                                ),
-                        )
-                    }
-                }
-        }
-    }
-
-    private fun resumeDraft() {
-        val draft = latestDraft ?: return
-        mutableUiState.value = draft.toUiState(entryPoint = mutableUiState.value.entryPoint)
-    }
-
-    private fun discardDraft() {
-        val draftId = mutableUiState.value.draftId ?: latestDraft?.draftId
-        if (draftId == null) {
-            resetForm()
-            return
-        }
-
-        viewModelScope.launch {
-            runCatching { reportRepository.deleteDraft(draftId) }
-                .onSuccess {
-                    latestDraft = null
-                    resetForm()
-                }.onFailure {
-                    mutableUiState.update { state ->
-                        state.copy(
-                            draftSaveState =
-                                ReportDraftSaveState.Failed(
-                                    reason = ReportFailureReason.LocalSaveFailed,
-                                ),
-                        )
-                    }
-                }
-        }
-    }
-
     private fun selectReportType(type: ReportType) {
         val state = mutableUiState.value
 
@@ -297,16 +191,6 @@ class ReportViewModel(
             if (state.currentStep == ReportStep.Home || state.currentStep == ReportStep.TypeSelection) {
                 applyReportType(type)
             }
-            return
-        }
-
-        // 저장된 draft가 DB에 있고 사용자가 "다른" type을 선택했다면,
-        // 현재 in-memory state(=draft와 동일하든, 사용자가 뒤로가기로 복귀했든)와 무관하게
-        // 그대로 진행 시 저장/제출 시점에 기존 draft가 덮어써지거나 삭제되어 데이터가 손실된다.
-        // 명시적 사용자 동의를 위해 다이얼로그를 띄운다.
-        val hasSavedDraft = state.hasExistingDraft && state.draftId != null
-        if (hasSavedDraft) {
-            emitUiEvent(ReportUiEvent.ShowDraftDiscardDialog(pendingType = type))
             return
         }
 
@@ -325,38 +209,9 @@ class ReportViewModel(
                 screenState = ReportScreenState.Editing,
                 currentStep = nextStep,
                 reportType = state.reportType.withValue(type),
-                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
-        }
-    }
-
-    private fun handleDiscardDraftAndStartNew(type: ReportType) {
-        val draftId = mutableUiState.value.draftId ?: latestDraft?.draftId
-        if (draftId == null) {
-            // Draft가 이미 없으면 폼 초기화 후 새 유형을 그대로 적용한다.
-            resetForm()
-            applyReportType(type)
-            return
-        }
-
-        viewModelScope.launch {
-            runCatching { reportRepository.deleteDraft(draftId) }
-                .onSuccess {
-                    latestDraft = null
-                    resetForm()
-                    applyReportType(type)
-                }.onFailure {
-                    mutableUiState.update { state ->
-                        state.copy(
-                            draftSaveState =
-                                ReportDraftSaveState.Failed(
-                                    reason = ReportFailureReason.LocalSaveFailed,
-                                ),
-                        )
-                    }
-                }
         }
     }
 
@@ -534,7 +389,6 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 location = state.location.withValue(location, source),
-                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -595,7 +449,6 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 location = state.location.withAddress(address, updatedLocation),
-                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -628,7 +481,6 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 photo = state.photo.withAdded(photo),
-                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -640,7 +492,6 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 photo = state.photo.withRemovedAt(index),
-                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -658,7 +509,6 @@ class ReportViewModel(
             state.copy(
                 screenState = ReportScreenState.Editing,
                 description = state.description.withValue(description),
-                draftSaveState = ReportDraftSaveState.Idle,
                 outboxState = ReportOutboxState.NotSaved,
                 submitState = ReportSubmitState.Idle,
             )
@@ -747,24 +597,15 @@ class ReportViewModel(
             )
     }
 
-    private suspend fun handleServerSubmitSuccess(
+    private fun handleServerSubmitSuccess(
         validatedState: ReportUiState,
         outboxId: String,
         serverReportId: Long,
     ) {
-        val isDraftDeleted = deleteDraftIfPresent(validatedState.draftId)
         mutableUiState.value =
             validatedState.copy(
                 screenState = ReportScreenState.Completed,
                 currentStep = ReportStep.Complete,
-                draftId = if (isDraftDeleted) null else validatedState.draftId,
-                hasExistingDraft = !isDraftDeleted && validatedState.hasExistingDraft,
-                draftSaveState =
-                    if (isDraftDeleted) {
-                        ReportDraftSaveState.Idle
-                    } else {
-                        ReportDraftSaveState.Failed(reason = ReportFailureReason.LocalSaveFailed)
-                    },
                 outboxState = ReportOutboxState.Saved(outboxId = outboxId),
                 submitState = ReportSubmitState.Success(reportId = serverReportId),
                 submittedAtMillis = System.currentTimeMillis(),
@@ -775,23 +616,14 @@ class ReportViewModel(
         emitUiEvent(ReportUiEvent.AnnounceForAccessibility("제보가 서버에 등록되었습니다."))
     }
 
-    private suspend fun handleServerSubmitSkipped(
+    private fun handleServerSubmitSkipped(
         validatedState: ReportUiState,
         outboxId: String,
     ) {
-        val isDraftDeleted = deleteDraftIfPresent(validatedState.draftId)
         mutableUiState.value =
             validatedState.copy(
                 screenState = ReportScreenState.Completed,
                 currentStep = ReportStep.Complete,
-                draftId = if (isDraftDeleted) null else validatedState.draftId,
-                hasExistingDraft = !isDraftDeleted && validatedState.hasExistingDraft,
-                draftSaveState =
-                    if (isDraftDeleted) {
-                        ReportDraftSaveState.Idle
-                    } else {
-                        ReportDraftSaveState.Failed(reason = ReportFailureReason.LocalSaveFailed)
-                    },
                 outboxState = ReportOutboxState.Saved(outboxId = outboxId),
                 submitState = ReportSubmitState.Success(reportId = null),
                 submittedAtMillis = System.currentTimeMillis(),
@@ -813,15 +645,6 @@ class ReportViewModel(
             )
     }
 
-    private suspend fun deleteDraftIfPresent(draftId: String?): Boolean {
-        if (draftId.isNullOrBlank()) return true
-        val deleteResult = runCatching { reportRepository.deleteDraft(draftId) }
-        if (deleteResult.isSuccess) {
-            latestDraft = null
-        }
-        return deleteResult.isSuccess
-    }
-
     private fun markSubmitValidationFailed(validatedState: ReportUiState) {
         mutableUiState.value =
             validatedState.copy(
@@ -834,7 +657,6 @@ class ReportViewModel(
     private fun resetForm(
         entryPoint: ReportEntryPoint = mutableUiState.value.entryPoint,
         currentStep: ReportStep = ReportStep.Home,
-        preserveDraftAffordance: Boolean = true,
     ) {
         val currentState = mutableUiState.value
         pendingCurrentLocationRequest = false
@@ -843,13 +665,10 @@ class ReportViewModel(
         cancelPermissionPendingTimeout()
         reverseGeocodeJob?.cancel()
         reverseGeocodeJob = null
-        val draft = latestDraft.takeIf { preserveDraftAffordance }
         mutableUiState.value =
             ReportUiState(
                 currentStep = currentStep,
                 entryPoint = entryPoint,
-                draftId = draft?.draftId,
-                hasExistingDraft = draft != null,
                 processingCounts = currentState.processingCounts,
                 recentReports = currentState.recentReports,
                 isOnline = currentState.isOnline,
@@ -933,60 +752,6 @@ private fun ReportTypeInput.withValue(type: ReportType): ReportTypeInput =
         error = validateReportType(type),
     )
 
-private data class ReportDraftSnapshot(
-    val reportType: ReportType?,
-    val location: ReportLocation?,
-    val addressText: String,
-    val photos: List<ReportPhoto>,
-    val description: String,
-)
-
-private fun ReportUiState.toDraftSnapshot(): ReportDraftSnapshot =
-    ReportDraftSnapshot(
-        reportType = reportType.value,
-        location = location.value,
-        addressText = location.addressText,
-        photos = photo.values,
-        description = description.value,
-    )
-
-private fun ReportUiState.toDraftData(existingDraft: ReportDraftData?): ReportDraftData {
-    val now = System.currentTimeMillis()
-    val locationValue = location.value
-    val draftId = draftId ?: existingDraft?.draftId.orEmpty()
-
-    return ReportDraftData(
-        draftId = draftId,
-        reportCategory = reportType.value?.apiValue,
-        description = description.trimmedValue,
-        // 옵션 4: address는 좌표 → RGC 자동 결과만, addressDetail은 사용자 직접 입력 메모만.
-        // 두 필드를 분리해 저장하므로 복원 시점에 자동/사용자 영역이 그대로 살아난다.
-        address = locationValue?.address,
-        addressDetail = location.addressText.trim().ifEmpty { null },
-        latitude = locationValue?.latitude,
-        longitude = locationValue?.longitude,
-        locationSource = location.source.name,
-        // Task 3.2 (S14P31E102-682)부터 첨부 사진 전체(최대 5장)를 draft에 영속화.
-        photos = photo.values.map { it.toDraftPhotoData() },
-        createdAtMillis = existingDraft?.createdAtMillis ?: 0L,
-        updatedAtMillis = now,
-    )
-}
-
-private fun ReportPhoto.toDraftPhotoData(): ReportDraftPhotoData =
-    ReportDraftPhotoData(
-        localUri = localUri,
-        mimeType = mimeType,
-        sizeBytes = sizeBytes,
-    )
-
-private fun ReportDraftPhotoData.toReportPhoto(): ReportPhoto =
-    ReportPhoto(
-        localUri = localUri,
-        mimeType = mimeType,
-        sizeBytes = sizeBytes,
-    )
-
 private fun ReportUiState.toOutboxData(): ReportOutboxData {
     val now = System.currentTimeMillis()
     val reportTypeValue = requireNotNull(reportType.value)
@@ -1018,87 +783,6 @@ private fun ReportPhoto.toOutboxPhotoData(): ReportOutboxPhotoData =
         mimeType = mimeType,
         sizeBytes = sizeBytes,
     )
-
-private fun ReportDraftData.toUiState(entryPoint: ReportEntryPoint): ReportUiState {
-    val reportType = reportCategory.toReportType()
-    val location =
-        if (latitude != null && longitude != null) {
-            ReportLocation(
-                latitude = latitude,
-                longitude = longitude,
-                address = address,
-            )
-        } else {
-            null
-        }
-    val locationSource = locationSource.toReportLocationSource()
-    // Task 3.2 (S14P31E102-682)부터 photos 리스트(최대 5장)를 그대로 복원. v6 이전에 저장된
-    // 단일 사진 draft는 Repository.toData()에서 1-item list로 fallback 변환되어 전달됨.
-    val photos = this.photos.map { it.toReportPhoto() }
-
-    val resumedStep =
-        when {
-            location != null -> ReportStep.DetailInput
-            reportType != null -> ReportStep.LocationConfirm
-            else -> ReportStep.TypeSelection
-        }
-
-    return ReportUiState(
-        currentStep = resumedStep,
-        entryPoint = entryPoint,
-        draftId = draftId,
-        hasExistingDraft = true,
-        reportType =
-            ReportTypeInput(
-                value = reportType,
-                isDirty = reportType != null,
-                error = null,
-            ),
-        location =
-            ReportLocationInput(
-                value = location,
-                // 옵션 4: 사용자 입력 메모는 addressDetail에서 복원. 자동 RGC 결과(address)는
-                // location.value.address에 이미 들어가 있어 카드의 자동 도로명 라인에 노출된다.
-                // 기존 v8 이전 draft는 addressDetail이 null이라 사용자 영역은 빈 칸으로 복원됨.
-                addressText = addressDetail.orEmpty(),
-                source = locationSource,
-                isDirty = location != null || !addressDetail.isNullOrBlank(),
-                error =
-                    if (location == null) {
-                        null
-                    } else {
-                        validateLocation(location, addressDetail.orEmpty())
-                    },
-            ),
-        photo =
-            ReportPhotoInput(
-                values = photos,
-                isDirty = photos.isNotEmpty(),
-                error = validatePhotos(photos),
-            ),
-        description =
-            ReportDescriptionInput(
-                value = description,
-                isDirty = description.isNotBlank(),
-                error = validateDescription(description),
-            ),
-        draftSaveState =
-            ReportDraftSaveState.Saved(
-                draftId = draftId,
-                savedAtMillis = updatedAtMillis,
-            ),
-    )
-}
-
-private fun String?.toReportType(): ReportType? =
-    ReportType.values().firstOrNull { type -> type.apiValue == this }
-
-private fun String?.toReportLocationSource(): ReportLocationSource =
-    this
-        ?.let { value ->
-            ReportLocationSource.values().firstOrNull { source -> source.name == value }
-        }
-        ?: ReportLocationSource.Draft
 
 private fun ReportTypeInput.validated(touched: Boolean = isTouched): ReportTypeInput =
     copy(

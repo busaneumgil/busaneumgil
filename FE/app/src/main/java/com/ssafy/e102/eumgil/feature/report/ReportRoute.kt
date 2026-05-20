@@ -144,7 +144,6 @@ fun ReportRoute(
                     view.announceForAccessibility(event.message)
                 }
                 ReportUiEvent.ScrollToFirstError -> scrollState.animateScrollTo(0)
-                is ReportUiEvent.ShowDraftDiscardDialog -> Unit
                 ReportUiEvent.RequestLocationPermission -> {
                     // Activity가 살아있어야 launcher 사용 가능. Manager가 이미 Granted/Unavailable
                     // 상태이면 자체적으로 no-op으로 처리하므로 안전.

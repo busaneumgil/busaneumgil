@@ -13,13 +13,10 @@ data class ReportUiState(
     val screenState: ReportScreenState = ReportScreenState.Editing,
     val currentStep: ReportStep = ReportStep.Home,
     val entryPoint: ReportEntryPoint = ReportEntryPoint.TopLevel,
-    val draftId: String? = null,
-    val hasExistingDraft: Boolean = false,
     val reportType: ReportTypeInput = ReportTypeInput(),
     val location: ReportLocationInput = ReportLocationInput(),
     val photo: ReportPhotoInput = ReportPhotoInput(),
     val description: ReportDescriptionInput = ReportDescriptionInput(),
-    val draftSaveState: ReportDraftSaveState = ReportDraftSaveState.Idle,
     val outboxState: ReportOutboxState = ReportOutboxState.NotSaved,
     val submitState: ReportSubmitState = ReportSubmitState.Idle,
     val processingCounts: ReportProcessingCounts = ReportProcessingCounts(),
@@ -29,12 +26,6 @@ data class ReportUiState(
     // 기본값 true: 정보가 없을 때는 사용자가 시도할 수 있게 두는 게 더 자연스럽다.
     val isOnline: Boolean = true,
 ) {
-    val isDraftSavable: Boolean
-        get() = reportType.value != null ||
-            location.value != null ||
-            photo.values.isNotEmpty() ||
-            description.value.isNotBlank()
-
     val isLocationStepConfirmable: Boolean
         get() = location.value != null && location.error == null
 
@@ -143,7 +134,6 @@ enum class ReportLocationSource {
     CurrentLocation,
     MapPin,
     AddressText,
-    Draft,
 }
 
 sealed interface ReportScreenState {
@@ -158,21 +148,6 @@ sealed interface ReportScreenState {
     data class Failure(
         val reason: ReportFailureReason,
     ) : ReportScreenState
-}
-
-sealed interface ReportDraftSaveState {
-    data object Idle : ReportDraftSaveState
-
-    data object Saving : ReportDraftSaveState
-
-    data class Saved(
-        val draftId: String,
-        val savedAtMillis: Long,
-    ) : ReportDraftSaveState
-
-    data class Failed(
-        val reason: ReportFailureReason,
-    ) : ReportDraftSaveState
 }
 
 sealed interface ReportOutboxState {
@@ -210,24 +185,6 @@ sealed interface ReportUiAction {
     ) : ReportUiAction
 
     data object BackClicked : ReportUiAction
-
-    data object DraftResumeClicked : ReportUiAction
-
-    data object DraftDiscardClicked : ReportUiAction
-
-    /**
-     * Draft 충돌 다이얼로그에서 "삭제하고 새로 작성"을 선택했을 때 dispatch된다.
-     * 기존 draft를 삭제한 뒤 [type]으로 새 제보 작성을 시작한다.
-     */
-    data class DiscardDraftAndStartNew(
-        val type: ReportType,
-    ) : ReportUiAction
-
-    /**
-     * Draft 충돌 다이얼로그에서 "이어서 작성"을 선택했을 때 dispatch된다.
-     * 저장된 draft를 폼에 복원한다.
-     */
-    data object ResumeDraftFromDialog : ReportUiAction
 
     data class ReportTypeSelected(
         val type: ReportType,
@@ -273,8 +230,6 @@ sealed interface ReportUiAction {
 
     data object DescriptionBlurred : ReportUiAction
 
-    data object SaveDraftClicked : ReportUiAction
-
     data object SubmitClicked : ReportUiAction
 
     data object RetrySubmitClicked : ReportUiAction
@@ -299,15 +254,6 @@ sealed interface ReportUiEvent {
 
     data class ReturnToNavigationWithSubmittedReport(
         val reportId: Long,
-    ) : ReportUiEvent
-
-    /**
-     * 저장된 draft가 있는 상태에서 사용자가 새 유형을 선택했을 때 emit된다.
-     * Route는 [pendingType]을 보관해 두었다가 다이얼로그 응답에 따라
-     * [ReportUiAction.DiscardDraftAndStartNew] 또는 [ReportUiAction.ResumeDraftFromDialog]를 dispatch한다.
-     */
-    data class ShowDraftDiscardDialog(
-        val pendingType: ReportType,
     ) : ReportUiEvent
 
     data object RequestLocationPermission : ReportUiEvent

@@ -114,6 +114,8 @@ class ReportRepositoryTest {
                                         reportType = "STAIRS_STEP",
                                         lat = 35.1796,
                                         lng = 129.0756,
+                                        description = "공사 자재가 인도를 막고 있습니다.",
+                                        thumbnailUrls = listOf("https://example.com/17-1-thumb.jpg"),
                                         imageUrls = listOf("https://example.com/17-1.jpg"),
                                     ),
                                 ),
@@ -147,6 +149,8 @@ class ReportRepositoryTest {
             assertEquals("new-refresh-token", authSessionRepository.getAuthGateState().authSession?.refreshToken)
             assertEquals(1, markers.size)
             assertEquals(17L, markers.single().reportId)
+            assertEquals(listOf("https://example.com/17-1-thumb.jpg"), markers.single().thumbnailUrls)
+            assertEquals("공사 자재가 인도를 막고 있습니다.", markers.single().description)
         }
 
     @Test

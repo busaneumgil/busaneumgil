@@ -195,6 +195,32 @@ class HazardReportServiceTest {
 	}
 
 	@Test
+	@DisplayName("legacy idempotency hash로 저장된 기존 제보도 동일 요청 재시도를 허용한다")
+	void createHazardReportReturnsExistingReportForLegacyIdempotencyRequest() {
+		UUID userId = UUID.randomUUID();
+		CreateHazardReportRequest request = defaultCreateRequest();
+		User user = user(userId);
+		HazardReport existingReport = hazardReport(user, 9L, List.of("hazard-reports/user-1/20260514/image-1.jpg"));
+		ReflectionTestUtils.setField(existingReport, "idempotencyKey", "outbox-report-legacy");
+		ReflectionTestUtils.setField(existingReport, "idempotencyRequestHash", legacyIdempotencyRequestHash(request));
+		ReflectionTestUtils.setField(existingReport, "idempotencyExpiresAt", NOW.plusHours(1));
+		when(hazardReportRepository.findByUser_UserIdAndIdempotencyKey(userId, "outbox-report-legacy"))
+			.thenReturn(Optional.of(existingReport));
+
+		HazardReportIdResponse response = hazardReportService.createHazardReport(
+			userId,
+			request,
+			"outbox-report-legacy");
+
+		assertThat(response.reportId()).isEqualTo(9L);
+		verify(userRepository, never()).findByIdForUpdate(userId);
+		verify(hazardReportRepository, never()).clearExpiredIdempotencyMetadata(NOW);
+		verify(hazardReportImageUploadService, never()).validateImageObjectKeys(any(), any());
+		verify(kakaoLocalClient, never()).reverseGeocode(anyDouble(), anyDouble());
+		verify(hazardReportRepository, never()).save(any(HazardReport.class));
+	}
+
+	@Test
 	@DisplayName("동일 Idempotency-Key와 다른 요청은 충돌로 거부한다")
 	void rejectDifferentRequestWithSameIdempotencyKey() {
 		UUID userId = UUID.randomUUID();
@@ -268,6 +294,7 @@ class HazardReportServiceTest {
 				ReportType.SIDEWALK_MISSING,
 				"보행 가능한 인도가 없습니다.",
 				new GeoPointRequest(35.1686, 129.0576),
+				List.of(),
 				List.of()));
 
 		assertThat(response.reportId()).isEqualTo(1L);
@@ -292,7 +319,8 @@ class HazardReportServiceTest {
 				ReportType.SIDEWALK_MISSING,
 				"보행 가능한 인도가 없습니다.",
 				new GeoPointRequest(35.1686, 129.0576),
-				imageObjectKeys)))
+				imageObjectKeys,
+				List.of())))
 			.isInstanceOf(HazardReportException.class)
 			.extracting("errorCode")
 			.isEqualTo(HazardReportErrorCode.INVALID_HAZARD_REPORT_IMAGE_URL);
@@ -312,6 +340,7 @@ class HazardReportServiceTest {
 				ReportType.SIDEWALK_MISSING,
 				null,
 				new GeoPointRequest(35.1686, 129.0576),
+				null,
 				null)))
 			.hasMessage("사용자를 찾을 수 없습니다.");
 
@@ -454,6 +483,7 @@ class HazardReportServiceTest {
 		assertThat(response.markers().get(0).reportType()).isEqualTo(ReportType.RAMP);
 		assertThat(response.markers().get(0).lat()).isEqualTo(35.1);
 		assertThat(response.markers().get(0).lng()).isEqualTo(129.1);
+		assertThat(response.markers().get(0).description()).isEqualTo(approvedWithImages.getDescription());
 		assertThat(response.markers().get(0).imageUrls())
 			.containsExactly(
 				"https://storage.example.com/read?key=image-1",
@@ -604,10 +634,15 @@ class HazardReportServiceTest {
 			ReportType.SIDEWALK_MISSING,
 			"보행 가능한 인도가 없습니다.",
 			new GeoPointRequest(35.1686, 129.0576),
-			List.of("hazard-reports/user-1/20260514/image-1.jpg"));
+			List.of("hazard-reports/user-1/20260514/image-1.jpg"),
+			List.of("hazard-reports/user-1/20260514/image-1-thumb.jpg"));
 	}
 
 	private String idempotencyRequestHash(CreateHazardReportRequest request) {
+		return HazardReportIdempotencyRequestHash.from(request);
+	}
+
+	private String legacyIdempotencyRequestHash(CreateHazardReportRequest request) {
 		StringBuilder canonical = new StringBuilder();
 		appendPart(canonical, request.reportType().name());
 		appendPart(canonical, request.description().trim());

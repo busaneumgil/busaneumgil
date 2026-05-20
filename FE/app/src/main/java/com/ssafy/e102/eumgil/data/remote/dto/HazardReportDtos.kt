@@ -14,6 +14,7 @@ data class CreateHazardReportRequestDto(
     // Task 5.6: BE 명세에 따라 presigned 업로드된 S3 object key 배열을 전송한다.
     // 이미지 binary는 별도 presigned PUT API로 먼저 업로드해야 한다.
     val imageObjectKeys: List<String> = emptyList(),
+    val thumbnailObjectKeys: List<String> = emptyList(),
 )
 
 /**
@@ -33,6 +34,14 @@ data class PresignedUploadResponseDto(
     val uploadUrl: String,
     val objectKey: String,
     val expiresAt: String,
+)
+
+data class PresignedUploadBatchRequestDto(
+    val files: List<PresignedUploadRequestDto>,
+)
+
+data class PresignedUploadBatchResponseDto(
+    val uploads: List<PresignedUploadResponseDto>,
 )
 
 data class CreateHazardReportResponseDto(
@@ -78,6 +87,8 @@ data class HazardMarkerDto(
     val reportType: String,
     val lat: Double,
     val lng: Double,
+    val description: String? = null,
+    val thumbnailUrls: List<String> = emptyList(),
     val imageUrls: List<String> = emptyList(),
 )
 

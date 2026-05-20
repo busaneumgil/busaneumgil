@@ -189,3 +189,6 @@ CREATE TABLE IF NOT EXISTS hazard_report_route_review_segment_drafts (
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_hazard_report_route_review_segment_drafts_review_edge
     ON hazard_report_route_review_segment_drafts (review_id, edge_id);
+
+ALTER TABLE IF EXISTS hazard_report_images
+    ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;

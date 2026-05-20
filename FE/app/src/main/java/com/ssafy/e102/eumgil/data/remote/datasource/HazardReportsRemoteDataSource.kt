@@ -63,6 +63,7 @@ open class HazardReportsRemoteDataSource private constructor(
                         .put("lng", request.reportPoint.lng),
                 )
                 .put("imageObjectKeys", JSONArray(request.imageObjectKeys))
+                .put("thumbnailObjectKeys", JSONArray(request.thumbnailObjectKeys))
 
         val headers =
             buildMap {
@@ -238,6 +239,8 @@ open class HazardReportsRemoteDataSource private constructor(
             reportType = requireString("reportType"),
             lat = optDouble("lat"),
             lng = optDouble("lng"),
+            description = optNullableString("description"),
+            thumbnailUrls = optJSONArray("thumbnailUrls")?.toStringList().orEmpty(),
             imageUrls = optJSONArray("imageUrls")?.toStringList().orEmpty(),
         )
 

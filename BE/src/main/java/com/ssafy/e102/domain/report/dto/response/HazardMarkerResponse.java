@@ -9,5 +9,7 @@ public record HazardMarkerResponse(
 	ReportType reportType,
 	double lat,
 	double lng,
+	String description,
+	List<String> thumbnailUrls,
 	List<String> imageUrls) {
 }

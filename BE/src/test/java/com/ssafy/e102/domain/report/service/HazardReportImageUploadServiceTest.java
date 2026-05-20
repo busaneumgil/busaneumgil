@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -49,6 +50,27 @@ class HazardReportImageUploadServiceTest {
 		assertThat(presigner.contentType).isEqualTo("image/jpeg");
 		assertThat(presigner.contentLength).isEqualTo(1024L);
 		assertThat(presigner.signatureDuration).isEqualTo(Duration.ofMinutes(10));
+	}
+
+	@Test
+	void createUploadUrls() {
+		RecordingReportImagePresigner presigner = new RecordingReportImagePresigner();
+		HazardReportImageUploadService service = new HazardReportImageUploadService(
+			properties(),
+			presigner,
+			Clock.fixed(NOW, ZoneOffset.UTC));
+
+		List<CreateHazardReportImageUploadUrlResponse> responses = service.createUploadUrls(
+			USER_ID,
+			List.of(
+				new CreateHazardReportImageUploadUrlRequest("photo-1.jpg", "image/jpeg", 1024L),
+				new CreateHazardReportImageUploadUrlRequest("photo-2.webp", "image/webp", 2048L)));
+
+		assertThat(responses).hasSize(2);
+		assertThat(responses.get(0).uploadUrl()).isEqualTo("https://storage.example.com/upload");
+		assertThat(responses.get(0).objectKey()).startsWith("hazard-reports/11111111-1111-1111-1111-111111111111/20260514/");
+		assertThat(responses.get(1).objectKey()).endsWith(".webp");
+		assertThat(presigner.putRequests).hasSize(2);
 	}
 
 	@Test
@@ -232,6 +254,7 @@ class HazardReportImageUploadServiceTest {
 		private Duration signatureDuration;
 		private String readObjectKey;
 		private Duration readSignatureDuration;
+		private final List<String> putRequests = new ArrayList<>();
 
 		@Override
 		public ReportImagePresignedUrl createPutObjectPresignedUrl(
@@ -239,6 +262,7 @@ class HazardReportImageUploadServiceTest {
 			String contentType,
 			long contentLength,
 			Duration signatureDuration) {
+			this.putRequests.add(objectKey);
 			this.objectKey = objectKey;
 			this.contentType = contentType;
 			this.contentLength = contentLength;

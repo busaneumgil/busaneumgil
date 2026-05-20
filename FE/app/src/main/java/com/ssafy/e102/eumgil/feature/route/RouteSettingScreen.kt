@@ -303,6 +303,7 @@ fun RouteSettingScreen(
         ApprovedHazardMarkerBottomSheet(
             marker = hazardMarkerState.selectedMarker,
             onDismiss = hazardMarkerState::dismissSelection,
+            bottomInset = routeSettingHazardSheetBottomInset(),
             modifier = Modifier.matchParentSize(),
         )
     }
@@ -517,6 +518,7 @@ fun RouteDetailScreen(
             ApprovedHazardMarkerBottomSheet(
                 marker = hazardMarkerState.selectedMarker,
                 onDismiss = hazardMarkerState::dismissSelection,
+                bottomInset = routeSettingHazardSheetBottomInset(),
                 modifier = Modifier.matchParentSize(),
             )
         }
@@ -2306,6 +2308,12 @@ private fun routeSettingBottomBarOverlayClearance(extraSpacing: Dp = EumSpacing.
     val density = LocalDensity.current
     val navigationBarInset = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
     return RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + extraSpacing + navigationBarInset
+}
+
+@Composable
+private fun routeSettingHazardSheetBottomInset(): Dp {
+    val density = LocalDensity.current
+    return with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
 }
 
 internal fun routeSearchHeaderPolicy(showModeTabs: Boolean = true): RouteSearchHeaderPolicy =

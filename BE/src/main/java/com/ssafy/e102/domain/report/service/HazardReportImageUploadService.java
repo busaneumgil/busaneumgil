@@ -76,6 +76,20 @@ public class HazardReportImageUploadService {
 			presignedUpload.expiresAt());
 	}
 
+	public List<CreateHazardReportImageUploadUrlResponse> createUploadUrls(
+		UUID userId,
+		List<CreateHazardReportImageUploadUrlRequest> requests) {
+		if (requests == null || requests.isEmpty()) {
+			throw invalidUploadRequest("이미지 업로드 요청 목록은 비어 있을 수 없습니다.");
+		}
+		if (requests.size() > MAX_IMAGE_COUNT) {
+			throw invalidUploadRequest("제보 이미지는 최대 5장까지 업로드할 수 있습니다.");
+		}
+		return requests.stream()
+			.map(request -> createUploadUrl(userId, request))
+			.toList();
+	}
+
 	public String createReadUrl(String imageObjectKey) {
 		String normalizedObjectKey = normalizeStoredImageReference(imageObjectKey);
 		validateReadableImageObjectKey(normalizedObjectKey);
@@ -90,6 +104,24 @@ public class HazardReportImageUploadService {
 		}
 		if (imageObjectKeys.size() > MAX_IMAGE_COUNT) {
 			throw invalidImageObjectKey("제보 이미지는 최대 5장까지 첨부할 수 있습니다.");
+		}
+
+		UUID requiredUserId = requireUserId(userId);
+		for (String imageObjectKey : imageObjectKeys) {
+			validateOwnedImageObjectKey(requiredUserId, imageObjectKey);
+		}
+	}
+
+	public void validateThumbnailObjectKeys(UUID userId, List<String> thumbnailObjectKeys) {
+		validateOwnedImageObjectKeys(userId, thumbnailObjectKeys);
+	}
+
+	private void validateOwnedImageObjectKeys(UUID userId, List<String> imageObjectKeys) {
+		if (imageObjectKeys == null || imageObjectKeys.isEmpty()) {
+			return;
+		}
+		if (imageObjectKeys.size() > MAX_IMAGE_COUNT) {
+			throw invalidImageObjectKey("?쒕낫 ?대?吏??理쒕? 5?κ퉴吏 泥⑤??????덉뒿?덈떎.");
 		}
 
 		UUID requiredUserId = requireUserId(userId);

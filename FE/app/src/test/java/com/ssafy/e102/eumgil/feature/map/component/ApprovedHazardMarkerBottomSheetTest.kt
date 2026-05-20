@@ -2,10 +2,10 @@ package com.ssafy.e102.eumgil.feature.map.component
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -85,14 +85,16 @@ class ApprovedHazardMarkerBottomSheetTest {
     }
 
     @Test
-    fun `bottom sheet shows empty image state when marker has no photos`() {
+    fun `bottom sheet shows square empty image placeholder when marker has no photos`() {
         composeRule.setContent {
             BusanEumgilTheme {
                 ApprovedHazardMarkerBottomSheet(marker = marker(imageUrls = emptyList()))
             }
         }
 
-        assertTrue(composeRule.onAllNodesWithText("사진 없음").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(composeRule.onAllNodesWithTag("approvedHazardNoImagePlaceholder").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(composeRule.onAllNodesWithTag("approvedHazardHeaderWarningIcon").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(composeRule.onAllNodesWithText("사진 없음").fetchSemanticsNodes().isEmpty())
         assertTrue(composeRule.onAllNodesWithContentDescription("승인 제보 사진 1").fetchSemanticsNodes().isEmpty())
     }
 
@@ -184,11 +186,88 @@ class ApprovedHazardMarkerBottomSheetTest {
         assertTrue(viewerSection.contains("onClick = onDismiss"))
     }
 
-    private fun marker(imageUrls: List<String>) =
+    @Test
+    fun `sheet header uses shared warning drawable and no image placeholder uses the square camera empty state`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/ApprovedHazardMarkerBottomSheet.kt")
+                .readText()
+
+        assertTrue(source.contains("approvedHazardHeaderWarningIcon"))
+        assertTrue(source.contains("approvedHazardNoImagePlaceholder"))
+        assertTrue(source.contains("R.drawable.ic_approved_hazard_warning"))
+        assertFalse(source.contains("Modifier.offset(y = (-10).dp)"))
+        assertFalse(source.contains("map_facility_detail_close"))
+        assertTrue(source.contains("Color(0xFFD9D9D9)"))
+        assertTrue(source.contains("Color(0xFFFFFFFF)"))
+        assertTrue(source.contains("Color(0xFFE5E7EB)"))
+    }
+
+    @Test
+    fun `bottom sheet shows hazard description between report type and images`() {
+        composeRule.setContent {
+            BusanEumgilTheme {
+                ApprovedHazardMarkerBottomSheet(
+                    marker =
+                        marker(
+                            description = "공사 자재가 인도를 막고 있어 우회가 필요합니다.",
+                            imageUrls = emptyList(),
+                        ),
+                )
+            }
+        }
+
+        assertTrue(
+            composeRule
+                .onAllNodesWithText("공사 자재가 인도를 막고 있어 우회가 필요합니다.")
+                .fetchSemanticsNodes()
+                .isNotEmpty(),
+        )
+        assertTrue(composeRule.onAllNodesWithTag("approvedHazardDescription").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
+    fun `sheet source renders optional description ahead of the image section`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/ApprovedHazardMarkerBottomSheet.kt")
+                .readText()
+
+        assertTrue(source.contains("resolvedMarker.description?.takeIf"))
+        assertTrue(source.contains("approvedHazardDescription"))
+        assertTrue(
+            source.indexOf("approvedHazardDescription") <
+                source.indexOf("if (resolvedMarker.imageUrls.isEmpty())"),
+        )
+    }
+
+    @Test
+    fun `sheet source prefers thumbnail urls for gallery cards and falls back to original images`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/ApprovedHazardMarkerBottomSheet.kt")
+                .readText()
+
+        assertTrue(source.contains("resolvedMarker.thumbnailUrls.ifEmpty { resolvedMarker.imageUrls }"))
+    }
+
+    @Test
+    fun `sheet uses attached bottom edge treatment and drag dismisses through onDismiss`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/ApprovedHazardMarkerBottomSheet.kt")
+                .readText()
+
+        assertTrue(source.contains("edgeTreatment = MapBottomSheetEdgeTreatment.AttachedToBottomBar"))
+        assertTrue(source.contains(".draggable("))
+        assertTrue(source.contains("onDismiss()"))
+    }
+
+    private fun marker(
+        description: String? = null,
+        imageUrls: List<String>,
+    ) =
         ApprovedHazardMarker(
             reportId = 12L,
             reportType = "RAMP",
             coordinate = GeoCoordinate(latitude = 35.1, longitude = 129.1),
+            description = description,
             imageUrls = imageUrls,
         )
 }

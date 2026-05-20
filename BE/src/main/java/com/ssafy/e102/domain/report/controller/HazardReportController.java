@@ -14,7 +14,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.e102.domain.report.dto.request.CreateHazardReportImageUploadUrlRequest;
+import com.ssafy.e102.domain.report.dto.request.CreateHazardReportImageUploadBatchRequest;
 import com.ssafy.e102.domain.report.dto.request.CreateHazardReportRequest;
+import com.ssafy.e102.domain.report.dto.response.CreateHazardReportImageUploadBatchResponse;
 import com.ssafy.e102.domain.report.dto.response.CreateHazardReportImageUploadUrlResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportDetailResponse;
 import com.ssafy.e102.domain.report.dto.response.HazardReportIdResponse;
@@ -51,6 +53,17 @@ public class HazardReportController {
 		@Valid @RequestBody
 		CreateHazardReportImageUploadUrlRequest request) {
 		return ApiResponse.success(hazardReportImageUploadService.createUploadUrl(principal.userId(), request));
+	}
+
+	@PostMapping("/images/presigned-upload/batch")
+	public ApiResponse<CreateHazardReportImageUploadBatchResponse> createPresignedUploadUrls(
+		@AuthenticationPrincipal
+		AuthPrincipal principal,
+		@Valid @RequestBody
+		CreateHazardReportImageUploadBatchRequest request) {
+		return ApiResponse.success(
+			new CreateHazardReportImageUploadBatchResponse(
+				hazardReportImageUploadService.createUploadUrls(principal.userId(), request.files())));
 	}
 
 	@Operation(summary = "도로 상태 제보 등록", description = "현재 로그인한 사용자가 도로 상태 문제 위치, 유형, 설명, 첨부 이미지를 등록한다.")

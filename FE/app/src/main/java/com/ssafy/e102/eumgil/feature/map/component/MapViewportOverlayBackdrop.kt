@@ -42,7 +42,6 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.core.model.BrailleBlockType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
-import com.ssafy.e102.eumgil.feature.report.reportTypeMarkerIconRes
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -857,14 +856,12 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
 
         MapViewportPointKind.APPROVED_REPORT ->
             ViewportPointMarkerSpec(
-                label = null,
+                label = "!",
                 containerColor = Color(0xFFFFD84D),
-                contentColor = Color.White,
-                borderColor = Color(0xFFE0B312),
-                size = 44.dp,
-                shape = ViewportPointMarkerShape.CIRCLE,
-                iconResId = reportTypeMarkerIconRes(reportTypeApiValue),
-                iconSize = 20.dp,
+                contentColor = Color(0xFF111827),
+                borderColor = Color(0xFF111827),
+                size = 40.dp,
+                shape = ViewportPointMarkerShape.TRIANGLE_WARNING,
                 fontSize = 18.sp,
                 borderWidth = 2.dp,
             )

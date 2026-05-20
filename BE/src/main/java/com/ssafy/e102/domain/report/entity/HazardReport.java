@@ -95,7 +95,7 @@ public class HazardReport extends BaseEntity {
 		String description,
 		Point reportPoint,
 		List<String> imageObjectKeys) {
-		return create(user, reportType, description, null, reportPoint, imageObjectKeys);
+		return create(user, reportType, description, null, reportPoint, imageObjectKeys, List.of());
 	}
 
 	public static HazardReport create(
@@ -105,6 +105,17 @@ public class HazardReport extends BaseEntity {
 		String address,
 		Point reportPoint,
 		List<String> imageObjectKeys) {
+		return create(user, reportType, description, address, reportPoint, imageObjectKeys, List.of());
+	}
+
+	public static HazardReport create(
+		User user,
+		ReportType reportType,
+		String description,
+		String address,
+		Point reportPoint,
+		List<String> imageObjectKeys,
+		List<String> thumbnailObjectKeys) {
 		HazardReport hazardReport = new HazardReport();
 		hazardReport.user = requireUser(user);
 		hazardReport.reportType = requireReportType(reportType);
@@ -112,7 +123,7 @@ public class HazardReport extends BaseEntity {
 		hazardReport.address = normalizeAddress(address);
 		hazardReport.reportPoint = requirePoint(reportPoint);
 		hazardReport.status = ReportStatus.PENDING;
-		hazardReport.addImages(valueOrEmpty(imageObjectKeys));
+		hazardReport.addImages(valueOrEmpty(imageObjectKeys), valueOrEmpty(thumbnailObjectKeys));
 		return hazardReport;
 	}
 
@@ -183,12 +194,16 @@ public class HazardReport extends BaseEntity {
 		this.processedAt = processedAt;
 	}
 
-	private void addImages(List<String> imageObjectKeys) {
+	private void addImages(List<String> imageObjectKeys, List<String> thumbnailObjectKeys) {
 		if (imageObjectKeys.size() > MAX_IMAGE_COUNT) {
 			throw invalidRequest("제보 이미지는 최대 5장까지 등록할 수 있습니다.");
 		}
+		if (!thumbnailObjectKeys.isEmpty() && thumbnailObjectKeys.size() != imageObjectKeys.size()) {
+			throw invalidRequest("제보 썸네일 object key 개수는 원본 이미지 개수와 같아야 합니다.");
+		}
 		for (int index = 0; index < imageObjectKeys.size(); index++) {
-			images.add(HazardReportImage.create(this, imageObjectKeys.get(index), index));
+			String thumbnailObjectKey = thumbnailObjectKeys.isEmpty() ? null : thumbnailObjectKeys.get(index);
+			images.add(HazardReportImage.create(this, imageObjectKeys.get(index), thumbnailObjectKey, index));
 		}
 	}
 

@@ -123,7 +123,8 @@ class HazardReportFeFlowTest {
 			ReportType.SIDEWALK_MISSING,
 			longDescription,
 			new GeoPointRequest(35.1686, 129.0576),
-			List.of(upload.objectKey()));
+			List.of(upload.objectKey()),
+			List.of());
 
 		HazardReportIdResponse created = hazardReportService.createHazardReport(
 			USER_ID,

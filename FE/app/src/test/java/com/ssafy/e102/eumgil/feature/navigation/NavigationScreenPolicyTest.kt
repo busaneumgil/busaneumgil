@@ -496,6 +496,10 @@ class NavigationScreenPolicyTest {
             "The full-screen hazard image viewer should mount after the navigation bottom bar so it can cover the entire screen chrome.",
             screenSection.indexOf("NavigationBottomBar(") < screenSection.indexOf("ApprovedHazardMarkerBottomSheet("),
         )
+        assertTrue(
+            "The navigation hazard sheet should attach to the safe area instead of floating above the local CTA bar.",
+            screenSection.contains("bottomInset = navigationHazardSheetBottomInset()"),
+        )
     }
 
     @Test

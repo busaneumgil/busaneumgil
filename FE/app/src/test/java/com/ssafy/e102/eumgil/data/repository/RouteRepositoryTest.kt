@@ -101,7 +101,7 @@ class RouteRepositoryTest {
         }
 
     @Test
-    fun `getRouteSearchData returns cached walk search data after first remote load`() =
+    fun `getRouteSearchData reloads walk search data on every call`() =
         runBlocking {
             val localDataSource = RouteLocalDataSource()
             var walkCallCount = 0
@@ -112,7 +112,10 @@ class RouteRepositoryTest {
                         remoteDataSource(
                             searchWalkResponse = {
                                 walkCallCount += 1
-                                walkSearchResponse()
+                                walkSearchResponse(
+                                    searchId = "rs_walk_server_$walkCallCount",
+                                    routeId = "walk_rt_safe_$walkCallCount",
+                                )
                             },
                         ),
                 )
@@ -121,15 +124,16 @@ class RouteRepositoryTest {
             val first = repository.getRouteSearchData(query)
             val second = repository.getRouteSearchData(query)
 
-            assertEquals(1, walkCallCount)
+            assertEquals(2, walkCallCount)
             assertEquals(RouteSearchSourceType.SERVER_API, first.source.type)
             assertTrue(!first.source.isFromCache)
-            assertTrue(second.source.isFromCache)
-            assertEquals("rs_walk_server_001", first.result.searchId)
-            assertEquals(first.result, second.result)
-            assertEquals("walk_rt_safe_001", first.routes.single().routeId)
+            assertTrue(!second.source.isFromCache)
+            assertEquals("rs_walk_server_1", first.result.searchId)
+            assertEquals("rs_walk_server_2", second.result.searchId)
+            assertEquals("walk_rt_safe_1", first.routes.single().routeId)
+            assertEquals("walk_rt_safe_2", second.routes.single().routeId)
             assertEquals(RouteTransportMode.WALK, first.routes.single().transportMode)
-            assertEquals(first, localDataSource.getCachedSearchData(query))
+            assertNull(localDataSource.getCachedSearchData(query))
         }
 
     @Test
@@ -160,11 +164,11 @@ class RouteRepositoryTest {
             assertEquals("rs_walk_server_1", cached.result.searchId)
             assertEquals("rs_walk_server_2", fresh.result.searchId)
             assertEquals("walk_rt_safe_2", fresh.routes.single().routeId)
-            assertEquals(fresh, localDataSource.getCachedSearchData(query))
+            assertNull(localDataSource.getCachedSearchData(query))
         }
 
     @Test
-    fun `getTransitRouteSearchData uses transit surface and caches transit result`() =
+    fun `getTransitRouteSearchData uses transit surface and reloads on every call`() =
         runBlocking {
             val localDataSource = RouteLocalDataSource()
             var walkCallCount = 0
@@ -190,14 +194,15 @@ class RouteRepositoryTest {
             val second = repository.getTransitRouteSearchData(query)
 
             assertEquals(0, walkCallCount)
-            assertEquals(1, transitCallCount)
+            assertEquals(2, transitCallCount)
             assertEquals("rs_transit_server_001", first.result.searchId)
             assertEquals(RouteTransportMode.PUBLIC_TRANSIT, first.routes.single().transportMode)
             assertEquals(RouteOption.RECOMMENDED, first.routes.single().routeOption)
             assertEquals("Stop B", first.routes.single().legs[1].alightingStop?.name)
-            assertTrue(second.source.isFromCache)
+            assertTrue(!first.source.isFromCache)
+            assertTrue(!second.source.isFromCache)
             assertEquals(first.result, second.result)
-            assertEquals(first, localDataSource.getCachedSearchData(query))
+            assertNull(localDataSource.getCachedSearchData(query))
         }
 
     @Test

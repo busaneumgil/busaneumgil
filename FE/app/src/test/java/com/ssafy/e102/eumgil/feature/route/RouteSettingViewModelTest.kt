@@ -1199,7 +1199,7 @@ class RouteSettingViewModelTest {
         }
 
     @Test
-    fun `manual travel mode change reuses cached walk surface when returning to walk`() =
+    fun `manual travel mode change reloads walk surface when returning to walk`() =
         runTest {
             val destinationSelectionRepository =
                 InMemoryDestinationSelectionRepository().apply {
@@ -1234,7 +1234,7 @@ class RouteSettingViewModelTest {
             assertEquals(RouteTravelMode.WALK, viewModel.uiState.value.selectedTravelMode)
             assertEquals(RouteOption.SAFE, viewModel.uiState.value.selectedOption)
             assertEquals("Safe Route", viewModel.uiState.value.selectedRoute?.title)
-            assertEquals(1, routeRepository.walkSearchCount)
+            assertEquals(2, routeRepository.walkSearchCount)
             assertEquals(1, routeRepository.transitSearchCount)
         }
 

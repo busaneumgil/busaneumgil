@@ -94,7 +94,6 @@ class DefaultRouteRepository(
         getSearchData(
             query = query,
             requestPath = ROUTE_SEARCH_WALK_PATH,
-            useCache = true,
         ) { request ->
             remoteDataSource.searchWalkRoutes(request)
         }
@@ -103,7 +102,6 @@ class DefaultRouteRepository(
         getSearchData(
             query = query,
             requestPath = ROUTE_SEARCH_WALK_PATH,
-            useCache = false,
         ) { request ->
             remoteDataSource.searchWalkRoutes(request)
         }
@@ -112,7 +110,6 @@ class DefaultRouteRepository(
         getSearchData(
             query = query,
             requestPath = ROUTE_SEARCH_TRANSIT_PATH,
-            useCache = true,
         ) { request ->
             remoteDataSource.searchTransitRoutes(request)
         }
@@ -121,7 +118,6 @@ class DefaultRouteRepository(
         getSearchData(
             query = query,
             requestPath = ROUTE_SEARCH_TRANSIT_PATH,
-            useCache = false,
         ) { request ->
             remoteDataSource.searchTransitRoutes(request)
         }
@@ -187,26 +183,16 @@ class DefaultRouteRepository(
     private suspend fun getSearchData(
         query: RouteSearchQuery,
         requestPath: String,
-        useCache: Boolean,
         remoteSearch: suspend (RouteSearchRequestDto) -> RouteSearchResponseDto,
     ): RouteSearchData {
-        if (useCache) {
-            localDataSource.getCachedSearchData(query)?.let { cachedSearchData ->
-                return cachedSearchData.copy(source = cachedSearchData.source.asCached())
-            }
-        }
-
         val response = runAuthenticatedRemoteRequest(requestPath = requestPath) { remoteSearch(query.toRequestDto()) }
-        val searchData =
-            withContext(routeMappingDispatcher) {
-                RouteSearchData(
-                    query = query,
-                    result = response.toDomain(query = query, geometryParser = geometryParser),
-                    source = RouteSearchSource.serverApi(),
-                )
-            }
-        localDataSource.updateCachedSearchData(query = query, searchData = searchData)
-        return searchData
+        return withContext(routeMappingDispatcher) {
+            RouteSearchData(
+                query = query,
+                result = response.toDomain(query = query, geometryParser = geometryParser),
+                source = RouteSearchSource.serverApi(),
+            )
+        }
     }
 
     private suspend fun <T> runAuthenticatedRemoteRequest(

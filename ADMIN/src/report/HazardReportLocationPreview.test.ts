@@ -35,4 +35,11 @@ describe("HazardReportLocationPreview map chrome", () => {
     expect(appSource).toContain("roadviewDock.open && roadviewDock.message");
     expect(appSource).not.toContain("{roadviewDock.message && <div className=\"roadview-empty\"");
   });
+
+  it("renders location markers after the Kakao map instance becomes ready", () => {
+    expect(source).toContain("const [mapReady, setMapReady] = useState(false);");
+    expect(source).toContain("setMapReady(true);");
+    expect(source).toContain("if (!mapReady || !mapRef.current || !window.kakao?.maps)");
+    expect(source).toContain("[mapReady, point.lat, point.lng, roadviewPoint?.lat, roadviewPoint?.lng]");
+  });
 });

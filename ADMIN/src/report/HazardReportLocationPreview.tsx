@@ -20,6 +20,7 @@ export function HazardReportLocationPreview({
   const reportMarkerRef = useRef<KakaoOverlay | null>(null);
   const roadviewMarkerRef = useRef<KakaoOverlay | null>(null);
   const onPickRoadviewPointRef = useRef(onPickRoadviewPoint);
+  const [mapReady, setMapReady] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -60,10 +61,12 @@ export function HazardReportLocationPreview({
           });
         }
 
+        setMapReady(true);
         setStatus("ready");
       })
       .catch((error: unknown) => {
         if (disposed) return;
+        setMapReady(false);
         setStatus("error");
         setErrorMessage(error instanceof Error ? error.message : "지도 미리보기를 준비하지 못했습니다.");
       });
@@ -76,15 +79,15 @@ export function HazardReportLocationPreview({
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current || !window.kakao?.maps) return;
+    if (!mapReady || !mapRef.current || !window.kakao?.maps) return;
     const center = new window.kakao.maps.LatLng(point.lat, point.lng);
     mapRef.current.setCenter(center);
     mapRef.current.setLevel(3);
     mapRef.current.relayout?.();
-  }, [point.lat, point.lng]);
+  }, [mapReady, point.lat, point.lng]);
 
   useEffect(() => {
-    if (!mapRef.current || !window.kakao?.maps) {
+    if (!mapReady || !mapRef.current || !window.kakao?.maps) {
       return;
     }
 
@@ -96,7 +99,7 @@ export function HazardReportLocationPreview({
     roadviewMarkerRef.current = hasRoadviewPoint
       ? createLocationPreviewMarker(roadviewPoint, "roadview", mapRef.current)
       : null;
-  }, [point.lat, point.lng, roadviewPoint?.lat, roadviewPoint?.lng]);
+  }, [mapReady, point.lat, point.lng, roadviewPoint?.lat, roadviewPoint?.lng]);
 
   return (
     <div className="hazard-location-map" role="img" aria-label={`${label} 지도 미리보기`}>

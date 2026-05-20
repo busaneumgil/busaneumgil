@@ -15,6 +15,8 @@ import {
   resolveActiveHazardRouteReview,
   routeReviewCompletionClassName,
   routeReviewCompletionMessage,
+  selectHazardRouteReviewSegment,
+  shouldPersistHazardRouteReviewDraft,
   startHazardRouteReview,
   storeHazardRouteReview,
   updateHazardRouteReviewSegmentDraft,
@@ -268,6 +270,27 @@ describe("hazard route review workflow state", () => {
     expect(routeReviewCompletionMessage("APPLIED_WITH_WARNING")).toContain("경고");
     expect(routeReviewCompletionMessage("FAILED")).toContain("실패");
     expect(routeReviewCompletionMessage("SKIPPED")).toContain("대상");
+  });
+
+  it("does not persist a route review draft when only the selected segment changes", () => {
+    const review = startHazardRouteReview({
+      reportId: 91,
+      intent: "approve",
+      reviewerUserId: "admin-select",
+      now: "2026-05-21T03:20:00.000Z",
+    });
+    const selectedOnly = selectHazardRouteReviewSegment(review, 42001, "2026-05-21T03:21:00.000Z");
+
+    expect(shouldPersistHazardRouteReviewDraft(review, selectedOnly)).toBe(false);
+
+    const withDraft = updateHazardRouteReviewSegmentDraft(
+      selectedOnly,
+      42001,
+      { walkAccess: "NO", stairsState: "UNKNOWN" },
+      "2026-05-21T03:22:00.000Z",
+    );
+
+    expect(shouldPersistHazardRouteReviewDraft(selectedOnly, withDraft)).toBe(true);
   });
 
   it("marks approved reports as applied after the bulk routing apply succeeds", () => {

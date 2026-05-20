@@ -5,7 +5,7 @@ import pageSource from "./HazardReportsPage.tsx?raw";
 describe("HazardRouteReviewWorkspace copy", () => {
   it("removes immediate route apply copy from the completion action", () => {
     expect(source).toContain("검수 완료");
-    expect(source).toContain("DB 저장 후 경로 반영 버튼");
+    expect(source).toContain("검수 완료를 누르고, 필요하면 경로 반영 버튼");
     expect(source).not.toContain("즉시 반영");
   });
 
@@ -15,11 +15,12 @@ describe("HazardRouteReviewWorkspace copy", () => {
     expect(source).toContain("hazard-review-segment-card selected");
   });
 
-  it("shows DB save and routing refresh state around completion and apply actions", () => {
+  it("shows draft save and routing refresh state around completion and apply actions", () => {
     expect(source).toContain("savingReview");
     expect(source).toContain("reviewSaveMessage");
-    expect(source).toContain("DB 저장 중");
-    expect(pageSource).toContain("DB 저장 완료");
+    expect(source).toContain("검수 초안 저장 중");
+    expect(pageSource).toContain("검수 초안 저장 완료");
+    expect(pageSource).not.toContain("message: \"DB 저장 완료\"");
     expect(source).toContain("상태 새로고침 중");
     expect(source).toContain("검수 완료 중");
   });

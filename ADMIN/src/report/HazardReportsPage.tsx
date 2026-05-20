@@ -57,6 +57,7 @@ import {
   resolveActiveHazardRouteReview,
   routeReviewCompletionClassName,
   routeReviewCompletionMessage,
+  shouldPersistHazardRouteReviewDraft,
   startHazardRouteReview,
   storeHazardRouteReview,
   toAdminHazardRouteReviewIntent,
@@ -566,7 +567,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     ),
     onMutate: () => {
       setRouteReviewSaveNotice({
-        message: "DB 저장 중",
+        message: "검수 초안 저장 중",
         className: "warning-box",
       });
     },
@@ -576,14 +577,14 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
         setRouteReviewDraft(hydratedReview);
       }
       setRouteReviewSaveNotice({
-        message: "DB 저장 완료",
+        message: "검수 초안 저장 완료",
         className: "success-box",
       });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
     },
     onError: (error) => {
       setRouteReviewSaveNotice({
-        message: error instanceof Error ? error.message : "DB 저장에 실패했습니다.",
+        message: error instanceof Error ? error.message : "검수 초안 저장에 실패했습니다.",
         className: "error-box",
       });
     },
@@ -770,7 +771,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     });
     setRouteReviewDraft(nextReview);
     setRouteReviewSaveNotice({
-      message: "DB 저장 완료",
+      message: "검수 초안 저장 완료",
       className: "success-box",
     });
     markReportViewed(activeReport.reportId);
@@ -778,10 +779,15 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   }
 
   function handleRouteReviewChange(nextReview: HazardRouteReviewRecord) {
+    const previousReview = activeReport ? routeReviewDrafts[activeReport.reportId] ?? serverReviewDraft : null;
     setRouteReviewDraft(nextReview);
+    if (!shouldPersistHazardRouteReviewDraft(previousReview, nextReview)) {
+      setRouteReviewSaveNotice(null);
+      return;
+    }
     if (preview) {
       setRouteReviewSaveNotice({
-        message: "DB 저장 완료",
+        message: "검수 초안 저장 완료",
         className: "success-box",
       });
       return;

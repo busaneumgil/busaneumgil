@@ -188,6 +188,16 @@ export function selectHazardRouteReviewSegment(
   };
 }
 
+export function shouldPersistHazardRouteReviewDraft(
+  previous: HazardRouteReviewRecord | null | undefined,
+  next: HazardRouteReviewRecord,
+) {
+  if (!previous) {
+    return Object.keys(next.segmentDrafts).length > 0;
+  }
+  return !areSegmentDraftMapsEqual(previous.segmentDrafts, next.segmentDrafts);
+}
+
 export function updateHazardRouteReviewSegmentDraft(
   review: HazardRouteReviewRecord,
   edgeId: string | number,
@@ -204,6 +214,37 @@ export function updateHazardRouteReviewSegmentDraft(
       [normalizedEdgeId]: draft,
     },
   };
+}
+
+function areSegmentDraftMapsEqual(
+  a: Record<string, AdminRoadSegmentAttributesUpdateRequest>,
+  b: Record<string, AdminRoadSegmentAttributesUpdateRequest>,
+) {
+  const aKeys = Object.keys(a).sort();
+  const bKeys = Object.keys(b).sort();
+  if (aKeys.length !== bKeys.length) {
+    return false;
+  }
+  return aKeys.every((key, index) => (
+    key === bKeys[index] && areSegmentDraftsEqual(a[key], b[key])
+  ));
+}
+
+function areSegmentDraftsEqual(
+  a: AdminRoadSegmentAttributesUpdateRequest | undefined,
+  b: AdminRoadSegmentAttributesUpdateRequest | undefined,
+) {
+  return normalizeDraftField(a?.walkAccess) === normalizeDraftField(b?.walkAccess)
+    && normalizeDraftField(a?.brailleBlockState) === normalizeDraftField(b?.brailleBlockState)
+    && normalizeDraftField(a?.audioSignalState) === normalizeDraftField(b?.audioSignalState)
+    && normalizeDraftField(a?.widthState) === normalizeDraftField(b?.widthState)
+    && normalizeDraftField(a?.surfaceState) === normalizeDraftField(b?.surfaceState)
+    && normalizeDraftField(a?.stairsState) === normalizeDraftField(b?.stairsState)
+    && normalizeDraftField(a?.signalState) === normalizeDraftField(b?.signalState);
+}
+
+function normalizeDraftField(value: unknown) {
+  return value ?? null;
 }
 
 export function completeHazardRouteReview(review: HazardRouteReviewRecord, now: string): HazardRouteReviewRecord {

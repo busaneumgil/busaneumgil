@@ -155,7 +155,7 @@ export function HazardRouteReviewWorkspace({
   return (
     <div className="hazard-review-shell">
       <div className="hazard-inline-banner hazard-review-banner">
-        <span>신고 검수와 경로 반영은 분리됩니다. 세그먼트를 검수한 뒤 DB 저장 상태를 확인하고, 필요하면 경로 반영을 별도로 실행해 주세요.</span>
+        <span>세그먼트 속성 변경은 검수 초안으로 저장됩니다. 실제 DB 반영은 검수 완료 시 적용되고, 경로 반영은 별도로 실행합니다.</span>
       </div>
 
       <section className="hazard-detail-card hazard-review-map-card">
@@ -209,7 +209,7 @@ export function HazardRouteReviewWorkspace({
             <ReviewRow label="신고 유형" value={reportTypeLabel} />
             <ReviewRow label="위치" value={locationAddress ?? "좌표 기준 위치 확인 중"} secondary={locationRegion || undefined} />
             <ReviewRow label="좌표" value={formatHazardCoordinates(reportPoint)} />
-            <ReviewRow label="검수 현황" value={`검수한 세그먼트 ${reviewedSegmentCount}건`} secondary={savingReview ? "DB 저장 중" : `마지막 저장 ${formatReviewStamp(review.updatedAt)}`} />
+            <ReviewRow label="검수 현황" value={`검수한 세그먼트 ${reviewedSegmentCount}건`} secondary={savingReview ? "검수 초안 저장 중" : `마지막 변경 ${formatReviewStamp(review.updatedAt)}`} />
             <div className="hazard-detail-list__row hazard-detail-list__row--description">
               <dt>내용</dt>
               <dd>
@@ -279,8 +279,8 @@ export function HazardRouteReviewWorkspace({
       <div className="hazard-review-actionbar">
         <div className="hazard-review-actionbar__summary">
           <strong>{hazardRouteReviewIntentLabel(review.intent)}</strong>
-          <span>{canComplete ? `검수한 세그먼트 ${reviewedSegmentCount}건이 DB 저장 대상입니다. 검수 완료 전 최신 초안을 DB에 저장하고, DB 저장 후 경로 반영 버튼 순서로 적용해 주세요.` : "최소 1개 세그먼트를 검수해야 처리 완료를 진행할 수 있습니다."}</span>
-          {savingReview && <span className="warning-box">DB 저장 중</span>}
+          <span>{canComplete ? `검수한 세그먼트 ${reviewedSegmentCount}건이 검수 완료 시 DB 반영 대상입니다. 초안 저장을 확인한 뒤 검수 완료를 누르고, 필요하면 경로 반영 버튼으로 적용해 주세요.` : "최소 1개 세그먼트를 검수해야 처리 완료를 진행할 수 있습니다."}</span>
+          {savingReview && <span className="warning-box">검수 초안 저장 중</span>}
           {!savingReview && reviewSaveMessage && <span className={reviewSaveClassName}>{reviewSaveMessage}</span>}
           {refreshingRoutingState && <span className="warning-box">상태 새로고침 중</span>}
           <RoutingApplyStateSummary state={routingApplyState} />
@@ -303,7 +303,7 @@ export function HazardRouteReviewWorkspace({
             disabled={!canComplete || completing || savingReview}
             onClick={onComplete}
           >
-            {savingReview ? "DB 저장 중" : completing ? "검수 완료 중" : "검수 완료"}
+            {savingReview ? "초안 저장 중" : completing ? "검수 완료 중" : "검수 완료"}
           </button>
         </div>
       </div>

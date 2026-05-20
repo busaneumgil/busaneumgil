@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
 import com.ssafy.e102.domain.report.exception.HazardReportErrorCode;
 import com.ssafy.e102.domain.report.exception.HazardReportException;
 import com.ssafy.e102.domain.report.type.HazardRouteReviewIntent;
@@ -68,6 +69,16 @@ public class HazardReportRouteReview extends BaseEntity {
 
 	@Column(name = "completed_at")
 	private LocalDateTime completedAt;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "routing_apply_status", length = 30)
+	private AdminRoutingApplyStatus routingApplyStatus;
+
+	@Column(name = "routing_apply_message", columnDefinition = "TEXT")
+	private String routingApplyMessage;
+
+	@Column(name = "routing_applied_at")
+	private LocalDateTime routingAppliedAt;
 
 	@Column(name = "selected_segment_edge_id")
 	private Long selectedSegmentEdgeId;
@@ -137,6 +148,15 @@ public class HazardReportRouteReview extends BaseEntity {
 		}
 		stage = HazardRouteReviewStage.COMPLETED;
 		completedAt = requireTimestamp(now);
+	}
+
+	public void recordRoutingApplyStatus(
+		AdminRoutingApplyStatus status,
+		String message,
+		LocalDateTime appliedAt) {
+		routingApplyStatus = status;
+		routingApplyMessage = message;
+		routingAppliedAt = appliedAt;
 	}
 
 	public void continueBy(UUID userId) {

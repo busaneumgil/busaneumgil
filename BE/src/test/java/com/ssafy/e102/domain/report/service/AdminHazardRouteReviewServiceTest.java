@@ -327,6 +327,7 @@ class AdminHazardRouteReviewServiceTest {
 		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.APPROVED);
 		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.PENDING);
 		assertThat(response.routingApplyMessage()).contains("DB");
+		assertThat(review.getRoutingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.PENDING);
 		verify(adminMapService).applyRouteReviewSegmentDraftsInCurrentTransaction(
 			org.mockito.ArgumentMatchers.eq(userId),
 			org.mockito.ArgumentMatchers.eq(review.getGu()),
@@ -420,6 +421,7 @@ class AdminHazardRouteReviewServiceTest {
 		assertThat(response.stage()).isEqualTo(HazardRouteReviewStage.COMPLETED);
 		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.SKIPPED);
 		assertThat(response.routingApplyMessage()).contains("없");
+		assertThat(review.getRoutingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.SKIPPED);
 	}
 
 	@Test

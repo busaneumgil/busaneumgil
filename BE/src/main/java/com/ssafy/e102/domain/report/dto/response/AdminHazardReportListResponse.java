@@ -24,12 +24,14 @@ public record AdminHazardReportListResponse(
 		int size,
 		boolean hasNext,
 		Map<Long, String> representativeImageUrls,
-		GeoPointConverter geoPointConverter) {
+		GeoPointConverter geoPointConverter,
+		Map<Long, AdminHazardRouteReviewResponse> latestRouteReviews) {
 		List<AdminHazardReportSummaryResponse> responses = hazardReports.stream()
 			.map(hazardReport -> AdminHazardReportSummaryResponse.of(
 				hazardReport,
 				representativeImageUrls.get(hazardReport.getReportId()),
-				geoPointConverter))
+				geoPointConverter,
+				latestRouteReviews.get(hazardReport.getReportId())))
 			.toList();
 		Long nextCursor = hasNext && !hazardReports.isEmpty()
 			? hazardReports.getLast().getReportId()

@@ -52,6 +52,7 @@ import {
   deriveHazardDisplayStatus,
   hydrateHazardRouteReviewRecord,
   isHazardReviewActive,
+  isHazardRoutingApplyPending,
   loadStoredHazardRouteReview,
   resolveActiveHazardRouteReview,
   routeReviewCompletionClassName,
@@ -409,6 +410,19 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     () => filteredReports.find((report) => report.reportId === selectedReportId) ?? null,
     [filteredReports, selectedReportId],
   );
+  const filteredReportReviewDrafts = useMemo(() => {
+    const drafts = new Map<number, HazardRouteReviewRecord | null>();
+    filteredReports.forEach((report) => {
+      drafts.set(
+        report.reportId,
+        routeReviewDrafts[report.reportId] ?? hydrateHazardRouteReviewRecord(report.latestRouteReview),
+      );
+    });
+    return drafts;
+  }, [filteredReports, routeReviewDrafts]);
+  const selectedReportReviewDraft = selectedReport
+    ? filteredReportReviewDrafts.get(selectedReport.reportId) ?? null
+    : null;
 
   const detailQuery = useQuery({
     queryKey: ["admin-hazard-report-detail", selectedReportId, accessToken],
@@ -616,7 +630,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     ? resolveActiveHazardRouteReview(
       activeReport.status,
       routeReviewDrafts[activeReport.reportId] ?? null,
-    ) ?? serverReviewDraft ?? null
+    ) ?? serverReviewDraft ?? selectedReportReviewDraft ?? null
     : null;
   const previewImages = detail?.imageUrls ?? (selectedReport?.representativeImageUrl ? [selectedReport.representativeImageUrl] : []);
   const selectedImageUrl = pickHazardPrimaryImage(previewImages, selectedImageIndex);
@@ -720,9 +734,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       return;
     }
     const nextDraft = routeReviewDrafts[selectedReportId]
-      ?? (detail?.reportId === selectedReportId ? serverReviewDraft : null);
+      ?? (detail?.reportId === selectedReportId ? serverReviewDraft : null)
+      ?? selectedReportReviewDraft;
     setDetailPaneMode(nextDraft?.stage === "IN_PROGRESS" ? "review" : "detail");
-  }, [detail?.reportId, routeReviewDrafts, selectedReportId, serverReviewDraft]);
+  }, [detail?.reportId, routeReviewDrafts, selectedReportId, selectedReportReviewDraft, serverReviewDraft]);
 
   function changeStatus(nextStatus: HazardFilterKey) {
     setStatus(nextStatus);
@@ -812,14 +827,19 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const pendingCount = reportSummary?.pendingReports ?? countReportsByStatus(reportListData?.content, "PENDING");
   const approvedCount = reportSummary?.approvedReports ?? countReportsByStatus(reportListData?.content, "APPROVED");
   const rejectedCount = reportSummary?.rejectedReports ?? countReportsByStatus(reportListData?.content, "REJECTED");
+  const visibleDbSyncPendingCount = filteredReports.reduce((count, report) => (
+    isHazardRoutingApplyPending(filteredReportReviewDrafts.get(report.reportId) ?? null, routingApplyState) ? count + 1 : count
+  ), 0);
   const dbSyncPendingCount = preview
     ? previewSummary.dbSyncPendingCount
-    : (routingApplyState?.dirty || routingApplyState?.applying) ? approvedCount : 0;
+    : visibleDbSyncPendingCount;
   const currentPage = cursorStack.length;
   const paginationItems = buildVisiblePageNumbers(currentPage, Boolean(reportListData?.hasNext));
   const detailTrackingId = activeReport ? formatHazardTrackingId(activeReport.createdAt, activeReport.reportId) : null;
   const detailHistory = activeReport ? buildHazardTimeline(activeReport, adminPrincipal.userId, activeReviewDraft) : [];
-  const hasDbSyncQueue = dbSyncPendingCount > 0;
+  const hasDbSyncQueue = preview
+    ? dbSyncPendingCount > 0
+    : Boolean(routingApplyState?.dirty || routingApplyState?.applying);
   const latestReportStamp = preview
     ? previewSummary.latestSnapshotAt
     : activeReport?.createdAt
@@ -936,7 +956,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                 accessToken={accessToken}
                 preview={preview}
                 previewAddress={previewHazardRecords.find((record) => record.summary.reportId === report.reportId)?.address}
-                reviewDraft={routeReviewDrafts[report.reportId] ?? null}
+                reviewDraft={filteredReportReviewDrafts.get(report.reportId) ?? null}
                 routingApplyState={routingApplyState}
                 seen={Boolean(reportSessionMeta[report.reportId]?.viewedAt)}
                 selected={report.reportId === selectedReportId}
@@ -1006,8 +1026,12 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
           <div className={`hazard-bulk-bar ${hasDbSyncQueue ? "" : "empty"}`}>
             <div className="hazard-bulk-bar__summary">
-              <strong>{hasDbSyncQueue ? `전체 경로 반영 필요 ${dbSyncPendingCount}건` : "지금 반영할 항목이 없습니다."}</strong>
-              <span>경로 반영 필요 {dbSyncPendingCount}건</span>
+              <strong>{hasDbSyncQueue
+                ? dbSyncPendingCount > 0
+                  ? `현재 목록 경로 반영 필요 ${dbSyncPendingCount}건`
+                  : "다른 목록에 경로 반영 필요 항목이 있습니다."
+                : "지금 반영할 항목이 없습니다."}</strong>
+              <span>{dbSyncPendingCount > 0 ? `현재 목록 ${dbSyncPendingCount}건` : "현재 목록 반영 필요 없음"}</span>
               <small>{latestReportStamp ? `마지막 집계 ${formatLongDateTime(latestReportStamp)}` : "마지막 집계 준비 중"}</small>
             </div>
             <button
@@ -1832,8 +1856,8 @@ function buildHazardTimeline(
   if (report.status === "APPROVED") {
     return [
       { time: baseTime, label: "처리 완료", meta: reviewerLabel, tone: "green" as HazardBadgeTone },
-      { time: baseTime, label: "경로 반영 필요", meta: "(시스템)", tone: "orange" as HazardBadgeTone },
-      { time: "-", label: "원상복구 반영", meta: "-", tone: "purple" as HazardBadgeTone },
+      { time: "-", label: "경로 반영", meta: "-", tone: "gray" as HazardBadgeTone },
+      { time: "-", label: "원상복구 검수 가능", meta: "-", tone: "purple" as HazardBadgeTone },
     ];
   }
 
@@ -1916,7 +1940,7 @@ function summarizeRecoveryStatus(status: HazardReportStatus, review?: HazardRout
     return { label: "-", tone: "gray" as HazardBadgeTone };
   }
   if (status === "APPROVED") {
-    return { label: "대기", tone: "purple" as HazardBadgeTone };
+    return { label: "가능", tone: "purple" as HazardBadgeTone };
   }
   return { label: "-", tone: "gray" as HazardBadgeTone };
 }

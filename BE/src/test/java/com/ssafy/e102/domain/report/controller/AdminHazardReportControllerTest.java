@@ -78,7 +78,8 @@ class AdminHazardReportControllerTest {
 					new GeoPointResponse(35.1686, 129.0576),
 					ReportStatus.PENDING,
 					LocalDateTime.of(2026, 5, 7, 22, 0),
-					"https://example.com/reports/3/image-1.jpg")),
+					"https://example.com/reports/3/image-1.jpg",
+					null)),
 				2,
 				3L,
 				true));

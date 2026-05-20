@@ -263,10 +263,10 @@ export function deriveHazardDisplayStatus(
   if (review?.stage === "COMPLETED" && review.intent === "restore") {
     return { key: "RESTORED", label: "원상복구 완료", tone: "purple" };
   }
-  if (baseStatus === "APPROVED") {
-    return { key: "RESTORE_PENDING", label: "원상복구 대기", tone: "purple" };
-  }
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
+    return { key: "COMPLETED", label: "완료", tone: "green" };
+  }
+  if (baseStatus === "APPROVED") {
     return { key: "COMPLETED", label: "완료", tone: "green" };
   }
   if (baseStatus === "REJECTED") {
@@ -284,20 +284,19 @@ export function deriveHazardDbSyncStatus(
     return { label: review.intent === "restore" ? "복구 검수" : "검수중", tone: "blue" };
   }
   if (review?.stage === "COMPLETED" && review.intent === "restore") {
-    return { label: "복구 완료", tone: "purple" };
-  }
-  if (isRoutingApplyCompleted(routingApplyState)
-    && (baseStatus === "APPROVED" || (review?.stage === "COMPLETED" && review.intent === "approve"))) {
-    return {
-      label: "반영완료",
-      tone: routingApplyState?.routingApplyStatus === "APPLIED_WITH_WARNING" ? "orange" : "green",
-    };
+    return deriveCompletedReviewRoutingStatus(review, routingApplyState);
   }
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
-    return { label: "DB 대기", tone: "orange" };
+    return deriveCompletedReviewRoutingStatus(review, routingApplyState);
   }
   if (baseStatus === "APPROVED") {
-    return { label: "DB 대기", tone: "orange" };
+    if (isRoutingApplyCompleted(routingApplyState)) {
+      return {
+        label: "반영완료",
+        tone: routingApplyState?.routingApplyStatus === "APPLIED_WITH_WARNING" ? "orange" : "green",
+      };
+    }
+    return { label: "-", tone: "gray" };
   }
   if (baseStatus === "REJECTED") {
     return { label: "-", tone: "gray" };
@@ -372,6 +371,18 @@ export function isHazardReviewActive(review?: HazardRouteReviewRecord | null) {
   return review?.stage === "IN_PROGRESS";
 }
 
+export function isHazardRoutingApplyPending(
+  review?: HazardRouteReviewRecord | null,
+  routingApplyState?: AdminRoutingApplyStateResponse | null,
+) {
+  return review?.stage === "COMPLETED"
+    && (
+      review.routingApplyStatus === "PENDING"
+      || review.routingApplyStatus === "FAILED"
+      || isLegacyReviewPendingRoutingApply(review, routingApplyState)
+    );
+}
+
 export function hazardRouteReviewIntentLabel(intent: HazardRouteReviewIntent) {
   return intent === "restore" ? "원상복구 검수" : "승인 검수";
 }
@@ -393,4 +404,58 @@ function isRoutingApplyCompleted(state?: AdminRoutingApplyStateResponse | null) 
     return false;
   }
   return state.routingApplyStatus === "APPLIED" || state.routingApplyStatus === "APPLIED_WITH_WARNING";
+}
+
+function deriveCompletedReviewRoutingStatus(
+  review: HazardRouteReviewRecord,
+  routingApplyState?: AdminRoutingApplyStateResponse | null,
+): HazardOperationStatus {
+  switch (review.routingApplyStatus) {
+    case "PENDING":
+      return { label: "DB 대기", tone: "orange" };
+    case "FAILED":
+      return { label: "반영실패", tone: "red" };
+    case "APPLIED":
+      return { label: "반영완료", tone: "green" };
+    case "APPLIED_WITH_WARNING":
+      return { label: "반영경고", tone: "orange" };
+    case "SKIPPED":
+      return { label: "대상 없음", tone: "gray" };
+    default:
+      if (isLegacyReviewPendingRoutingApply(review, routingApplyState)) {
+        return routingApplyState?.routingApplyStatus === "FAILED"
+          ? { label: "반영실패", tone: "red" }
+          : { label: "DB 대기", tone: "orange" };
+      }
+      if (isRoutingApplyCompleted(routingApplyState)) {
+        return {
+          label: "반영완료",
+          tone: routingApplyState?.routingApplyStatus === "APPLIED_WITH_WARNING" ? "orange" : "green",
+        };
+      }
+      return { label: "-", tone: "gray" };
+  }
+}
+
+function isLegacyReviewPendingRoutingApply(
+  review: HazardRouteReviewRecord,
+  routingApplyState?: AdminRoutingApplyStateResponse | null,
+) {
+  if (review.routingApplyStatus != null || !routingApplyState?.dirty) {
+    return false;
+  }
+  const completedAt = timestampMs(review.completedAt ?? review.updatedAt);
+  if (completedAt == null) {
+    return false;
+  }
+  const lastAppliedAt = timestampMs(routingApplyState.lastAppliedAt);
+  return lastAppliedAt == null || completedAt > lastAppliedAt;
+}
+
+function timestampMs(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
 }

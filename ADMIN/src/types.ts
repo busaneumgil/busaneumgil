@@ -793,6 +793,7 @@ export interface AdminHazardReportSummary {
   status: HazardReportStatus;
   createdAt: string;
   representativeImageUrl: string | null;
+  latestRouteReview?: AdminHazardRouteReview | null;
 }
 
 export interface AdminHazardReportListResponse {

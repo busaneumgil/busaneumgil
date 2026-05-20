@@ -18,6 +18,7 @@ import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDetailResponse
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDeleteResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportListResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportStatusResponse;
+import com.ssafy.e102.domain.report.dto.response.AdminHazardRouteReviewResponse;
 import com.ssafy.e102.domain.report.entity.HazardReport;
 import com.ssafy.e102.domain.report.entity.HazardReportImage;
 import com.ssafy.e102.domain.report.exception.HazardReportErrorCode;
@@ -65,12 +66,15 @@ public class AdminHazardReportService {
 		int size) {
 		PageRequest pageRequest = PageRequest.of(0, size, NEWEST_FIRST);
 		Slice<HazardReport> hazardReports = findHazardReports(status, cursor, pageRequest);
+		Map<Long, AdminHazardRouteReviewResponse> latestRouteReviews =
+			adminHazardRouteReviewService.getLatestRouteReviewsByReportIds(hazardReports.getContent());
 		return AdminHazardReportListResponse.of(
 			hazardReports.getContent(),
 			size,
 			hazardReports.hasNext(),
 			getRepresentativeImageUrls(hazardReports.getContent()),
-			geoPointConverter);
+			geoPointConverter,
+			latestRouteReviews == null ? Map.of() : latestRouteReviews);
 	}
 
 	public AdminHazardReportDetailResponse getHazardReportDetail(Long reportId) {

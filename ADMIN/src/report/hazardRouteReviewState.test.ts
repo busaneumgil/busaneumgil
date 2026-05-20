@@ -9,6 +9,7 @@ import {
   deriveHazardDisplayStatus,
   hazardRouteReviewIntentLabel,
   hydrateHazardRouteReviewRecord,
+  isHazardRoutingApplyPending,
   isHazardRestorePending,
   loadStoredHazardRouteReview,
   resolveActiveHazardRouteReview,
@@ -76,15 +77,15 @@ describe("hazard route review workflow state", () => {
     });
 
     expect(deriveHazardDisplayStatus("APPROVED")).toMatchObject({
-      key: "RESTORE_PENDING",
-      label: "원상복구 대기",
-      tone: "purple",
+      key: "COMPLETED",
+      label: "완료",
+      tone: "green",
     });
 
     expect(deriveHazardDisplayStatus("APPROVED", completeHazardRouteReview(review, "2026-05-18T03:11:00.000Z"))).toMatchObject({
-      key: "RESTORE_PENDING",
-      label: "원상복구 대기",
-      tone: "purple",
+      key: "COMPLETED",
+      label: "완료",
+      tone: "green",
     });
 
     expect(deriveHazardDisplayStatus("APPROVED", startHazardRouteReview({
@@ -287,6 +288,7 @@ describe("hazard route review workflow state", () => {
       applying: false,
       lastAppliedAt: null,
     })).toEqual({ label: "DB 대기", tone: "orange" });
+    expect(isHazardRoutingApplyPending(review)).toBe(true);
 
     expect(deriveHazardDbSyncStatus("APPROVED", review, {
       routingApplyStatus: "APPLIED",
@@ -294,7 +296,73 @@ describe("hazard route review workflow state", () => {
       dirty: false,
       applying: false,
       lastAppliedAt: "2026-05-20T08:40:00",
+    })).toEqual({ label: "DB 대기", tone: "orange" });
+
+    const appliedReview = {
+      ...review,
+      routingApplyStatus: "APPLIED" as const,
+    };
+
+    expect(deriveHazardDbSyncStatus("APPROVED", appliedReview, {
+      routingApplyStatus: "APPLIED",
+      message: "reloaded",
+      dirty: false,
+      applying: false,
+      lastAppliedAt: "2026-05-20T08:40:00",
     })).toEqual({ label: "반영완료", tone: "green" });
+    expect(isHazardRoutingApplyPending(appliedReview)).toBe(false);
+
+    expect(deriveHazardDbSyncStatus("APPROVED", undefined, {
+      routingApplyStatus: "PENDING",
+      message: "다른 제보 반영 대기",
+      dirty: true,
+      applying: false,
+      lastAppliedAt: "2026-05-20T08:40:00",
+    })).toEqual({ label: "-", tone: "gray" });
+
+    const legacyPendingReview = {
+      ...review,
+      routingApplyStatus: null,
+      completedAt: "2026-05-20T08:45:00",
+      updatedAt: "2026-05-20T08:45:00",
+    };
+
+    expect(deriveHazardDbSyncStatus("APPROVED", legacyPendingReview, {
+      routingApplyStatus: "PENDING",
+      message: "기존 null 데이터 보정",
+      dirty: true,
+      applying: false,
+      lastAppliedAt: "2026-05-20T08:40:00",
+    })).toEqual({ label: "DB 대기", tone: "orange" });
+    expect(isHazardRoutingApplyPending(legacyPendingReview, {
+      routingApplyStatus: "PENDING",
+      message: "기존 null 데이터 보정",
+      dirty: true,
+      applying: false,
+      lastAppliedAt: "2026-05-20T08:40:00",
+    })).toBe(true);
+
+    const legacyAppliedReview = {
+      ...review,
+      routingApplyStatus: null,
+      completedAt: "2026-05-20T08:35:00",
+      updatedAt: "2026-05-20T08:35:00",
+    };
+
+    expect(deriveHazardDbSyncStatus("APPROVED", legacyAppliedReview, {
+      routingApplyStatus: "PENDING",
+      message: "다른 최신 제보 반영 대기",
+      dirty: true,
+      applying: false,
+      lastAppliedAt: "2026-05-20T08:40:00",
+    })).toEqual({ label: "-", tone: "gray" });
+    expect(isHazardRoutingApplyPending(legacyAppliedReview, {
+      routingApplyStatus: "PENDING",
+      message: "다른 최신 제보 반영 대기",
+      dirty: true,
+      applying: false,
+      lastAppliedAt: "2026-05-20T08:40:00",
+    })).toBe(false);
   });
 
   it("maps route review completion status to visual severity classes", () => {

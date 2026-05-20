@@ -78,7 +78,11 @@ public record AdminHazardRouteReviewResponse(
 	}
 
 	public static AdminHazardRouteReviewResponse from(HazardReportRouteReview review, ReportStatus reportStatus) {
-		return from(review, reportStatus, AdminRoutingApplyStatus.SKIPPED, null);
+		return from(
+			review,
+			reportStatus,
+			review == null ? null : review.getRoutingApplyStatus(),
+			review == null ? null : review.getRoutingApplyMessage());
 	}
 
 	public static AdminHazardRouteReviewResponse from(

@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -95,6 +96,22 @@ class AdminHazardReportServiceTest {
 			.thenReturn(List.of(hazardReport.getImages().get(0)));
 		when(hazardReportImageUploadService.createReadUrl("hazard-reports/user-3/20260514/image-1.jpg"))
 			.thenReturn("https://storage.example.com/read?key=image-1");
+		AdminHazardRouteReviewResponse latestReview = new AdminHazardRouteReviewResponse(
+			31L,
+			3L,
+			null,
+			null,
+			ReportStatus.PENDING,
+			null,
+			"부산진구",
+			"부전동",
+			null,
+			LocalDateTime.of(2026, 5, 18, 13, 0),
+			LocalDateTime.of(2026, 5, 18, 13, 10),
+			null,
+			List.of());
+		when(adminHazardRouteReviewService.getLatestRouteReviewsByReportIds(List.of(hazardReport)))
+			.thenReturn(Map.of(3L, latestReview));
 
 		AdminHazardReportListResponse response = adminHazardReportService.getHazardReports(
 			ReportStatus.PENDING,
@@ -108,6 +125,7 @@ class AdminHazardReportServiceTest {
 		assertThat(response.content().get(0).status()).isEqualTo(ReportStatus.PENDING);
 		assertThat(response.content().get(0).representativeImageUrl())
 			.isEqualTo("https://storage.example.com/read?key=image-1");
+		assertThat(response.content().get(0).latestRouteReview()).isEqualTo(latestReview);
 		assertThat(response.nextCursor()).isEqualTo(3L);
 		assertThat(response.hasNext()).isTrue();
 	}

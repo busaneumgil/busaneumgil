@@ -32,7 +32,9 @@ describe("HazardReportsPage manual routing apply wiring", () => {
     expect(source).not.toContain("restorePendingCount");
     expect(source).not.toContain("countRestorableReports");
     expect(source).not.toContain("countCompletedRestoreReviews");
-    expect(source).toContain("const hasDbSyncQueue = dbSyncPendingCount > 0");
+    expect(source).toContain("const hasDbSyncQueue = preview");
+    expect(source).toContain("isHazardRoutingApplyPending(filteredReportReviewDrafts.get(report.reportId) ?? null, routingApplyState)");
+    expect(source).toContain("routeReviewDrafts[report.reportId] ?? hydrateHazardRouteReviewRecord(report.latestRouteReview)");
   });
 
   it("uses the rejected action slot as a delete action for processed reports", () => {

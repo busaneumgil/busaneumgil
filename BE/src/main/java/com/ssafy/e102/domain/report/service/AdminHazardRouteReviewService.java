@@ -2,8 +2,11 @@ package com.ssafy.e102.domain.report.service;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -149,6 +152,12 @@ public class AdminHazardRouteReviewService {
 				review.getGu(),
 				review.getDong(),
 				review.getSegmentDrafts());
+			review.recordRoutingApplyStatus(
+				routingOverlayReloadRequired ? AdminRoutingApplyStatus.PENDING : AdminRoutingApplyStatus.SKIPPED,
+				routingOverlayReloadRequired
+					? "DB 저장이 완료되었습니다. 경로 반영이 필요합니다."
+					: "경로 반영 대상 변경이 없습니다.",
+				null);
 
 			if (review.getIntent() == HazardRouteReviewIntent.APPROVE) {
 				hazardReport.approve(userId, now);
@@ -160,18 +169,12 @@ public class AdminHazardRouteReviewService {
 				review.getGu(),
 				review.getDong(),
 				before,
-				AdminHazardRouteReviewResponse.from(review, hazardReport.getStatus()),
-				routingOverlayReloadRequired);
+				AdminHazardRouteReviewResponse.from(review, hazardReport.getStatus()));
 		});
 		if (completion == null) {
 			throw new HazardReportException(HazardReportErrorCode.HAZARD_ROUTE_REVIEW_NOT_FOUND);
 		}
-		AdminHazardRouteReviewResponse after = withRoutingApplyStatus(
-			completion.after(),
-			completion.routingOverlayReloadRequired() ? AdminRoutingApplyStatus.PENDING : AdminRoutingApplyStatus.SKIPPED,
-			completion.routingOverlayReloadRequired()
-				? "DB 저장이 완료되었습니다. 경로 반영이 필요합니다."
-				: "경로 반영 대상 변경이 없습니다.");
+		AdminHazardRouteReviewResponse after = completion.after();
 
 		adminAuditLogService.record(
 			userId,
@@ -188,6 +191,26 @@ public class AdminHazardRouteReviewService {
 
 	public AdminHazardRouteReviewResponse getLatestRouteReview(Long reportId, ReportStatus reportStatus) {
 		return AdminHazardRouteReviewResponse.from(findLatestReview(reportId), reportStatus);
+	}
+
+	public Map<Long, AdminHazardRouteReviewResponse> getLatestRouteReviewsByReportIds(
+		Collection<HazardReport> hazardReports) {
+		List<Long> reportIds = hazardReports.stream()
+			.map(HazardReport::getReportId)
+			.toList();
+		if (reportIds.isEmpty()) {
+			return Map.of();
+		}
+		Map<Long, ReportStatus> reportStatusById = hazardReports.stream()
+			.collect(Collectors.toMap(HazardReport::getReportId, HazardReport::getStatus));
+		return hazardReportRouteReviewRepository.findLatestByReportIds(reportIds)
+			.stream()
+			.collect(Collectors.toMap(
+				review -> review.getHazardReport().getReportId(),
+				review -> AdminHazardRouteReviewResponse.from(
+					review,
+					reportStatusById.get(review.getHazardReport().getReportId())),
+				(existing, ignored) -> existing));
 	}
 
 	@Transactional
@@ -327,35 +350,12 @@ public class AdminHazardRouteReviewService {
 		return value;
 	}
 
-	private AdminHazardRouteReviewResponse withRoutingApplyStatus(
-		AdminHazardRouteReviewResponse response,
-		AdminRoutingApplyStatus routingApplyStatus,
-		String routingApplyMessage) {
-		return new AdminHazardRouteReviewResponse(
-			response.reviewId(),
-			response.reportId(),
-			response.intent(),
-			response.stage(),
-			response.reportStatus(),
-			response.reviewerUserId(),
-			response.gu(),
-			response.dong(),
-			response.selectedSegmentEdgeId(),
-			response.startedAt(),
-			response.updatedAt(),
-			response.completedAt(),
-			response.segmentDrafts(),
-			routingApplyStatus,
-			routingApplyMessage);
-	}
-
 	private record RouteReviewCompletion(
 		Long reportId,
 		String gu,
 		String dong,
 		AdminHazardRouteReviewResponse before,
-		AdminHazardRouteReviewResponse after,
-		boolean routingOverlayReloadRequired) {
+		AdminHazardRouteReviewResponse after) {
 	}
 
 	private record ResolvedReviewArea(String gu, String dong) {

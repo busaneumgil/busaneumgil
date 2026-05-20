@@ -30,7 +30,9 @@ public record AdminHazardReportSummaryResponse(
 	@Schema(description = "등록 일시", example = "2026-05-07T22:00:00")
 	LocalDateTime createdAt,
 	@Schema(description = "대표 첨부 이미지 URL. 사진이 없으면 null")
-	String representativeImageUrl) {
+	String representativeImageUrl,
+	@Schema(description = "최신 경로 검수 정보")
+	AdminHazardRouteReviewResponse latestRouteReview) {
 
 	private static final int DESCRIPTION_PREVIEW_LENGTH = 80;
 	private static final String DESCRIPTION_PREVIEW_SUFFIX = "...";
@@ -38,7 +40,8 @@ public record AdminHazardReportSummaryResponse(
 	public static AdminHazardReportSummaryResponse of(
 		HazardReport hazardReport,
 		String representativeImageUrl,
-		GeoPointConverter geoPointConverter) {
+		GeoPointConverter geoPointConverter,
+		AdminHazardRouteReviewResponse latestRouteReview) {
 		return new AdminHazardReportSummaryResponse(
 			hazardReport.getReportId(),
 			hazardReport.getUser().getUserId(),
@@ -48,7 +51,8 @@ public record AdminHazardReportSummaryResponse(
 			geoPointConverter.toResponse(hazardReport.getReportPoint()),
 			hazardReport.getStatus(),
 			hazardReport.getCreatedAt(),
-			representativeImageUrl);
+			representativeImageUrl,
+			latestRouteReview);
 	}
 
 	private static String toDescriptionPreview(String description) {

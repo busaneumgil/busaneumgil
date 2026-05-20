@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.admin.service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStateResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
 import com.ssafy.e102.domain.admin.entity.RoutingApplyState;
 import com.ssafy.e102.domain.admin.repository.RoutingApplyStateRepository;
+import com.ssafy.e102.domain.report.repository.HazardReportRouteReviewRepository;
 import com.ssafy.e102.global.exception.BusinessException;
 import com.ssafy.e102.global.exception.CommonErrorCode;
 import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient;
@@ -23,6 +25,7 @@ import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHo
 public class AdminRoutingApplyService {
 
 	private final RoutingApplyStateRepository routingApplyStateRepository;
+	private final HazardReportRouteReviewRepository hazardReportRouteReviewRepository;
 	private final GraphHopperAdminClient graphHopperAdminClient;
 	private final TransactionTemplate transactionTemplate;
 	private final Clock clock;
@@ -30,10 +33,12 @@ public class AdminRoutingApplyService {
 
 	public AdminRoutingApplyService(
 		RoutingApplyStateRepository routingApplyStateRepository,
+		HazardReportRouteReviewRepository hazardReportRouteReviewRepository,
 		GraphHopperAdminClient graphHopperAdminClient,
 		PlatformTransactionManager transactionManager,
 		Clock clock) {
 		this.routingApplyStateRepository = routingApplyStateRepository;
+		this.hazardReportRouteReviewRepository = hazardReportRouteReviewRepository;
 		this.graphHopperAdminClient = graphHopperAdminClient;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 		this.clock = clock;
@@ -83,8 +88,52 @@ public class AdminRoutingApplyService {
 			RoutingApplyState state = getOrCreateState(true);
 			state.finishApplying(reloadResult, LocalDateTime.now(clock), applyStart.dirtyMarkedAt());
 			routingApplyStateRepository.save(state);
-			return toResponse(state);
+			AdminRoutingApplyStateResponse response = toResponse(state);
+			updateCompletedHazardRouteReviewApplyStatuses(
+				toAdminRoutingApplyStatus(reloadResult.status()),
+				reloadResult.message(),
+				response.lastAppliedAt(),
+				applyStart.dirtyMarkedAt());
+			return response;
 		}));
+	}
+
+	private void updateCompletedHazardRouteReviewApplyStatuses(
+		AdminRoutingApplyStatus reloadStatus,
+		String message,
+		LocalDateTime appliedAt,
+		LocalDateTime appliedThrough) {
+		if (appliedThrough == null) {
+			return;
+		}
+		if (reloadStatus == AdminRoutingApplyStatus.FAILED) {
+			hazardReportRouteReviewRepository.updateRoutingApplyStatusForCompletedBefore(
+				List.of(AdminRoutingApplyStatus.PENDING),
+				AdminRoutingApplyStatus.FAILED,
+				message,
+				null,
+				appliedThrough);
+			return;
+		}
+		if (reloadStatus == AdminRoutingApplyStatus.APPLIED
+			|| reloadStatus == AdminRoutingApplyStatus.APPLIED_WITH_WARNING
+			|| reloadStatus == AdminRoutingApplyStatus.SKIPPED) {
+			hazardReportRouteReviewRepository.updateRoutingApplyStatusForCompletedBefore(
+				List.of(AdminRoutingApplyStatus.PENDING, AdminRoutingApplyStatus.FAILED),
+				reloadStatus,
+				message,
+				appliedAt,
+				appliedThrough);
+		}
+	}
+
+	private AdminRoutingApplyStatus toAdminRoutingApplyStatus(GraphHopperReloadStatus status) {
+		return switch (status) {
+			case SKIPPED -> AdminRoutingApplyStatus.SKIPPED;
+			case APPLIED -> AdminRoutingApplyStatus.APPLIED;
+			case APPLIED_WITH_WARNING -> AdminRoutingApplyStatus.APPLIED_WITH_WARNING;
+			case FAILED -> AdminRoutingApplyStatus.FAILED;
+		};
 	}
 
 	private RoutingApplyState getOrCreateState(boolean forUpdate) {

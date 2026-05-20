@@ -4,13 +4,20 @@ import source from "./SegmentMap.tsx?raw";
 describe("SegmentMap route review guardrail", () => {
   it("caps forced detailed rendering when too many segments are loaded", () => {
     expect(source).toContain("FORCED_DETAIL_SEGMENT_MAX_COUNT");
-    expect(source).toContain("상세 렌더링을 제한했습니다");
+    expect(source).toContain("forceDetailedSegmentsBlocked");
   });
 
-  it("caps zoom-triggered overlay rendering to protect the browser main thread", () => {
-    expect(source).toContain("DETAIL_SEGMENT_RENDER_MAX_COUNT");
+  it("renders every scoped detailed segment without a hard viewport cap", () => {
+    expect(source).not.toContain("DETAIL_SEGMENT_RENDER_MAX_COUNT");
     expect(source).toContain("detailSegmentRenderScope");
-    expect(source).toContain("화면 보호를 위해 일부만 표시 중");
+    expect(source).toContain("features: orderedFeatures");
+    expect(source).toContain("capped: false");
+  });
+
+  it("schedules detailed overlay creation in batches to protect the browser main thread", () => {
+    expect(source).toContain("DETAIL_SEGMENT_RENDER_BATCH_SIZE");
+    expect(source).toContain("scheduleOverlayRenderBatches");
+    expect(source).toContain("requestAnimationFrame");
   });
 
   it("uses a high-contrast overlay for the selected segment", () => {

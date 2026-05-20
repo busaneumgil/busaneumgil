@@ -819,6 +819,7 @@ function AdminApp() {
     setActiveRoadEditJobId(null);
     queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
     queryClient.invalidateQueries({ queryKey: ["admin-road-network-bridges"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-hazard-route-review-network"] });
   }, [activeRoadEditJob, clearDraftForAssignment]);
 
   const filteredDongs = useMemo(() => {
@@ -1390,6 +1391,7 @@ function AdminApp() {
             onRoadviewChange={setRoadviewDock}
             onSegmentUpdated={() => {
               queryClient.invalidateQueries({ queryKey: ["admin-road-network"] });
+              queryClient.invalidateQueries({ queryKey: ["admin-hazard-route-review-network"] });
             }}
           />
         )}

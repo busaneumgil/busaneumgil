@@ -22,6 +22,7 @@ import com.ssafy.e102.eumgil.core.model.RouteSearchResult
 import com.ssafy.e102.eumgil.core.model.RouteSearchSource
 import com.ssafy.e102.eumgil.core.model.RouteSegment
 import com.ssafy.e102.eumgil.core.model.RouteSummary
+import com.ssafy.e102.eumgil.core.model.RouteTransportMode
 import com.ssafy.e102.eumgil.core.model.RouteTransitStop
 import com.ssafy.e102.eumgil.core.model.RouteWaypoint
 import com.ssafy.e102.eumgil.data.repository.BookmarkData
@@ -100,7 +101,10 @@ class NavigationViewModelTest {
             viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
             advanceUntilIdle()
 
-            assertEquals(listOf(Triple(42L, "walk-route-1", WALK_MID_POINT)), reportRepository.hazardRerouteCalls)
+            assertEquals(
+                listOf(HazardRerouteCall(42L, "walk-route-1", WALK_MID_POINT, 1)),
+                reportRepository.hazardRerouteCalls,
+            )
             assertEquals("rr_rerouted_walk_1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
         }
 
@@ -161,7 +165,10 @@ class NavigationViewModelTest {
             viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
             advanceUntilIdle()
 
-            assertEquals(listOf(Triple(42L, "walk-route-1", WALK_MID_POINT)), reportRepository.hazardRerouteCalls)
+            assertEquals(
+                listOf(HazardRerouteCall(42L, "walk-route-1", WALK_MID_POINT, 1)),
+                reportRepository.hazardRerouteCalls,
+            )
             assertEquals("walk-route-1", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
             assertEquals(NavigationUiEvent.ShowDuribalCallDialog, eventDeferred.await())
         }
@@ -227,7 +234,10 @@ class NavigationViewModelTest {
             routeRepository.completeReroute()
             advanceUntilIdle()
 
-            assertEquals(listOf(Triple(42L, "walk-route-1", OFF_ROUTE_CANDIDATE_POINT)), reportRepository.hazardRerouteCalls)
+            assertEquals(
+                listOf(HazardRerouteCall(42L, "walk-route-1", OFF_ROUTE_CANDIDATE_POINT, 1)),
+                reportRepository.hazardRerouteCalls,
+            )
         }
 
     @Test
@@ -246,6 +256,111 @@ class NavigationViewModelTest {
             advanceUntilIdle()
 
             assertTrue(reportRepository.hazardRerouteCalls.isEmpty())
+        }
+
+    @Test
+    fun `submitted hazard report does not call reroute while active leg is transit`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val reportRepository = FakeNavigationReportRepository()
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    reportRepository = reportRepository,
+                )
+            val eventDeferred =
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.uiEvent.first { it is NavigationUiEvent.ShowDuribalCallDialog }
+                }
+
+            viewModel.bindNavigationRequest(testPartialTransitWalkPolylineNavigationRequest())
+            advanceUntilIdle()
+            locationManager.emitLocation(PARTIAL_TRANSIT_RIDE_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(PARTIAL_TRANSIT_RIDE_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
+            advanceUntilIdle()
+
+            assertTrue(reportRepository.hazardRerouteCalls.isEmpty())
+            assertEquals(NavigationUiEvent.ShowDuribalCallDialog, eventDeferred.await())
+        }
+
+    @Test
+    fun `submitted hazard report reroutes public transit route while walking to boarding stop`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val reportRepository =
+                FakeNavigationReportRepository(
+                    rerouteResult =
+                        HazardReportRerouteResult(
+                            rerouted = true,
+                            route = reroutedPartialTransitRoute(serverRouteId = "pt-rerouted-boarding"),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    reportRepository = reportRepository,
+                )
+
+            viewModel.bindNavigationRequest(testPartialTransitWalkPolylineNavigationRequest())
+            advanceUntilIdle()
+            locationManager.emitLocation(PARTIAL_TRANSIT_WALK_PROGRESS_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(PARTIAL_TRANSIT_WALK_PROGRESS_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(
+                    HazardRerouteCall(42L, "partial-transit-walk-route-1", PARTIAL_TRANSIT_WALK_PROGRESS_POINT, 1),
+                ),
+                reportRepository.hazardRerouteCalls,
+            )
+            assertEquals("pt-rerouted-boarding", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
+        }
+
+    @Test
+    fun `submitted hazard report reroutes public transit route while walking to destination`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val reportRepository =
+                FakeNavigationReportRepository(
+                    rerouteResult =
+                        HazardReportRerouteResult(
+                            rerouted = true,
+                            route = reroutedPartialTransitRoute(serverRouteId = "pt-rerouted-destination"),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    locationManager = locationManager,
+                    reportRepository = reportRepository,
+                )
+
+            viewModel.bindNavigationRequest(testPartialTransitWalkPolylineNavigationRequest())
+            advanceUntilIdle()
+            locationManager.emitLocation(PARTIAL_TRANSIT_FINAL_WALK_PROGRESS_POINT.toLocationSnapshot(recordedAtEpochMillis = 1_000L))
+            locationManager.emitLocation(PARTIAL_TRANSIT_FINAL_WALK_PROGRESS_POINT.toLocationSnapshot(recordedAtEpochMillis = 2_500L))
+            advanceUntilIdle()
+
+            viewModel.onAction(NavigationUiAction.HazardReportSubmitted(reportId = 42L))
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(
+                    HazardRerouteCall(
+                        42L,
+                        "partial-transit-walk-route-1",
+                        PARTIAL_TRANSIT_FINAL_WALK_PROGRESS_POINT,
+                        3,
+                    ),
+                ),
+                reportRepository.hazardRerouteCalls,
+            )
+            assertEquals("pt-rerouted-destination", viewModel.currentRouteDetailRequest()?.selectedRoute?.serverRouteId)
         }
 
     @Test
@@ -2743,7 +2858,7 @@ private class FakeNavigationReportRepository(
     private val rerouteResult: HazardReportRerouteResult = HazardReportRerouteResult(rerouted = false, route = null),
     private val rerouteFailure: Throwable? = null,
 ) : ReportRepository {
-    val hazardRerouteCalls = mutableListOf<Triple<Long, String, GeoCoordinate>>()
+    val hazardRerouteCalls = mutableListOf<HazardRerouteCall>()
 
     override fun observeReportHistory() = kotlinx.coroutines.flow.flowOf(emptyList<com.ssafy.e102.eumgil.data.repository.ReportOutboxData>())
 
@@ -2761,12 +2876,20 @@ private class FakeNavigationReportRepository(
         reportId: Long,
         routeId: String,
         currentPoint: GeoCoordinate,
+        activeLegSequence: Int?,
     ): HazardReportRerouteResult {
-        hazardRerouteCalls += Triple(reportId, routeId, currentPoint)
+        hazardRerouteCalls += HazardRerouteCall(reportId, routeId, currentPoint, activeLegSequence)
         rerouteFailure?.let { throw it }
         return rerouteResult
     }
 }
+
+private data class HazardRerouteCall(
+    val reportId: Long,
+    val routeId: String,
+    val currentPoint: GeoCoordinate,
+    val activeLegSequence: Int?,
+)
 
 private fun testWalkNavigationRequest(): RouteNavigationRequest =
     RouteNavigationRequest(
@@ -3395,6 +3518,7 @@ private fun testPartialTransitWalkPolylineNavigationRequest(): RouteNavigationRe
         selectedRoute =
             RouteCandidate(
                 serverRouteId = "partial-transit-walk-route-1",
+                transportMode = RouteTransportMode.PUBLIC_TRANSIT,
                 routeOption = RouteOption.RECOMMENDED,
                 title = "Partial Transit Walk Route",
                 summary =
@@ -3523,6 +3647,11 @@ private fun testPartialTransitWalkPolylineNavigationRequest(): RouteNavigationRe
             ),
     )
 
+private fun reroutedPartialTransitRoute(serverRouteId: String): RouteCandidate =
+    testPartialTransitWalkPolylineNavigationRequest()
+        .selectedRoute
+        .copy(serverRouteId = serverRouteId)
+
 private fun testUnscopedTransitWalkPolylineNavigationRequest(): RouteNavigationRequest =
     RouteNavigationRequest(
         origin =
@@ -3538,6 +3667,7 @@ private fun testUnscopedTransitWalkPolylineNavigationRequest(): RouteNavigationR
         selectedRoute =
             RouteCandidate(
                 serverRouteId = "unscoped-transit-walk-route-1",
+                transportMode = RouteTransportMode.PUBLIC_TRANSIT,
                 routeOption = RouteOption.RECOMMENDED,
                 title = "Unscoped Transit Walk Route",
                 summary =
@@ -3883,9 +4013,12 @@ private val CROSSWALK_ROUTE_AFTER_END_POINT = GeoCoordinate(latitude = 35.1830, 
 private val CROSSWALK_ROUTE_END_POINT = GeoCoordinate(latitude = 35.1830, longitude = 129.0730)
 private val LEG_FALLBACK_START_POINT = GeoCoordinate(latitude = 35.1802, longitude = 129.0718)
 private val PARTIAL_TRANSIT_WALK_START_POINT = GeoCoordinate(latitude = 35.1800, longitude = 129.0700)
+private val PARTIAL_TRANSIT_WALK_PROGRESS_POINT = GeoCoordinate(latitude = 35.1802, longitude = 129.0710)
 private val PARTIAL_TRANSIT_BOARDING_POINT = GeoCoordinate(latitude = 35.1804, longitude = 129.0720)
+private val PARTIAL_TRANSIT_RIDE_POINT = GeoCoordinate(latitude = 35.1808, longitude = 129.0740)
 private val PARTIAL_TRANSIT_ALIGHTING_POINT = GeoCoordinate(latitude = 35.1812, longitude = 129.0760)
 private val PARTIAL_TRANSIT_FINAL_WALK_START_POINT = GeoCoordinate(latitude = 35.1812, longitude = 129.0760)
+private val PARTIAL_TRANSIT_FINAL_WALK_PROGRESS_POINT = GeoCoordinate(latitude = 35.1814, longitude = 129.0770)
 private val PARTIAL_TRANSIT_FINAL_WALK_END_POINT = GeoCoordinate(latitude = 35.1816, longitude = 129.0780)
 private val POINT_ANCHOR_ROUTE_START_POINT = GeoCoordinate(latitude = 35.1804, longitude = 129.0710)
 private val POINT_ANCHOR_EVENT_POINT = GeoCoordinate(latitude = 35.1805, longitude = 129.0722)

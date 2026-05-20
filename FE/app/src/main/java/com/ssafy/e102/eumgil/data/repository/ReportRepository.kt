@@ -35,6 +35,7 @@ interface ReportRepository {
         reportId: Long,
         routeId: String,
         currentPoint: GeoCoordinate,
+        activeLegSequence: Int? = null,
     ): HazardReportRerouteResult = HazardReportRerouteResult(rerouted = false, route = null)
 
     fun observeReportHistoryEntries(): Flow<List<ReportHistoryData>> =
@@ -299,6 +300,7 @@ class DefaultReportRepository(
         reportId: Long,
         routeId: String,
         currentPoint: GeoCoordinate,
+        activeLegSequence: Int?,
     ): HazardReportRerouteResult {
         val datasource = hazardReportsRemoteDataSource ?: return HazardReportRerouteResult(rerouted = false, route = null)
         val response =
@@ -313,6 +315,7 @@ class DefaultReportRepository(
                                 lat = currentPoint.latitude,
                                 lng = currentPoint.longitude,
                             ),
+                        activeLegSequence = activeLegSequence,
                     )
                 }
             }.getOrNull() ?: return HazardReportRerouteResult(rerouted = false, route = null)

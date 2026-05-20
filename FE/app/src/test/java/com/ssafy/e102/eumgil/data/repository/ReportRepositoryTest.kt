@@ -69,9 +69,11 @@ class ReportRepositoryTest {
                     reportId = 12L,
                     routeId = "rr_active_123",
                     currentPoint = ReportRerouteCurrentPoint,
+                    activeLegSequence = 3,
                 )
 
             assertEquals(listOf("expired-access-token", "new-access-token"), remoteDataSource.hazardRerouteRequestTokens)
+            assertEquals(listOf(3, 3), remoteDataSource.hazardRerouteRequestActiveLegSequences)
             assertEquals(1, authRemoteDataSource.reissueCallCount)
             assertEquals("refresh-token", authRemoteDataSource.latestRefreshToken)
             assertEquals(false, result.rerouted)
@@ -330,6 +332,7 @@ private class FakeHazardReportsRemoteDataSource(
         private set
     val markerRequestTokens = mutableListOf<String?>()
     val hazardRerouteRequestTokens = mutableListOf<String?>()
+    val hazardRerouteRequestActiveLegSequences = mutableListOf<Int?>()
 
     override suspend fun getApprovedHazardMarkers(
         swLat: Double,
@@ -354,8 +357,10 @@ private class FakeHazardReportsRemoteDataSource(
         accessToken: String,
         routeId: String,
         currentPoint: HazardReportPointDto,
+        activeLegSequence: Int?,
     ): HazardReportRerouteResponseDto {
         hazardRerouteRequestTokens += accessToken
+        hazardRerouteRequestActiveLegSequences += activeLegSequence
         if (failFirstHazardRerouteRequestWithUnauthorized && hazardRerouteRequestTokens.size == 1) {
             throw HazardReportsApiException(
                 httpStatusCode = 401,

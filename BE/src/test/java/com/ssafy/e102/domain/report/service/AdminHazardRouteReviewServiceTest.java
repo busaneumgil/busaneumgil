@@ -160,6 +160,28 @@ class AdminHazardRouteReviewServiceTest {
 	}
 
 	@Test
+	@DisplayName("행정구역 조회 결과가 중첩 Object 배열이어도 승인 검수를 시작할 수 있다")
+	void startApproveReviewWithNestedAreaTuple() {
+		UUID userId = UUID.randomUUID();
+		HazardReport hazardReport = pendingHazardReport(1L);
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
+		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdOrderByReviewIdDesc(1L))
+			.thenReturn(Optional.empty());
+		when(adminAreaRepository.findAreaByPoint(129.0576, 35.1686))
+			.thenReturn(Optional.of(new Object[] {new Object[] {"부산진구", "부전동"}}));
+		when(hazardReportRouteReviewRepository.save(org.mockito.ArgumentMatchers.any(HazardReportRouteReview.class)))
+			.thenAnswer(invocation -> invocation.getArgument(0));
+
+		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.startRouteReview(
+			userId,
+			1L,
+			new StartHazardRouteReviewRequest(HazardRouteReviewIntent.APPROVE));
+
+		assertThat(response.gu()).isEqualTo("부산진구");
+		assertThat(response.dong()).isEqualTo("부전동");
+	}
+
+	@Test
 	@DisplayName("동시에 같은 제보 검수를 시작해 unique 제약이 나면 경로 검수 충돌로 변환한다")
 	void startRouteReviewMapsUniqueConstraintConflict() {
 		UUID userId = UUID.randomUUID();
@@ -179,6 +201,34 @@ class AdminHazardRouteReviewServiceTest {
 				.isInstanceOf(HazardReportException.class)
 				.extracting("errorCode")
 				.isEqualTo(HazardReportErrorCode.HAZARD_ROUTE_REVIEW_CONFLICT);
+	}
+
+	@Test
+	@DisplayName("진행 중인 동일 검수는 다른 관리자도 이어받을 수 있다")
+	void startRouteReviewAllowsTakeoverForSameIntent() {
+		UUID firstReviewer = UUID.randomUUID();
+		UUID nextReviewer = UUID.randomUUID();
+		HazardReport hazardReport = pendingHazardReport(1L);
+		HazardReportRouteReview review = HazardReportRouteReview.start(
+			hazardReport,
+			HazardRouteReviewIntent.APPROVE,
+			firstReviewer,
+			"부산진구",
+			"부전동",
+			LocalDateTime.now(FIXED_CLOCK));
+		ReflectionTestUtils.setField(review, "reviewId", 44L);
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
+		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdOrderByReviewIdDesc(1L))
+			.thenReturn(Optional.of(review));
+
+		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.startRouteReview(
+			nextReviewer,
+			1L,
+			new StartHazardRouteReviewRequest(HazardRouteReviewIntent.APPROVE));
+
+		assertThat(response.reviewId()).isEqualTo(44L);
+		assertThat(response.reviewerUserId()).isEqualTo(nextReviewer);
+		assertThat(review.getReviewerUserId()).isEqualTo(nextReviewer);
 	}
 
 	@Test
@@ -221,6 +271,44 @@ class AdminHazardRouteReviewServiceTest {
 	}
 
 	@Test
+	@DisplayName("진행 중인 경로 검수 draft 저장은 다른 관리자도 이어받을 수 있다")
+	void updateRouteReviewAllowsTakeover() {
+		UUID firstReviewer = UUID.randomUUID();
+		UUID nextReviewer = UUID.randomUUID();
+		HazardReport hazardReport = pendingHazardReport(1L);
+		HazardReportRouteReview review = HazardReportRouteReview.start(
+			hazardReport,
+			HazardRouteReviewIntent.APPROVE,
+			firstReviewer,
+			"부산진구",
+			"부전동",
+			LocalDateTime.now(FIXED_CLOCK));
+		ReflectionTestUtils.setField(review, "reviewId", 12L);
+		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdAndStageOrderByReviewIdDesc(
+			1L,
+			HazardRouteReviewStage.IN_PROGRESS)).thenReturn(Optional.of(review));
+		when(roadSegmentRepository.existsIntersectingAreaByEdgeId(41231L, "부산진구", "부전동")).thenReturn(true);
+
+		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.updateRouteReview(
+			nextReviewer,
+			1L,
+			new UpdateHazardRouteReviewRequest(
+				41231L,
+				List.of(new AdminHazardRouteReviewSegmentDraftRequest(
+					41231L,
+					AccessibilityState.NO,
+					AccessibilityState.UNKNOWN,
+					AccessibilityState.UNKNOWN,
+					WidthState.NARROW,
+					null,
+					AccessibilityState.YES,
+					AccessibilityState.UNKNOWN))));
+
+		assertThat(response.reviewerUserId()).isEqualTo(nextReviewer);
+		assertThat(review.getReviewerUserId()).isEqualTo(nextReviewer);
+	}
+
+	@Test
 	@DisplayName("승인 검수 완료는 제보 상태를 APPROVED로 변경한다")
 	void completeApproveRouteReview() {
 		UUID userId = UUID.randomUUID();
@@ -250,6 +338,31 @@ class AdminHazardRouteReviewServiceTest {
 			org.mockito.ArgumentMatchers.eq(review.getDong()),
 			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()));
 		verify(adminMapService).resolveRouteReviewRoutingApplyResult(true);
+	}
+
+	@Test
+	@DisplayName("진행 중인 승인 검수 완료는 다른 관리자도 이어받아 마무리할 수 있다")
+	void completeApproveRouteReviewAllowsTakeover() {
+		UUID firstReviewer = UUID.randomUUID();
+		UUID nextReviewer = UUID.randomUUID();
+		HazardReport hazardReport = rejectedHazardReport(1L);
+		HazardReportRouteReview review = inProgressReview(hazardReport, firstReviewer, HazardRouteReviewIntent.APPROVE);
+		when(hazardReportRouteReviewRepository.findTopByHazardReport_ReportIdAndStageOrderByReviewIdDesc(
+			1L,
+			HazardRouteReviewStage.IN_PROGRESS)).thenReturn(Optional.of(review));
+		when(adminMapService.applyRouteReviewSegmentDraftsInCurrentTransaction(
+			org.mockito.ArgumentMatchers.eq(nextReviewer),
+			org.mockito.ArgumentMatchers.eq(review.getGu()),
+			org.mockito.ArgumentMatchers.eq(review.getDong()),
+			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()))).thenReturn(true);
+		when(adminMapService.resolveRouteReviewRoutingApplyResult(true))
+			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
+
+		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.completeRouteReview(nextReviewer, 1L);
+
+		assertThat(response.reviewerUserId()).isEqualTo(nextReviewer);
+		assertThat(review.getReviewerUserId()).isEqualTo(nextReviewer);
+		assertThat(hazardReport.getProcessedByUserId()).isEqualTo(nextReviewer);
 	}
 
 	@Test

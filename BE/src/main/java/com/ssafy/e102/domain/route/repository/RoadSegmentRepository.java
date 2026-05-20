@@ -121,14 +121,17 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 		String dong);
 
 	@Query(value = """
-		select distinct rs.*
+		select rs.*
 		from road_segments rs
-		join admin_areas aa
-			on ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 100)::geometry)
-		where aa.gu = :gu
-			and (
-				aa.dong = :dong
-				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+		where exists (
+				select 1
+				from admin_areas aa
+				where aa.gu = :gu
+					and (
+						aa.dong = :dong
+						or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+					)
+					and ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 100)::geometry)
 			)
 			and rs.geom && ST_Expand(
 				ST_SetSRID(ST_MakePoint(:lng, :lat), 4326),
@@ -139,7 +142,11 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 				ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
 				:radiusMeter
 			)
-		order by rs.edge_id asc
+		order by ST_Distance(
+				rs.geom::geography,
+				ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography
+			) asc,
+			rs.edge_id asc
 		limit :limit
 		""", nativeQuery = true)
 	List<RoadSegment> findAllIntersectingAreaWithinRadius(
@@ -157,14 +164,17 @@ public interface RoadSegmentRepository extends JpaRepository<RoadSegment, Long> 
 		int limit);
 
 	@Query(value = """
-		select count(distinct rs.edge_id)
+		select count(*)
 		from road_segments rs
-		join admin_areas aa
-			on ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 100)::geometry)
-		where aa.gu = :gu
-			and (
-				aa.dong = :dong
-				or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+		where exists (
+				select 1
+				from admin_areas aa
+				where aa.gu = :gu
+					and (
+						aa.dong = :dong
+						or replace(replace(replace(replace(aa.dong, '1동', '동'), '2동', '동'), '3동', '동'), '4동', '동') = :dong
+					)
+					and ST_Intersects(rs.geom, ST_Buffer(aa.geom::geography, 100)::geometry)
 			)
 			and rs.geom && ST_Expand(
 				ST_SetSRID(ST_MakePoint(:lng, :lat), 4326),

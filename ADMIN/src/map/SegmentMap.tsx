@@ -10,6 +10,12 @@ import { pointLineDistanceM } from "./referenceMatching";
 type Coord = [number, number];
 type EditorMode = "idle" | "delete" | "add" | "roadview";
 type AddType = EditableSegmentType;
+interface ViewportBounds {
+  minLng: number;
+  minLat: number;
+  maxLng: number;
+  maxLat: number;
+}
 
 interface SegmentMapProps {
   payload?: SegmentPayload;
@@ -62,6 +68,8 @@ export interface RoadviewDockState {
 const ROADVIEW_DEFAULT_MESSAGE = "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.";
 const DETAIL_SEGMENT_MAX_LEVEL = 4;
 const FORCED_DETAIL_SEGMENT_MAX_COUNT = 1500;
+const DETAIL_SEGMENT_RENDER_MAX_COUNT = 500;
+const DETAIL_SEGMENT_VIEWPORT_PADDING_RATIO = 0.35;
 const segmentFeatureTypes: SegmentFeatureType[] = ["CROSSWALK", "AUDIO_SIGNAL", "BRAILLE_BLOCK", "STAIRS"];
 const segmentFeatureLabels: Record<SegmentFeatureType, string> = {
   CROSSWALK: "횡단보도",
@@ -180,6 +188,7 @@ export function SegmentMap({
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapLevel, setMapLevel] = useState(6);
+  const [viewportBounds, setViewportBounds] = useState<ViewportBounds | null>(null);
   const [snapMessage, setSnapMessage] = useState<string | null>(null);
   const [polygonDeleteActive, setPolygonDeleteActive] = useState(false);
   const [polygonPointCount, setPolygonPointCount] = useState(0);
@@ -236,6 +245,7 @@ export function SegmentMap({
           level: 6,
         });
         setMapLevel(mapRef.current.getLevel?.() ?? 6);
+        updateViewportBounds();
         detachWheelZoomRef.current?.();
         detachWheelZoomRef.current = attachKakaoWheelZoom(containerRef.current, () => mapRef.current, setMapLevel);
         roadviewClientRef.current = window.kakao.maps.RoadviewClient ? new window.kakao.maps.RoadviewClient() : null;
@@ -248,7 +258,9 @@ export function SegmentMap({
         });
         window.kakao.maps.event.addListener(mapRef.current, "zoom_changed", () => {
           setMapLevel(mapRef.current?.getLevel?.() ?? 6);
+          window.setTimeout(updateViewportBounds, 0);
         });
+        window.kakao.maps.event.addListener(mapRef.current, "idle", updateViewportBounds);
       })
       .catch((reason: Error) => setMapError(reason.message));
 
@@ -271,7 +283,7 @@ export function SegmentMap({
     const allSegmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
     overlaysRef.current.push(...createAreaBoundaryOverlay(payload?.areaBoundary, mapRef.current));
     const segmentFeatures = canRenderDetails
-      ? allSegmentFeatures.filter(shouldShowRoadSegmentLayer)
+      ? detailSegmentRenderScope(allSegmentFeatures.filter(shouldShowRoadSegmentLayer), viewportBounds).features
       : [];
     segmentFeatures.forEach((feature) => {
       const routeAttributeStyleOverride = toolbarMode === "routeAttributeLegend" ? routeAttributeSegmentStyle(feature, routeAttributeLayers) : undefined;
@@ -322,7 +334,7 @@ export function SegmentMap({
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
     syncDeletedSegmentOverlays();
-  }, [bridgePayload, detailedSegmentsVisible, focusMarker, mapReady, mode, payload, polygonDeleteActive, preferredView, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode]);
+  }, [bridgePayload, detailedSegmentsVisible, focusMarker, mapReady, mode, payload, polygonDeleteActive, preferredView, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode, viewportBounds]);
 
   useEffect(() => {
     if (detailedSegmentsVisible) {
@@ -351,7 +363,7 @@ export function SegmentMap({
 
   useEffect(() => {
     renderSegmentFeatureOverlays();
-  }, [detailedSegmentsVisible, draftEdits, mapReady, payload, routeAttributeLayers, segmentFeatureLayers, toolbarMode]);
+  }, [detailedSegmentsVisible, draftEdits, mapReady, payload, routeAttributeLayers, segmentFeatureLayers, toolbarMode, viewportBounds]);
 
   useEffect(() => {
     if (!selectedSegment || !detailedSegmentsVisible) {
@@ -606,7 +618,10 @@ export function SegmentMap({
     if (toolbarMode === "routeAttributeLegend") {
       const activeLayers = routeEventLayerTypes.filter((layer) => routeAttributeLayers[layer]);
       if (!activeLayers.length) return;
-      const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+      const segmentFeatures = detailSegmentRenderScope(
+        visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current).filter(shouldShowRoadSegmentLayer),
+        viewportBounds,
+      ).features;
       segmentFeatures.forEach((feature) => {
         const overlay = createRouteAttributeEventOverlay(feature, activeLayers);
         if (!overlay) return;
@@ -618,7 +633,10 @@ export function SegmentMap({
     if (toolbarMode !== "segmentFeatureLegend") return;
     const activeTypes = new Set(segmentFeatureTypes.filter((featureType) => segmentFeatureLayers[featureType]));
     if (!activeTypes.size) return;
-    const segmentFeatures = visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current);
+    const segmentFeatures = detailSegmentRenderScope(
+      visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current),
+      viewportBounds,
+    ).features;
     segmentFeatures.forEach((feature) => {
       const overlays = createSegmentFeatureOverlays(feature, activeTypes);
       overlays.forEach((overlay) => {
@@ -649,6 +667,7 @@ export function SegmentMap({
         mapRef.current.setLevel(preferredView.level);
       }
       mapRef.current.setCenter(new window.kakao.maps.LatLng(preferredView.point.lat, preferredView.point.lng));
+      window.setTimeout(updateViewportBounds, 0);
       return;
     }
 
@@ -658,16 +677,25 @@ export function SegmentMap({
       bounds.extend(new window.kakao.maps.LatLng(bbox[1], bbox[0]));
       bounds.extend(new window.kakao.maps.LatLng(bbox[3], bbox[2]));
       mapRef.current.setBounds(bounds);
+      window.setTimeout(updateViewportBounds, 0);
       return;
     }
     const firstCoord = segmentFeatures[0]?.geometry.coordinates[0] ?? bridgeFeatures[0]?.geometry.coordinates[0];
     if (firstCoord) {
       mapRef.current.setCenter(new window.kakao.maps.LatLng(firstCoord[1], firstCoord[0]));
+      window.setTimeout(updateViewportBounds, 0);
       return;
     }
     if (focusMarker) {
       mapRef.current.setCenter(new window.kakao.maps.LatLng(focusMarker.point.lat, focusMarker.point.lng));
+      window.setTimeout(updateViewportBounds, 0);
     }
+  }
+
+  function updateViewportBounds() {
+    const nextBounds = readViewportBounds(mapRef.current);
+    if (!nextBounds) return;
+    setViewportBounds((currentBounds) => areViewportBoundsEqual(currentBounds, nextBounds) ? currentBounds : nextBounds);
   }
 
   function hideRoadAttributeTooltip() {
@@ -919,6 +947,10 @@ export function SegmentMap({
   }
 
   const visibleFeaturesForLegend = visibleSegmentFeatures(payload?.segments.features ?? [], draftEdits);
+  const detailVisibleFeatures = detailedSegmentsVisible
+    ? visibleFeaturesForLegend.filter(shouldShowRoadSegmentLayer)
+    : [];
+  const detailRenderStatus = detailSegmentRenderScope(detailVisibleFeatures, viewportBounds);
   const segmentFeatureCounts = countSegmentFeatureTypes(visibleFeaturesForLegend);
   const routeAttributeCounts = countRouteAttributeLayers(visibleFeaturesForLegend);
   const roadSegmentCounts = countRoadSegmentLayers(visibleFeaturesForLegend);
@@ -1019,6 +1051,8 @@ export function SegmentMap({
                 ? forceDetailedSegmentsBlocked
                   ? `세그먼트 ${visibleSegmentCount}건이 선택되어 상세 렌더링을 제한했습니다. 제보 주변 범위를 더 좁히거나 확대해서 확인해 주세요.`
                   : `확대하면 보행 네트워크 segment가 표시됩니다. 현재 level ${mapLevel}, 표시 기준 ${DETAIL_SEGMENT_MAX_LEVEL} 이하`
+                : detailRenderStatus.capped
+                  ? `${detailRenderStatus.features.length}/${detailRenderStatus.scopedCount} segments 렌더링 · 화면 보호를 위해 일부만 표시 중`
                 : `${visibleSegmentCount} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · 영역 ${polygonPointCount}/5점` : ""}${snapMessage ? ` · ${snapMessage}` : ""}`}
       </div>
     </section>
@@ -1042,6 +1076,82 @@ function LegendItem({
       {label}
     </button>
   );
+}
+
+function detailSegmentRenderScope(features: SegmentFeature[], viewportBounds: ViewportBounds | null) {
+  const expandedBounds = viewportBounds ? expandViewportBounds(viewportBounds, DETAIL_SEGMENT_VIEWPORT_PADDING_RATIO) : null;
+  const scopedFeatures = expandedBounds
+    ? features.filter((feature) => segmentIntersectsBounds(feature, expandedBounds))
+    : features;
+  return {
+    features: scopedFeatures.slice(0, DETAIL_SEGMENT_RENDER_MAX_COUNT),
+    scopedCount: scopedFeatures.length,
+    capped: scopedFeatures.length > DETAIL_SEGMENT_RENDER_MAX_COUNT,
+  };
+}
+
+function readViewportBounds(map: KakaoMap | null): ViewportBounds | null {
+  const bounds = map?.getBounds?.() as {
+    getSouthWest?: () => { getLng?: () => number; getLat?: () => number };
+    getNorthEast?: () => { getLng?: () => number; getLat?: () => number };
+  } | null | undefined;
+  const southWest = bounds?.getSouthWest?.();
+  const northEast = bounds?.getNorthEast?.();
+  const minLng = southWest?.getLng?.();
+  const minLat = southWest?.getLat?.();
+  const maxLng = northEast?.getLng?.();
+  const maxLat = northEast?.getLat?.();
+  if (
+    typeof minLng !== "number"
+    || typeof minLat !== "number"
+    || typeof maxLng !== "number"
+    || typeof maxLat !== "number"
+    || !Number.isFinite(minLng)
+    || !Number.isFinite(minLat)
+    || !Number.isFinite(maxLng)
+    || !Number.isFinite(maxLat)
+  ) {
+    return null;
+  }
+  return { minLng, minLat, maxLng, maxLat };
+}
+
+function areViewportBoundsEqual(left: ViewportBounds | null, right: ViewportBounds) {
+  return left !== null
+    && Math.abs(left.minLng - right.minLng) < 0.000001
+    && Math.abs(left.minLat - right.minLat) < 0.000001
+    && Math.abs(left.maxLng - right.maxLng) < 0.000001
+    && Math.abs(left.maxLat - right.maxLat) < 0.000001;
+}
+
+function expandViewportBounds(bounds: ViewportBounds, ratio: number): ViewportBounds {
+  const lngPadding = Math.max((bounds.maxLng - bounds.minLng) * ratio, 0.0008);
+  const latPadding = Math.max((bounds.maxLat - bounds.minLat) * ratio, 0.0008);
+  return {
+    minLng: bounds.minLng - lngPadding,
+    minLat: bounds.minLat - latPadding,
+    maxLng: bounds.maxLng + lngPadding,
+    maxLat: bounds.maxLat + latPadding,
+  };
+}
+
+function segmentIntersectsBounds(feature: SegmentFeature, bounds: ViewportBounds) {
+  const coordinates = feature.geometry.coordinates;
+  if (!coordinates.length) return false;
+  let minLng = Number.POSITIVE_INFINITY;
+  let minLat = Number.POSITIVE_INFINITY;
+  let maxLng = Number.NEGATIVE_INFINITY;
+  let maxLat = Number.NEGATIVE_INFINITY;
+  coordinates.forEach(([lng, lat]) => {
+    minLng = Math.min(minLng, lng);
+    minLat = Math.min(minLat, lat);
+    maxLng = Math.max(maxLng, lng);
+    maxLat = Math.max(maxLat, lat);
+  });
+  return maxLng >= bounds.minLng
+    && minLng <= bounds.maxLng
+    && maxLat >= bounds.minLat
+    && minLat <= bounds.maxLat;
 }
 
 function mapCenterKey(

@@ -78,8 +78,8 @@ const percentFormatter = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 1,
 });
 
-const HAZARD_ROUTE_REVIEW_RADIUS_METER = 200;
-const HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT = 1500;
+const HAZARD_ROUTE_REVIEW_RADIUS_METER = 150;
+const HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT = 500;
 
 type PreviewHazardRecord = {
   summary: AdminHazardReportSummary;
@@ -597,6 +597,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       && hasToken
       && reportPoint != null
       && Boolean(routeReviewAreaScope?.gu && routeReviewAreaScope?.dong)
+      && detailPaneMode === "review"
       && isHazardReviewActive(activeReviewDraft),
     retry: false,
     staleTime: 300_000,

@@ -341,6 +341,16 @@ export function canRejectHazardReport(
   return baseStatus === "PENDING";
 }
 
+export function canDeleteHazardReport(
+  baseStatus: HazardReportStatus,
+  review?: HazardRouteReviewRecord | null,
+) {
+  if (review?.stage === "IN_PROGRESS") {
+    return false;
+  }
+  return baseStatus === "APPROVED" || baseStatus === "REJECTED";
+}
+
 export function resolveActiveHazardRouteReview(
   baseStatus: HazardReportStatus,
   review?: HazardRouteReviewRecord | null,

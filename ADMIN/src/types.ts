@@ -859,3 +859,7 @@ export interface AdminHazardReportStatusResponse {
   reportId: number;
   status: HazardReportStatus;
 }
+
+export interface AdminHazardReportDeleteResponse {
+  reportId: number;
+}

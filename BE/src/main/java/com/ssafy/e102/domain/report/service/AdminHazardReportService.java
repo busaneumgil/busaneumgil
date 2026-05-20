@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDetailResponse;
+import com.ssafy.e102.domain.report.dto.response.AdminHazardReportDeleteResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportListResponse;
 import com.ssafy.e102.domain.report.dto.response.AdminHazardReportStatusResponse;
 import com.ssafy.e102.domain.report.entity.HazardReport;
@@ -124,6 +125,30 @@ public class AdminHazardReportService {
 			ReportStatus.PENDING,
 			ReportStatus.REJECTED);
 		return new AdminHazardReportStatusResponse(reportId, ReportStatus.REJECTED);
+	}
+
+	@Transactional
+	public AdminHazardReportDeleteResponse deleteHazardReport(Long reportId, UUID actorUserId) {
+		HazardReport hazardReport = getHazardReport(reportId);
+		if (hazardReport.getStatus() != ReportStatus.APPROVED
+			&& hazardReport.getStatus() != ReportStatus.REJECTED) {
+			throw new HazardReportException(
+				HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED,
+				"승인 완료 또는 반려된 제보만 삭제할 수 있습니다.");
+		}
+		AdminHazardReportStatusResponse before = AdminHazardReportStatusResponse.from(hazardReport);
+		hazardReportRepository.delete(hazardReport);
+		adminAuditLogService.record(
+			actorUserId,
+			"HAZARD_REPORT_DELETE",
+			"HAZARD_REPORT",
+			String.valueOf(reportId),
+			null,
+			null,
+			"제보 삭제 처리 reportId=" + reportId,
+			before,
+			null);
+		return new AdminHazardReportDeleteResponse(reportId);
 	}
 
 	private void updateHazardReportStatus(

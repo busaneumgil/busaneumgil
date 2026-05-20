@@ -10,6 +10,7 @@ import type {
   AdminRoutePreviewResponse,
   AdminDashboardSummaryResponse,
   AdminHazardReportDetail,
+  AdminHazardReportDeleteResponse,
   AdminHazardReportListResponse,
   AdminHazardReportStatusResponse,
   AdminMeResponse,
@@ -595,6 +596,15 @@ export async function rejectAdminHazardReport(
 ): Promise<AdminHazardReportStatusResponse> {
   return requestAdminJson<AdminHazardReportStatusResponse>(`/admin/hazard-reports/${reportId}/reject`, accessToken, {
     method: "PATCH",
+  });
+}
+
+export async function deleteAdminHazardReport(
+  reportId: number,
+  accessToken: string,
+): Promise<AdminHazardReportDeleteResponse> {
+  return requestAdminJson<AdminHazardReportDeleteResponse>(`/admin/hazard-reports/${reportId}`, accessToken, {
+    method: "DELETE",
   });
 }
 

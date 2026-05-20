@@ -259,6 +259,68 @@ class AdminHazardReportServiceTest {
 		verify(adminAuditLogService, never()).record(any(), any(), any(), any(), any(), any(), any(), any(), any());
 	}
 
+	@Test
+	@DisplayName("승인된 관리자 제보 삭제는 제보 row만 삭제하고 감사 로그를 남긴다")
+	void deleteApprovedHazardReport() {
+		UUID actorUserId = UUID.randomUUID();
+		HazardReport hazardReport = hazardReport(user(UUID.randomUUID()), 1L, List.of("hazard-reports/user-1/image.jpg"));
+		hazardReport.approve(actorUserId, LocalDateTime.of(2026, 5, 18, 12, 0));
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
+
+		var response = adminHazardReportService.deleteHazardReport(1L, actorUserId);
+
+		assertThat(response.reportId()).isEqualTo(1L);
+		verify(hazardReportRepository).delete(hazardReport);
+		verify(adminAuditLogService).record(
+			eq(actorUserId),
+			eq("HAZARD_REPORT_DELETE"),
+			eq("HAZARD_REPORT"),
+			eq("1"),
+			eq(null),
+			eq(null),
+			eq("제보 삭제 처리 reportId=1"),
+			any(),
+			eq(null));
+		verify(adminHazardRouteReviewService, never()).clearInProgressRouteReview(any());
+	}
+
+	@Test
+	@DisplayName("대기 제보는 관리자 삭제 API로 삭제할 수 없다")
+	void deletePendingHazardReport() {
+		HazardReport hazardReport = hazardReport(user(UUID.randomUUID()), 1L, List.of());
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
+
+		assertThatThrownBy(() -> adminHazardReportService.deleteHazardReport(1L, UUID.randomUUID()))
+			.isInstanceOf(HazardReportException.class)
+			.extracting("errorCode")
+			.isEqualTo(HazardReportErrorCode.HAZARD_REPORT_ALREADY_PROCESSED);
+		verify(hazardReportRepository, never()).delete(any());
+	}
+
+	@Test
+	@DisplayName("반려된 관리자 제보 삭제는 제보 row를 삭제하고 감사 로그를 남긴다")
+	void deleteRejectedHazardReport() {
+		UUID actorUserId = UUID.randomUUID();
+		HazardReport hazardReport = hazardReport(user(UUID.randomUUID()), 1L, List.of());
+		hazardReport.reject(actorUserId, LocalDateTime.of(2026, 5, 18, 12, 0));
+		when(hazardReportRepository.findWithImagesAndUserByReportId(1L)).thenReturn(Optional.of(hazardReport));
+
+		var response = adminHazardReportService.deleteHazardReport(1L, actorUserId);
+
+		assertThat(response.reportId()).isEqualTo(1L);
+		verify(hazardReportRepository).delete(hazardReport);
+		verify(adminAuditLogService).record(
+			eq(actorUserId),
+			eq("HAZARD_REPORT_DELETE"),
+			eq("HAZARD_REPORT"),
+			eq("1"),
+			eq(null),
+			eq(null),
+			eq("제보 삭제 처리 reportId=1"),
+			any(),
+			eq(null));
+	}
+
 	private HazardReport hazardReport(User user, Long reportId, List<String> imageObjectKeys) {
 		HazardReport hazardReport = HazardReport.create(
 			user,

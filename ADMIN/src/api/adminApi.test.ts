@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   completeAdminHazardRouteReview,
+  deleteAdminHazardReport,
   fetchAdminDashboardBottlenecks,
   fetchAdminDashboardSummary,
   fetchAdminHazardReportDetail,
@@ -55,6 +56,32 @@ describe("admin hazard route review API", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/admin/hazard-reports/1"),
       expect.objectContaining({
+        credentials: "include",
+        headers: expect.objectContaining({
+          Authorization: "Bearer token",
+        }),
+      }),
+    );
+  });
+
+  it("deletes an admin hazard report through the dedicated endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "OK",
+        message: "ok",
+        data: { reportId: 42 },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await deleteAdminHazardReport(42, "token");
+
+    expect(response.reportId).toBe(42);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/hazard-reports/42"),
+      expect.objectContaining({
+        method: "DELETE",
         credentials: "include",
         headers: expect.objectContaining({
           Authorization: "Bearer token",

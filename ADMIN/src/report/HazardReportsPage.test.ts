@@ -30,4 +30,13 @@ describe("HazardReportsPage manual routing apply wiring", () => {
     expect(source).not.toContain("countCompletedRestoreReviews");
     expect(source).toContain("const hasDbSyncQueue = dbSyncPendingCount > 0");
   });
+
+  it("uses the rejected action slot as a delete action for processed reports", () => {
+    expect(source).toContain("deleteAdminHazardReport(reportId, accessToken)");
+    expect(source).toContain("canDeleteHazardReport(detail.status, activeReviewDraft)");
+    expect(source).toContain('const showsDeleteAction = detail ? canDeleteHazardReport(detail.status, null) : false;');
+    expect(source).toContain('confirm("처리된 제보를 삭제할까요?');
+    expect(source).toContain("{showsDeleteAction ? \"삭제\" : \"반려\"}");
+    expect(source).toContain('name={showsDeleteAction ? "trash" : "close"}');
+  });
 });

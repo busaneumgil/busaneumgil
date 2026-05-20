@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  canDeleteHazardReport,
   canRejectHazardReport,
   canStartHazardApprove,
   canStartHazardRestore,
@@ -175,6 +176,21 @@ describe("hazard route review workflow state", () => {
     expect(canRejectHazardReport("PENDING", staleRestoreReview)).toBe(true);
     expect(canRejectHazardReport("APPROVED", approveReview)).toBe(false);
     expect(canRejectHazardReport("REJECTED", approveReview)).toBe(false);
+  });
+
+  it("allows deleting processed reports but keeps active reviews protected", () => {
+    const restoreReview = startHazardRouteReview({
+      reportId: 16,
+      intent: "restore",
+      reviewerUserId: "admin-delete",
+      now: "2026-05-18T05:20:00.000Z",
+    });
+
+    expect(canDeleteHazardReport("PENDING")).toBe(false);
+    expect(canDeleteHazardReport("APPROVED")).toBe(true);
+    expect(canDeleteHazardReport("REJECTED")).toBe(true);
+    expect(canDeleteHazardReport("APPROVED", restoreReview)).toBe(false);
+    expect(canDeleteHazardReport("APPROVED", completeHazardRouteReview(restoreReview, "2026-05-18T05:25:00.000Z"))).toBe(true);
   });
 
   it("drops in-progress approve review display after the report is rejected", () => {

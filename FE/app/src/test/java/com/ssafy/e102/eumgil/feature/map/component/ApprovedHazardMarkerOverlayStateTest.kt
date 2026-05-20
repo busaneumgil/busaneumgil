@@ -175,6 +175,34 @@ class ApprovedHazardMarkerOverlayStateTest {
     }
 
     @Test
+    fun `approved hazard overlay point uses click target as kakao marker id`() = runTest {
+        val repository = FakeReportRepository()
+        val state =
+            ApprovedHazardMarkerOverlayState(
+                reportRepository = repository,
+                coroutineScope = backgroundScope,
+            )
+        runCurrent()
+
+        state.onViewportBoundsChanged(
+            MapViewportBounds(
+                swLat = 35.099,
+                swLng = 129.099,
+                neLat = 35.101,
+                neLng = 129.101,
+            ),
+        )
+        runCurrent()
+        advanceTimeBy(401L)
+        runCurrent()
+
+        val marker = state.overlayPoints.single().toKakaoProjectedPointMarkerState()
+
+        assertEquals("hazard-report-12", marker?.markerId)
+        assertEquals("hazard-report-12", marker?.clickTargetId)
+    }
+
+    @Test
     fun `unknown report type is still preserved on overlay point for fallback rendering`() = runTest {
         val repository =
             FakeReportRepository(

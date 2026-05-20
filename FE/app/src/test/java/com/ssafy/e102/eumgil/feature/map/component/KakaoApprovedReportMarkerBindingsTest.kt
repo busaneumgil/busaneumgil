@@ -24,8 +24,10 @@ class KakaoApprovedReportMarkerBindingsTest {
         val marker = point.toKakaoProjectedPointMarkerState()
 
         assertEquals(KakaoOverlayMarkerKind.APPROVED_REPORT, marker?.kind)
+        assertEquals("approved-report:42", marker?.markerId)
         assertEquals(32, marker?.sizeDp)
         assertEquals(R.drawable.ic_report_ramp, marker?.iconResId)
+        assertEquals(0xFFE0B312.toInt(), marker?.strokeColorArgb)
         assertEquals("approved-report:42", marker?.clickTargetId)
     }
 
@@ -44,6 +46,33 @@ class KakaoApprovedReportMarkerBindingsTest {
         val marker = point.toKakaoProjectedPointMarkerState()
 
         assertEquals(R.drawable.ic_report_other, marker?.iconResId)
+    }
+
+    @Test
+    fun `approved hazard marker uses click target id as poi marker id when overlay id differs`() {
+        val point =
+            MapViewportPointOverlay(
+                overlayId = "hazard-12",
+                coordinate = MapCoordinate(35.1796, 129.0756),
+                kind = MapViewportPointKind.APPROVED_REPORT,
+                reportTypeApiValue = "RAMP",
+                includeInProjection = false,
+                clickTargetId = "hazard-report-12",
+            )
+
+        val marker = point.toKakaoProjectedPointMarkerState()
+
+        assertEquals("hazard-report-12", marker?.markerId)
+        assertEquals("hazard-report-12", marker?.clickTargetId)
+    }
+
+    @Test
+    fun `approved report marker bitmap uses white icon tint`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/component/KakaoMapViewport.kt")
+                .readText()
+
+        assertTrue(source.contains("APPROVED_REPORT_MARKER_ICON_TINT = -1"))
     }
 
     @Test

@@ -25,6 +25,11 @@ describe("Admin dashboard navigation wiring", () => {
     expect(appSource).toContain("data={usesRealAdminApi ? bottleneckMonitoringQuery.data : bottleneckMonitoringMockResponse}");
   });
 
+  it("keeps the main road-network inspection map loading by selected dong scope", () => {
+    expect(appSource).toContain("queryFn: () => fetchAdminRoadNetworkPayload({ gu: selectedGu, dong: selectedDong, accessToken })");
+    expect(appSource).not.toContain("radiusMeter: HAZARD_ROUTE_REVIEW_RADIUS_METER");
+  });
+
   it("binds dashboard period controls to summary and bottleneck queries", () => {
     expect(appSource).toContain('queryKey: ["admin-dashboard-summary", accessToken, normalizedDashboardRange.from, normalizedDashboardRange.to]');
     expect(appSource).toContain('queryKey: ["admin-dashboard-bottlenecks", accessToken, normalizedDashboardRange.from, normalizedDashboardRange.to]');

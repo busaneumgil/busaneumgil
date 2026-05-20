@@ -10,9 +10,10 @@ describe("HazardReportsPage manual routing apply wiring", () => {
   });
 
   it("keeps route-review segment loading scoped to active review mode", () => {
-    expect(source).toContain("const HAZARD_ROUTE_REVIEW_RADIUS_METER = 150");
+    expect(source).toContain("const HAZARD_ROUTE_REVIEW_RADIUS_METER = 300");
     expect(source).toContain("const HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT = 500");
     expect(source).toContain('&& detailPaneMode === "review"');
+    expect(source).toContain("radiusMeter: HAZARD_ROUTE_REVIEW_RADIUS_METER");
   });
 
   it("keeps the reject action available during approve review progress", () => {

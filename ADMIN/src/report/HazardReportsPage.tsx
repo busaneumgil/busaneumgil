@@ -85,7 +85,7 @@ const percentFormatter = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 1,
 });
 
-const HAZARD_ROUTE_REVIEW_RADIUS_METER = 150;
+const HAZARD_ROUTE_REVIEW_RADIUS_METER = 300;
 const HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT = 500;
 
 type PreviewHazardRecord = {

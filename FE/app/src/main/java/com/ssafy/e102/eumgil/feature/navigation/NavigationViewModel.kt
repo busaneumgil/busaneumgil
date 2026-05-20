@@ -3230,8 +3230,8 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
     transitPresentation: NavigationTransitPresentation?,
 ): NavigationFocusedSegmentCardUiState? {
     val totalStepCount = selectedRoute.segments.size.coerceAtLeast(1)
-    val remainingTimeLabel = estimatedMinutes.toDestinationRemainingTimeLabel()
     if (focusedSegmentIndex == NavigationOriginSegmentIndex) {
+        val remainingTimeLabel = estimatedMinutes.toDestinationRemainingTimeLabel()
         return NavigationFocusedSegmentCardUiState(
             sequenceLabel = "1 / $totalStepCount",
             instruction = NavigationOriginHeroTitle,
@@ -3246,6 +3246,11 @@ private fun RouteNavigationRequest.toFocusedSegmentCardUiState(
 
     val focusedSegment = selectedRoute.segments.getOrNull(focusedSegmentIndex) ?: return null
     val heroDetail = selectedRoute.toNavigationHeroDetail(focusedSegment)
+    val remainingTimeLabel =
+        selectedRoute.focusedSegmentRemainingTimeLabel(
+            focusedSegmentIndex = focusedSegmentIndex,
+            fallbackEstimatedMinutes = estimatedMinutes,
+        )
 
     return NavigationFocusedSegmentCardUiState(
         sequenceLabel = "${focusedSegment.sequence} / $totalStepCount",
@@ -3939,6 +3944,63 @@ private fun Int?.toDestinationRemainingTimeLabel(): String =
         ?.takeIf { minutes -> minutes >= 0 }
         ?.let { minutes -> "목적지까지 약 ${minutes.coerceAtLeast(1)}분" }
         ?: "목적지까지 확인 중"
+
+private fun RouteCandidate.focusedSegmentRemainingTimeLabel(
+    focusedSegmentIndex: Int,
+    fallbackEstimatedMinutes: Int?,
+): String {
+    val totalDurationSeconds =
+        totalDurationSeconds().takeIf { durationSeconds -> durationSeconds > 0 }
+            ?: return fallbackEstimatedMinutes.toDestinationRemainingTimeLabel()
+    val focusedSegment = segments.getOrNull(focusedSegmentIndex)
+        ?: return fallbackEstimatedMinutes.toDestinationRemainingTimeLabel()
+    val elapsedSeconds =
+        segments.buildEffectiveElapsedSecondsByIndex(totalDurationSeconds)[focusedSegmentIndex]
+            ?: focusedSegment.durationFromRouteStartSeconds
+            ?: 0
+    val remainingMinutes = ((totalDurationSeconds - elapsedSeconds).coerceAtLeast(0) + 59) / 60
+    return remainingMinutes.toDestinationRemainingTimeLabel()
+}
+
+private fun List<RouteSegment>.buildEffectiveElapsedSecondsByIndex(totalDurationSeconds: Int): Map<Int, Int> {
+    if (totalDurationSeconds <= 0) return emptyMap()
+    val totalDistance = sumOf { segment -> segment.distanceMeters.coerceAtLeast(0) }
+    var cumulativeDistance = 0
+    var previousServerElapsedSeconds: Int? = null
+
+    return mapIndexed { index, segment ->
+        val fallbackElapsedSeconds =
+            when {
+                totalDistance > 0 ->
+                    ((totalDurationSeconds.toLong() * cumulativeDistance.toLong()) / totalDistance.toLong()).toInt()
+                size > 1 ->
+                    ((totalDurationSeconds.toLong() * index.toLong()) / size.toLong()).toInt()
+                else -> 0
+            }
+        val serverElapsedSeconds =
+            segment.durationFromRouteStartSeconds
+                ?.takeIf { seconds -> seconds in 0..totalDurationSeconds }
+        val previousServerElapsed = previousServerElapsedSeconds
+        val isServerElapsedProgressing =
+            serverElapsedSeconds != null &&
+                (
+                    previousServerElapsed == null ||
+                        serverElapsedSeconds > previousServerElapsed ||
+                        segment.distanceMeters <= 0
+                )
+        val effectiveElapsedSeconds =
+            if (isServerElapsedProgressing && serverElapsedSeconds != null) {
+                serverElapsedSeconds
+            } else {
+                fallbackElapsedSeconds
+            }
+        if (isServerElapsedProgressing) {
+            previousServerElapsedSeconds = serverElapsedSeconds
+        }
+        cumulativeDistance += segment.distanceMeters.coerceAtLeast(0)
+        index to effectiveElapsedSeconds
+    }.toMap()
+}
 
 private fun RouteCandidate.toLiveGuidanceText(
     segment: RouteSegment,

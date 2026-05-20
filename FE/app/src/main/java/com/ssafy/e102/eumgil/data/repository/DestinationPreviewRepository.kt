@@ -11,6 +11,7 @@ data class DestinationPreviewRequest(
     val requestId: Long,
     val destination: PlaceDestination,
     val editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+    val routeEndpointTarget: RouteEditingTarget? = null,
     val accessibilityTagKeys: List<String> = emptyList(),
     val detailType: MapPlaceDetailType = MapPlaceDetailType.INTERNAL_PLACE,
     val bookmarkTargetId: String? = null,
@@ -24,6 +25,7 @@ interface DestinationPreviewRepository {
     fun requestPreview(
         destination: PlaceDestination,
         editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
+        routeEndpointTarget: RouteEditingTarget? = null,
         accessibilityTagKeys: List<String> = emptyList(),
         detailType: MapPlaceDetailType = MapPlaceDetailType.INTERNAL_PLACE,
         bookmarkTargetId: String? = null,
@@ -45,6 +47,7 @@ class InMemoryDestinationPreviewRepository : DestinationPreviewRepository {
     override fun requestPreview(
         destination: PlaceDestination,
         editingTarget: RouteEditingTarget,
+        routeEndpointTarget: RouteEditingTarget?,
         accessibilityTagKeys: List<String>,
         detailType: MapPlaceDetailType,
         bookmarkTargetId: String?,
@@ -57,6 +60,7 @@ class InMemoryDestinationPreviewRepository : DestinationPreviewRepository {
                 requestId = nextRequestId,
                 destination = destination,
                 editingTarget = editingTarget,
+                routeEndpointTarget = routeEndpointTarget,
                 accessibilityTagKeys = accessibilityTagKeys,
                 detailType = detailType,
                 bookmarkTargetId = bookmarkTargetId,
@@ -82,6 +86,7 @@ object NoOpDestinationPreviewRepository : DestinationPreviewRepository {
     override fun requestPreview(
         destination: PlaceDestination,
         editingTarget: RouteEditingTarget,
+        routeEndpointTarget: RouteEditingTarget?,
         accessibilityTagKeys: List<String>,
         detailType: MapPlaceDetailType,
         bookmarkTargetId: String?,

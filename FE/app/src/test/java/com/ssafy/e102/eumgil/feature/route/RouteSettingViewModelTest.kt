@@ -2622,16 +2622,19 @@ private fun directionalRouteRepository(): RouteRepository =
                                             RouteSegment(
                                                 sequence = 1,
                                                 distanceMeters = 120,
+                                                durationFromRouteStartSeconds = 0,
                                                 guidanceMessage = "직진 120m 구간입니다.",
                                             ),
                                             RouteSegment(
                                                 sequence = 2,
                                                 distanceMeters = 80,
+                                                durationFromRouteStartSeconds = 0,
                                                 guidanceMessage = "좌회전 후 80m 이동하세요.",
                                             ),
                                             RouteSegment(
                                                 sequence = 3,
                                                 distanceMeters = 60,
+                                                durationFromRouteStartSeconds = 0,
                                                 safetyFlags =
                                                     RouteSegmentSafetyFlags(
                                                         hasCrosswalk = true,
@@ -2643,6 +2646,7 @@ private fun directionalRouteRepository(): RouteRepository =
                                             RouteSegment(
                                                 sequence = 4,
                                                 distanceMeters = 150,
+                                                durationFromRouteStartSeconds = 0,
                                                 guidanceMessage = "우회전 후 목적지 방향으로 이동하세요.",
                                             ),
                                         ),

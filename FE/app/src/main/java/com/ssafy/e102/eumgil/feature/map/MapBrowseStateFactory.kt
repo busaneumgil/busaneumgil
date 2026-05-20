@@ -19,7 +19,12 @@ internal object MapBrowseStateFactory {
         browseData: FacilityBrowseData,
         selection: MapFilterSelectionState,
     ): MapMarkerOverlayState {
-        val normalizedSelection = normalizeSelection(selection = selection, browseData = browseData)
+        val normalizedSelection =
+            normalizeSelection(
+                selection = selection,
+                browseData = browseData,
+                preserveUnavailableCategories = true,
+            )
         val markers =
             browseData.allMarkers.map { marker ->
                 val matchesSelection = marker.matches(normalizedSelection)
@@ -53,7 +58,12 @@ internal object MapBrowseStateFactory {
         selection: MapFilterSelectionState,
         overlayState: MapMarkerOverlayState,
     ): MapMarkerFilterUiState {
-        val normalizedSelection = normalizeSelection(selection = selection, browseData = browseData)
+        val normalizedSelection =
+            normalizeSelection(
+                selection = selection,
+                browseData = browseData,
+                preserveUnavailableCategories = true,
+            )
         val allMarkers = browseData.allMarkers
         val totalMarkerCountByCategory =
             browseData.availableCategories.associateWith { category ->
@@ -199,6 +209,7 @@ internal object MapBrowseStateFactory {
     fun normalizeSelection(
         selection: MapFilterSelectionState,
         browseData: FacilityBrowseData,
+        preserveUnavailableCategories: Boolean = false,
     ): MapFilterSelectionState {
         if (selection.isShowingAllCategories) {
             return showAllSelection()
@@ -206,7 +217,12 @@ internal object MapBrowseStateFactory {
 
         val availableCategories = browseData.availableCategories.toSet()
         val availableBrailleBlockTypes = browseData.availableBrailleBlockTypes.toSet()
-        val normalizedCategories = selection.selectedFacilityCategories intersect availableCategories
+        val normalizedCategories =
+            if (preserveUnavailableCategories) {
+                selection.selectedFacilityCategories
+            } else {
+                selection.selectedFacilityCategories intersect availableCategories
+            }
         if (normalizedCategories.isEmpty()) {
             return resetSelection()
         }

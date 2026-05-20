@@ -2985,6 +2985,167 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `delayed search here response does not clear filter selected after request started`() =
+        runTest {
+            val placesRepository = DelayedSearchHerePlacesRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.TOILET))
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = MapCoordinate(latitude = 35.18, longitude = 129.08),
+                    zoomLevel = 15,
+                    isUserGesture = true,
+                ),
+            )
+            viewModel.onAction(MapUiAction.SearchHereClicked)
+            runCurrent()
+
+            assertTrue(placesRepository.searchHereRequested.isCompleted)
+
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.ELEVATOR))
+            runCurrent()
+
+            assertEquals(
+                setOf(FacilityCategory.ELEVATOR),
+                viewModel.uiState.value.markerFilterState.selection.selectedFacilityCategories,
+            )
+
+            placesRepository.completeSearchHere(
+                listOf(
+                    PlaceSummary(
+                        placeId = "toilet-2",
+                        name = "New Accessible Toilet",
+                        address = "2 Toilet-ro, Busan",
+                        latitude = 35.181,
+                        longitude = 129.081,
+                        category = PlaceCategory.TOILET,
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                "The user-selected filter should stay selected even if the delayed response has no matching category.",
+                setOf(FacilityCategory.ELEVATOR),
+                viewModel.uiState.value.markerFilterState.selection.selectedFacilityCategories,
+            )
+            assertTrue(viewModel.uiState.value.markerOverlayState.isEmptyResult)
+            assertTrue(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.ELEVATOR }
+                    .isSelected,
+            )
+        }
+
+    @Test
+    fun `current location reload after search here keeps selected shortcut filter`() =
+        runTest {
+            val locationManager = FakeCurrentLocationManager()
+            val placesRepository =
+                SequentialPlacesRepository(
+                    responses =
+                        listOf(
+                            listOf(
+                                PlaceSummary(
+                                    placeId = "toilet-1",
+                                    name = "Accessible Toilet",
+                                    address = "1 Toilet-ro, Busan",
+                                    latitude = 35.1796,
+                                    longitude = 129.0756,
+                                    category = PlaceCategory.TOILET,
+                                ),
+                                PlaceSummary(
+                                    placeId = "elevator-1",
+                                    name = "Station Elevator",
+                                    address = "2 Elevator-ro, Busan",
+                                    latitude = 35.1802,
+                                    longitude = 129.0762,
+                                    category = PlaceCategory.ELEVATOR,
+                                ),
+                            ),
+                            listOf(
+                                PlaceSummary(
+                                    placeId = "toilet-2",
+                                    name = "Viewport Toilet",
+                                    address = "2 Toilet-ro, Busan",
+                                    latitude = 35.181,
+                                    longitude = 129.081,
+                                    category = PlaceCategory.TOILET,
+                                ),
+                                PlaceSummary(
+                                    placeId = "elevator-2",
+                                    name = "Viewport Elevator",
+                                    address = "2 Elevator-ro, Busan",
+                                    latitude = 35.1812,
+                                    longitude = 129.0812,
+                                    category = PlaceCategory.ELEVATOR,
+                                ),
+                            ),
+                            listOf(
+                                PlaceSummary(
+                                    placeId = "toilet-3",
+                                    name = "Current Location Toilet",
+                                    address = "3 Toilet-ro, Busan",
+                                    latitude = 35.182,
+                                    longitude = 129.082,
+                                    category = PlaceCategory.TOILET,
+                                ),
+                            ),
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = EmptyFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    placesRepository = placesRepository,
+                )
+
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.TOILET))
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = MapCoordinate(latitude = 35.18, longitude = 129.08),
+                    zoomLevel = 15,
+                    isUserGesture = true,
+                ),
+            )
+            viewModel.onAction(MapUiAction.SearchHereClicked)
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.ShortcutFilterClicked(MapShortcutFilterKey.ELEVATOR))
+            advanceUntilIdle()
+
+            locationManager.updateLocation(testLocationSnapshot(latitude = 35.182, longitude = 129.082))
+            advanceUntilIdle()
+
+            assertEquals(3, placesRepository.queries.size)
+            assertEquals(
+                setOf(FacilityCategory.ELEVATOR),
+                viewModel.uiState.value.markerFilterState.selection.selectedFacilityCategories,
+            )
+            assertTrue(viewModel.uiState.value.markerOverlayState.isEmptyResult)
+            assertTrue(
+                viewModel.uiState.value.shortcutFilterState.chips
+                    .first { chip -> chip.key == MapShortcutFilterKey.ELEVATOR }
+                    .isSelected,
+            )
+        }
+
+    @Test
     fun `shortcut filter disabled chip tap shows unavailable snackbar without changing selection`() =
         runTest {
             val viewModel =
@@ -3698,6 +3859,65 @@ private class DelayedFallbackPlacesRepository : PlacesRepository {
     private fun PlaceQuery.isFallbackBusanQuery(): Boolean =
         latitude == MapDefaults.BUSAN_CENTER.latitude &&
             longitude == MapDefaults.BUSAN_CENTER.longitude
+}
+
+private class DelayedSearchHerePlacesRepository : PlacesRepository {
+    val queries = mutableListOf<PlaceQuery>()
+    val searchHereRequested = CompletableDeferred<Unit>()
+    private val searchHereGate = CompletableDeferred<List<PlaceSummary>>()
+
+    override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
+        queries += query
+        if (queries.size == 1) {
+            return listOf(
+                PlaceSummary(
+                    placeId = "toilet-1",
+                    name = "Accessible Toilet",
+                    address = "1 Toilet-ro, Busan",
+                    latitude = 35.1796,
+                    longitude = 129.0756,
+                    category = PlaceCategory.TOILET,
+                ),
+                PlaceSummary(
+                    placeId = "elevator-1",
+                    name = "Station Elevator",
+                    address = "2 Elevator-ro, Busan",
+                    latitude = 35.1802,
+                    longitude = 129.0762,
+                    category = PlaceCategory.ELEVATOR,
+                ),
+            )
+        }
+
+        searchHereRequested.complete(Unit)
+        return searchHereGate.await()
+    }
+
+    override suspend fun getPlaceDetail(placeId: String): PlaceDetail? = null
+
+    override suspend fun getMapTappedPlaceDetail(request: MapPlaceDetailRequest): MapTappedPlaceDetail? = null
+
+    fun completeSearchHere(places: List<PlaceSummary>) {
+        searchHereGate.complete(places)
+    }
+}
+
+private class SequentialPlacesRepository(
+    private val responses: List<List<PlaceSummary>>,
+) : PlacesRepository {
+    val queries = mutableListOf<PlaceQuery>()
+    private var responseIndex = 0
+
+    override suspend fun getPlaces(query: PlaceQuery): List<PlaceSummary> {
+        queries += query
+        val resolvedIndex = responseIndex.coerceAtMost(responses.lastIndex)
+        responseIndex += 1
+        return responses[resolvedIndex]
+    }
+
+    override suspend fun getPlaceDetail(placeId: String): PlaceDetail? = null
+
+    override suspend fun getMapTappedPlaceDetail(request: MapPlaceDetailRequest): MapTappedPlaceDetail? = null
 }
 
 private class FakePlacesRepository(

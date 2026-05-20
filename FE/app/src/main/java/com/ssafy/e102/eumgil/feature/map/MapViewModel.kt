@@ -399,6 +399,7 @@ class MapViewModel(
                         MapBrowseStateFactory.normalizeSelection(
                             selection = markerFilterSelectionState,
                             browseData = browseData,
+                            preserveUnavailableCategories = true,
                         )
                     } else {
                         MapBrowseStateFactory.resetSelection()
@@ -884,6 +885,11 @@ class MapViewModel(
         val browseData = facilityBrowseData ?: return
 
         val category = key.toFacilityCategory(browseData.availableCategories.toSet())
+        if (category == null && key.isSelected(markerFilterSelectionState)) {
+            markerFilterSelectionState = MapBrowseStateFactory.resetSelection()
+            renderMarkerBrowseState()
+            return
+        }
         if (category == null) {
             emitUiEvent(MapUiEvent.ShowSnackbar(SHORTCUT_FILTER_UNAVAILABLE_MESSAGE))
             return
@@ -1240,6 +1246,7 @@ class MapViewModel(
                         loadLivePlaceBrowseState(
                             anchorSource = PlacesBrowseAnchorSource.CURRENT_LOCATION,
                             force = true,
+                            preserveSelection = true,
                         )
                     }
                     if (shouldSyncCameraToCurrentLocation()) {
@@ -2104,7 +2111,7 @@ class MapViewModel(
                     MapShortcutFilterChipState(
                         key = key,
                         isSelected = key.isSelected(selection = selection, availableCategories = availableCategories),
-                        isEnabled = key.toFacilityCategory(availableCategories) != null,
+                        isEnabled = key.toFacilityCategory(availableCategories) != null || key.isSelected(selection),
                     )
                 },
         )
@@ -2462,9 +2469,31 @@ private fun MapShortcutFilterKey.isSelected(
     availableCategories: Set<FacilityCategory>,
 ): Boolean {
     if (selection.isShowingAllCategories) return false
-    val category = toFacilityCategory(availableCategories) ?: return false
-    return category in selection.selectedFacilityCategories
+    val category = toFacilityCategory(availableCategories)
+    return if (category != null) {
+        category in selection.selectedFacilityCategories
+    } else {
+        isSelected(selection)
+    }
 }
+
+private fun MapShortcutFilterKey.isSelected(selection: MapFilterSelectionState): Boolean {
+    if (selection.isShowingAllCategories) return false
+    return targetFacilityCategories().any { category -> category in selection.selectedFacilityCategories }
+}
+
+private fun MapShortcutFilterKey.targetFacilityCategories(): Set<FacilityCategory> =
+    when (this) {
+        MapShortcutFilterKey.TOILET -> setOf(FacilityCategory.TOILET)
+        MapShortcutFilterKey.ELEVATOR -> setOf(FacilityCategory.ELEVATOR)
+        MapShortcutFilterKey.CHARGING_STATION -> setOf(FacilityCategory.CHARGING_STATION)
+        MapShortcutFilterKey.FOOD_CAFE -> setOf(FacilityCategory.FOOD_CAFE, FacilityCategory.RESTAURANT)
+        MapShortcutFilterKey.TOURIST_SPOT -> setOf(FacilityCategory.TOURIST_SPOT, FacilityCategory.TOURIST_ATTRACTION)
+        MapShortcutFilterKey.ACCOMMODATION -> setOf(FacilityCategory.ACCOMMODATION)
+        MapShortcutFilterKey.HEALTHCARE -> setOf(FacilityCategory.HEALTHCARE)
+        MapShortcutFilterKey.WELFARE -> setOf(FacilityCategory.WELFARE)
+        MapShortcutFilterKey.PUBLIC_OFFICE -> setOf(FacilityCategory.PUBLIC_OFFICE)
+    }
 
 private const val ROUTE_ENDPOINT_PICKER_DEFAULT_PLACE_NAME = "선택한 위치"
 private const val ROUTE_ENDPOINT_PICKER_COORDINATE_LABEL = "좌표"

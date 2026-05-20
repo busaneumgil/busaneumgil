@@ -715,7 +715,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     <section className="hazard-page admin-page-content">
       <div className="hazard-summary-strip">
         <HazardSummaryCard
-          label="전체 신고"
+          label="전체 제보"
           value={String(totalCount)}
           detail={reportSummary ? `오늘 +${reportSummary.newReports}` : "최근 집계"}
           share={null}
@@ -890,7 +890,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
         <aside className="admin-dashboard-card hazard-detail-shell">
           {!selectedReportId && !reportsQuery.isLoading && (
             <div className="hazard-empty-state">
-              <strong>신고를 선택하면 상세 검토 패널이 열립니다.</strong>
+              <strong>제보를 선택하면 상세 검토 패널이 열립니다.</strong>
               <span>지도, 첨부 이미지, 운영 상태를 한 번에 확인할 수 있도록 오른쪽 검토 영역을 구성했습니다.</span>
             </div>
           )}

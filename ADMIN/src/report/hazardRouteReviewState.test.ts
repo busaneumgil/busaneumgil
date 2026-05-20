@@ -133,18 +133,25 @@ describe("hazard route review workflow state", () => {
     expect(canStartHazardApprove("REJECTED", completeHazardRouteReview(review, "2026-05-18T03:55:00.000Z"))).toBe(false);
   });
 
-  it("keeps reject available while an approve review is in progress", () => {
-    const review = startHazardRouteReview({
+  it("keeps reject available for pending reports while any review is in progress", () => {
+    const approveReview = startHazardRouteReview({
       reportId: 14,
       intent: "approve",
       reviewerUserId: "admin-reject",
       now: "2026-05-18T05:00:00.000Z",
     });
+    const staleRestoreReview = startHazardRouteReview({
+      reportId: 14,
+      intent: "restore",
+      reviewerUserId: "admin-reject",
+      now: "2026-05-18T05:01:00.000Z",
+    });
 
     expect(canRejectHazardReport("PENDING")).toBe(true);
-    expect(canRejectHazardReport("PENDING", review)).toBe(true);
-    expect(canRejectHazardReport("APPROVED", review)).toBe(false);
-    expect(canRejectHazardReport("REJECTED", review)).toBe(false);
+    expect(canRejectHazardReport("PENDING", approveReview)).toBe(true);
+    expect(canRejectHazardReport("PENDING", staleRestoreReview)).toBe(true);
+    expect(canRejectHazardReport("APPROVED", approveReview)).toBe(false);
+    expect(canRejectHazardReport("REJECTED", approveReview)).toBe(false);
   });
 
   it("drops in-progress approve review display after the report is rejected", () => {

@@ -332,12 +332,9 @@ export function canStartHazardRestore(
 
 export function canRejectHazardReport(
   baseStatus: HazardReportStatus,
-  review?: HazardRouteReviewRecord | null,
+  _review?: HazardRouteReviewRecord | null,
 ) {
-  if (baseStatus !== "PENDING") {
-    return false;
-  }
-  return review?.stage !== "IN_PROGRESS" || review.intent === "approve";
+  return baseStatus === "PENDING";
 }
 
 export function resolveActiveHazardRouteReview(

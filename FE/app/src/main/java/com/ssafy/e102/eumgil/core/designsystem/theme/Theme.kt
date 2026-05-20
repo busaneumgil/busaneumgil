@@ -4,9 +4,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.ssafy.e102.eumgil.core.model.TextSizePreference
+
+val LocalAppTextSizeScale = staticCompositionLocalOf { 1f }
 
 @Composable
 fun BusanEumgilTheme(
@@ -30,7 +33,10 @@ fun BusanEumgilTheme(
         density.scaledByTextSizeScale(textSizeScale)
     }
 
-    CompositionLocalProvider(LocalDensity provides scaledDensity) {
+    CompositionLocalProvider(
+        LocalDensity provides scaledDensity,
+        LocalAppTextSizeScale provides textSizeScale,
+    ) {
         MaterialTheme(
             colorScheme = BusanEumgilLightColorScheme,
             typography = typography,

@@ -109,7 +109,7 @@ class RouteStepScrubberRailTest {
                 .readText()
 
         assertTrue(scrubberSource.contains("isProgrammaticScroll"))
-        assertTrue(scrubberSource.contains("if (index != null && !isProgrammaticScroll)"))
+        assertTrue(scrubberSource.contains("if (!isProgrammaticScroll && index != currentResolvedFocusedIndex)"))
     }
 
     @Test

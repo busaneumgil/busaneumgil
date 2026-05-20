@@ -1600,6 +1600,12 @@ class RouteSettingLayoutPolicyTest {
                 scrubberSource.contains("resolveRouteStepScrubberIndex(") &&
                 scrubberSource.contains("currentOnFocusedItemChanged(index)"),
         )
+        assertTrue(
+            "The shared scrubber must ignore its first offset observation so route-detail click focus is not reset back to the first item.",
+            scrubberSource.contains("var hasObservedInitialPosition = false") &&
+                scrubberSource.contains("!hasObservedInitialPosition") &&
+                scrubberSource.contains("index != currentResolvedFocusedIndex"),
+        )
         assertFalse(
             "Route detail rail items must not force a fixed outer height because hidden top-card items need to collapse out of the rail.",
             railSection.contains("modifier = Modifier.size(RouteDetailCollapsedRailItemSize)"),

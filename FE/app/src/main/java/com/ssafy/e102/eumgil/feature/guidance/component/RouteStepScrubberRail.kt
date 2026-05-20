@@ -63,6 +63,7 @@ fun RouteStepScrubberRail(
     val resolvedFocusedIndex = items.resolveFocusedScrubberIndex(focusedItemIndex)
     val currentOnFocusedItemChanged by rememberUpdatedState(onFocusedItemChanged)
     val currentOnItemClick by rememberUpdatedState(onItemClick)
+    val currentResolvedFocusedIndex by rememberUpdatedState(resolvedFocusedIndex)
     val coroutineScope = rememberCoroutineScope()
     val interactionSource = remember { MutableInteractionSource() }
     val isDragged by interactionSource.collectIsDraggedAsState()
@@ -107,6 +108,7 @@ fun RouteStepScrubberRail(
     }
 
     LaunchedEffect(state, items, itemHeightPx) {
+        var hasObservedInitialPosition = false
         snapshotFlow {
             val offset = state.offset.takeUnless(Float::isNaN) ?: 0f
             resolveRouteStepScrubberIndex(
@@ -117,7 +119,14 @@ fun RouteStepScrubberRail(
         }
             .distinctUntilChanged()
             .collect { index ->
-                if (index != null && !isProgrammaticScroll) {
+                if (index == null) {
+                    return@collect
+                }
+                if (!hasObservedInitialPosition) {
+                    hasObservedInitialPosition = true
+                    return@collect
+                }
+                if (!isProgrammaticScroll && index != currentResolvedFocusedIndex) {
                     lastScrubbedIndex = index
                     currentOnFocusedItemChanged(index)
                 }

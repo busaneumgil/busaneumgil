@@ -59,6 +59,7 @@
 
 - API 명세: [../Docs/API/](../Docs/API/)
 - ERD: [../Docs/ERD/ERD_v4.md](../Docs/ERD/ERD_v4.md)
+- 기술 문서: [docs/README.md](docs/README.md)
 - Backend convention: [../Docs/skills/backend/backend-convention.md](../Docs/skills/backend/backend-convention.md)
 - Layer / package convention: [../Docs/skills/backend/layer-package-convention.md](../Docs/skills/backend/layer-package-convention.md)
 - API response / error convention: [../Docs/skills/backend/api-response-error-convention.md](../Docs/skills/backend/api-response-error-convention.md)
@@ -295,4 +296,3 @@ Windows:
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
 - Actuator Health: `http://localhost:8080/actuator/health`
 - Prometheus: `http://localhost:8080/actuator/prometheus`
-

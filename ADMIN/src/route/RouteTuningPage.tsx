@@ -2,6 +2,7 @@ import { type RefObject, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   applyAdminRoutingOverrides,
+  fetchAdminRoadSegment,
   fetchAdminRoutingApplyState,
   previewAdminRoute,
   updateAdminRoadSegmentAttributes,
@@ -81,6 +82,7 @@ export function RouteTuningPage({
     safe: true,
     fast: true,
   });
+  const selectedSegmentEdgeId = selectedSegment?.properties.edgeId ?? null;
 
   const routingApplyStateQuery = useQuery({
     queryKey: ["admin-routing-apply-state", accessToken],
@@ -88,6 +90,18 @@ export function RouteTuningPage({
     enabled: Boolean(accessToken),
     retry: false,
   });
+  const selectedSegmentDetailQuery = useQuery({
+    queryKey: ["admin-road-segment", selectedSegmentEdgeId, gu, dong, accessToken],
+    queryFn: () => fetchAdminRoadSegment({
+      edgeId: selectedSegmentEdgeId!,
+      gu,
+      dong,
+      accessToken,
+    }),
+    enabled: selectedSegmentEdgeId !== null && Boolean(accessToken && gu),
+    retry: false,
+  });
+  const selectedSegmentForAttributes = selectedSegmentDetailQuery.data ?? selectedSegment;
 
   const applyRoutingMutation = useMutation({
     mutationFn: () => applyAdminRoutingOverrides(accessToken),
@@ -101,20 +115,28 @@ export function RouteTuningPage({
   });
 
   useEffect(() => {
-    if (!selectedSegment) {
+    if (!selectedSegmentForAttributes) {
       setAttributeDraft({});
       return;
     }
     setAttributeDraft({
-      walkAccess: normalizeAccessibility(selectedSegment.properties.walkAccess),
-      brailleBlockState: normalizeAccessibility(selectedSegment.properties.brailleBlockState),
-      audioSignalState: normalizeAccessibility(selectedSegment.properties.audioSignalState),
-      widthState: normalizeWidth(selectedSegment.properties.widthState),
-      surfaceState: normalizeSurface(selectedSegment.properties.surfaceState),
-      stairsState: normalizeAccessibility(selectedSegment.properties.stairsState),
-      signalState: normalizeAccessibility(selectedSegment.properties.signalState),
+      walkAccess: normalizeAccessibility(selectedSegmentForAttributes.properties.walkAccess),
+      brailleBlockState: normalizeAccessibility(selectedSegmentForAttributes.properties.brailleBlockState),
+      audioSignalState: normalizeAccessibility(selectedSegmentForAttributes.properties.audioSignalState),
+      widthState: normalizeWidth(selectedSegmentForAttributes.properties.widthState),
+      surfaceState: normalizeSurface(selectedSegmentForAttributes.properties.surfaceState),
+      stairsState: normalizeAccessibility(selectedSegmentForAttributes.properties.stairsState),
+      signalState: normalizeAccessibility(selectedSegmentForAttributes.properties.signalState),
     });
-  }, [selectedSegment]);
+  }, [selectedSegmentForAttributes]);
+
+  useEffect(() => {
+    if (!selectedSegment || !selectedSegmentDetailQuery.data) return;
+    if (String(selectedSegment.properties.edgeId) !== String(selectedSegmentDetailQuery.data.properties.edgeId)) return;
+    if (selectedSegment !== selectedSegmentDetailQuery.data) {
+      onSelectSegment(selectedSegmentDetailQuery.data);
+    }
+  }, [onSelectSegment, selectedSegment, selectedSegmentDetailQuery.data]);
 
   function handleRoutePointPick(point: GeoPoint) {
     onSelectSegment(null);
@@ -149,11 +171,11 @@ export function RouteTuningPage({
   }
 
   async function saveSegmentAttributes() {
-    if (!selectedSegment) return;
+    if (!selectedSegmentForAttributes) return;
     setSavingAttributes(true);
     try {
       const response = await updateAdminRoadSegmentAttributes(
-        selectedSegment.properties.edgeId,
+        selectedSegmentForAttributes.properties.edgeId,
         gu,
         dong,
         {
@@ -171,8 +193,16 @@ export function RouteTuningPage({
         stairsState: normalizeAccessibility(response.segment.stairsState),
         signalState: normalizeAccessibility(response.segment.signalState),
       });
+      onSelectSegment({
+        ...selectedSegmentForAttributes,
+        properties: {
+          ...selectedSegmentForAttributes.properties,
+          ...response.segment,
+        },
+      });
       setMessage(response.routingApplyMessage ?? resolveSegmentSaveMessage(response.routingApplyStatus));
       onSegmentUpdated();
+      void queryClient.invalidateQueries({ queryKey: ["admin-road-segment", selectedSegmentForAttributes.properties.edgeId] });
       void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "segment 속성 저장에 실패했습니다.");
@@ -198,7 +228,7 @@ export function RouteTuningPage({
         error={error}
         draftEdits={[]}
         onDraftEdit={() => undefined}
-        selectedSegment={routePickEnabled ? null : selectedSegment}
+        selectedSegment={routePickEnabled ? null : selectedSegmentForAttributes}
         onSelectSegment={onSelectSegment}
         roadviewContainerRef={roadviewContainerRef}
         onRoadviewChange={onRoadviewChange}
@@ -284,14 +314,20 @@ export function RouteTuningPage({
         <section className="panel-section">
           <h3>segment 속성</h3>
           <p className={canEdit ? "muted" : "error-box"}>{assignmentMessage}</p>
-          {selectedSegment ? (
+          {selectedSegment && selectedSegmentDetailQuery.isFetching && (
+            <p className="muted">선택 segment의 DB 최신값을 확인하는 중입니다.</p>
+          )}
+          {selectedSegment && selectedSegmentDetailQuery.error && (
+            <p className="error-box">선택 segment의 최신 DB 값을 불러오지 못해 지도 데이터 기준으로 표시합니다.</p>
+          )}
+          {selectedSegmentForAttributes ? (
             <>
               <dl className="attribute-detail-list">
-                <AttributeRow label="edge" value={String(selectedSegment.properties.edgeId)} />
-                <AttributeRow label="type" value={String(selectedSegment.properties.segmentType ?? "-")} />
-                <AttributeRow label="length" value={`${formatNumber(Number(selectedSegment.properties.lengthMeter))}m`} />
-                <AttributeRow label="보도 폭" value={formatMeter(selectedSegment.properties.widthMeter)} />
-                <AttributeRow label="평균 경사도" value={formatPercent(selectedSegment.properties.avgSlopePercent)} />
+                <AttributeRow label="edge" value={String(selectedSegmentForAttributes.properties.edgeId)} />
+                <AttributeRow label="type" value={String(selectedSegmentForAttributes.properties.segmentType ?? "-")} />
+                <AttributeRow label="length" value={`${formatNumber(Number(selectedSegmentForAttributes.properties.lengthMeter))}m`} />
+                <AttributeRow label="보도 폭" value={formatMeter(selectedSegmentForAttributes.properties.widthMeter)} />
+                <AttributeRow label="평균 경사도" value={formatPercent(selectedSegmentForAttributes.properties.avgSlopePercent)} />
               </dl>
               <div className="admin-form-grid">
                 <StateSelect label="통행 가능" value={attributeDraft.walkAccess ?? "UNKNOWN"} options={accessibilityOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, walkAccess: value as AccessibilityState }))} />

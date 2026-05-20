@@ -12,4 +12,9 @@ describe("SegmentMap route review guardrail", () => {
     expect(source).toContain("detailSegmentRenderScope");
     expect(source).toContain("화면 보호를 위해 일부만 표시 중");
   });
+
+  it("uses a high-contrast overlay for the selected segment", () => {
+    expect(source).toContain('strokeColor: "#f97316"');
+    expect(source).toContain("zIndex: 80");
+  });
 });

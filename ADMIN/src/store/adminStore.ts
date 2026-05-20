@@ -17,7 +17,7 @@ const adminPages: AdminPage[] = [
   "logs",
 ];
 
-const previewableAdminPages: AdminPage[] = ["routeStats", "bottleneckMonitoring", "hazards"];
+const previewableAdminPages: AdminPage[] = ["routeStats", "bottleneckMonitoring", "hazards", "notices"];
 
 function areaAssignmentId(gu: string, dong: string) {
   return `area:${gu}:${dong}`;

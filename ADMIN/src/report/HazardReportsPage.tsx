@@ -265,6 +265,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     message: string;
     className: string;
   } | null>(null);
+  const [routeReviewSaveNotice, setRouteReviewSaveNotice] = useState<{
+    message: string;
+    className: string;
+  } | null>(null);
   const [reportSessionMeta, setReportSessionMeta] = useState<Record<number, HazardReportSessionMeta>>(() => {
     if (!preview) {
       return {};
@@ -331,8 +335,15 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   });
   const applyRoutingMutation = useMutation({
     mutationFn: () => applyAdminRoutingOverrides(accessToken),
+    onMutate: () => {
+      setRouteReviewCompletionNotice({
+        message: "경로 반영 API 호출 중입니다.",
+        className: "warning-box",
+      });
+    },
     onSuccess: (response) => {
       void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
+      void queryClient.refetchQueries({ queryKey: ["admin-routing-apply-state"] });
       const notice = routingApplyNotice(response.routingApplyStatus);
       setRouteReviewCompletionNotice({
         message: response.message ?? notice.message,
@@ -460,6 +471,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   function handleSelectReport(reportId: number) {
     setSelectedReportId(reportId);
     setRouteReviewCompletionNotice(null);
+    setRouteReviewSaveNotice(null);
     markReportViewed(reportId);
   }
 
@@ -514,11 +526,28 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       toAdminHazardRouteReviewUpdateRequest(review),
       accessToken,
     ),
+    onMutate: () => {
+      setRouteReviewSaveNotice({
+        message: "DB 저장 중",
+        className: "warning-box",
+      });
+    },
     onSuccess: (response) => {
       const hydratedReview = hydrateHazardRouteReviewRecord(response);
       if (hydratedReview) {
         setRouteReviewDraft(hydratedReview);
       }
+      setRouteReviewSaveNotice({
+        message: "DB 저장 완료",
+        className: "success-box",
+      });
+      void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
+    },
+    onError: (error) => {
+      setRouteReviewSaveNotice({
+        message: error instanceof Error ? error.message : "DB 저장에 실패했습니다.",
+        className: "error-box",
+      });
     },
   });
 
@@ -537,6 +566,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
         className: routeReviewCompletionClassName(response.routingApplyStatus),
       });
       void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
+      void queryClient.refetchQueries({ queryKey: ["admin-routing-apply-state"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] });
@@ -677,6 +707,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       existing: routeReviewDrafts[activeReport.reportId] ?? null,
     });
     setRouteReviewDraft(nextReview);
+    setRouteReviewSaveNotice({
+      message: "DB 저장 완료",
+      className: "success-box",
+    });
     markReportViewed(activeReport.reportId);
     setDetailPaneMode("review");
   }
@@ -684,6 +718,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   function handleRouteReviewChange(nextReview: HazardRouteReviewRecord) {
     setRouteReviewDraft(nextReview);
     if (preview) {
+      setRouteReviewSaveNotice({
+        message: "DB 저장 완료",
+        className: "success-box",
+      });
       return;
     }
     updateRouteReviewMutation.mutate({
@@ -700,6 +738,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     setIsCompletingRouteReview(true);
     try {
       if (!preview) {
+        await updateRouteReviewMutation.mutateAsync({
+          reportId: activeReport.reportId,
+          review: activeReviewDraft,
+        });
         await completeRouteReviewMutation.mutateAsync(activeReport.reportId);
         return;
       }
@@ -989,6 +1031,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   areaScopeLabel={routeReviewAreaScope ? `${routeReviewAreaScope.gu} ${routeReviewAreaScope.dong}` : null}
                   routingApplyState={preview ? null : routingApplyStateQuery.data}
                   applyingRouting={applyRoutingMutation.isPending}
+                  refreshingRoutingState={routingApplyStateQuery.isFetching}
+                  savingReview={updateRouteReviewMutation.isPending}
+                  reviewSaveMessage={routeReviewSaveNotice?.message ?? null}
+                  reviewSaveClassName={routeReviewSaveNotice?.className}
                   onApplyRouting={() => applyRoutingMutation.mutate()}
                   onBack={() => setDetailPaneMode("detail")}
                   onReviewChange={handleRouteReviewChange}

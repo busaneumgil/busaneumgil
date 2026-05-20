@@ -35,6 +35,7 @@ import type {
   AssignmentType,
   GeoPoint,
   BridgePayload,
+  SegmentFeature,
 } from "../types";
 
 const configuredBackendApiUrl = import.meta.env.VITE_BACKEND_API_URL as string | undefined;
@@ -370,6 +371,27 @@ export async function fetchAdminRoadNetworkPayload({
     params.set("radiusMeter", String(radiusMeter));
   }
   return requestAdminJson<SegmentPayload>(`/admin/road-network/segments?${params.toString()}`, accessToken);
+}
+
+export async function fetchAdminRoadSegment({
+  edgeId,
+  gu,
+  dong,
+  accessToken,
+}: {
+  edgeId: string | number;
+  gu: string;
+  dong?: string;
+  accessToken: string;
+}): Promise<SegmentFeature> {
+  const params = new URLSearchParams({ gu });
+  if (dong) {
+    params.set("dong", dong);
+  }
+  return requestAdminJson<SegmentFeature>(
+    `/admin/road-network/segments/${edgeId}?${params.toString()}`,
+    accessToken,
+  );
 }
 
 export async function fetchAdminRoadNetworkBridges({

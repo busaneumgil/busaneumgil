@@ -101,9 +101,6 @@ export function HazardReportLocationPreview({
   return (
     <div className="hazard-location-map" role="img" aria-label={`${label} 지도 미리보기`}>
       <div ref={containerRef} className="hazard-location-map__canvas" />
-      <div className="hazard-location-map__hint">
-        지도를 드래그한 뒤 원하는 지점을 클릭하면 해당 위치 기준 로드뷰를 확인할 수 있습니다.
-      </div>
       {status !== "ready" && (
         <div className="hazard-location-map__overlay">
           <strong>{status === "loading" ? "위치를 불러오는 중입니다." : "지도를 표시하지 못했습니다."}</strong>

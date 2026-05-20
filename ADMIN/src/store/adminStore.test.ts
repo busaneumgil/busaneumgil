@@ -24,6 +24,7 @@ describe("adminStore role model", () => {
     expect(adminPageFromSearch("?preview=hazards")).toBe("hazards");
     expect(adminPageFromSearch("?preview=routeStats")).toBe("routeStats");
     expect(adminPageFromSearch("?preview=bottleneckMonitoring")).toBe("bottleneckMonitoring");
+    expect(adminPageFromSearch("?preview=notices")).toBe("notices");
   });
 
   it("keeps explicit page links ahead of preview hints", () => {

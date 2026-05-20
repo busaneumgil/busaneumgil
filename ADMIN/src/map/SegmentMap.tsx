@@ -744,11 +744,11 @@ export function SegmentMap({
     selectedSegmentOverlayRef.current = new window.kakao.maps.Polyline({
       map: mapRef.current,
       path: feature.geometry.coordinates.map(([lng, lat]) => new window.kakao!.maps.LatLng(lat, lng)),
-      strokeColor: "#111827",
-      strokeWeight: 8,
+      strokeColor: "#f97316",
+      strokeWeight: 10,
       strokeOpacity: 0.95,
       strokeStyle: "solid",
-      zIndex: 22,
+      zIndex: 80,
     });
   }
 

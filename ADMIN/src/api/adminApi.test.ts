@@ -4,6 +4,7 @@ import {
   fetchAdminDashboardBottlenecks,
   fetchAdminDashboardSummary,
   fetchAdminHazardReportDetail,
+  fetchAdminRoadSegment,
   startAdminHazardRouteReview,
   updateAdminHazardRouteReview,
 } from "./adminApi";
@@ -200,6 +201,42 @@ describe("admin hazard route review API", () => {
       2,
       expect.stringContaining("/admin/dashboard/bottlenecks?limit=12&from=2026-05-01&to=2026-05-19"),
       expect.anything(),
+    );
+  });
+
+  it("fetches a single road segment detail with area scope", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "OK",
+        message: "ok",
+        data: {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: [] },
+          properties: {
+            edgeId: 15206,
+            walkAccess: "YES",
+          },
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await fetchAdminRoadSegment({
+      edgeId: 15206,
+      gu: "강서구",
+      dong: "명지동",
+      accessToken: "token",
+    });
+
+    expect(response.properties.walkAccess).toBe("YES");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/road-network/segments/15206?gu=%EA%B0%95%EC%84%9C%EA%B5%AC&dong=%EB%AA%85%EC%A7%80%EB%8F%99"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token",
+        }),
+      }),
     );
   });
 });

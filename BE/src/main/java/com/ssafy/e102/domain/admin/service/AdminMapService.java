@@ -232,6 +232,28 @@ public class AdminMapService {
 			toAreaBoundaryFeature(gu, dong));
 	}
 
+	public AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadSegmentPropertiesResponse> getRoadSegment(
+		Long edgeId,
+		String gu,
+		String dong) {
+		if (!hasGu(gu)) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "구는 필수입니다.");
+		}
+		boolean inScope = hasAreaScope(gu, dong)
+			? roadSegmentRepository.existsIntersectingAreaByEdgeId(edgeId, gu, dong)
+			: roadSegmentRepository.existsIntersectingGuByEdgeId(edgeId, gu);
+		if (!inScope) {
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "담당 구/동의 segment만 조회할 수 있습니다.");
+		}
+		RoadSegment roadSegment = roadSegmentRepository.findById(edgeId)
+			.orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND, "segment를 찾을 수 없습니다."));
+		List<SegmentFeatureType> featureTypes = segmentFeatureRepository.findByEdgeIdIn(List.of(edgeId))
+			.stream()
+			.map(SegmentFeature::getFeatureType)
+			.toList();
+		return toRoadSegmentFeature(roadSegment, Map.of(edgeId, featureTypes));
+	}
+
 	public AdminRoadNetworkBridgePayloadResponse getRoadNetworkBridges(String gu, String dong) {
 		if (!hasGu(gu)) {
 			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "구는 필수입니다.");

@@ -430,7 +430,7 @@ const pageMeta: Record<AdminPage, { label: string; description: string }> = {
   },
   notices: {
     label: "공지사항 관리",
-    description: "",
+    description: "공지사항 관리 기능은 현재 준비중입니다.",
   },
   users: {
     label: "사용자 관리",
@@ -508,7 +508,7 @@ function AdminApp() {
     : null;
   const fullShellPreviewEnabled = typeof window !== "undefined"
     && import.meta.env.DEV
-    && (previewPage === "routeStats" || previewPage === "bottleneckMonitoring" || previewPage === "hazards");
+    && (previewPage === "routeStats" || previewPage === "bottleneckMonitoring" || previewPage === "hazards" || previewPage === "notices");
   const currentAdmin = adminPrincipal ?? (fullShellPreviewEnabled
     ? {
         userId: "7e7e00a4-bf81-4a82-918c-7a5e062dc325",
@@ -1564,7 +1564,7 @@ function AdminApp() {
           />
         )}
 
-        {page === "notices" && <EmptyAdminPage />}
+        {page === "notices" && <NoticeComingSoonPage />}
 
         {page === "facilities" && (
           <div className="facility-management-layout">
@@ -1691,8 +1691,19 @@ function App() {
   );
 }
 
-function EmptyAdminPage() {
-  return null;
+function NoticeComingSoonPage() {
+  return (
+    <section className="notice-coming-soon admin-page-content" aria-labelledby="notice-coming-soon-title">
+      <div className="notice-coming-soon-card">
+        <div className="notice-coming-soon-icon" aria-hidden="true">
+          <DashboardIcon name="report" />
+        </div>
+        <span className="notice-coming-soon-badge">준비중</span>
+        <h2 id="notice-coming-soon-title">공지사항 관리 기능은 준비중입니다.</h2>
+        <p>현재 공지 등록, 수정, 삭제 기능은 제공되지 않습니다.</p>
+      </div>
+    </section>
+  );
 }
 
 type MetricTone = "blue" | "green" | "orange" | "red" | "yellow" | "purple";

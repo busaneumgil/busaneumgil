@@ -43,6 +43,10 @@ interface HazardRouteReviewWorkspaceProps {
   areaScopeLabel: string | null;
   routingApplyState?: AdminRoutingApplyStateResponse | null;
   applyingRouting: boolean;
+  refreshingRoutingState: boolean;
+  savingReview: boolean;
+  reviewSaveMessage: string | null;
+  reviewSaveClassName?: string;
   onApplyRouting: () => void;
   onBack: () => void;
   onReviewChange: (review: HazardRouteReviewRecord) => void;
@@ -63,6 +67,10 @@ export function HazardRouteReviewWorkspace({
   areaScopeLabel,
   routingApplyState,
   applyingRouting,
+  refreshingRoutingState,
+  savingReview,
+  reviewSaveMessage,
+  reviewSaveClassName = "success-box",
   onApplyRouting,
   onBack,
   onReviewChange,
@@ -100,6 +108,10 @@ export function HazardRouteReviewWorkspace({
 
   const reviewedSegmentCount = Object.keys(review.segmentDrafts).length;
   const canComplete = reviewedSegmentCount > 0;
+  const selectedSegmentEdgeId = selectedSegment ? String(selectedSegment.properties.edgeId) : null;
+  const segmentCardClassName = selectedSegment
+    ? "hazard-detail-card hazard-review-segment-card selected"
+    : "hazard-detail-card hazard-review-segment-card";
 
   function handleSelectSegment(feature: SegmentFeature) {
     setSelectedSegment(feature);
@@ -138,6 +150,12 @@ export function HazardRouteReviewWorkspace({
         </div>
 
         <div className="hazard-review-map-frame">
+          {selectedSegmentEdgeId && (
+            <div className="hazard-review-selected-segment-pill" aria-live="polite">
+              <span>선택한 세그먼트</span>
+              <strong>edge {selectedSegmentEdgeId}</strong>
+            </div>
+          )}
           <SegmentMap
             payload={networkPayload}
             loading={networkLoading}
@@ -170,7 +188,7 @@ export function HazardRouteReviewWorkspace({
             <ReviewRow label="신고 유형" value={reportTypeLabel} />
             <ReviewRow label="위치" value={locationAddress ?? "좌표 기준 위치 확인 중"} secondary={locationRegion || undefined} />
             <ReviewRow label="좌표" value={formatHazardCoordinates(reportPoint)} />
-            <ReviewRow label="검수 현황" value={`검수한 세그먼트 ${reviewedSegmentCount}건`} secondary={`마지막 저장 ${formatReviewStamp(review.updatedAt)}`} />
+            <ReviewRow label="검수 현황" value={`검수한 세그먼트 ${reviewedSegmentCount}건`} secondary={savingReview ? "DB 저장 중" : `마지막 저장 ${formatReviewStamp(review.updatedAt)}`} />
             <div className="hazard-detail-list__row hazard-detail-list__row--description">
               <dt>내용</dt>
               <dd>
@@ -182,7 +200,7 @@ export function HazardRouteReviewWorkspace({
           </dl>
         </section>
 
-        <section className="hazard-detail-card hazard-review-segment-card">
+        <section className={segmentCardClassName}>
           <h3>세그먼트 검수</h3>
           <p className="hazard-review-helper">지도에서 세그먼트를 누르면 해당 edge의 핵심 통행 속성을 바로 검수할 수 있습니다.</p>
 
@@ -234,7 +252,10 @@ export function HazardRouteReviewWorkspace({
       <div className="hazard-review-actionbar">
         <div className="hazard-review-actionbar__summary">
           <strong>{hazardRouteReviewIntentLabel(review.intent)}</strong>
-          <span>{canComplete ? `검수한 세그먼트 ${reviewedSegmentCount}건이 DB 저장 대상입니다. 검수 완료 후 DB 저장 후 경로 반영 버튼 순서로 적용해 주세요.` : "최소 1개 세그먼트를 검수해야 처리 완료를 진행할 수 있습니다."}</span>
+          <span>{canComplete ? `검수한 세그먼트 ${reviewedSegmentCount}건이 DB 저장 대상입니다. 검수 완료 전 최신 초안을 DB에 저장하고, DB 저장 후 경로 반영 버튼 순서로 적용해 주세요.` : "최소 1개 세그먼트를 검수해야 처리 완료를 진행할 수 있습니다."}</span>
+          {savingReview && <span className="warning-box">DB 저장 중</span>}
+          {!savingReview && reviewSaveMessage && <span className={reviewSaveClassName}>{reviewSaveMessage}</span>}
+          {refreshingRoutingState && <span className="warning-box">상태 새로고침 중</span>}
           <RoutingApplyStateSummary state={routingApplyState} />
         </div>
         <div className="hazard-review-actionbar__buttons">
@@ -244,7 +265,7 @@ export function HazardRouteReviewWorkspace({
           <button
             type="button"
             className="hazard-action-button secondary"
-            disabled={applyingRouting || !routingApplyState?.dirty}
+            disabled={applyingRouting || refreshingRoutingState || !routingApplyState?.dirty}
             onClick={onApplyRouting}
           >
             {applyingRouting || routingApplyState?.applying ? "경로 반영 중" : "경로 반영"}
@@ -252,10 +273,10 @@ export function HazardRouteReviewWorkspace({
           <button
             type="button"
             className="hazard-action-button approve"
-            disabled={!canComplete || completing}
+            disabled={!canComplete || completing || savingReview}
             onClick={onComplete}
           >
-            {completing ? "처리 중" : "검수 완료"}
+            {savingReview ? "DB 저장 중" : completing ? "검수 완료 중" : "검수 완료"}
           </button>
         </div>
       </div>

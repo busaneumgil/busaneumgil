@@ -42,4 +42,10 @@ describe("Admin dashboard navigation wiring", () => {
     expect(appSource).toContain('presentationMode={viewMode}');
     expect(appSource).toContain("속도 기준 (m/s)");
   });
+
+  it("renders the notices workspace as an implementation-ready state", () => {
+    expect(appSource).toContain('{page === "notices" && <NoticeComingSoonPage />}');
+    expect(appSource).toContain("공지사항 관리 기능은 준비중입니다.");
+    expect(appSource).toContain("현재 공지 등록, 수정, 삭제 기능은 제공되지 않습니다.");
+  });
 });

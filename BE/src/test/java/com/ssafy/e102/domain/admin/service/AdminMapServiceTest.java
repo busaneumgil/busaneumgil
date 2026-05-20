@@ -44,6 +44,7 @@ import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
 import com.ssafy.e102.domain.route.repository.RoutingSegmentOverrideRepository;
 import com.ssafy.e102.domain.route.repository.SegmentFeatureRepository;
 import com.ssafy.e102.domain.route.type.AccessibilityState;
+import com.ssafy.e102.domain.route.type.SurfaceState;
 import com.ssafy.e102.domain.route.type.WidthState;
 import com.ssafy.e102.global.geo.GeoPointConverter;
 
@@ -146,6 +147,29 @@ class AdminMapServiceTest {
 		verify(roadSegmentRepository).findAllIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200, 1500);
 		verify(roadSegmentRepository, never()).countIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200);
 		verify(roadSegmentRepository, never()).findAllIntersectingArea("강서구", "명지동");
+	}
+
+	@Test
+	@DisplayName("segment 상세 조회는 DB에 저장된 최신 검수 속성을 반환한다")
+	void getRoadSegmentReturnsCurrentDbAttributes() {
+		RoadSegment roadSegment = roadSegment(15206L);
+		roadSegment.updateAttributes(
+			AccessibilityState.YES,
+			AccessibilityState.UNKNOWN,
+			AccessibilityState.UNKNOWN,
+			WidthState.ADEQUATE_150,
+			SurfaceState.PAVED,
+			AccessibilityState.UNKNOWN,
+			AccessibilityState.UNKNOWN);
+		when(roadSegmentRepository.existsIntersectingAreaByEdgeId(15206L, "강서구", "명지동")).thenReturn(true);
+		when(roadSegmentRepository.findById(15206L)).thenReturn(Optional.of(roadSegment));
+		when(segmentFeatureRepository.findByEdgeIdIn(List.of(15206L))).thenReturn(List.of());
+
+		var response = adminMapService.getRoadSegment(15206L, "강서구", "명지동");
+
+		assertThat(response.properties().walkAccess()).isEqualTo(AccessibilityState.YES);
+		assertThat(response.properties().widthState()).isEqualTo(WidthState.ADEQUATE_150);
+		assertThat(response.properties().surfaceState()).isEqualTo(SurfaceState.PAVED);
 	}
 
 	@Test

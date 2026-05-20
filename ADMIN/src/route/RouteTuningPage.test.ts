@@ -13,4 +13,10 @@ describe("RouteTuningPage copy", () => {
     expect(source).toContain("setAttributeDraft({");
     expect(source).toContain("normalizeAccessibility(response.segment.walkAccess)");
   });
+
+  it("loads the selected segment detail from the single-segment DB endpoint", () => {
+    expect(source).toContain("fetchAdminRoadSegment");
+    expect(source).toContain('queryKey: ["admin-road-segment"');
+    expect(source).toContain("selectedSegmentDetailQuery.data ?? selectedSegment");
+  });
 });

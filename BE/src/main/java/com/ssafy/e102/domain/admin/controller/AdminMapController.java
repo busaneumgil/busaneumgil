@@ -19,12 +19,15 @@ import com.ssafy.e102.domain.admin.dto.request.AdminRoadNetworkEditApplyRequest;
 import com.ssafy.e102.domain.admin.dto.request.AdminRoadSegmentAttributesUpdateRequest;
 import com.ssafy.e102.domain.admin.dto.response.AdminAreaListResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminFacilityPayloadResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminGeoJsonFeatureResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminLineStringGeometryResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminPlaceDetailResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoutePreviewResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditApplyResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkEditJobResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkBridgePayloadResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadNetworkResponse;
+import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentPropertiesResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoadSegmentUpdateResponse;
 import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStateResponse;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
@@ -79,6 +82,18 @@ public class AdminMapController {
 		@Parameter(description = "구/동 미지정 전체 조회 fallback 개수. 구/동을 지정하면 해당 구/동의 모든 구간을 조회한다. 허용 범위는 1~20000이다.") @RequestParam(defaultValue = "10000") @Min(1) @Max(20000)
 		int limit) {
 		return ApiResponse.success(adminMapService.getRoadNetwork(gu, dong, limit, centerLat, centerLng, radiusMeter));
+	}
+
+	@Operation(summary = "관리자 보행 segment 상세 조회", description = "선택한 segment의 DB 최신 검수 속성을 단건으로 조회한다.")
+	@GetMapping("/road-network/segments/{edgeId}")
+	public ApiResponse<AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadSegmentPropertiesResponse>> getRoadSegment(
+		@Parameter(description = "조회할 segment ID") @PathVariable @Positive
+		Long edgeId,
+		@Parameter(description = "구") @RequestParam
+		String gu,
+		@Parameter(description = "동") @RequestParam(required = false)
+		String dong) {
+		return ApiResponse.success(adminMapService.getRoadSegment(edgeId, gu, dong));
 	}
 
 	@Operation(summary = "관리자 보행 네트워크 연결 후보 조회", description = "선택한 구/동에서 서로 다른 보행 네트워크 컴포넌트를 연결할 수 있는 가이드 후보를 조회한다.")

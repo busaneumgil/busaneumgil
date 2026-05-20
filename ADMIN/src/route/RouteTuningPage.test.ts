@@ -19,5 +19,6 @@ describe("RouteTuningPage copy", () => {
     expect(source).toContain('queryKey: ["admin-road-segment"');
     expect(source).toContain("selectedSegmentForMap = selectedSegmentDetailQuery.data ?? selectedSegment");
     expect(source).toContain("selectedSegmentDetailQuery.isFetching ? null : selectedSegment");
+    expect(source).not.toContain("onSelectSegment(selectedSegmentDetailQuery.data)");
   });
 });

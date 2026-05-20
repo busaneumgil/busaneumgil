@@ -132,14 +132,6 @@ export function RouteTuningPage({
     });
   }, [selectedSegmentForAttributes]);
 
-  useEffect(() => {
-    if (!selectedSegment || !selectedSegmentDetailQuery.data) return;
-    if (String(selectedSegment.properties.edgeId) !== String(selectedSegmentDetailQuery.data.properties.edgeId)) return;
-    if (selectedSegment !== selectedSegmentDetailQuery.data) {
-      onSelectSegment(selectedSegmentDetailQuery.data);
-    }
-  }, [onSelectSegment, selectedSegment, selectedSegmentDetailQuery.data]);
-
   function handleRoutePointPick(point: GeoPoint) {
     onSelectSegment(null);
     setPreview(null);

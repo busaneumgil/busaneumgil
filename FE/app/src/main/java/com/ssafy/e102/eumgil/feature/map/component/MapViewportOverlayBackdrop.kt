@@ -2,6 +2,7 @@ package com.ssafy.e102.eumgil.feature.map.component
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -29,6 +31,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -39,6 +42,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.core.model.BrailleBlockType
 import com.ssafy.e102.eumgil.core.model.FacilityCategory
+import com.ssafy.e102.eumgil.feature.report.reportTypeMarkerIconRes
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -655,23 +659,41 @@ private fun ViewportPointMarker(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f),
                 ) {}
             } else {
-                Text(
-                    text = spec.label.orEmpty(),
-                    modifier =
-                        if (spec.isRotated) {
-                            Modifier.graphicsLayer { rotationZ = -45f }
-                        } else {
+                if (spec.iconResId != null) {
+                    Image(
+                        painter = painterResource(id = spec.iconResId),
+                        contentDescription = null,
+                        colorFilter = ColorFilter.tint(spec.contentColor),
+                        modifier =
                             Modifier
-                        },
-                    color = spec.contentColor,
-                    style =
-                        MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = spec.fontSize,
-                        ),
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                )
+                                .size(spec.iconSize)
+                                .then(
+                                    if (spec.isRotated) {
+                                        Modifier.graphicsLayer { rotationZ = -45f }
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
+                    )
+                } else {
+                    Text(
+                        text = spec.label.orEmpty(),
+                        modifier =
+                            if (spec.isRotated) {
+                                Modifier.graphicsLayer { rotationZ = -45f }
+                            } else {
+                                Modifier
+                            },
+                        color = spec.contentColor,
+                        style =
+                            MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = spec.fontSize,
+                            ),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
@@ -835,14 +857,16 @@ private fun MapViewportPointOverlay.toViewportPointMarkerSpec(): ViewportPointMa
 
         MapViewportPointKind.APPROVED_REPORT ->
             ViewportPointMarkerSpec(
-                label = "!",
+                label = null,
                 containerColor = Color(0xFFFFD84D),
-                contentColor = Color(0xFF3A2A00),
-                borderColor = Color(0xFF7A4F00),
+                contentColor = Color.White,
+                borderColor = Color(0xFFE0B312),
                 size = 44.dp,
+                shape = ViewportPointMarkerShape.CIRCLE,
+                iconResId = reportTypeMarkerIconRes(reportTypeApiValue),
+                iconSize = 20.dp,
                 fontSize = 18.sp,
                 borderWidth = 2.dp,
-                shape = ViewportPointMarkerShape.TRIANGLE_WARNING,
             )
 
         MapViewportPointKind.CAMERA_FOCUS ->
@@ -902,6 +926,8 @@ private data class ViewportPointMarkerSpec(
     val isDiamond: Boolean = false,
     val isRotated: Boolean = false,
     val shape: ViewportPointMarkerShape = ViewportPointMarkerShape.CIRCLE,
+    val iconResId: Int? = null,
+    val iconSize: Dp = 0.dp,
     val fontSize: androidx.compose.ui.unit.TextUnit,
     val borderWidth: Dp = 1.dp,
 )

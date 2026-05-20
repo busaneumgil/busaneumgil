@@ -1020,7 +1020,7 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
     return when (kind) {
         MapViewportPointKind.APPROVED_REPORT ->
             KakaoOverlayMarkerRenderState(
-                markerId = overlayId,
+                markerId = clickTargetId ?: overlayId,
                 coordinate = coordinate,
                 kind = KakaoOverlayMarkerKind.APPROVED_REPORT,
                 iconResId = reportTypeMarkerIconRes(reportTypeApiValue),
@@ -1322,7 +1322,7 @@ private const val KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_SCREEN_RELATIVE = "
 private const val KAKAO_ROUTE_DIRECTION_ARROW_ROTATION_MODEL_MAP_ABSOLUTE = "map-absolute"
 private val KAKAO_ROUTE_DIRECTION_ARROW_TRANSFORM_METHOD = TransformMethod.AbsoluteRotation
 private val KAKAO_APPROVED_REPORT_MARKER_FILL = 0xFFFFD84D.toInt()
-private val KAKAO_APPROVED_REPORT_MARKER_STROKE = 0xFF7A4F00.toInt()
+private val KAKAO_APPROVED_REPORT_MARKER_STROKE = 0xFFE0B312.toInt()
 
 private fun MapViewportPolylineOverlay.toKakaoRouteLineStyle(): KakaoRouteLineStyleSpec {
     val palette = tone.toKakaoRouteLinePalette()

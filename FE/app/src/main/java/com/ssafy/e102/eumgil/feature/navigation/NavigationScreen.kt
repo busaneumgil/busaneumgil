@@ -425,8 +425,7 @@ internal fun navigationBottomBarChromePolicy(): NavigationBottomBarChromePolicy 
 @Composable
 private fun navigationHazardSheetBottomInset(): Dp {
     val density = LocalDensity.current
-    val navigationBarInset = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
-    return NavigationBottomBarButtonHeight + NavigationBottomBarBottomGap + navigationBarInset
+    return with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
 }
 
 internal enum class NavigationExitDialogShell {

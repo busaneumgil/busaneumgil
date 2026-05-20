@@ -496,7 +496,7 @@ class NavigationScreenPolicyTest {
             screenSection.indexOf("NavigationBottomBar(") < screenSection.indexOf("ApprovedHazardMarkerBottomSheet("),
         )
         assertTrue(
-            "The navigation hazard sheet should reserve the local bottom bar clearance so the CTA remains visible.",
+            "The navigation hazard sheet should attach to the safe area instead of floating above the local CTA bar.",
             screenSection.contains("bottomInset = navigationHazardSheetBottomInset()"),
         )
     }

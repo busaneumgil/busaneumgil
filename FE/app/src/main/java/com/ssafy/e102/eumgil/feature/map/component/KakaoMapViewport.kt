@@ -1901,57 +1901,16 @@ private class KakaoOverlayMarkerStyleCache(
     ): Bitmap {
         val sizePx = dpToPx(marker.sizeDp.toFloat())
         val bitmapSizePx = sizePx.roundToInt().coerceAtLeast(1)
-        val borderWidthPx = dpToPx(if (marker.isSelected) 3f else 2f).coerceAtLeast(1f)
-        val halfStroke = borderWidthPx / 2f
-        val padding = dpToPx(2f)
         val bitmap = Bitmap.createBitmap(bitmapSizePx, bitmapSizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val outerFillPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.FILL
-                color = if (marker.isSelected) APPROVED_REPORT_MARKER_SELECTED_RING else marker.strokeColorArgb
+        AppCompatResources
+            .getDrawable(context, R.drawable.ic_approved_hazard_warning)
+            ?.mutate()
+            ?.let { drawable ->
+                DrawableCompat.setTintList(drawable, null)
+                drawable.setBounds(0, 0, bitmapSizePx, bitmapSizePx)
+                drawable.draw(canvas)
             }
-        val fillPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.FILL
-                color = marker.fillColorArgb
-            }
-        val strokePaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                this.strokeWidth = borderWidthPx
-                color = marker.strokeColorArgb
-            }
-        val path =
-            AndroidPath().apply {
-                moveTo(sizePx / 2f, padding + halfStroke)
-                lineTo(sizePx - padding - halfStroke, sizePx - padding - halfStroke)
-                lineTo(padding + halfStroke, sizePx - padding - halfStroke)
-                close()
-            }
-        canvas.drawPath(path, outerFillPaint)
-        canvas.drawPath(path, fillPaint)
-        canvas.drawPath(path, strokePaint)
-        val symbolPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                color = APPROVED_REPORT_MARKER_SYMBOL
-                strokeWidth = borderWidthPx * 0.7f
-                strokeCap = Paint.Cap.ROUND
-            }
-        canvas.drawLine(
-            sizePx / 2f,
-            sizePx * 0.33f,
-            sizePx / 2f,
-            sizePx * 0.58f,
-            symbolPaint,
-        )
-        val dotPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.FILL
-                color = APPROVED_REPORT_MARKER_SYMBOL
-            }
-        canvas.drawCircle(sizePx / 2f, sizePx * 0.72f, borderWidthPx * 0.35f, dotPaint)
         return bitmap
     }
 

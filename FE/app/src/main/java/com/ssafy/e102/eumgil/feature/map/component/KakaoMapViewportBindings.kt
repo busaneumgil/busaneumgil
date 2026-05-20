@@ -97,6 +97,21 @@ internal fun syncRenderedKakaoCameraTarget(
     )
 }
 
+internal fun shouldSkipKakaoCameraSync(
+    renderedTarget: MapCameraTarget?,
+    requestedTarget: MapCameraTarget,
+): Boolean {
+    if (requestedTarget.shouldAnimateTransition) return false
+    val previous = renderedTarget ?: return false
+    return previous.center.isNearCameraTarget(requestedTarget.center) &&
+        previous.resolvedZoomLevel() == requestedTarget.resolvedZoomLevel() &&
+        previous.bearingDegrees == requestedTarget.bearingDegrees
+}
+
+private fun MapCoordinate.isNearCameraTarget(other: MapCoordinate): Boolean =
+    kotlin.math.abs(latitude - other.latitude) <= KAKAO_CAMERA_SYNC_COORDINATE_TOLERANCE &&
+        kotlin.math.abs(longitude - other.longitude) <= KAKAO_CAMERA_SYNC_COORDINATE_TOLERANCE
+
 internal data class KakaoMapScreenPoint(
     val x: Int,
     val y: Int,
@@ -137,6 +152,8 @@ internal enum class KakaoProjectedMarkerKind {
     ROUTE_DESTINATION,
     ROUTE_SEGMENT_JUNCTION,
 }
+
+private const val KAKAO_CAMERA_SYNC_COORDINATE_TOLERANCE = 0.00002
 
 internal enum class KakaoOverlayMarkerKind {
     APPROVED_REPORT,

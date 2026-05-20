@@ -413,9 +413,16 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(
             "Transit options should scroll above the fixed start button on a white surface.",
             transitPaneSection.contains("color = Color.White") &&
-                transitPaneSection.contains(".verticalScroll(rememberScrollState())") &&
+                transitPaneSection.contains(".nestedScroll(pullRefreshConnection)") &&
+                transitPaneSection.contains(".verticalScroll(scrollState)") &&
                 transitPaneSection.contains("val bottomBarOverlayClearance = routeSettingBottomBarOverlayClearance()") &&
                 transitPaneSection.contains("bottom = bottomBarOverlayClearance"),
+        )
+        assertTrue(
+            "Transit result pane should support pull-to-refresh without adding a floating CTA-adjacent refresh button.",
+            transitPaneSection.contains("rememberTransitRoutePullRefreshConnection(") &&
+                source.contains("onRefresh = {") &&
+                source.contains("RouteSettingUiAction.RouteRefreshClicked"),
         )
     }
 
@@ -1709,7 +1716,7 @@ class RouteSettingLayoutPolicyTest {
                 .substringBefore("@Composable\nprivate fun RouteSettingCtaContent")
 
         assertFalse("Route selection should not pass a floating refresh action into the bottom bar.", screenSection.contains("showRefreshAction ="))
-        assertFalse("Route selection should not dispatch route refresh from a floating CTA-adjacent button.", screenSection.contains("RouteSettingUiAction.RouteRefreshClicked"))
+        assertTrue("Transit pull-to-refresh may dispatch route refresh from the result pane.", screenSection.contains("RouteSettingUiAction.RouteRefreshClicked"))
         assertFalse("The bottom bar should not render a floating refresh button over the start CTA.", bottomBarSection.contains("RouteRefreshFloatingButton("))
         assertFalse("The floating refresh composable should be removed from the route selection screen.", source.contains("private fun RouteRefreshFloatingButton("))
     }

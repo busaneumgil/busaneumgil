@@ -105,4 +105,68 @@ class KakaoMapCameraAnimationBindingsTest {
         assertEquals(previous.requestId, synced.requestId)
         assertTrue(shouldAnimateKakaoCameraTransition(previousTarget = synced, nextTarget = nextZoom))
     }
+
+    @Test
+    fun `camera sync skips duplicate move when only request id changed after user gesture`() {
+        val rendered =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1812, longitude = 129.0814),
+                source = MapCameraSource.SEARCH_RESULT,
+                requestId = 7L,
+                zoomLevel = 17,
+                shouldAnimateTransition = false,
+            )
+        val requested = rendered.copy(requestId = 8L)
+
+        assertTrue(
+            shouldSkipKakaoCameraSync(
+                renderedTarget = rendered,
+                requestedTarget = requested,
+            ),
+        )
+    }
+
+    @Test
+    fun `camera sync runs animated programmatic focus even when target matches previous render`() {
+        val rendered =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1812, longitude = 129.0814),
+                source = MapCameraSource.SEARCH_RESULT,
+                requestId = 7L,
+                zoomLevel = 17,
+                shouldAnimateTransition = false,
+            )
+        val requested =
+            rendered.copy(
+                requestId = 8L,
+                shouldAnimateTransition = true,
+            )
+
+        assertFalse(
+            shouldSkipKakaoCameraSync(
+                renderedTarget = rendered,
+                requestedTarget = requested,
+            ),
+        )
+    }
+
+    @Test
+    fun `camera sync still runs when zoom actually changes`() {
+        val rendered =
+            MapCameraTarget(
+                center = MapCoordinate(latitude = 35.1812, longitude = 129.0814),
+                source = MapCameraSource.SEARCH_RESULT,
+                requestId = 7L,
+                zoomLevel = 17,
+                shouldAnimateTransition = false,
+            )
+        val requested = rendered.copy(requestId = 8L, zoomLevel = 18)
+
+        assertFalse(
+            shouldSkipKakaoCameraSync(
+                renderedTarget = rendered,
+                requestedTarget = requested,
+            ),
+        )
+    }
 }

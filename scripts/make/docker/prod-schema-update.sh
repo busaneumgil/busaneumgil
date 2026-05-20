@@ -125,6 +125,49 @@ with psycopg2.connect(
 PY
 }
 
+ensure_admin_map_performance_indexes() {
+  run_db_python <<'PY'
+import os
+import psycopg2
+
+url = os.environ["DB_URL"].replace("jdbc:postgresql://", "")
+host_port, db_name = url.split("/", 1)
+host, port = host_port.split(":", 1)
+
+with psycopg2.connect(
+    host=host,
+    port=port,
+    dbname=db_name,
+    user=os.environ["DB_USERNAME"],
+    password=os.environ["DB_PASSWORD"],
+    sslmode=os.environ.get("DB_SSLMODE", "require"),
+) as conn:
+    conn.autocommit = True
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_road_segments_geom_gist
+                ON road_segments
+                USING GIST (geom)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_admin_areas_geom_gist
+                ON admin_areas
+                USING GIST (geom)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_segment_features_edge_id
+                ON segment_features (edge_id)
+            """
+        )
+        print("admin map performance indexes ready")
+PY
+}
+
 drop_empty_incompatible_road_tables() {
   run_db_python <<'PY'
 import os
@@ -266,6 +309,7 @@ host_port, db_name = url.split("/", 1)
 host, port = host_port.split(":", 1)
 
 required_tables = ("road_nodes", "road_segments", "segment_features", "source_features", "routing_segment_overrides", "routing_apply_states")
+required_indexes = ("idx_road_segments_geom_gist", "idx_admin_areas_geom_gist", "idx_segment_features_edge_id")
 required_columns = {
     "road_nodes": ("vertex_id", "source_node_key", "point"),
     "road_segments": (
@@ -345,6 +389,20 @@ with psycopg2.connect(
         if missing_tables:
             raise SystemExit(f"missing road schema tables: {', '.join(missing_tables)}")
 
+        cursor.execute(
+            """
+            SELECT indexname
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND indexname = ANY(%s)
+            """,
+            (list(required_indexes),),
+        )
+        existing_indexes = {row[0] for row in cursor.fetchall()}
+        missing_indexes = [index for index in required_indexes if index not in existing_indexes]
+        if missing_indexes:
+            raise SystemExit(f"missing admin map performance indexes: {', '.join(missing_indexes)}")
+
         for table, columns in required_columns.items():
             cursor.execute(
                 """
@@ -400,4 +458,5 @@ ensure_postgis_extension
 drop_empty_incompatible_road_tables
 run_jpa_schema_update
 ensure_routing_segment_overrides_schema
+ensure_admin_map_performance_indexes
 verify_road_schema

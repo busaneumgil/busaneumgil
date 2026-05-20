@@ -25,6 +25,7 @@ export interface KakaoMap {
   setCenter: (latLng: unknown) => void;
   getCenter?: () => unknown;
   setBounds?: (bounds: unknown) => void;
+  getBounds?: () => unknown;
   getLevel?: () => number;
   setLevel: (level: number) => void;
   getProjection?: () => KakaoMapProjection;

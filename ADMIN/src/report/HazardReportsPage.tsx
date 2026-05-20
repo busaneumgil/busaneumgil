@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  applyAdminRoutingOverrides,
   approveAdminHazardReport,
   completeAdminHazardRouteReview,
+  fetchAdminRoutingApplyState,
   fetchAdminDashboardSummary,
   fetchAdminHazardReportDetail,
   fetchAdminHazardReports,
@@ -43,7 +45,6 @@ import {
   completeHazardRouteReview,
   deriveHazardDisplayStatus,
   hydrateHazardRouteReviewRecord,
-  isHazardRestorePending,
   isHazardReviewActive,
   loadStoredHazardRouteReview,
   routeReviewCompletionClassName,
@@ -197,7 +198,7 @@ const previewHazardRecords: PreviewHazardRecord[] = [
     address: "금정구 중앙대로 1717",
     region: "부산광역시 금정구 부곡동",
     point: { lat: 35.229221, lng: 129.090612 },
-    description: "점자블록 훼손 구간으로 검수 완료 즉시 지도와 경로 탐색에 반영됩니다.",
+    description: "점자블록 훼손 구간으로 지도 반영 대기 상태입니다.",
     imageUrls: [previewStreetImageC, previewStreetImageA],
   }),
   createPreviewHazardRecord({
@@ -258,7 +259,6 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [selectedRoadviewPoint, setSelectedRoadviewPoint] = useState<GeoPoint | null>(null);
   const [detailPaneMode, setDetailPaneMode] = useState<"detail" | "review">("detail");
   const [isCompletingRouteReview, setIsCompletingRouteReview] = useState(false);
   const [routeReviewCompletionNotice, setRouteReviewCompletionNotice] = useState<{
@@ -322,6 +322,30 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     retry: false,
     staleTime: 300_000,
   });
+  const routingApplyStateQuery = useQuery({
+    queryKey: ["admin-routing-apply-state", accessToken],
+    queryFn: () => fetchAdminRoutingApplyState(accessToken),
+    enabled: !preview && hasToken,
+    retry: false,
+    staleTime: 15_000,
+  });
+  const applyRoutingMutation = useMutation({
+    mutationFn: () => applyAdminRoutingOverrides(accessToken),
+    onSuccess: (response) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
+      const notice = routingApplyNotice(response.routingApplyStatus);
+      setRouteReviewCompletionNotice({
+        message: response.message ?? notice.message,
+        className: notice.className,
+      });
+    },
+    onError: (error) => {
+      setRouteReviewCompletionNotice({
+        message: error instanceof Error ? error.message : "경로 반영에 실패했습니다.",
+        className: "error-box",
+      });
+    },
+  });
 
   const reportListData = preview
     ? {
@@ -335,7 +359,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const filteredReports = useMemo(() => {
     const normalizedKeyword = searchQuery.trim().toLowerCase();
     return (reportListData?.content ?? []).filter((report) => {
-      if (status === "RESTORE_PENDING" && !isHazardRestorePending(routeReviewDrafts[report.reportId])) {
+      if (status === "RESTORE_PENDING" && !isHazardRestoreEligible(report, routeReviewDrafts[report.reportId])) {
         return false;
       }
 
@@ -447,6 +471,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
     },
   });
 
@@ -511,6 +536,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
         message: routeReviewCompletionMessage(response.routingApplyStatus),
         className: routeReviewCompletionClassName(response.routingApplyStatus),
       });
+      void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] });
@@ -527,11 +553,6 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const previewImages = detail?.imageUrls ?? (selectedReport?.representativeImageUrl ? [selectedReport.representativeImageUrl] : []);
   const selectedImageUrl = pickHazardPrimaryImage(previewImages, selectedImageIndex);
   const reportPoint = activeReport?.reportPoint ?? null;
-  const roadviewPoint = selectedRoadviewPoint ?? reportPoint;
-
-  useEffect(() => {
-    setSelectedRoadviewPoint(reportPoint);
-  }, [activeReport?.reportId, reportPoint?.lat, reportPoint?.lng]);
 
   useEffect(() => {
     if (preview || !serverReviewDraft) {
@@ -582,10 +603,11 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   });
   const coordinateLabel = reportPoint ? formatHazardCoordinates(reportPoint) : "";
   const mapLink = reportPoint && activeReport
-    ? createKakaoMapLink(reportPoint, `${reportTypeLabel[activeReport.reportType] ?? activeReport.reportType} 제보 위치`)
+    ? createKakaoMapLink(reportPoint, `${reportTypeLabel[activeReport.reportType] ?? activeReport.reportType} 신고 위치`)
     : null;
-  const roadviewLink = roadviewPoint ? createKakaoRoadviewLink(roadviewPoint) : null;
+  const roadviewLink = reportPoint ? createKakaoRoadviewLink(reportPoint) : null;
   const displayStatus = activeReport ? deriveHazardDisplayStatus(activeReport.status, activeReviewDraft) : null;
+  const hasRouteReviewScope = preview || Boolean(routeReviewAreaScope?.gu && routeReviewAreaScope?.dong);
   const canStartApprove = Boolean(detail && canStartHazardApprove(detail.status, activeReviewDraft));
   const canReject = Boolean(
     detail
@@ -635,6 +657,9 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       return;
     }
     if (!preview) {
+      if (!areaScope?.gu || !areaScope?.dong) {
+        return;
+      }
       startRouteReviewMutation.mutate({
         reportId: activeReport.reportId,
         intent,
@@ -696,11 +721,22 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const pendingCount = reportSummary?.pendingReports ?? countReportsByStatus(reportListData?.content, "PENDING");
   const approvedCount = reportSummary?.approvedReports ?? countReportsByStatus(reportListData?.content, "APPROVED");
   const rejectedCount = reportSummary?.rejectedReports ?? countReportsByStatus(reportListData?.content, "REJECTED");
-  const restorePendingCount = countRestorePendingReports(reportListData?.content, routeReviewDrafts);
+  const restorePendingCount = preview
+    ? countRestorableReports(reportListData?.content, routeReviewDrafts)
+    : Math.max(approvedCount - countCompletedRestoreReviews(routeReviewDrafts), 0);
+  const dbSyncPendingCount = preview ? previewSummary.dbSyncPendingCount : approvedCount;
+  const totalSyncPendingCount = dbSyncPendingCount + restorePendingCount;
   const currentPage = cursorStack.length;
   const paginationItems = buildVisiblePageNumbers(currentPage, Boolean(reportListData?.hasNext));
   const detailTrackingId = activeReport ? formatHazardTrackingId(activeReport.createdAt, activeReport.reportId) : null;
   const detailHistory = activeReport ? buildHazardTimeline(activeReport, adminPrincipal.userId, activeReviewDraft) : [];
+  const hasDbSyncQueue = totalSyncPendingCount > 0;
+  const latestReportStamp = preview
+    ? previewSummary.latestSnapshotAt
+    : activeReport?.createdAt
+      ?? reportListData?.content[0]?.createdAt
+      ?? summaryQuery.data?.period.to
+      ?? "";
   const operationSnapshot = activeReport ? buildOperationSnapshot(activeReport.status, activeReviewDraft) : null;
   const activeSessionMeta = activeReport ? reportSessionMeta[activeReport.reportId] : undefined;
   const processedAt = activeSessionMeta?.handledAt
@@ -715,7 +751,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
     <section className="hazard-page admin-page-content">
       <div className="hazard-summary-strip">
         <HazardSummaryCard
-          label="전체 신고"
+          label="전체 제보"
           value={String(totalCount)}
           detail={reportSummary ? `오늘 +${reportSummary.newReports}` : "최근 집계"}
           share={null}
@@ -751,7 +787,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       <div className="hazard-content-grid">
         <section className="admin-dashboard-card hazard-list-shell">
           <div className="hazard-list-shell__header">
-            <div className="hazard-tab-strip" role="tablist" aria-label="불편제보 상태 필터">
+            <div className="hazard-tab-strip" role="tablist" aria-label="불편신고 상태 필터">
               {[
                 { key: "" as HazardFilterKey, label: "전체", count: totalCount },
                 { key: "PENDING" as HazardFilterKey, label: "대기", count: pendingCount },
@@ -778,7 +814,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="제목, 내용, 위치 검색"
-                aria-label="불편제보 검색"
+                aria-label="불편신고 검색"
               />
               <span className="hazard-search-field__icon" aria-hidden="true">
                 <HazardUiIcon name="search" />
@@ -788,7 +824,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
           <div className="hazard-inline-banner">
             <HazardUiIcon name="info" />
-            <span>승인 검수와 원상복구 검수는 제보별로 즉시 적용됩니다. 검수 완료 시 도로 속성과 경로 오버레이가 바로 갱신되고 필요하면 경로 엔진도 다시 불러옵니다.</span>
+            <span>승인/반려/원상복구는 신고별로 개별 처리됩니다. 처리한 항목은 경로 반영 필요 상태로 모아 두었다가 별도 경로 반영으로 적용합니다.</span>
           </div>
 
           {reportsQuery.error instanceof Error && <p className="error-box">{reportsQuery.error.message}</p>}
@@ -879,18 +915,27 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
           </div>
 
-          <div className="hazard-bulk-bar">
+          <div className={`hazard-bulk-bar ${hasDbSyncQueue ? "" : "empty"}`}>
             <div className="hazard-bulk-bar__summary">
-              <strong>검수 완료 즉시 도로와 경로 탐색에 반영됩니다.</strong>
-              <span>원상복구 대기 {restorePendingCount}건은 승인 처리된 제보 중 복구 검수가 필요한 항목입니다.</span>
+              <strong>{hasDbSyncQueue ? `전체 경로 반영 필요 ${totalSyncPendingCount}건` : "지금 반영할 항목이 없습니다."}</strong>
+              <span>경로 반영 필요 {dbSyncPendingCount}건 · 원상복구 대기 {restorePendingCount}건</span>
+              <small>{latestReportStamp ? `마지막 집계 ${formatLongDateTime(latestReportStamp)}` : "마지막 집계 준비 중"}</small>
             </div>
+            <button
+              type="button"
+              className="hazard-bulk-bar__button"
+              onClick={() => applyRoutingMutation.mutate()}
+              disabled={applyRoutingMutation.isPending || routingApplyStateQuery.data?.applying || !routingApplyStateQuery.data?.dirty}
+            >
+              전체 경로 반영
+            </button>
           </div>
         </section>
 
         <aside className="admin-dashboard-card hazard-detail-shell">
           {!selectedReportId && !reportsQuery.isLoading && (
             <div className="hazard-empty-state">
-              <strong>신고를 선택하면 상세 검토 패널이 열립니다.</strong>
+              <strong>제보를 선택하면 상세 검토 패널이 열립니다.</strong>
               <span>지도, 첨부 이미지, 운영 상태를 한 번에 확인할 수 있도록 오른쪽 검토 영역을 구성했습니다.</span>
             </div>
           )}
@@ -902,7 +947,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
             <>
               <div className="hazard-detail-shell__header">
                 <div className="hazard-detail-shell__title">
-                  <strong>{isRouteReviewMode ? "경로 검수" : "제보 상세"}</strong>
+                  <strong>{isRouteReviewMode ? "경로 검수" : "신고 상세"}</strong>
                   <span>{detailTrackingId ?? "#"}</span>
                 </div>
 
@@ -919,7 +964,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                       onClick={() => setDetailPaneMode(isRouteReviewMode ? "detail" : "review")}
                     >
                       <HazardUiIcon name={isRouteReviewMode ? "back" : "check"} />
-                      {isRouteReviewMode ? "제보 상세로" : "검수 이어서"}
+                      {isRouteReviewMode ? "신고 상세로" : "검수 이어서"}
                     </button>
                   )}
                   <button type="button" className="hazard-toolbar-chip ghost" onClick={() => setSelectedReportId(null)}>
@@ -941,6 +986,9 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   networkLoading={preview ? false : routeNetworkQuery.isLoading}
                   networkError={preview ? null : routeNetworkQuery.error instanceof Error ? routeNetworkQuery.error : null}
                   areaScopeLabel={routeReviewAreaScope ? `${routeReviewAreaScope.gu} ${routeReviewAreaScope.dong}` : null}
+                  routingApplyState={preview ? null : routingApplyStateQuery.data}
+                  applyingRouting={applyRoutingMutation.isPending}
+                  onApplyRouting={() => applyRoutingMutation.mutate()}
                   onBack={() => setDetailPaneMode("detail")}
                   onReviewChange={handleRouteReviewChange}
                   onComplete={completeRouteReviewFlow}
@@ -956,8 +1004,6 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                       <HazardReportLocationPreview
                         point={reportPoint}
                         label={reportTypeLabel[activeReport.reportType] ?? activeReport.reportType}
-                        roadviewPoint={roadviewPoint}
-                        onPickRoadviewPoint={setSelectedRoadviewPoint}
                       />
                       {mapLink && (
                         <a className="hazard-preview-card__expand" href={mapLink} target="_blank" rel="noreferrer">
@@ -972,11 +1018,10 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
 
                 <div className="hazard-preview-card">
                   <div className="hazard-preview-card__label">로드뷰</div>
-                  {roadviewPoint ? (
+                  {reportPoint ? (
                     <HazardReportRoadviewPreview
-                      point={roadviewPoint}
+                      point={reportPoint}
                       label={reportTypeLabel[activeReport.reportType] ?? activeReport.reportType}
-                      helperMessage="좌측 지도에서 원하는 지점을 클릭하면 해당 위치 기준으로 다시 로드뷰를 탐색합니다."
                     />
                   ) : (
                     <div className="hazard-preview-card__empty">좌표 정보가 없어 로드뷰를 표시할 수 없습니다.</div>
@@ -1119,7 +1164,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   <button
                     type="button"
                     className="hazard-action-button approve"
-                    disabled={!canStartApprove || startRouteReviewMutation.isPending}
+                    disabled={!canStartApprove || !hasRouteReviewScope || startRouteReviewMutation.isPending}
                     onClick={() => startRouteReview("approve")}
                   >
                     <HazardUiIcon name="check" />
@@ -1141,7 +1186,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                   <button
                     type="button"
                     className="hazard-action-button restore"
-                    disabled={!canRestore || activeReviewDraft?.stage === "IN_PROGRESS" || startRouteReviewMutation.isPending}
+                    disabled={!canRestore || activeReviewDraft?.stage === "IN_PROGRESS" || !hasRouteReviewScope || startRouteReviewMutation.isPending}
                     onClick={() => startRouteReview("restore")}
                   >
                     <HazardUiIcon name="refresh" />
@@ -1623,7 +1668,7 @@ function buildHazardTimeline(
 
   if (review?.stage === "IN_PROGRESS") {
     return [
-      { time: baseTime, label: "제보 접수", meta: "(사용자)", tone: "blue" as HazardBadgeTone },
+      { time: baseTime, label: "신고 접수", meta: "(사용자)", tone: "blue" as HazardBadgeTone },
       {
         time: formatLongDateTime(review.startedAt),
         label: review.intent === "restore" ? "원상복구 경로 검수" : "승인 경로 검수",
@@ -1635,7 +1680,6 @@ function buildHazardTimeline(
   }
 
   if (review?.stage === "COMPLETED" && review.intent === "restore") {
-    const routeApply = summarizeDbSyncStatus(report.status, review);
     return [
       {
         time: report.status === "REJECTED" ? baseTime : "-",
@@ -1649,14 +1693,13 @@ function buildHazardTimeline(
         meta: reviewerLabel,
         tone: "purple" as HazardBadgeTone,
       },
-      { time: formatLongDateTime(review.completedAt ?? review.updatedAt), label: routeApply.label, meta: "(시스템)", tone: routeApply.tone },
+      { time: "-", label: "경로 반영 필요", meta: "(경로 반영 대기)", tone: "gray" as HazardBadgeTone },
     ];
   }
 
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
-    const routeApply = summarizeDbSyncStatus(report.status, review);
     return [
-      { time: baseTime, label: "제보 접수", meta: "(사용자)", tone: "blue" as HazardBadgeTone },
+      { time: baseTime, label: "신고 접수", meta: "(사용자)", tone: "blue" as HazardBadgeTone },
       {
         time: formatLongDateTime(review.startedAt),
         label: "경로 검수 시작",
@@ -1669,14 +1712,13 @@ function buildHazardTimeline(
         meta: reviewerLabel,
         tone: "green" as HazardBadgeTone,
       },
-      { time: formatLongDateTime(review.completedAt ?? review.updatedAt), label: routeApply.label, meta: "(시스템)", tone: routeApply.tone },
     ];
   }
 
   if (report.status === "APPROVED") {
     return [
       { time: baseTime, label: "처리 완료", meta: reviewerLabel, tone: "green" as HazardBadgeTone },
-      { time: baseTime, label: "즉시 반영 완료", meta: "(시스템)", tone: "green" as HazardBadgeTone },
+      { time: baseTime, label: "경로 반영 필요", meta: "(시스템)", tone: "orange" as HazardBadgeTone },
       { time: "-", label: "원상복구 반영", meta: "-", tone: "purple" as HazardBadgeTone },
     ];
   }
@@ -1685,14 +1727,14 @@ function buildHazardTimeline(
     return [
       { time: baseTime, label: "반려", meta: reviewerLabel, tone: "red" as HazardBadgeTone },
       { time: "-", label: "후속 조치 없음", meta: "-", tone: "gray" as HazardBadgeTone },
-      { time: "-", label: "즉시 반영 없음", meta: "-", tone: "gray" as HazardBadgeTone },
+      { time: "-", label: "경로 반영", meta: "-", tone: "gray" as HazardBadgeTone },
     ];
   }
 
   return [
-    { time: baseTime, label: "제보 접수", meta: "(사용자)", tone: "blue" as HazardBadgeTone },
+    { time: baseTime, label: "신고 접수", meta: "(사용자)", tone: "blue" as HazardBadgeTone },
     { time: "-", label: "승인 검수 대기", meta: "(Admin)", tone: "orange" as HazardBadgeTone },
-    { time: "-", label: "즉시 반영 대기", meta: "-", tone: "gray" as HazardBadgeTone },
+    { time: "-", label: "경로 반영", meta: "-", tone: "gray" as HazardBadgeTone },
   ];
 }
 
@@ -1710,36 +1752,18 @@ function summarizeDbSyncStatus(status: HazardReportStatus, review?: HazardRouteR
     return { label: review.intent === "restore" ? "복구 검수" : "검수중", tone: "blue" as HazardBadgeTone };
   }
   if (review?.stage === "COMPLETED" && review.intent === "restore") {
-    return summarizeImmediateApplyStatus(review.routingApplyStatus, "복구 완료");
+    return { label: "복구 완료", tone: "purple" as HazardBadgeTone };
   }
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
-    return summarizeImmediateApplyStatus(review.routingApplyStatus, "검수 완료");
+    return { label: "DB 대기", tone: "orange" as HazardBadgeTone };
   }
   if (status === "APPROVED") {
-    return { label: "즉시 반영 완료", tone: "green" as HazardBadgeTone };
+    return { label: "DB 대기", tone: "orange" as HazardBadgeTone };
   }
   if (status === "REJECTED") {
-    return { label: "즉시 반영 없음", tone: "gray" as HazardBadgeTone };
+    return { label: "-", tone: "gray" as HazardBadgeTone };
   }
-  return { label: "대기", tone: "gray" as HazardBadgeTone };
-}
-
-function summarizeImmediateApplyStatus(
-  routingApplyStatus: HazardRouteReviewRecord["routingApplyStatus"],
-  fallbackLabel: string,
-) {
-  switch (routingApplyStatus) {
-    case "APPLIED":
-      return { label: "즉시 반영 완료", tone: "green" as HazardBadgeTone };
-    case "APPLIED_WITH_WARNING":
-      return { label: "즉시 반영 경고", tone: "orange" as HazardBadgeTone };
-    case "FAILED":
-      return { label: "즉시 반영 실패", tone: "red" as HazardBadgeTone };
-    case "SKIPPED":
-      return { label: "즉시 반영 없음", tone: "gray" as HazardBadgeTone };
-    default:
-      return { label: fallbackLabel, tone: "green" as HazardBadgeTone };
-  }
+  return { label: "-", tone: "gray" as HazardBadgeTone };
 }
 
 function summarizeMapSyncStatus(status: HazardReportStatus, review?: HazardRouteReviewRecord | null) {
@@ -1750,10 +1774,10 @@ function summarizeMapSyncStatus(status: HazardReportStatus, review?: HazardRoute
     return { label: "복구 완료", tone: "purple" as HazardBadgeTone };
   }
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
-    return { label: "즉시 반영 완료", tone: "green" as HazardBadgeTone };
+    return { label: "검수 완료", tone: "green" as HazardBadgeTone };
   }
   if (status === "APPROVED") {
-    return { label: "즉시 반영 완료", tone: "green" as HazardBadgeTone };
+    return { label: "검수 완료", tone: "green" as HazardBadgeTone };
   }
   if (status === "REJECTED") {
     return { label: "검토 종료", tone: "gray" as HazardBadgeTone };
@@ -1769,10 +1793,10 @@ function summarizeRouteExclusionStatus(status: HazardReportStatus, review?: Haza
     return { label: "제외 해제", tone: "purple" as HazardBadgeTone };
   }
   if (review?.stage === "COMPLETED" && review.intent === "approve") {
-    return { label: "제외 반영", tone: "orange" as HazardBadgeTone };
+    return { label: "제외 예정", tone: "orange" as HazardBadgeTone };
   }
   if (status === "APPROVED") {
-    return { label: "제외 반영", tone: "orange" as HazardBadgeTone };
+    return { label: "제외 예정", tone: "orange" as HazardBadgeTone };
   }
   if (status === "REJECTED") {
     return { label: "-", tone: "gray" as HazardBadgeTone };
@@ -1798,11 +1822,22 @@ function summarizeRecoveryStatus(status: HazardReportStatus, review?: HazardRout
   return { label: "-", tone: "gray" as HazardBadgeTone };
 }
 
-function countRestorePendingReports(
+function isHazardRestoreEligible(
+  report: Pick<AdminHazardReportSummary, "reportId" | "status">,
+  review?: HazardRouteReviewRecord | null,
+) {
+  return canStartHazardRestore(report.status, review);
+}
+
+function countRestorableReports(
   reports: AdminHazardReportSummary[] | undefined,
   drafts: Record<number, HazardRouteReviewRecord>,
 ) {
-  return (reports ?? []).filter((report) => isHazardRestorePending(drafts[report.reportId])).length;
+  return (reports ?? []).filter((report) => isHazardRestoreEligible(report, drafts[report.reportId])).length;
+}
+
+function countCompletedRestoreReviews(drafts: Record<number, HazardRouteReviewRecord>) {
+  return Object.values(drafts).filter((draft) => draft.stage === "COMPLETED" && draft.intent === "restore").length;
 }
 
 function statusToneFromReport(status: HazardReportStatus): HazardBadgeTone {
@@ -2169,4 +2204,34 @@ function createPreviewStreetImage(background: string, accent: string, label: str
   `;
 
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function routingApplyNotice(status?: string | null) {
+  switch (status) {
+    case "FAILED":
+      return {
+        message: "경로 반영에 실패했습니다. 저장된 변경은 유지되며 다시 시도할 수 있습니다.",
+        className: "error-box",
+      };
+    case "APPLIED_WITH_WARNING":
+      return {
+        message: "경로 반영은 수행됐지만 일부 경고가 있습니다. 운영 상태를 확인해 주세요.",
+        className: "warning-box",
+      };
+    case "SKIPPED":
+      return {
+        message: "경로 반영 대상이 없습니다.",
+        className: "info-box",
+      };
+    case "APPLIED":
+      return {
+        message: "경로 반영이 완료되었습니다.",
+        className: "success-box",
+      };
+    default:
+      return {
+        message: "경로 반영 요청이 처리되었습니다.",
+        className: "info-box",
+      };
+  }
 }

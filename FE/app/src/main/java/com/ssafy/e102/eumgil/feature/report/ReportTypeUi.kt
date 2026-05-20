@@ -6,6 +6,10 @@ import com.ssafy.e102.eumgil.R
 fun String?.toReportTypeOrNull(): ReportType? =
     ReportType.entries.firstOrNull { type -> type.apiValue == this }
 
+@DrawableRes
+fun reportTypeMarkerIconRes(apiValue: String?): Int =
+    apiValue.toReportTypeOrNull()?.markerIconRes ?: R.drawable.ic_report_other
+
 val ReportType.displayLabel: String
     get() =
         when (this) {

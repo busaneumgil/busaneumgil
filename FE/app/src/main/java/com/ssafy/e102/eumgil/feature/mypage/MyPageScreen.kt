@@ -462,7 +462,7 @@ private fun QuickActionCard(
     Surface(
         modifier =
             modifier
-                .height(88.dp)
+                .heightIn(min = 88.dp)
                 .clickable(role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(EumRadius.medium),
         color = containerColor,
@@ -472,7 +472,7 @@ private fun QuickActionCard(
         Row(
             modifier =
                 Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .padding(horizontal = 14.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -492,8 +492,8 @@ private fun QuickActionCard(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = EumTextPrimary,
-                    maxLines = 1,
-                    softWrap = false,
+                    maxLines = 2,
+                    softWrap = true,
                 )
             }
             Icon(

@@ -581,7 +581,8 @@ erDiagram
 - `(review_id, edge_id)` unique 제약으로 같은 검수 내 중복 draft를 막는다.
 - draft는 검수 범위 `gu/dong`에 포함되는 `road_segments.edge_id`만 저장할 수 있다.
 - 경로 검수 완료 시 draft 값은 batch로 `road_segments` 원본 truth에 반영된다.
-- overlay 대상인 `walk_access`, `stairs_state`, `width_state`, `braille_block_state` 값이 포함된 draft는 `routing_segment_overrides` current-state도 함께 patch하며 GraphHopper reload는 완료 플로우에서 1회만 호출한다.
+- overlay 대상인 `walk_access`, `stairs_state`, `width_state`, `braille_block_state` 값이 포함된 draft는 `routing_segment_overrides` current-state도 함께 patch한다.
+- 검수 완료 시 GraphHopper reload는 직접 호출하지 않고 `routing_apply_states.dirty=true`로 마킹한 뒤 운영자가 별도 `경로 반영`을 실행한다.
 
 ---
 
@@ -759,7 +760,7 @@ SHP 선형의 시작/종료점에서 파생된 anchor node만 관리한다. sour
 
 ## routing_segment_overrides
 
-GraphHopper runtime overlay current-state 테이블이다. 원본 truth는 `road_segments`에 저장하고, `저장 + 즉시 경로 반영`이 선택된 경우에만 이 테이블을 동기화한다.
+GraphHopper runtime overlay current-state 테이블이다. 원본 truth는 `road_segments`에 저장하고, 관리자 저장/검수 완료 시 이 테이블을 즉시 동기화한 뒤 runtime 반영은 별도 수동 `경로 반영`에서 처리한다.
 
 | 컬럼 | 물리명 | 타입 | Null | 비고 |
 | --- | --- | --- | --- | --- |
@@ -768,17 +769,40 @@ GraphHopper runtime overlay current-state 테이블이다. 원본 truth는 `road
 | 계단 override | stairs_state | ENUM | NULL | `YES`, `NO`, `UNKNOWN`; NULL이면 base graph EV 사용 |
 | 폭 상태 override | width_state | ENUM | NULL | `ADEQUATE_150`, `ADEQUATE_120`, `NARROW`, `UNKNOWN`; NULL이면 base graph EV 사용 |
 | 점자블록 override | braille_block_state | ENUM | NULL | `YES`, `NO`, `UNKNOWN`; NULL이면 base graph EV 사용 |
+| optimistic lock version | version | BIGINT | NOT NULL | JPA `@Version` 동시 수정 충돌 감지용 |
 
 - row 없음은 overlay 없음이다.
 - row가 있어도 컬럼값이 `NULL`이면 해당 EV는 base graph 값을 그대로 쓴다.
-- 관리자 즉시 반영 요청은 요청에 포함된 overlay 대상 필드만 current-state row에 patch한다. 미포함 필드는 기존 overlay 값을 유지한다.
+- 관리자 저장 요청은 요청에 포함된 overlay 대상 필드만 current-state row에 patch한다. 미포함 필드는 기존 overlay 값을 유지한다.
 - 요청에 포함된 overlay 대상 필드를 patch한 결과 네 컬럼이 모두 `NULL`이면 row를 삭제한다.
-- 즉시 반영 요청이어도 overlay 대상 필드가 하나도 포함되지 않으면 기존 overlay row를 유지하고 GraphHopper reload를 생략한다.
-- migration은 신규 create뿐 아니라 기존 테이블의 `walk_access DROP NOT NULL`, `stairs_state`, `width_state`, `braille_block_state` `ADD COLUMN IF NOT EXISTS`를 포함한다.
+- overlay 대상 필드가 하나도 포함되지 않으면 기존 overlay row를 유지한다.
+- migration은 신규 create뿐 아니라 기존 테이블의 `walk_access DROP NOT NULL`, `stairs_state`, `width_state`, `braille_block_state`, `version` `ADD COLUMN IF NOT EXISTS`를 포함한다.
 - GraphHopper custom model JSON은 계속 source of truth다. Runtime overlay는 final weight 보정이 아니라 delegate/custom model이 읽는 `EdgeIteratorState` effective EV를 프로필 정책에 맞게 바꿔치기한다.
 - 프로필별 overlay 해석은 GraphHopper custom model이 읽는 EV와 맞춘다. `pedestrian_*`, `visual_*`, `wheelchair_*`는 `walk_access`, `stairs_state`, `width_state`를 반영하고, `visual_*`는 추가로 `braille_block_state`를 반영한다.
 - Route calculation은 overlay effective EV를 반영하지만 GraphHopper response details/guidance가 base graph EV를 읽을 수 있다. 시연에서 배지/안내 문구까지 overlay와 일치해야 하면 별도 response detail overlay 설계가 필요하다.
 - 원천 feature 객체는 `source_features`에 저장하고, `road_segments`에는 최종 집계 상태값만 반영한다. `segment_features`는 라우팅/안내에 필요한 edge 매칭 결과만 저장한다.
+
+## routing_apply_states
+
+수동 경로 반영 상태 singleton 메타데이터 테이블이다. DB에 저장된 override 변경이 runtime에 아직 반영되지 않았는지와 마지막 반영 결과를 추적한다.
+
+| 컬럼 | 물리명 | 타입 | Null | 비고 |
+| --- | --- | --- | --- | --- |
+| 상태 키 | state_key | VARCHAR(100) | PK | singleton key, 현재 `ROUTING_OVERRIDES` 1행 사용 |
+| 미반영 dirty 여부 | dirty | BOOLEAN | NOT NULL | runtime 미반영 변경 존재 여부 |
+| 반영 실행 중 여부 | applying | BOOLEAN | NOT NULL | 중복 실행 방지용 상태 |
+| 반영 시작 시각 | applying_started_at | TIMESTAMP | NULL | stale lock 복구 기준 시각 |
+| dirty 표시 시각 | dirty_marked_at | TIMESTAMP | NULL | 마지막으로 dirty=true가 된 시각 |
+| 마지막 반영 시각 | last_applied_at | TIMESTAMP | NULL | 마지막 reload 완료 시각 |
+| 마지막 결과 상태 | last_result_status | VARCHAR(30) | NOT NULL | `SKIPPED`, `APPLIED`, `APPLIED_WITH_WARNING`, `FAILED` |
+| 마지막 결과 메시지 | last_result_message | TEXT | NULL | GraphHopper reload 결과 메시지 |
+| 갱신 시각 | updated_at | TIMESTAMP | NOT NULL | 상태 row 변경 시각 |
+
+- route review 완료 또는 segment 저장에서 overlay 대상 변경이 있으면 `dirty=true`로 마킹한다.
+- `applying=true` stale lock 복구 기준은 고정 10분이 아니라 GraphHopper admin reload client의 최대 timeout window(기본 `connect 5s + read 5s`, 최대 `2 endpoints x 2 attempts`)에 buffer를 더한 값이다.
+- 따라서 정상 reload가 아직 client timeout window 안에 있으면 그대로 `경로 반영 중`으로 유지하고, 그 window를 넘긴 경우에만 `applying_started_at` 기준 stale lock을 회수한다.
+- 수동 `경로 반영` 성공 시 `dirty=false`로 내리고 `last_applied_at`을 갱신한다.
+- 수동 `경로 반영` 실패 시 DB 저장 내용은 유지하고 `dirty=true`를 유지한다.
 
 ---
 

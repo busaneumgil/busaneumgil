@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.ssafy.e102.domain.admin.dto.response.AdminRoutingApplyStatus;
 import com.ssafy.e102.domain.admin.repository.AdminAreaRepository;
 import com.ssafy.e102.domain.admin.service.AdminAuditLogService;
 import com.ssafy.e102.domain.admin.service.AdminMapService;
@@ -31,7 +32,6 @@ import com.ssafy.e102.domain.report.type.HazardRouteReviewIntent;
 import com.ssafy.e102.domain.report.type.HazardRouteReviewStage;
 import com.ssafy.e102.domain.report.type.ReportStatus;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
-import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
 
 @Service
 @Transactional(readOnly = true)
@@ -76,7 +76,7 @@ public class AdminHazardRouteReviewService {
 		validateStartReview(hazardReport, latestReview, request.intent());
 
 		if (latestReview != null && latestReview.isInProgress() && latestReview.getIntent() == request.intent()) {
-			latestReview.validateOwnedBy(userId);
+			latestReview.continueBy(userId);
 			return AdminHazardRouteReviewResponse.from(latestReview, hazardReport.getStatus());
 		}
 
@@ -109,7 +109,7 @@ public class AdminHazardRouteReviewService {
 		Long reportId,
 		UpdateHazardRouteReviewRequest request) {
 		HazardReportRouteReview review = getInProgressReview(reportId);
-		review.validateOwnedBy(userId);
+		review.continueBy(userId);
 		AdminHazardRouteReviewResponse before = AdminHazardRouteReviewResponse.from(review, review.getHazardReport().getStatus());
 
 		if (request.selectedSegmentEdgeId() != null) {
@@ -137,7 +137,7 @@ public class AdminHazardRouteReviewService {
 		RouteReviewCompletion completion = transactionTemplate.execute(transactionStatus -> {
 			HazardReportRouteReview review = getInProgressReview(reportId);
 			HazardReport hazardReport = review.getHazardReport();
-			review.validateOwnedBy(userId);
+			review.continueBy(userId);
 			AdminHazardRouteReviewResponse before = AdminHazardRouteReviewResponse.from(review, hazardReport.getStatus());
 			LocalDateTime now = LocalDateTime.now(clock);
 			if (review.getIntent() == HazardRouteReviewIntent.RESTORE) {
@@ -155,26 +155,32 @@ public class AdminHazardRouteReviewService {
 			} else {
 				hazardReport.markProcessed(userId, now);
 			}
-			return new RouteReviewCompletion(review, hazardReport.getStatus(), before, routingOverlayReloadRequired);
+			return new RouteReviewCompletion(
+				reportId,
+				review.getGu(),
+				review.getDong(),
+				before,
+				AdminHazardRouteReviewResponse.from(review, hazardReport.getStatus()),
+				routingOverlayReloadRequired);
 		});
 		if (completion == null) {
 			throw new HazardReportException(HazardReportErrorCode.HAZARD_ROUTE_REVIEW_NOT_FOUND);
 		}
-		GraphHopperReloadResult routingApplyResult = adminMapService.resolveRouteReviewRoutingApplyResult(
-			completion.routingOverlayReloadRequired());
-		AdminHazardRouteReviewResponse after = AdminHazardRouteReviewResponse.from(
-			completion.review(),
-			completion.reportStatus(),
-			routingApplyResult);
+		AdminHazardRouteReviewResponse after = withRoutingApplyStatus(
+			completion.after(),
+			completion.routingOverlayReloadRequired() ? AdminRoutingApplyStatus.PENDING : AdminRoutingApplyStatus.SKIPPED,
+			completion.routingOverlayReloadRequired()
+				? "DB 저장이 완료되었습니다. 경로 반영이 필요합니다."
+				: "경로 반영 대상 변경이 없습니다.");
 
 		adminAuditLogService.record(
 			userId,
 			"HAZARD_REPORT_ROUTE_REVIEW_COMPLETE",
 			"HAZARD_REPORT",
 			String.valueOf(reportId),
-			completion.review().getGu(),
-			completion.review().getDong(),
-			"hazard route review complete reportId=" + reportId + " intent=" + completion.review().getIntent(),
+			completion.gu(),
+			completion.dong(),
+			"hazard route review complete reportId=" + reportId + " intent=" + completion.after().intent(),
 			completion.before(),
 			after);
 		return after;
@@ -285,17 +291,63 @@ public class AdminHazardRouteReviewService {
 	private ResolvedReviewArea resolveReviewArea(HazardReport hazardReport) {
 		double lng = hazardReport.getReportPoint().getX();
 		double lat = hazardReport.getReportPoint().getY();
-		Object[] area = adminAreaRepository.findAreaByPoint(lng, lat)
+		Object[] area = normalizeAreaRow(adminAreaRepository.findAreaByPoint(lng, lat)
 			.orElseThrow(() -> new HazardReportException(
 				HazardReportErrorCode.INVALID_HAZARD_ROUTE_REVIEW_REQUEST,
-				"제보 위치에 대응하는 검수 행정구역을 찾을 수 없습니다."));
-		return new ResolvedReviewArea((String)area[0], (String)area[1]);
+				"제보 위치에 대응하는 검수 행정구역을 찾을 수 없습니다.")));
+		return new ResolvedReviewArea(readAreaField(area, 0, "검수 구"), readAreaField(area, 1, "검수 동"));
+	}
+
+	private Object[] normalizeAreaRow(Object area) {
+		Object current = area;
+		while (current instanceof Object[] array && array.length == 1 && array[0] instanceof Object[]) {
+			current = array[0];
+		}
+		if (current instanceof Object[] array && array.length >= 2) {
+			return array;
+		}
+		throw new HazardReportException(
+			HazardReportErrorCode.INVALID_HAZARD_ROUTE_REVIEW_REQUEST,
+			"제보 위치에 대응하는 검수 행정구역 형식이 올바르지 않습니다.");
+	}
+
+	private String readAreaField(Object[] area, int index, String label) {
+		if (index >= area.length || !(area[index] instanceof String value) || value.isBlank()) {
+			throw new HazardReportException(
+				HazardReportErrorCode.INVALID_HAZARD_ROUTE_REVIEW_REQUEST,
+				label + " 정보를 읽을 수 없습니다.");
+		}
+		return value;
+	}
+
+	private AdminHazardRouteReviewResponse withRoutingApplyStatus(
+		AdminHazardRouteReviewResponse response,
+		AdminRoutingApplyStatus routingApplyStatus,
+		String routingApplyMessage) {
+		return new AdminHazardRouteReviewResponse(
+			response.reviewId(),
+			response.reportId(),
+			response.intent(),
+			response.stage(),
+			response.reportStatus(),
+			response.reviewerUserId(),
+			response.gu(),
+			response.dong(),
+			response.selectedSegmentEdgeId(),
+			response.startedAt(),
+			response.updatedAt(),
+			response.completedAt(),
+			response.segmentDrafts(),
+			routingApplyStatus,
+			routingApplyMessage);
 	}
 
 	private record RouteReviewCompletion(
-		HazardReportRouteReview review,
-		ReportStatus reportStatus,
+		Long reportId,
+		String gu,
+		String dong,
 		AdminHazardRouteReviewResponse before,
+		AdminHazardRouteReviewResponse after,
 		boolean routingOverlayReloadRequired) {
 	}
 

@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.View
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -1686,8 +1687,9 @@ private const val KAKAO_OVERLAY_MARKER_RANK = 0L
 private const val KAKAO_ROUTE_CAMERA_PADDING = 84
 private const val KAKAO_PROJECTED_MARKER_MAX_RETRY_FRAMES = 6
 private const val APPROVED_REPORT_MARKER_FILL = -10163 // 0xFFFFD84D
-private const val APPROVED_REPORT_MARKER_STROKE = -8761600 // 0xFF7A4F00
-private const val APPROVED_REPORT_MARKER_TEXT = -12965376 // 0xFF3A2A00
+private const val APPROVED_REPORT_MARKER_STROKE = -2051310 // 0xFFE0B312
+private const val APPROVED_REPORT_MARKER_ICON_TINT = -1 // 0xFFFFFFFF
+private const val APPROVED_REPORT_MARKER_SELECTED_RING = -1 // 0xFFFFFFFF
 
 private fun String?.isClickableMarkerLayer(): Boolean =
     this == KAKAO_MARKER_LAYER_ID || this == KAKAO_APPROVED_REPORT_MARKER_LAYER_ID
@@ -1852,8 +1854,10 @@ private class KakaoOverlayMarkerStyleCache(
         val key =
             KakaoOverlayMarkerBitmapCacheKey(
                 kind = marker.kind,
+                iconResId = marker.iconResId,
                 fillColorArgb = marker.fillColorArgb,
                 strokeColorArgb = marker.strokeColorArgb,
+                isSelected = marker.isSelected,
                 rotationDegrees = marker.rotationDegrees.roundToInt(),
                 label = marker.label,
                 secondaryLabel = marker.secondaryLabel,
@@ -1898,47 +1902,62 @@ private class KakaoOverlayMarkerStyleCache(
     ): Bitmap {
         val sizePx = dpToPx(marker.sizeDp.toFloat())
         val bitmapSizePx = sizePx.roundToInt().coerceAtLeast(1)
-        val padding = dpToPx(2.5f)
-        val strokeWidth = dpToPx(2f).coerceAtLeast(1f)
-        val halfStroke = strokeWidth / 2f
+        val borderWidthPx = dpToPx(if (marker.isSelected) 2.5f else 1.5f).coerceAtLeast(1f)
+        val iconSizePx = dpToPx(18f)
         val bitmap = Bitmap.createBitmap(bitmapSizePx, bitmapSizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val trianglePath =
-            AndroidPath().apply {
-                moveTo(sizePx / 2f, padding + halfStroke)
-                lineTo(sizePx - padding - halfStroke, sizePx - padding - halfStroke)
-                lineTo(padding + halfStroke, sizePx - padding - halfStroke)
-                close()
+        val outerPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = if (marker.isSelected) APPROVED_REPORT_MARKER_SELECTED_RING else marker.strokeColorArgb
             }
         val fillPaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
-                color = APPROVED_REPORT_MARKER_FILL
+                color = marker.fillColorArgb
             }
         val strokePaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
-                this.strokeWidth = strokeWidth
-                strokeJoin = Paint.Join.ROUND
-                color = APPROVED_REPORT_MARKER_STROKE
+                this.strokeWidth = borderWidthPx
+                color = marker.strokeColorArgb
             }
-        val textPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = APPROVED_REPORT_MARKER_TEXT
-                textAlign = Paint.Align.CENTER
-                textSize = dpToPx(15f)
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-            }
-
-        canvas.drawPath(trianglePath, fillPaint)
-        canvas.drawPath(trianglePath, strokePaint)
-        canvas.drawText(
-            "!",
-            sizePx / 2f,
-            (sizePx * 0.62f) - ((textPaint.descent() + textPaint.ascent()) / 2f),
-            textPaint,
+        val center = sizePx / 2f
+        canvas.drawCircle(center, center, center, outerPaint)
+        canvas.drawCircle(center, center, center - borderWidthPx, fillPaint)
+        canvas.drawCircle(center, center, center - borderWidthPx, strokePaint)
+        drawApprovedReportIcon(
+            canvas = canvas,
+            iconResId = marker.iconResId ?: R.drawable.ic_report_other,
+            sizePx = sizePx,
+            iconSizePx = iconSizePx,
         )
         return bitmap
+    }
+
+    private fun drawApprovedReportIcon(
+        canvas: Canvas,
+        @DrawableRes iconResId: Int,
+        sizePx: Float,
+        iconSizePx: Float,
+    ) {
+        val iconDrawable =
+            AppCompatResources
+                .getDrawable(context, iconResId)
+                ?.mutate()
+                ?: return
+        DrawableCompat.setTint(iconDrawable, APPROVED_REPORT_MARKER_ICON_TINT)
+        val iconLeft = ((sizePx - iconSizePx) / 2f).toInt()
+        val iconTop = ((sizePx - iconSizePx) / 2f).toInt()
+        val iconSizeIntPx = iconSizePx.roundToInt()
+        iconDrawable.bounds =
+            Rect(
+                iconLeft,
+                iconTop,
+                iconLeft + iconSizeIntPx,
+                iconTop + iconSizeIntPx,
+            )
+        iconDrawable.draw(canvas)
     }
 
     private fun createFocusHaloBitmap(
@@ -2375,8 +2394,10 @@ private data class KakaoFacilityMarkerBitmapCacheKey(
 
 private data class KakaoOverlayMarkerBitmapCacheKey(
     val kind: KakaoOverlayMarkerKind,
+    val iconResId: Int?,
     val fillColorArgb: Int,
     val strokeColorArgb: Int,
+    val isSelected: Boolean,
     val rotationDegrees: Int,
     val label: String?,
     val secondaryLabel: String?,
@@ -2385,7 +2406,7 @@ private data class KakaoOverlayMarkerBitmapCacheKey(
 ) {
     val styleId: String
         get() =
-            "overlay-${kind.name.lowercase(Locale.US)}-$fillColorArgb-$strokeColorArgb-$rotationDegrees-${label.orEmpty()}-${secondaryLabel.orEmpty()}-${secondaryFillColorArgb ?: 0}-$densityBucket"
+            "overlay-${kind.name.lowercase(Locale.US)}-${iconResId ?: 0}-$fillColorArgb-$strokeColorArgb-${if (isSelected) 1 else 0}-$rotationDegrees-${label.orEmpty()}-${secondaryLabel.orEmpty()}-${secondaryFillColorArgb ?: 0}-$densityBucket"
 }
 
 private data class KakaoFacilityMarkerPalette(

@@ -79,9 +79,21 @@ class SplashConfigurationTest {
         val themeItems = themeStyle.items
 
         assertEquals("Theme.SplashScreen", themeStyle.parent)
+        assertEquals("@drawable/splash_illustration", themeItems["android:windowBackground"])
         assertEquals("@color/splash_background", themeItems["windowSplashScreenBackground"])
         assertEquals("@drawable/splash_transparent_icon", themeItems["windowSplashScreenAnimatedIcon"])
         assertEquals("@style/Theme.BusanEumgil", themeItems["postSplashScreenTheme"])
+    }
+
+    @Test
+    fun `platform splash background stays neutral when full-screen image cannot render there`() {
+        val colors = loadColors()
+
+        assertEquals(
+            "System splash background should stay neutral because Android 12 platform splash backgrounds cannot render the full-screen illustration.",
+            "#FFFFFF",
+            colors["splash_background"],
+        )
     }
 
     @Test
@@ -107,15 +119,45 @@ class SplashConfigurationTest {
     }
 
     @Test
-    fun `app nav host keeps splash illustration visible while startup route resolves`() {
+    fun `app nav host uses compose safe loading surface while startup route resolves`() {
         val appNavHost = File("src/main/java/com/ssafy/e102/eumgil/app/navigation/AppNavHost.kt").readText()
+        val loadingScreenSection =
+            appNavHost
+                .substringAfter("private fun AppEntryLoadingScreen(")
+                .substringBefore("\n}")
+
         assertTrue(
-            "AppNavHost should keep rendering the splash illustration while the startup route is loading.",
+            "AppNavHost should keep rendering a startup loading screen while the startup route is loading.",
             appNavHost.contains("AppEntryLoadingScreen(modifier = modifier)"),
         )
         assertTrue(
-            "Splash illustration should stay backed by the dedicated drawable resource.",
-            appNavHost.contains("R.drawable.splash_illustration"),
+            "Compose startup loading should decode the splash illustration through BitmapFactory.",
+            appNavHost.contains("BitmapFactory") &&
+                appNavHost.contains("R.drawable.splash_illustration") &&
+                appNavHost.contains("asImageBitmap()"),
+        )
+        assertTrue(
+            "Compose startup loading should render the splash illustration with the same crop behavior.",
+            loadingScreenSection.contains("Image(") &&
+                loadingScreenSection.contains("bitmap = splashImage") &&
+                loadingScreenSection.contains("ContentScale.Crop"),
+        )
+        assertTrue(
+            "Compose startup loading should keep a fallback loading state.",
+            loadingScreenSection.contains("CircularProgressIndicator(") &&
+                loadingScreenSection.contains("R.string.app_entry_loading"),
+        )
+        assertTrue(
+            "Compose startup loading should expose the loading copy in fallback.",
+            loadingScreenSection.contains("R.string.app_entry_loading"),
+        )
+        assertFalse(
+            "Compose startup loading must not use painterResource; resource aliases can resolve through unsupported drawable paths on some devices.",
+            loadingScreenSection.contains("painterResource("),
+        )
+        assertFalse(
+            "Compose startup loading should avoid loading the app logo through painterResource for the same startup crash class.",
+            loadingScreenSection.contains("R.drawable.app_logo"),
         )
     }
 
@@ -174,6 +216,18 @@ class SplashConfigurationTest {
             "Bookmark screens should load server or local cache data, not debug fixture bookmarks.",
             appContainer.contains("MockBookmarkFixtures.defaultBookmarks"),
         )
+    }
+
+    private fun loadColors(): Map<String, String> {
+        val document = parseXml(File("src/main/res/values/colors.xml"))
+
+        return document
+            .getElementsByTagName("color")
+            .asSequence()
+            .mapNotNull { node -> node as? Element }
+            .associate { element ->
+                element.getAttribute("name") to element.textContent.trim()
+            }
     }
 
     private fun loadStyle(name: String): StyleDefinition {

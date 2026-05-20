@@ -98,7 +98,10 @@ public class AdminHazardReportController {
 		Long reportId,
 		@RequestBody @Valid
 		StartHazardRouteReviewRequest request) {
-		return ApiResponse.success(adminHazardRouteReviewService.startRouteReview(principal.userId(), reportId, request));
+		return ApiResponse.success(adminHazardRouteReviewService.startRouteReview(
+			principal == null ? null : principal.userId(),
+			reportId,
+			request));
 	}
 
 	@Operation(summary = "제보 경로 검수 draft 저장", description = "진행 중인 경로 검수의 선택 세그먼트와 속성 draft를 저장한다.")
@@ -110,7 +113,10 @@ public class AdminHazardReportController {
 		Long reportId,
 		@RequestBody @Valid
 		UpdateHazardRouteReviewRequest request) {
-		return ApiResponse.success(adminHazardRouteReviewService.updateRouteReview(principal.userId(), reportId, request));
+		return ApiResponse.success(adminHazardRouteReviewService.updateRouteReview(
+			principal == null ? null : principal.userId(),
+			reportId,
+			request));
 	}
 
 	@Operation(summary = "제보 경로 검수 완료", description = "진행 중인 경로 검수를 완료하고 제보 최종 상태를 갱신한다.")
@@ -120,6 +126,8 @@ public class AdminHazardReportController {
 		AuthPrincipal principal,
 		@Parameter(description = "검수 완료할 제보 ID") @PathVariable @Positive
 		Long reportId) {
-		return ApiResponse.success(adminHazardRouteReviewService.completeRouteReview(principal.userId(), reportId));
+		return ApiResponse.success(adminHazardRouteReviewService.completeRouteReview(
+			principal == null ? null : principal.userId(),
+			reportId));
 	}
 }

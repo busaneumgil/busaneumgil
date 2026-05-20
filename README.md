@@ -46,7 +46,7 @@
 
 - **무장애 경로 탐색**: 경사로, 엘리베이터, 자동문 중심 경로 우선
 - **접근성 지도 정보 제공**: 장애인 화장실, 충전소, 점자블록, 베리어프리 시설 표시
-- **비로그인 local-first 사용 흐름**: 로그인 없이 기본 기능 사용 가능
+- **인증 기반 사용 흐름**: 소셜 로그인, 사용자 유형, 온보딩 상태에 따라 앱 진입 분기
 - **TTS 기반 길안내**: 시각장애인 사용자를 고려한 음성 안내
 - **장애물 제보**: 공사, 점자블록 손상, 보행 장애물 제보
 
@@ -66,7 +66,9 @@
 
 - PRD: [Docs/PRD/2026-04-09_부산이음길_PRD.md](Docs/PRD/2026-04-09_부산이음길_PRD.md)
 - 프로젝트 기획서: [Docs/기획/2026-04-10 최종_프로젝트_기획서.md](<Docs/기획/2026-04-10 최종_프로젝트_기획서.md>)
+- Frontend README: [FE/README.md](FE/README.md)
 - 인프라 설계안: [Docs/인프라/2026-04-20_AWS_인프라_설계안.md](<Docs/인프라/2026-04-20_AWS_인프라_설계안.md>)
+- 인프라 현재 상태: [Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md](Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md)
 - INF 기준: [INF/README.md](INF/README.md)
 
 
@@ -78,7 +80,7 @@
 | Backend API | Spring Boot 3, Spring Data JPA |
 | Data / AI | Python |
 | Route Engine | GraphHopper |
-| DB | PostgreSQL |
+| DB | PostgreSQL/PostGIS |
 | Cache | Redis / ElastiCache |
 | Infra | AWS, Docker, Docker Compose |
 | CI/CD | Jenkins |
@@ -91,7 +93,7 @@
 
 ```text
 S14P31E102/
-├── FE/                    # Android 앱
+├── FE/                    # Android 앱, 상세는 FE/README.md 참고
 ├── BE/                    # Spring Boot API
 ├── AI/                    # Python 실험 코드, 데이터 가공, 인식 관련 작업
 ├── Docs/                  # 기획, PRD, API, 인프라, 회의록 등 설명 문서
@@ -140,10 +142,12 @@ S14P31E102/
 
 이 저장소는 현재 **EC2 2대 운영 구조**를 기준으로 인프라 계약을 맞춰가는 단계입니다.
 
+2026-05-20 실서버 확인 기준 최신 런타임 스냅샷은 [Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md](Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md)를 기준으로 합니다.
+
 ### 현재 운영 기준
 
-- `S1 = blue(prod) + dev + Jenkins`
-- `S2 = green(prod standby) + PLG`
+- `S1 = dev + Jenkins + build runner + 운영도구`
+- `S2 = primary prod runtime`
 - `RDS = PostgreSQL managed service`
 - `ElastiCache = 필요 시 운영`
 - EC2 shell 접속은 `SSH`를 기본으로 사용하되, 관리자 고정 IP에서만 허용
@@ -163,13 +167,14 @@ S14P31E102/
   - `Grafana`, `Portainer`, `SonarQube`, `PLG` 운영도구 실행
 - `S2`
   - `primary prod` 실행
-  - 운영 WAS와 AI Flask intent server 실행
-  - prod GraphHopper runtime은 graph-cache build/deploy 흐름 준비 후 활성화
+  - 운영 WAS, AI Flask intent server, 관리자 웹 실행
+  - prod GraphHopper runtime은 S2 내부 `blue/green` slot으로 실행
 
 ### 운영 원칙
 
 - 현재 운영은 **2대 기반 현실형 운영안**이다.
 - 현재는 `S2 primary prod + S1 dev/Jenkins/운영도구` 구조이며, ALB 기반 Blue/Green은 같은 VPC 또는 private routing 정리 이후 확장 옵션으로 둔다.
+- 현재 prod blue/green은 EC2 서버 단위가 아니라 S2 내부 GraphHopper `blue/green` runtime slot 전환을 의미한다.
 - prod와 dev의 역할 경계는 문서와 설정에서 명확해야 한다.
 - GraphHopper의 무거운 build/import 작업은 prod 서버에서 직접 돌리지 않는다.
 - Jenkins, Grafana, SonarQube, PLG 같은 관리자 UI는 원 포트를 공개하지 않고 `Nginx`의 `443` host routing으로만 접근한다.

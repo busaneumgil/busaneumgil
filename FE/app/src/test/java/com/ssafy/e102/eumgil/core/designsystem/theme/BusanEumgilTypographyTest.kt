@@ -135,6 +135,7 @@ class BusanEumgilTypographyTest {
                 .readText()
 
         assertTrue(source.contains("textSizePreference.scale"))
+        assertTrue(source.contains("LocalAppTextSizeScale provides textSizeScale"))
         assertTrue(source.contains("LocalDensity provides scaledDensity"))
         assertTrue(source.contains("typography = typography"))
     }

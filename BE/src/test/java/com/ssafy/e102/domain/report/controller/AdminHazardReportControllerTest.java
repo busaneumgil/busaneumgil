@@ -1,5 +1,8 @@
 package com.ssafy.e102.domain.report.controller;
 
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -51,6 +54,7 @@ class AdminHazardReportControllerTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
+		SecurityContextHolder.clearContext();
 		mockMvc = MockMvcBuilders.standaloneSetup(
 				new AdminHazardReportController(adminHazardReportService, adminHazardRouteReviewService))
 			.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
@@ -192,6 +196,109 @@ class AdminHazardReportControllerTest {
 			.andExpect(jsonPath("$.data.reviewId").value(7))
 			.andExpect(jsonPath("$.data.intent").value("APPROVE"))
 			.andExpect(jsonPath("$.data.stage").value("IN_PROGRESS"));
+	}
+
+	@Test
+	@DisplayName("인증 principal이 비어 있어도 제보 경로 검수 시작에서 NPE가 나지 않는다")
+	void startRouteReviewWithoutPrincipal() throws Exception {
+		when(adminHazardRouteReviewService.startRouteReview(
+			null,
+			1L,
+			new com.ssafy.e102.domain.report.dto.request.StartHazardRouteReviewRequest(
+				HazardRouteReviewIntent.APPROVE)))
+			.thenReturn(new AdminHazardRouteReviewResponse(
+				7L,
+				1L,
+				HazardRouteReviewIntent.APPROVE,
+				HazardRouteReviewStage.IN_PROGRESS,
+				ReportStatus.PENDING,
+				UUID.randomUUID(),
+				"부산진구",
+				"부전동",
+				41231L,
+				LocalDateTime.of(2026, 5, 18, 15, 0),
+				LocalDateTime.of(2026, 5, 18, 15, 5),
+				null,
+				List.of()));
+
+		mockMvc.perform(post("/admin/hazard-reports/1/route-review/start")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "intent": "APPROVE"
+					}
+					"""))
+			.andExpect(status().isOk());
+
+		verify(adminHazardRouteReviewService).startRouteReview(
+			isNull(),
+			eq(1L),
+			argThat(request -> request != null && request.intent() == HazardRouteReviewIntent.APPROVE));
+	}
+
+	@Test
+	@DisplayName("인증 principal이 비어 있어도 제보 경로 검수 draft 저장에서 NPE가 나지 않는다")
+	void updateRouteReviewWithoutPrincipal() throws Exception {
+		when(adminHazardRouteReviewService.updateRouteReview(
+			null,
+			1L,
+			new com.ssafy.e102.domain.report.dto.request.UpdateHazardRouteReviewRequest(
+				41231L,
+				List.of())))
+			.thenReturn(new AdminHazardRouteReviewResponse(
+				7L,
+				1L,
+				HazardRouteReviewIntent.APPROVE,
+				HazardRouteReviewStage.IN_PROGRESS,
+				ReportStatus.PENDING,
+				UUID.randomUUID(),
+				"부산진구",
+				"부전동",
+				41231L,
+				LocalDateTime.of(2026, 5, 18, 15, 0),
+				LocalDateTime.of(2026, 5, 18, 15, 5),
+				null,
+				List.of()));
+
+		mockMvc.perform(patch("/admin/hazard-reports/1/route-review")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "selectedSegmentEdgeId": 41231,
+					  "segmentDrafts": []
+					}
+					"""))
+			.andExpect(status().isOk());
+
+		verify(adminHazardRouteReviewService).updateRouteReview(
+			isNull(),
+			eq(1L),
+			argThat(request -> request != null && request.selectedSegmentEdgeId() != null && request.selectedSegmentEdgeId() == 41231L));
+	}
+
+	@Test
+	@DisplayName("인증 principal이 비어 있어도 제보 경로 검수 완료에서 NPE가 나지 않는다")
+	void completeRouteReviewWithoutPrincipal() throws Exception {
+		when(adminHazardRouteReviewService.completeRouteReview(null, 1L))
+			.thenReturn(new AdminHazardRouteReviewResponse(
+				7L,
+				1L,
+				HazardRouteReviewIntent.APPROVE,
+				HazardRouteReviewStage.COMPLETED,
+				ReportStatus.APPROVED,
+				UUID.randomUUID(),
+				"부산진구",
+				"부전동",
+				41231L,
+				LocalDateTime.of(2026, 5, 18, 15, 0),
+				LocalDateTime.of(2026, 5, 18, 15, 10),
+				LocalDateTime.of(2026, 5, 18, 15, 10),
+				List.of()));
+
+		mockMvc.perform(post("/admin/hazard-reports/1/route-review/complete"))
+			.andExpect(status().isOk());
+
+		verify(adminHazardRouteReviewService).completeRouteReview(null, 1L);
 	}
 
 	@Test

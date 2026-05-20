@@ -53,7 +53,6 @@ class TextSizeSettingViewModel(
 
         viewModelScope.launch {
             textSizePreferenceRepository.saveTextSizePreference(preference)
-            uiEventChannel.send(TextSizeSettingUiEvent.ShowSavedMessage)
         }
     }
 

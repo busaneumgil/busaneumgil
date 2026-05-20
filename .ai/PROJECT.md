@@ -87,9 +87,9 @@
 - 운영 DB는 AWS RDS PostgreSQL/PostGIS를 전제로 한다.
 - 캐시는 ElastiCache/Redis를 전제로 한다.
 - 핵심 런타임은 WAS와 GraphHopper runtime이다.
-- AWS 운영은 현재 EC2 2대 기준으로 설계되어 있으며, S1은 blue(prod) + dev/Jenkins, S2는 green(prod standby) + 운영도구 후보 역할을 가진다.
-- ALB host-based routing과 target group health check를 사용하고, Blue/Green 전환은 target group 또는 listener rule 전환을 기준으로 한다.
-- Jenkins는 develop 배포와 smoke test 자동화를 담당한다.
+- AWS 운영은 현재 EC2 2대 기준이며, 2026-05-20 실서버 확인 기준 S1은 dev/Jenkins/build/운영도구, S2는 primary prod runtime 역할을 가진다.
+- 현재 prod blue/green은 EC2 서버 단위가 아니라 S2 내부 GraphHopper `blue/green` runtime slot 전환을 의미한다. ALB target group 기반 Blue/Green은 같은 VPC 또는 private routing 정리 이후 확장 옵션이다.
+- Jenkins는 develop 배포, S2 prod 배포, GraphHopper refresh, smoke test 자동화를 담당한다.
 - 모니터링은 CloudWatch를 1차 기준으로 두고, Grafana/Portainer/SonarQube/PLG는 보조 운영도구로 둔다.
 
 ## Source Documents
@@ -99,7 +99,7 @@
 - `Docs/기획/2026-04-10 최종_프로젝트_기획서.md`
 - `Docs/PRD/2026-04-09_부산이음길_PRD.md`
 - `Docs/PRD/2026-04-14_기능명세서.md`
-- `Docs/PRD/2026-04-20_MON-01_연계_요구사항_정리.md`
+- `Docs/PRD/archive/2026-04_requirement_sources/2026-04-20_MON-01_연계_요구사항_정리.md`
 
 ### FE primary documents
 
@@ -116,6 +116,7 @@
 - `Docs/ERD/ERD_v4.md`
 - `Docs/PoC/2026-04-21_부산_경사도_추출_정제_OSM_연계_통합_PoC.md`
 - `Docs/인프라/2026-04-20_AWS_인프라_설계안.md`
+- `Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md`
 - `Docs/컨벤션/2026-04-09_Git_Jira_컨벤션.md`
 - `Docs/컨벤션/2026-04-14_API_응답_코드_컨벤션.md`
 - `Docs/skills/backend/`

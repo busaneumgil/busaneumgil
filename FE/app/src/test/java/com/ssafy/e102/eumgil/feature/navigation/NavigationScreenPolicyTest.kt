@@ -383,10 +383,10 @@ class NavigationScreenPolicyTest {
                 .readText()
 
         assertTrue(
-            "Selected rail preview should automatically return to current live guidance after five seconds without another rail interaction.",
+            "Selected rail preview should automatically return to current live guidance after thirty seconds without another rail interaction.",
             source.contains("LaunchedEffect(uiState.segmentSync.isInspectingSegments, inspectionInteractionVersion)") &&
                 source.contains("delay(NavigationInspectAutoReturnMillis)") &&
-                source.contains("NavigationInspectAutoReturnMillis = 5_000L") &&
+                source.contains("NavigationInspectAutoReturnMillis = 30_000L") &&
                 source.contains("NavigationUiAction.ReturnToActiveSegmentClicked"),
         )
         assertTrue(

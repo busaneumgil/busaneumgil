@@ -754,26 +754,6 @@ class RouteSettingViewModel(
                 )
                 return@launch
             }
-            val reusableSearchData =
-                reusableSearchDataForMode(
-                    mode = mode,
-                    originResolution = originResolution,
-                    destinationResolution = destinationResolution,
-                )
-            if (reusableSearchData != null) {
-                mutableUiState.value =
-                    buildUiState(
-                        searchData = reusableSearchData,
-                        originResolution = originResolution,
-                        destinationResolution = destinationResolution,
-                        selectedTravelMode = mode,
-                        requestedOption = selectedOption,
-                        ctaAcknowledged = false,
-                    )
-                rememberSuccessfulAutomaticOrigin(originResolution)
-                return@launch
-            }
-
             mutableUiState.update { state ->
                 state.copy(
                     isLoading = true,
@@ -1214,24 +1194,6 @@ class RouteSettingViewModel(
                 latestSearchDataByMode = latestSearchDataByMode + (RouteTravelMode.WALK to searchData)
             }
         }.getOrThrow()
-
-    private fun reusableSearchDataForMode(
-        mode: RouteTravelMode,
-        originResolution: RouteOriginResolution,
-        destinationResolution: RouteDestinationResolution,
-    ): RouteSearchData? {
-        val searchData = latestSearchDataByMode[mode] ?: return null
-        if (searchData.routes.isEmpty()) {
-            return null
-        }
-        val query =
-            buildQuery(
-                originResolution = originResolution,
-                destinationResolution = destinationResolution,
-                mode = mode,
-            )
-        return searchData.takeIf { it.query == query }
-    }
 
     private fun determineDefaultTravelMode(walkSearchData: RouteSearchData): RouteTravelMode {
         val safeWalkRoute = walkSearchData.findRoute(RouteOption.SAFE) ?: return RouteTravelMode.WALK

@@ -168,7 +168,7 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(detailScreenSection.contains("contentWindowInsets = WindowInsets(0, 0, 0, 0)"))
         assertTrue(routeBottomBarSection.contains(".navigationBarsPadding()"))
         assertTrue(navigationBottomBarSection.contains(".navigationBarsPadding()"))
-        assertTrue(source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium"))
+        assertTrue(source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp"))
         assertTrue(navigationSource.contains("NavigationBottomBarHorizontalPadding = EumSpacing.medium + 50.dp"))
         assertTrue(source.contains("RouteSettingBottomBarBottomGap = 30.dp"))
         assertTrue(navigationSource.contains("NavigationBottomBarBottomGap = 30.dp"))
@@ -1694,8 +1694,8 @@ class RouteSettingLayoutPolicyTest {
                 .substringBefore("@Composable\nprivate fun RouteSettingCtaContent")
 
         assertTrue(
-            "Route start CTA should span the available screen width while preserving the shared page margin.",
-            source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium") &&
+            "Route start CTA should match the navigation exit CTA width while preserving the shared inset constant.",
+            source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp") &&
                 bottomBarSection.contains("start = RouteSettingBottomBarHorizontalPadding") &&
                 bottomBarSection.contains("end = RouteSettingBottomBarHorizontalPadding"),
         )

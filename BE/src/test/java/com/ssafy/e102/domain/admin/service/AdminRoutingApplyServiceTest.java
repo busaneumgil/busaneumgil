@@ -2,6 +2,7 @@ package com.ssafy.e102.domain.admin.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -145,6 +146,28 @@ class AdminRoutingApplyServiceTest {
 			.isInstanceOf(BusinessException.class)
 			.extracting("errorCode")
 			.isEqualTo(CommonErrorCode.CONFLICT);
+	}
+
+	@Test
+	@DisplayName("reload 중 새 DB 저장이 들어오면 성공 후에도 dirty=true와 PENDING이 유지된다")
+	void applyKeepsPendingWhenDirtyMarkedDuringReload() {
+		LocalDateTime firstDirtyAt = LocalDateTime.now(FIXED_CLOCK).minusMinutes(5);
+		RoutingApplyState activeState = RoutingApplyState.initialize();
+		activeState.markDirty(firstDirtyAt);
+
+		when(routingApplyStateRepository.findForUpdate(RoutingApplyState.STATE_KEY))
+			.thenReturn(Optional.of(activeState), Optional.of(activeState), Optional.of(activeState));
+		when(graphHopperAdminClient.reloadRoutingOverrides()).thenAnswer(invocation -> {
+			adminRoutingApplyService.markDirtyInCurrentTransaction();
+			return new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded");
+		});
+
+		AdminRoutingApplyStateResponse response = adminRoutingApplyService.applyRoutingOverrides();
+
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.PENDING);
+		assertThat(response.dirty()).isTrue();
+		assertThat(response.applying()).isFalse();
+		verify(routingApplyStateRepository, never()).findById(RoutingApplyState.STATE_KEY);
 	}
 
 	private static final class NoOpPlatformTransactionManager implements PlatformTransactionManager {

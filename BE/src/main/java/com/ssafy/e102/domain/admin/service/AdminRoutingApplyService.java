@@ -51,7 +51,7 @@ public class AdminRoutingApplyService {
 	}
 
 	public void markDirtyInCurrentTransaction() {
-		RoutingApplyState state = getOrCreateState(false);
+		RoutingApplyState state = getOrCreateState(true);
 		state.markDirty(LocalDateTime.now(clock));
 		routingApplyStateRepository.save(state);
 	}

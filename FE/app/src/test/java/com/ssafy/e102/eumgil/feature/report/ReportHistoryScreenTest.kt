@@ -51,6 +51,48 @@ class ReportHistoryScreenTest {
     }
 
     @Test
+    fun `report history loading states use shared centered loading style without card chrome`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/report/ReportHistoryScreen.kt")
+                .readText()
+        val listLoadingSection =
+            source
+                .substringAfter("ReportHistoryScreenState.LOADING ->")
+                .substringBefore("ReportHistoryScreenState.EMPTY ->")
+        val detailLoadingSection =
+            source
+                .substringAfter("if (detail == null) {")
+                .substringBefore("} else {")
+        val loadingStateSection =
+            source
+                .substringAfter("private fun ReportHistoryLoadingState(")
+                .substringBefore("@Composable\nprivate fun ReportHistoryStateCard")
+
+        assertTrue(
+            "Report history list loading should use the shared loading state instead of the generic state card.",
+            listLoadingSection.contains("ReportHistoryLoadingState(") &&
+                !listLoadingSection.contains("ReportHistoryStateCard("),
+        )
+        assertTrue(
+            "Report history detail loading should be centered inside the available detail area.",
+            detailLoadingSection.contains("Modifier.fillParentMaxSize()") &&
+                detailLoadingSection.contains("contentAlignment = Alignment.Center") &&
+                detailLoadingSection.contains("ReportHistoryLoadingState("),
+        )
+        assertTrue(
+            "Report history loading should share the app loading component.",
+            loadingStateSection.contains("EumLoadingState("),
+        )
+        assertFalse(
+            "Report history loading should not render card border, shadow, or local raw spinner chrome.",
+            loadingStateSection.contains("Surface(") ||
+                loadingStateSection.contains("BorderStroke(") ||
+                loadingStateSection.contains("shadowElevation") ||
+                loadingStateSection.contains("CircularProgressIndicator("),
+        )
+    }
+
+    @Test
     fun `report history placeholder icon uses report specific drawable without changing tab icon`() {
         val reportScreenSource =
             File("src/main/java/com/ssafy/e102/eumgil/feature/report/ReportScreen.kt")

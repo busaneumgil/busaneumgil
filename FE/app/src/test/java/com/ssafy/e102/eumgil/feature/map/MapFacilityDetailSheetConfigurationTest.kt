@@ -294,6 +294,31 @@ class MapFacilityDetailSheetConfigurationTest {
     }
 
     @Test
+    fun `facility detail preview uses preview editing target for a single route action`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()
+        val actionContentSection =
+            source
+                .substringAfter("actionContent = {")
+                .substringBefore("facilityDetailSheetUiState.bookmarkErrorMessage")
+
+        assertTrue(
+            "Search-result previews should reuse their preview editing target so home destination previews show only the destination action.",
+            actionContentSection.contains("facilityDetailSheetUiState.previewRouteEndpointTarget") &&
+                actionContentSection.contains("?: facilityDetailSheetUiState.routeEndpointPickerTarget") &&
+                actionContentSection.indexOf("val pickerTarget =") <
+                actionContentSection.indexOf("if (pickerTarget != null)"),
+        )
+        assertTrue(
+            "Map preview sheets should pass the preview editing target even after their place detail has been hydrated.",
+            source.contains("previewRouteEndpointTarget = sheetState.destinationPreview?.editingTarget") &&
+                source.contains(
+                    "previewRouteEndpointTarget = uiState.facilityDetailSheetState.destinationPreview?.editingTarget",
+                ),
+        )
+    }
+
+    @Test
     fun `facility detail and recent destinations use dedicated public office icon asset`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/map/MapScreen.kt").readText()

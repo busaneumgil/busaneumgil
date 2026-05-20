@@ -234,22 +234,18 @@ class AdminHazardRouteReviewServiceTest {
 			org.mockito.ArgumentMatchers.eq(review.getGu()),
 			org.mockito.ArgumentMatchers.eq(review.getDong()),
 			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()))).thenReturn(true);
-		when(adminMapService.resolveRouteReviewRoutingApplyResult(true))
-			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
-
 		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.completeRouteReview(userId, 1L);
 
 		assertThat(response.stage()).isEqualTo(HazardRouteReviewStage.COMPLETED);
 		assertThat(response.reportStatus()).isEqualTo(ReportStatus.APPROVED);
 		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.APPROVED);
-		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
-		assertThat(response.routingApplyMessage()).isEqualTo("reloaded");
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.PENDING);
+		assertThat(response.routingApplyMessage()).contains("DB");
 		verify(adminMapService).applyRouteReviewSegmentDraftsInCurrentTransaction(
 			org.mockito.ArgumentMatchers.eq(userId),
 			org.mockito.ArgumentMatchers.eq(review.getGu()),
 			org.mockito.ArgumentMatchers.eq(review.getDong()),
 			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()));
-		verify(adminMapService).resolveRouteReviewRoutingApplyResult(true);
 	}
 
 	@Test
@@ -266,21 +262,18 @@ class AdminHazardRouteReviewServiceTest {
 			org.mockito.ArgumentMatchers.eq(review.getGu()),
 			org.mockito.ArgumentMatchers.eq(review.getDong()),
 			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()))).thenReturn(true);
-		when(adminMapService.resolveRouteReviewRoutingApplyResult(true))
-			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.APPLIED, "reloaded"));
-
 		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.completeRouteReview(userId, 1L);
 
 		assertThat(response.stage()).isEqualTo(HazardRouteReviewStage.COMPLETED);
 		assertThat(response.reportStatus()).isEqualTo(ReportStatus.APPROVED);
 		assertThat(hazardReport.getProcessedByUserId()).isEqualTo(userId);
 		assertThat(hazardReport.getStatus()).isEqualTo(ReportStatus.APPROVED);
-		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.APPLIED);
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.PENDING);
 	}
 
 	@Test
-	@DisplayName("route review complete returns FAILED when GraphHopper overlay reload fails")
-	void completeRouteReviewReturnsFailedRoutingApplyStatus() {
+	@DisplayName("route review complete no longer reloads GraphHopper immediately")
+	void completeRouteReviewDoesNotReloadImmediately() {
 		UUID userId = UUID.randomUUID();
 		HazardReport hazardReport = rejectedHazardReport(1L);
 		HazardReportRouteReview review = inProgressReview(hazardReport, userId, HazardRouteReviewIntent.APPROVE);
@@ -292,14 +285,10 @@ class AdminHazardRouteReviewServiceTest {
 			org.mockito.ArgumentMatchers.eq(review.getGu()),
 			org.mockito.ArgumentMatchers.eq(review.getDong()),
 			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()))).thenReturn(true);
-		when(adminMapService.resolveRouteReviewRoutingApplyResult(true))
-			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.FAILED, "reload failed"));
-
 		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.completeRouteReview(userId, 1L);
 
 		assertThat(response.stage()).isEqualTo(HazardRouteReviewStage.COMPLETED);
-		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.FAILED);
-		assertThat(response.routingApplyMessage()).isEqualTo("reload failed");
+		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.PENDING);
 	}
 
 	@Test
@@ -316,14 +305,11 @@ class AdminHazardRouteReviewServiceTest {
 			org.mockito.ArgumentMatchers.eq(review.getGu()),
 			org.mockito.ArgumentMatchers.eq(review.getDong()),
 			org.mockito.ArgumentMatchers.same(review.getSegmentDrafts()))).thenReturn(false);
-		when(adminMapService.resolveRouteReviewRoutingApplyResult(false))
-			.thenReturn(new GraphHopperReloadResult(GraphHopperReloadStatus.SKIPPED, "no routing overlay fields requested"));
-
 		AdminHazardRouteReviewResponse response = adminHazardRouteReviewService.completeRouteReview(userId, 1L);
 
 		assertThat(response.stage()).isEqualTo(HazardRouteReviewStage.COMPLETED);
 		assertThat(response.routingApplyStatus()).isEqualTo(AdminRoutingApplyStatus.SKIPPED);
-		assertThat(response.routingApplyMessage()).contains("overlay");
+		assertThat(response.routingApplyMessage()).contains("없");
 	}
 
 	@Test

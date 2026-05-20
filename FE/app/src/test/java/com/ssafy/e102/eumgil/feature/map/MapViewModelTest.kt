@@ -57,6 +57,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -975,6 +976,15 @@ class MapViewModelTest {
             val currentLocation = testLocationSnapshot(latitude = 35.1796, longitude = 129.0756)
             val destinationSelectionRepository = InMemoryDestinationSelectionRepository()
             val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val selectedOrigin =
+                PlaceDestination(
+                    placeId = "origin-home-reset",
+                    name = "Busan City Hall",
+                    address = "1001 Jungang-daero, Busan",
+                    latitude = 35.1798,
+                    longitude = 129.0750,
+                    category = PlaceCategory.PUBLIC_OFFICE,
+                )
             val selectedDestination = testDestination()
             val previewDestination =
                 PlaceDestination(
@@ -985,7 +995,9 @@ class MapViewModelTest {
                     longitude = 129.0320,
                     category = PlaceCategory.TOURIST_SPOT,
                 )
+            destinationSelectionRepository.updateSelectedOrigin(selectedOrigin)
             destinationSelectionRepository.updateSelectedDestination(selectedDestination)
+            destinationSelectionRepository.setEditingTarget(RouteEditingTarget.ORIGIN)
             val viewModel =
                 MapViewModel(
                     locationPermissionManager =
@@ -1010,7 +1022,11 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertNull(destinationSelectionRepository.selectedOrigin.value)
+            assertEquals(RouteEditingTarget.DESTINATION, destinationSelectionRepository.editingTarget.value)
             assertNull(viewModel.uiState.value.selectedDestination)
+            assertNull(viewModel.uiState.value.selectedOrigin)
+            assertEquals(RouteEditingTarget.DESTINATION, viewModel.uiState.value.routeEditingTarget)
             assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
             assertNull(viewModel.uiState.value.facilityDetailSheetState.destinationPreview)
             assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
@@ -1046,7 +1062,9 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertNull(destinationSelectionRepository.selectedDestination.value)
+            assertNull(destinationSelectionRepository.selectedOrigin.value)
             assertNull(viewModel.uiState.value.selectedDestination)
+            assertNull(viewModel.uiState.value.selectedOrigin)
             assertEquals(0L, viewModel.uiState.value.rendererSessionKey)
             assertEquals(MapCameraSource.DEFAULT_BUSAN, viewModel.uiState.value.cameraTarget.source)
             assertEquals(MapDefaults.BUSAN_CENTER.latitude, viewModel.uiState.value.cameraTarget.center.latitude, 0.0)
@@ -1089,6 +1107,92 @@ class MapViewModelTest {
                 MapLocationStatus.Unavailable(MapLocationUnavailableReason.CURRENT_LOCATION_UNAVAILABLE),
                 viewModel.uiState.value.locationStatus,
             )
+        }
+
+    @Test
+    fun `map route refreshes current location when updates stop arriving`() =
+        runTest {
+            var now = 10_000L
+            val locationManager =
+                FakeCurrentLocationManager(
+                    initialLocation =
+                        testLocationSnapshot(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            recordedAtEpochMillis = now,
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(
+                            initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                        ),
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    nowEpochMillis = { now },
+                    enableLocationRecoveryWatchdog = true,
+                )
+
+            viewModel.onRouteStarted()
+            runCurrent()
+            try {
+                val refreshCountAfterStart = locationManager.refreshLatestLocationCallCount
+
+                now += 10_000L
+                advanceTimeBy(10_000L)
+                runCurrent()
+
+                assertEquals(refreshCountAfterStart + 1, locationManager.refreshLatestLocationCallCount)
+            } finally {
+                viewModel.onRouteStopped()
+            }
+        }
+
+    @Test
+    fun `map route restarts location updates when no fresh update arrives past recovery threshold`() =
+        runTest {
+            var now = 10_000L
+            val locationManager =
+                FakeCurrentLocationManager(
+                    initialLocation =
+                        testLocationSnapshot(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            recordedAtEpochMillis = now,
+                        ),
+                )
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager =
+                        FakeLocationPermissionManager(
+                            initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                        ),
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                    nowEpochMillis = { now },
+                    enableLocationRecoveryWatchdog = true,
+                )
+
+            viewModel.onRouteStarted()
+            runCurrent()
+            try {
+                val startCountAfterRouteStart = locationManager.startLocationUpdatesCallCount
+                val refreshCountAfterRouteStart = locationManager.refreshLatestLocationCallCount
+
+                now += 30_000L
+                advanceTimeBy(30_000L)
+                runCurrent()
+
+                assertEquals(startCountAfterRouteStart + 1, locationManager.startLocationUpdatesCallCount)
+                assertTrue(locationManager.refreshLatestLocationCallCount > refreshCountAfterRouteStart)
+            } finally {
+                viewModel.onRouteStopped()
+            }
         }
 
     @Test
@@ -1290,6 +1394,41 @@ class MapViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.isRecenterButtonActive)
+        }
+
+    @Test
+    fun `active current location follow increments camera request on location update`() =
+        runTest {
+            val currentLocation = testLocationSnapshot(latitude = 35.1500, longitude = 129.1500)
+            val updatedLocation = testLocationSnapshot(latitude = 35.1508, longitude = 129.1508)
+            val permissionManager =
+                FakeLocationPermissionManager(
+                    initialState = LocationPermissionState.Granted(LocationGrantAccuracy.PRECISE),
+                )
+            val locationManager = FakeCurrentLocationManager(initialLocation = currentLocation)
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = permissionManager,
+                    currentLocationManager = locationManager,
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+
+            viewModel.onRouteStarted()
+            advanceUntilIdle()
+            viewModel.onAction(MapUiAction.LocationActionClicked)
+            advanceUntilIdle()
+            val followedCamera = viewModel.uiState.value.cameraTarget
+
+            locationManager.updateLocation(updatedLocation)
+            advanceUntilIdle()
+
+            val updatedCamera = viewModel.uiState.value.cameraTarget
+            assertTrue(viewModel.uiState.value.isRecenterButtonActive)
+            assertEquals(followedCamera.requestId + 1L, updatedCamera.requestId)
+            assertEquals(updatedLocation.latitude, updatedCamera.center.latitude, 0.0)
+            assertEquals(updatedLocation.longitude, updatedCamera.center.longitude, 0.0)
         }
 
     @Test
@@ -3310,6 +3449,10 @@ private class FakeCurrentLocationManager(
     private val mutableLatestLocation = MutableStateFlow(initialLocation)
     var refreshLatestLocationCallCount: Int = 0
         private set
+    var startLocationUpdatesCallCount: Int = 0
+        private set
+    var stopLocationUpdatesCallCount: Int = 0
+        private set
 
     override val latestLocation: StateFlow<LocationSnapshot?> = mutableLatestLocation
 
@@ -3317,9 +3460,13 @@ private class FakeCurrentLocationManager(
         refreshLatestLocationCallCount += 1
     }
 
-    override fun startLocationUpdates() = Unit
+    override fun startLocationUpdates() {
+        startLocationUpdatesCallCount += 1
+    }
 
-    override fun stopLocationUpdates() = Unit
+    override fun stopLocationUpdates() {
+        stopLocationUpdatesCallCount += 1
+    }
 
     fun updateLocation(snapshot: LocationSnapshot?) {
         mutableLatestLocation.value = snapshot

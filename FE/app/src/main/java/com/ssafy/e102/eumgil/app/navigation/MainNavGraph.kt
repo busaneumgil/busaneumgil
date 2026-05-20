@@ -84,10 +84,12 @@ fun NavGraphBuilder.mainNavGraph(
                 navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked)
             },
             onNavigateToSearch = { editingTarget ->
-                navController.navigate(SearchRoute.Entry.createRoute(editingTarget))
+                navController.navigate(SearchRoute.Entry.createRoute(editingTarget, SearchSelectionMode.APPLY_TO_ROUTE))
             },
             onNavigateToSearchResults = { query, editingTarget ->
-                navController.navigate(SearchRoute.Results.createRoute(query, editingTarget)) {
+                navController.navigate(
+                    SearchRoute.Results.createRoute(query, editingTarget, SearchSelectionMode.APPLY_TO_ROUTE),
+                ) {
                     launchSingleTop = true
                 }
             },
@@ -206,8 +208,8 @@ fun NavGraphBuilder.mainNavGraph(
             },
             onNavigateToRouteSetting = { locationPermissionPrechecked ->
                 navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked) {
-                    popUpTo(SearchRoute.Entry.route) {
-                        inclusive = true
+                    popUpTo(TopLevelRoute.Map.route) {
+                        inclusive = false
                     }
                 }
             },
@@ -281,8 +283,8 @@ fun NavGraphBuilder.mainNavGraph(
             },
             onNavigateToRouteSetting = { locationPermissionPrechecked ->
                 navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked) {
-                    popUpTo(SearchRoute.Entry.route) {
-                        inclusive = true
+                    popUpTo(TopLevelRoute.Map.route) {
+                        inclusive = false
                     }
                 }
             },
@@ -463,7 +465,7 @@ fun NavGraphBuilder.mainNavGraph(
             initialRouteOption = initialRouteOption,
             requestLocationPermissionIfNeeded = !locationPermissionPrechecked,
             onNavigateBack = {
-                navController.popBackStack()
+                navController.navigateToTopLevelMapForHomeEntry()
             },
             onNavigateToMap = {
                 navController.navigateToTopLevelMapForHomeEntry()

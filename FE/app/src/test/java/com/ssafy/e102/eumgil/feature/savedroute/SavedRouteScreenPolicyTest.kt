@@ -106,11 +106,15 @@ class SavedRouteScreenPolicyTest {
                 .substringBefore("@Composable\nprivate fun SavedBookmarkEditBottomBar")
 
         assertTrue(
-            "Saved bookmark cards should use the larger target corner and elevation instead of flat outlined rows.",
+            "Saved bookmark cards should keep the larger target corner but remove card shadow.",
             source.contains("private val SavedBookmarkCardCornerRadius = 24.dp") &&
-                source.contains("private val SavedBookmarkCardElevation = 6.dp") &&
-                savedPlaceSection.contains("shadowElevation = cardElevation") &&
-                routeBookmarkSection.contains("shadowElevation = cardElevation"),
+                source.contains("private val SavedBookmarkCardElevation = 0.dp") &&
+                savedPlaceSection.contains("EumBorderSubtle.copy(alpha = 0.65f)") &&
+                routeBookmarkSection.contains("EumBorderSubtle.copy(alpha = 0.65f)") &&
+                savedPlaceSection.contains("shadowElevation = SavedBookmarkCardElevation") &&
+                routeBookmarkSection.contains("shadowElevation = SavedBookmarkCardElevation") &&
+                !savedPlaceSection.contains("val cardElevation =") &&
+                !routeBookmarkSection.contains("val cardElevation ="),
         )
         assertTrue(
             "Normal place and route cards should expose the guide CTA as a prominent full-width filled button.",
@@ -124,6 +128,135 @@ class SavedRouteScreenPolicyTest {
     }
 
     @Test
+    fun `saved bookmark lists keep bottom breathing room outside edit mode`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun SavedRouteScreen(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkSectionHeader")
+        val placeContentSection =
+            source
+                .substringAfter("private fun SavedPlaceContent(")
+                .substringBefore("@Composable\nprivate fun SavedRouteBookmarkContent")
+        val routeContentSection =
+            source
+                .substringAfter("private fun SavedRouteBookmarkContent(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkEmptyState")
+
+        assertTrue(
+            "Top-level bookmark screen should disable default system insets because AppNavHost already reserves the bottom tab area.",
+            screenSection.contains("contentWindowInsets = WindowInsets(0, 0, 0, 0)"),
+        )
+        assertTrue(
+            "Saved place list should add bottom content padding so the final card can scroll clear of the list edge.",
+            placeContentSection.contains("contentPadding = PaddingValues(bottom = SavedBookmarkListBottomContentPadding)"),
+        )
+        assertTrue(
+            "Saved route list should add bottom content padding so the final card is not clipped against the bottom tab area.",
+            routeContentSection.contains("contentPadding = PaddingValues(bottom = SavedBookmarkListBottomContentPadding)"),
+        )
+        assertTrue(
+            "Saved bookmark bottom padding should be larger than the ordinary 16dp gap because the final card needs scroll clearance.",
+            source.contains("private val SavedBookmarkListBottomContentPadding = 80.dp"),
+        )
+        assertTrue(
+            "Edit delete bottom bar should still only be composed in edit mode.",
+            source.contains("bottomBar = {") &&
+                source.contains("if (uiState.isEditMode)") &&
+                source.contains("SavedBookmarkEditBottomBar("),
+        )
+    }
+
+    @Test
+    fun `saved bookmark edit action only appears when selected tab has content`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val screenSection =
+            source
+                .substringAfter("fun SavedRouteScreen(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkSectionHeader")
+        val topBarActionEnabledSection =
+            screenSection
+                .substringAfter("isActionEnabled =")
+                .substringBefore("onActionClick =")
+
+        assertTrue(
+            "Bookmark edit action should be tied to the currently selected tab so empty place or route tabs do not expose edit.",
+            screenSection.contains("val hasSelectedTabContent =") &&
+                screenSection.contains("SavedBookmarkTab.PLACE -> uiState.placeContent.places.isNotEmpty()") &&
+                screenSection.contains("SavedBookmarkTab.ROUTE -> uiState.routeContent.routes.isNotEmpty()") &&
+                topBarActionEnabledSection.contains("hasSelectedTabContent"),
+        )
+        assertFalse(
+            "Bookmark edit action should not stay enabled just because the other tab has content.",
+            topBarActionEnabledSection.contains("uiState.placeContent.places.isNotEmpty()") ||
+                topBarActionEnabledSection.contains("uiState.routeContent.routes.isNotEmpty()"),
+        )
+    }
+
+    @Test
+    fun `saved bookmark tab shell stays flat and animates selected button indicator`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val screenContentSection =
+            source
+                .substringAfter("fun SavedRouteScreen(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkSectionHeader")
+        val tabRowSection =
+            source
+                .substringAfter("private fun SavedBookmarkTabRow(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkTabButton")
+        val tabButtonSection =
+            source
+                .substringAfter("private fun SavedBookmarkTabButton(")
+                .substringBefore("@Composable\nprivate fun SavedPlaceContent")
+
+        assertTrue(
+            "Place and route tab content should swap normally while the segmented button handles the animation.",
+            !screenContentSection.contains("AnimatedContent(") &&
+                screenContentSection.contains("when (uiState.selectedTab)") &&
+                screenContentSection.contains("modifier = Modifier.weight(1f)"),
+        )
+        assertTrue(
+            "The selected place-route button indicator should slide horizontally inside the segmented control.",
+            tabRowSection.contains("BoxWithConstraints(") &&
+                tabRowSection.contains("animateDpAsState(") &&
+                tabRowSection.contains("targetValue = targetIndicatorOffset") &&
+                tabRowSection.contains("label = \"SavedBookmarkTabIndicatorOffset\"") &&
+                tabRowSection.contains(".offset(x = animatedIndicatorOffset)") &&
+                source.contains("private val SavedBookmarkTabButtonGap = 4.dp") &&
+                source.contains("private const val SavedBookmarkTabButtonAnimationMillis = 220"),
+        )
+        assertTrue(
+            "The place-route segmented control should explicitly remove internal elevation from both the shell and tab buttons.",
+            tabRowSection.contains("tonalElevation = 0.dp") &&
+                tabRowSection.contains("shadowElevation = 0.dp") &&
+                !tabButtonSection.contains("Surface("),
+        )
+    }
+
+    @Test
+    fun `saved bookmark section header keeps edit and normal spacing aligned`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val sectionHeaderSection =
+            source
+                .substringAfter("private fun SavedBookmarkSectionHeader(")
+                .substringBefore("@Composable\nprivate fun SavedRouteTopBar")
+
+        assertTrue(
+            "Saved bookmark section header should keep a stable minimum height so edit mode does not reduce the vertical margin around the title.",
+            sectionHeaderSection.contains(".heightIn(min = SavedBookmarkSectionHeaderMinHeight)") &&
+                source.contains("private val SavedBookmarkSectionHeaderMinHeight = 48.dp"),
+        )
+    }
+
+    @Test
     fun `saved bookmark names use compact wrapping rules`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
@@ -132,10 +265,6 @@ class SavedRouteScreenPolicyTest {
             source
                 .substringAfter("private fun SavedPlaceListItem(")
                 .substringBefore("@Composable\nprivate fun SavedRouteBookmarkListItem")
-        val routeBookmarkSection =
-            source
-                .substringAfter("private fun SavedRouteBookmarkListItem(")
-                .substringBefore("@Composable\nprivate fun SavedBookmarkEditBottomBar")
         val routeWaypointInfoSection =
             source
                 .substringAfter("private fun SavedRouteWaypointInfoRow(")
@@ -219,6 +348,10 @@ class SavedRouteScreenPolicyTest {
                 source.contains("SavedRouteUiAction.DeleteSelectedClicked"),
         )
         assertTrue(
+            "Outlined saved-route navigation buttons should use the same subtle border family as the report tab.",
+            source.contains("EumBorderSubtle.copy(alpha = 0.75f)"),
+        )
+        assertTrue(
             "Saved-route no-ripple CTA helper should disable ripple indication explicitly.",
             source.contains("indication = null"),
         )
@@ -261,6 +394,43 @@ class SavedRouteScreenPolicyTest {
             routeEmptySection.contains("최근 길안내") ||
                 routeEmptySection.contains("recent", ignoreCase = true) ||
                 routeEmptySection.contains("history", ignoreCase = true),
+        )
+    }
+
+    @Test
+    fun `bookmark loading states render inline feedback without card chrome`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/savedroute/SavedRouteScreen.kt")
+                .readText()
+        val placeLoadingSection =
+            source
+                .substringAfter("private fun SavedPlaceContent(")
+                .substringBefore("SavedBookmarkContentState.EMPTY ->")
+        val routeLoadingSection =
+            source
+                .substringAfter("private fun SavedRouteBookmarkContent(")
+                .substringBefore("SavedBookmarkContentState.EMPTY ->")
+        val loadingStateSection =
+            source
+                .substringAfter("private fun SavedBookmarkLoadingState(")
+                .substringBefore("@Composable\nprivate fun SavedBookmarkStateCard")
+
+        assertTrue(
+            "Saved bookmark loading branches should use the inline loading state instead of the card state component.",
+            placeLoadingSection.contains("SavedBookmarkLoadingState(") &&
+                routeLoadingSection.contains("SavedBookmarkLoadingState("),
+        )
+        assertFalse(
+            "Saved bookmark loading branches should not request the card loading mode.",
+            placeLoadingSection.contains("SavedBookmarkStateCard(") ||
+                routeLoadingSection.contains("SavedBookmarkStateCard(") ||
+                source.contains("isLoading = true"),
+        )
+        assertTrue(
+            "Inline bookmark loading feedback should keep a progress indicator and polite live region without a Surface card.",
+            loadingStateSection.contains("CircularProgressIndicator()") &&
+                loadingStateSection.contains("LiveRegionMode.Polite") &&
+                !loadingStateSection.contains("Surface("),
         )
     }
 
@@ -417,7 +587,7 @@ class SavedRouteScreenPolicyTest {
                 !source.contains("R.string.saved_route_pending_delete") &&
                 source.contains("MaterialTheme.colorScheme.error.copy(alpha = 0.28f)") &&
                 source.contains("SavedBookmarkPendingDeleteContainerColor") &&
-                source.contains("if (isPendingRemoval) {\n            0.dp"),
+                source.contains("private val SavedBookmarkCardElevation = 0.dp"),
         )
         assertFalse(
             "Edit delete CTA should not reserve system navigation padding inside the top-level tab shell.",

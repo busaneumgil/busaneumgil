@@ -6,9 +6,11 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import com.ssafy.e102.eumgil.core.config.AppEnvironment
 import com.ssafy.e102.eumgil.core.location.AndroidAddressSearchResolver
 import com.ssafy.e102.eumgil.core.location.AndroidCurrentHeadingManager
+import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.AndroidCurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.AndroidLocationPermissionManager
 import com.ssafy.e102.eumgil.core.location.CurrentHeadingManager
+import com.ssafy.e102.eumgil.core.location.CurrentLocationAddressResolver
 import com.ssafy.e102.eumgil.core.location.CurrentLocationManager
 import com.ssafy.e102.eumgil.core.location.LocationPermissionManager
 import com.ssafy.e102.eumgil.core.model.resolveAccountScopeKey
@@ -366,6 +368,10 @@ class AppContainer(
 
     val currentLocationManager: CurrentLocationManager by lazy(LazyThreadSafetyMode.NONE) {
         AndroidCurrentLocationManager(context = appContext)
+    }
+
+    val currentLocationAddressResolver: CurrentLocationAddressResolver by lazy(LazyThreadSafetyMode.NONE) {
+        AndroidCurrentLocationAddressResolver(context = appContext)
     }
 
     val currentHeadingManager: CurrentHeadingManager by lazy(LazyThreadSafetyMode.NONE) {

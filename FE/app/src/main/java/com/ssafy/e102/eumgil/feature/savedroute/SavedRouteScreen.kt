@@ -1,22 +1,27 @@
 package com.ssafy.e102.eumgil.feature.savedroute
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -39,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +66,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.model.RouteOption
@@ -72,8 +79,14 @@ fun SavedRouteScreen(
 ) {
     val selectedRemovalCount =
         uiState.pendingPlaceRemovalIds.size + uiState.pendingRouteRemovalIds.size
+    val hasSelectedTabContent =
+        when (uiState.selectedTab) {
+            SavedBookmarkTab.PLACE -> uiState.placeContent.places.isNotEmpty()
+            SavedBookmarkTab.ROUTE -> uiState.routeContent.routes.isNotEmpty()
+        }
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             SavedRouteTopBar(
                 isEditMode = uiState.isEditMode,
@@ -81,8 +94,7 @@ fun SavedRouteScreen(
                     if (uiState.isEditMode) {
                         !uiState.isApplyingEditChanges
                     } else {
-                        uiState.placeContent.places.isNotEmpty() ||
-                            uiState.routeContent.routes.isNotEmpty()
+                        hasSelectedTabContent
                     },
                 onActionClick = {
                     onAction(
@@ -190,7 +202,10 @@ private fun SavedBookmarkSectionHeader(
         }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = SavedBookmarkSectionHeaderMinHeight),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -354,26 +369,56 @@ private fun SavedBookmarkTabRow(
         shape = RoundedCornerShape(EumRadius.full),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
-        Row(
+        BoxWithConstraints(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            SavedBookmarkTabButton(
-                label = stringResource(id = R.string.saved_route_tab_place),
-                selected = selectedTab == SavedBookmarkTab.PLACE,
-                modifier = Modifier.weight(1f),
-                onClick = { onTabSelected(SavedBookmarkTab.PLACE) },
+            val indicatorWidth = (maxWidth - SavedBookmarkTabButtonGap) / 2
+            val targetIndicatorOffset =
+                if (selectedTab == SavedBookmarkTab.PLACE) {
+                    0.dp
+                } else {
+                    indicatorWidth + SavedBookmarkTabButtonGap
+                }
+            val animatedIndicatorOffset by animateDpAsState(
+                targetValue = targetIndicatorOffset,
+                animationSpec = tween(SavedBookmarkTabButtonAnimationMillis),
+                label = "SavedBookmarkTabIndicatorOffset",
             )
-            SavedBookmarkTabButton(
-                label = stringResource(id = R.string.saved_route_tab_route),
-                selected = selectedTab == SavedBookmarkTab.ROUTE,
-                modifier = Modifier.weight(1f),
-                onClick = { onTabSelected(SavedBookmarkTab.ROUTE) },
-            )
+
+            Surface(
+                modifier =
+                    Modifier
+                        .offset(x = animatedIndicatorOffset)
+                        .width(indicatorWidth)
+                        .height(SavedBookmarkTabHeight),
+                shape = RoundedCornerShape(EumRadius.full),
+                color = MaterialTheme.colorScheme.primary,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+            ) {}
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(SavedBookmarkTabButtonGap),
+            ) {
+                SavedBookmarkTabButton(
+                    label = stringResource(id = R.string.saved_route_tab_place),
+                    selected = selectedTab == SavedBookmarkTab.PLACE,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onTabSelected(SavedBookmarkTab.PLACE) },
+                )
+                SavedBookmarkTabButton(
+                    label = stringResource(id = R.string.saved_route_tab_route),
+                    selected = selectedTab == SavedBookmarkTab.ROUTE,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onTabSelected(SavedBookmarkTab.ROUTE) },
+                )
+            }
         }
     }
 }
@@ -388,7 +433,7 @@ private fun SavedBookmarkTabButton(
     val tabSelectedStateDescription = stringResource(id = R.string.a11y_tab_selected)
     val tabUnselectedStateDescription = stringResource(id = R.string.a11y_tab_unselected)
 
-    Surface(
+    Box(
         modifier =
             modifier
                 .clip(RoundedCornerShape(EumRadius.full))
@@ -406,13 +451,6 @@ private fun SavedBookmarkTabButton(
                     role = Role.Tab,
                     onClick = onClick,
                 ),
-        shape = RoundedCornerShape(EumRadius.full),
-        color =
-            if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.surface
-            },
     ) {
         Box(
             modifier =
@@ -446,10 +484,9 @@ private fun SavedPlaceContent(
 ) {
     when (content.screenState) {
         SavedBookmarkContentState.LOADING ->
-            SavedBookmarkStateCard(
+            SavedBookmarkLoadingState(
                 title = stringResource(id = R.string.saved_route_place_loading_title),
                 description = stringResource(id = R.string.saved_route_place_loading_description),
-                isLoading = true,
                 modifier = modifier.fillMaxWidth(),
             )
         SavedBookmarkContentState.EMPTY ->
@@ -475,6 +512,7 @@ private fun SavedPlaceContent(
         SavedBookmarkContentState.CONTENT ->
             LazyColumn(
                 modifier = modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = SavedBookmarkListBottomContentPadding),
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             ) {
                 content.errorMessage?.let { message ->
@@ -528,10 +566,9 @@ private fun SavedRouteBookmarkContent(
 ) {
     when (content.screenState) {
         SavedBookmarkContentState.LOADING ->
-            SavedBookmarkStateCard(
+            SavedBookmarkLoadingState(
                 title = stringResource(id = R.string.saved_route_route_loading_title),
                 description = stringResource(id = R.string.saved_route_route_loading_description),
-                isLoading = true,
                 modifier = modifier.fillMaxWidth(),
             )
         SavedBookmarkContentState.EMPTY ->
@@ -557,6 +594,7 @@ private fun SavedRouteBookmarkContent(
         SavedBookmarkContentState.CONTENT ->
             LazyColumn(
                 modifier = modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = SavedBookmarkListBottomContentPadding),
                 verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             ) {
                 content.errorMessage?.let { message ->
@@ -648,6 +686,37 @@ private fun SavedBookmarkEmptyState(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SavedBookmarkLoadingState(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .semantics { liveRegion = LiveRegionMode.Polite }
+                .padding(horizontal = EumSpacing.large, vertical = 36.dp),
+        verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator()
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -803,7 +872,7 @@ private fun NoRippleSavedRouteNavigationButton(
         }
     val border =
         if (isOutlined) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.36f))
+            BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.75f))
         } else {
             null
         }
@@ -875,7 +944,7 @@ private fun SavedPlaceListItem(
         if (isPendingRemoval) {
             BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.28f))
         } else {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f))
         }
     val containerColor =
         if (isPendingRemoval) {
@@ -883,19 +952,12 @@ private fun SavedPlaceListItem(
         } else {
             MaterialTheme.colorScheme.surface
         }
-    val cardElevation =
-        if (isPendingRemoval) {
-            0.dp
-        } else {
-            SavedBookmarkCardElevation
-        }
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(SavedBookmarkCardCornerRadius),
         color = containerColor,
         border = border,
-        shadowElevation = cardElevation,
+        shadowElevation = SavedBookmarkCardElevation,
     ) {
         Column(
             modifier =
@@ -1129,19 +1191,13 @@ private fun SavedRouteBookmarkListItem(
         if (isPendingRemoval) {
             BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.28f))
         } else {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f))
         }
     val containerColor =
         if (isPendingRemoval) {
             SavedBookmarkPendingDeleteContainerColor
         } else {
             MaterialTheme.colorScheme.surface
-        }
-    val cardElevation =
-        if (isPendingRemoval) {
-            0.dp
-        } else {
-            SavedBookmarkCardElevation
         }
     val routeOptionLabel =
         routeOptionCompactLabel(
@@ -1154,7 +1210,7 @@ private fun SavedRouteBookmarkListItem(
         shape = RoundedCornerShape(SavedBookmarkCardCornerRadius),
         color = containerColor,
         border = border,
-        shadowElevation = cardElevation,
+        shadowElevation = SavedBookmarkCardElevation,
     ) {
         Column(
             modifier =
@@ -1478,7 +1534,10 @@ private val SavedBookmarkWaypointValueLineHeight = 20.sp
 private val SavedBookmarkCategoryIconSize = 40.dp
 private val SavedBookmarkCardCornerRadius = 24.dp
 private val SavedBookmarkCardContentPadding = 18.dp
-private val SavedBookmarkCardElevation = 6.dp
+private val SavedBookmarkCardElevation = 0.dp
+private val SavedBookmarkSectionHeaderMinHeight = 48.dp
+private val SavedBookmarkTabButtonGap = 4.dp
+private const val SavedBookmarkTabButtonAnimationMillis = 220
 private val SavedBookmarkPendingDeleteContainerColor = Color(0xFFFFF1F2)
 private val SavedBookmarkPlaceIconTileSize = 72.dp
 private val SavedBookmarkPlaceIconTileCornerRadius = 20.dp
@@ -1488,3 +1547,4 @@ private val SavedBookmarkRoutePathVerticalPadding = 7.dp
 private val SavedBookmarkRouteWaypointGap = 8.dp
 private val SavedBookmarkRoutePathDotSize = 14.dp
 private val SavedBookmarkSortDropdownWidth = 132.dp
+private val SavedBookmarkListBottomContentPadding = 80.dp

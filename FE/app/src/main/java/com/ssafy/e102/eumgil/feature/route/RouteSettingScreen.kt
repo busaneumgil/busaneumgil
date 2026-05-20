@@ -87,8 +87,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -272,11 +274,8 @@ fun RouteSettingScreen(
                         enabled = uiState.isStartEnabled,
                         supportingText = ctaSupportingText,
                         selectedRoute = uiState.selectedRoute,
-                        showRefreshAction = uiState.selectedRoute != null,
-                        isRefreshInProgress = uiState.isRouteRefreshing,
                         onStartClick = { onAction(RouteSettingUiAction.StartNavigationClicked) },
                         onDisabledStartClick = onDisabledStartClick,
-                        onRefreshClick = { onAction(RouteSettingUiAction.RouteRefreshClicked) },
                         modifier =
                             Modifier
                                 .align(Alignment.BottomCenter)
@@ -298,9 +297,6 @@ fun RouteSettingScreen(
                             bottom = routeSettingBottomBarOverlayClearance(extraSpacing = EumSpacing.small),
                         ),
             )
-        }
-        if (uiState.isLoading && uiState.selectedTravelMode == RouteTravelMode.TRANSIT) {
-            RouteSearchFullscreenLoadingOverlay(modifier = Modifier.matchParentSize())
         }
         ApprovedHazardMarkerBottomSheet(
             marker = hazardMarkerState.selectedMarker,
@@ -2139,7 +2135,10 @@ private fun RouteSearchHeaderModeTab(
         color = if (selected) headerPolicy.summaryContainerColor else headerPolicy.inactiveTabContainerColor,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = EumSpacing.small),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EumSpacing.small),
             horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -3459,7 +3458,7 @@ private fun RouteOptionSection(
         verticalArrangement = Arrangement.spacedBy(RouteOptionCardGap),
     ) {
         when {
-            uiState.isLoading && uiState.optionCards.isEmpty() -> Unit
+            uiState.isLoading && uiState.optionCards.isEmpty() -> RouteSearchLoadingState()
 
             uiState.routePreviewMap.status == RoutePreviewMapStatus.NO_ROUTE ->
                 RouteFailureFallbackState(
@@ -3515,31 +3514,42 @@ private fun RouteLoadingScreen(
         modifier = modifier,
         color = MaterialTheme.colorScheme.background,
     ) {
+        RouteSettingLoadingState(
+            title = stringResource(id = R.string.route_setting_summary_loading_title),
+            description = stringResource(id = R.string.route_setting_summary_loading_description),
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+@Composable
+private fun RouteSettingLoadingState(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .semantics { liveRegion = LiveRegionMode.Polite }
+                .padding(horizontal = EumSpacing.large, vertical = 36.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge),
+            verticalArrangement = Arrangement.spacedBy(EumSpacing.medium),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(44.dp),
-                strokeWidth = 4.dp,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(modifier = Modifier.height(EumSpacing.large))
+            CircularProgressIndicator()
             Text(
-                text = stringResource(id = R.string.route_setting_summary_loading_title),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )
-            Spacer(modifier = Modifier.height(EumSpacing.small))
             Text(
-                text = stringResource(id = R.string.route_setting_summary_loading_description),
-                style = MaterialTheme.typography.bodyLarge,
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
@@ -3556,46 +3566,39 @@ private fun RouteUnsupportedAreaScreen(
         modifier = modifier,
         color = MaterialTheme.colorScheme.background,
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier =
-                    Modifier
-                        .align(Alignment.Center)
-                        .padding(horizontal = EumSpacing.large)
-                        .offset(y = -RouteFailureScreenContentOffset),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                RouteNoRouteIllustration(
-                    visualOffsetY = RouteFailureIllustrationVisualOffset,
-                    modifier = Modifier.size(RouteUnsupportedAreaIllustrationSize),
-                )
-                Spacer(modifier = Modifier.height(RouteFailureImageToTextGap))
-                Text(
-                    text = stringResource(id = R.string.route_setting_unsupported_area_title),
-                    style = routeFailureTitleTextStyle(),
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(modifier = Modifier.height(EumSpacing.small))
-                Text(
-                    text = stringResource(id = R.string.route_setting_unsupported_area_description),
-                    style = routeFailureDescriptionTextStyle(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-            }
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge)
+                    .offset(y = -RouteFailureScreenContentOffset),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            RouteNoRouteIllustration(
+                visualOffsetY = RouteFailureIllustrationVisualOffset,
+                modifier = Modifier.size(RouteFailureScreenIllustrationSize),
+            )
+            Spacer(modifier = Modifier.height(RouteFailureImageToTextGap))
+            Text(
+                text = stringResource(id = R.string.route_setting_unsupported_area_title),
+                style = routeFailureTitleTextStyle(),
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.small))
+            Text(
+                text = stringResource(id = R.string.route_setting_unsupported_area_description),
+                style = routeFailureDescriptionTextStyle(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(EumSpacing.large))
             Button(
                 onClick = onSelectPlaceClick,
                 modifier =
                     Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(
-                            start = RouteSettingBottomBarHorizontalPadding,
-                            end = RouteSettingBottomBarHorizontalPadding,
-                            bottom = RouteSettingBottomBarBottomGap,
-                        )
                         .fillMaxWidth()
                         .heightIn(min = RouteSettingBottomBarButtonHeight),
                 shape = RoundedCornerShape(RouteStandardCardCornerRadius),
@@ -3966,39 +3969,6 @@ private fun RouteCompactOptionCard(
 }
 
 @Composable
-private fun RouteSearchFullscreenLoadingOverlay(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.background(Color.White.copy(alpha = 0.72f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
-            shadowElevation = RouteOverlayCardElevation,
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = EumSpacing.large, vertical = EumSpacing.medium),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(32.dp),
-                    strokeWidth = 3.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "경로 탐색중",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun RouteSearchLoadingState() {
     Box(
         modifier =
@@ -4007,27 +3977,11 @@ private fun RouteSearchLoadingState() {
                 .height(RouteSearchLoadingHeight),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.72f),
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = EumSpacing.large, vertical = EumSpacing.medium),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(EumSpacing.small),
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    strokeWidth = 3.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "경로 탐색 중",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        RouteSettingLoadingState(
+            title = stringResource(id = R.string.route_setting_summary_loading_title),
+            description = stringResource(id = R.string.route_setting_summary_loading_description),
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 
@@ -4397,9 +4351,6 @@ private fun RouteSettingBottomBar(
     onStartClick: () -> Unit,
     onDisabledStartClick: () -> Unit = {},
     modifier: Modifier = Modifier,
-    showRefreshAction: Boolean = false,
-    isRefreshInProgress: Boolean = false,
-    onRefreshClick: () -> Unit = {},
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -4430,60 +4381,6 @@ private fun RouteSettingBottomBar(
                 onDisabledStartClick = onDisabledStartClick,
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (showRefreshAction) {
-                RouteRefreshFloatingButton(
-                    isRefreshing = isRefreshInProgress,
-                    enabled = !isRefreshInProgress,
-                    onClick = onRefreshClick,
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(y = -RouteTransitRefreshButtonDiagonalOffset),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RouteRefreshFloatingButton(
-    isRefreshing: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier =
-            modifier
-                .size(RouteTransitRefreshButtonSize)
-                .clip(CircleShape)
-                .clickable(
-                    enabled = enabled,
-                    role = Role.Button,
-                    onClick = onClick,
-                ).semantics {
-                    contentDescription = "경로 새로고침"
-                    stateDescription = if (isRefreshing) "새로고침 중" else "새로고침 가능"
-                },
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 3.dp,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            if (isRefreshing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(RouteTransitRefreshProgressSize),
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_status_refresh),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(RouteTransitRefreshIconSize),
-                )
-            }
         }
     }
 }
@@ -5443,6 +5340,8 @@ private val RouteSearchHeaderModeTabHeight = 36.dp
 private val RouteSearchHeaderModeTabCornerRadius = 10.dp
 private val RouteSearchHeaderTransitTabIconSize = 22.dp
 private val RouteSearchHeaderWalkTabIconSize = 26.dp
+private val RouteTravelModeTransitTabIconSize = 20.dp
+private val RouteTravelModeWalkTabIconSize = 22.dp
 private val RouteSearchHeaderTopToSummaryGap = 6.dp
 private val RouteSearchHeaderSummaryMinHeight = 92.dp
 private val RouteSearchHeaderWaypointGap = 10.dp
@@ -5455,7 +5354,6 @@ private val RouteFloatingControlElevation = 6.dp
 private val RouteBottomSheetElevation = 6.dp
 private val RouteMapMessageIllustrationSize = 144.dp
 private val RouteMapMessageIllustrationVisualOffset = 10.dp
-private val RouteUnsupportedAreaIllustrationSize = 280.dp
 private val RouteFailureScreenIllustrationSize = 280.dp
 private val RouteFailureFallbackIllustrationSize = 160.dp
 private val RouteFailureScreenContentOffset = 48.dp
@@ -5539,8 +5437,6 @@ private val RouteWaypointInputLabelColor = Color(0xFF94A3B8)
 private val RouteDetailArrivalInfoChipRadius = 18.dp
 private val RouteTimelineDividerColor = Color(0xFFD9D9D9)
 private val RouteTravelModeTabVerticalPadding = 7.dp
-private val RouteTravelModeWalkTabIconSize = 30.dp
-private val RouteTravelModeTransitTabIconSize = 28.dp
 private val RouteMapControlButtonSize = 36.dp
 private val RouteSettingSheetVerticalPadding = 8.dp
 private val RouteSettingSheetGap = 6.dp
@@ -5584,13 +5480,9 @@ private val RouteOptionDetailButtonTouchTargetSize = 48.dp
 private val RouteOptionDetailButtonIconSize = 24.dp
 private val RouteInlineButtonHeight = 44.dp
 private val RouteSettingBottomBarButtonHeight = 50.dp
-private val RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp
+private val RouteSettingBottomBarHorizontalPadding = EumSpacing.medium
 private val RouteSettingBottomBarTopGap = EumSpacing.small
 private val RouteSettingBottomBarBottomGap = 30.dp
-private val RouteTransitRefreshButtonSize = 44.dp
-private val RouteTransitRefreshIconSize = 22.dp
-private val RouteTransitRefreshProgressSize = 20.dp
-private val RouteTransitRefreshButtonDiagonalOffset = 40.dp
 private val RouteDetailSidePanelBottomClearance =
     RouteSettingBottomBarButtonHeight + RouteSettingBottomBarBottomGap + EumSpacing.medium
 // Match the tighter card-to-CTA spacing users currently see on devices with a visible system nav bar.

@@ -5,6 +5,7 @@ import type {
   AdminHazardRouteReview,
   AdminRoadSegmentAttributesUpdateRequest,
   AdminRoadSegmentUpdateResponse,
+  AdminRoutingApplyStateResponse,
   AdminRoutePreviewRequest,
   AdminRoutePreviewResponse,
   AdminDashboardSummaryResponse,
@@ -449,6 +450,20 @@ export async function updateAdminRoadSegmentAttributes(
       body: JSON.stringify(request),
     },
   );
+}
+
+export async function fetchAdminRoutingApplyState(
+  accessToken: string,
+): Promise<AdminRoutingApplyStateResponse> {
+  return requestAdminJson<AdminRoutingApplyStateResponse>("/admin/routing/overrides/apply-state", accessToken);
+}
+
+export async function applyAdminRoutingOverrides(
+  accessToken: string,
+): Promise<AdminRoutingApplyStateResponse> {
+  return requestAdminJson<AdminRoutingApplyStateResponse>("/admin/routing/overrides/apply", accessToken, {
+    method: "POST",
+  });
 }
 
 export async function reverseGeocodePlace(point: GeoPoint, accessToken: string) {

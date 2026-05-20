@@ -7,14 +7,27 @@ import org.junit.Test
 
 class SearchScreenPolicyTest {
     @Test
+    fun `destination search entry title uses destination copy`() {
+        val stringsSource = File("src/main/res/values/strings.xml").readText()
+
+        assertTrue(
+            "Home destination search should title the search screen as destination search instead of generic place search.",
+            stringsSource.contains("<string name=\"search_screen_title\">도착지 검색</string>"),
+        )
+    }
+
+    @Test
     fun `apply to route search exposes route endpoint quick actions`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
                 .readText()
 
         assertTrue(
-            "Apply-to-route search should show quick actions only in route assignment mode.",
-            source.contains("shouldShowRouteEndpointQuickActions(uiState.selectionMode)") &&
+            "Apply-to-route search entry should show quick actions for both route endpoint assignment targets.",
+            source.contains("shouldShowRouteEndpointQuickActions(uiState.selectionMode, uiState.editingTarget)") &&
+                source.contains("selectionMode == SearchSelectionMode.APPLY_TO_ROUTE") &&
+                source.contains("editingTarget == RouteEditingTarget.ORIGIN") &&
+                source.contains("editingTarget == RouteEditingTarget.DESTINATION") &&
                 source.contains("RouteEndpointQuickActionSection("),
         )
         assertTrue(
@@ -45,6 +58,23 @@ class SearchScreenPolicyTest {
             "Current-location failures should remain visible on the screen instead of being only transient feedback.",
             source.contains("currentLocationQuickActionState") &&
                 source.contains("resolveSearchCurrentLocationStatusContent("),
+        )
+    }
+
+    @Test
+    fun `search results screen never renders route endpoint quick actions`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val searchResultsContentSection =
+            source
+                .substringAfter("private fun SearchResultsContent(")
+                .substringBefore("@Composable\nprivate fun SearchInputField")
+
+        assertFalse(
+            "Search results should keep route endpoint shortcuts out of the result list surface.",
+            searchResultsContentSection.contains("RouteEndpointQuickActionSection(") ||
+                searchResultsContentSection.contains("shouldShowRouteEndpointQuickActions("),
         )
     }
 
@@ -91,6 +121,28 @@ class SearchScreenPolicyTest {
     }
 
     @Test
+    fun `recent search rows scroll inside the available entry space`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val recentVisitSection =
+            source
+                .substringAfter("private fun RecentVisitSection(")
+                .substringBefore("@Composable\nprivate fun RecentVisitItem")
+
+        assertTrue(
+            "Recent search rows should be rendered in a weighted LazyColumn so overflowing rows scroll instead of being clipped above the promo banner.",
+            recentVisitSection.contains("LazyColumn(") &&
+                recentVisitSection.contains(".weight(1f)") &&
+                recentVisitSection.contains("items("),
+        )
+        assertFalse(
+            "Recent search rows should not be appended directly to the parent Column because that clips the last row when the banner is visible.",
+            recentVisitSection.contains("recentSearches.forEach"),
+        )
+    }
+
+    @Test
     fun `results screen loading state uses spinner without illustration or placeholder card`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
@@ -110,7 +162,8 @@ class SearchScreenPolicyTest {
         )
         assertTrue(
             "Search results loading state should keep a spinner affordance inside the centered state.",
-            loadingStateSection.contains("showLoadingIndicator = true"),
+            loadingStateSection.contains("showLoadingIndicator = true") &&
+                source.contains("EumCircularLoadingIndicator("),
         )
         assertTrue(
             "Search results loading state should not render the centered illustration while the request is in progress.",
@@ -119,6 +172,41 @@ class SearchScreenPolicyTest {
         assertFalse(
             "Search results loading state should not fall back to the boxed SearchStateCard placeholder.",
             loadingStateSection.contains("SearchStateCard("),
+        )
+        assertFalse(
+            "Search results loading should not use an oversized custom spinner.",
+            source.contains("SearchResultsLoadingIndicatorSize"),
+        )
+    }
+
+    @Test
+    fun `search result sort control matches saved bookmark segmented button motion`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/search/SearchScreen.kt")
+                .readText()
+        val sortControlSection =
+            source
+                .substringAfter("private fun SearchSortControl(")
+                .substringBefore("@Composable\nprivate fun SearchSortOptionButton")
+        val sortButtonSection =
+            source
+                .substringAfter("private fun SearchSortOptionButton(")
+                .substringBefore("@Composable\nprivate fun SearchNextPageLoadingIndicator")
+
+        assertTrue(
+            "Search sort control should use the same segmented shell and animated indicator pattern as the saved bookmark tab control.",
+            sortControlSection.contains("BoxWithConstraints(") &&
+                sortControlSection.contains("animateDpAsState(") &&
+                sortControlSection.contains("SearchSortOptionIndicatorOffset") &&
+                sortControlSection.contains("RoundedCornerShape(EumRadius.full)") &&
+                sortControlSection.contains("SearchSortOptionButtonGap") &&
+                !sortControlSection.contains("RoundedCornerShape(EumRadius.scaleM)"),
+        )
+        assertTrue(
+            "Search sort buttons should be transparent hit targets over the moving selected indicator.",
+            sortButtonSection.contains(".clip(RoundedCornerShape(EumRadius.full))") &&
+                sortButtonSection.contains("this.selected = selected") &&
+                !sortButtonSection.contains("color = containerColor"),
         )
     }
 

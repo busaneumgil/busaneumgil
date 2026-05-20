@@ -130,6 +130,74 @@ class MyPageScreenTest {
     }
 
     @Test
+    fun `my page surfaces match report tab flat white border style`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+        val profileSection =
+            source
+                .substringAfter("private fun ProfileOverviewCard(")
+                .substringBefore("@Composable\nprivate fun ProfileAvatar")
+        val quickActionSection =
+            source
+                .substringAfter("private fun QuickActionCard(")
+                .substringBefore("@Composable\nprivate fun MainMenuCard")
+        val menuCardSection =
+            source
+                .substringAfter("private fun MainMenuCard(")
+                .substringBefore("@Composable\nprivate fun MyPageMenuRow")
+
+        assertTrue(
+            "My page should use the same white page background as the report tab.",
+            source.contains("private val MyPageBackground = Color.White"),
+        )
+        assertTrue(
+            "Profile, quick action, and menu surfaces should use report-style subtle borders.",
+            profileSection.contains("border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f))") &&
+                quickActionSection.contains("border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f))") &&
+                menuCardSection.contains("border = BorderStroke(1.dp, EumBorderSubtle.copy(alpha = 0.65f))"),
+        )
+        assertTrue(
+            "My page cards should remove shadow elevation to match report surfaces.",
+            profileSection.contains("shadowElevation = 0.dp") &&
+                quickActionSection.contains("shadowElevation = 0.dp") &&
+                menuCardSection.contains("shadowElevation = 0.dp"),
+        )
+        assertFalse(
+            "My page should not keep the old shadowed card elevations.",
+            profileSection.contains("shadowElevation = 4.dp") ||
+                quickActionSection.contains("shadowElevation = 3.dp") ||
+                menuCardSection.contains("shadowElevation = 4.dp"),
+        )
+    }
+
+    @Test
+    fun `my page action and menu text uses profile name weight`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")
+                .readText()
+        val quickActionSection =
+            source
+                .substringAfter("private fun QuickActionCard(")
+                .substringBefore("@Composable\nprivate fun MainMenuCard")
+        val menuRowSection =
+            source
+                .substringAfter("private fun MyPageMenuRow(")
+                .substringBefore("@Composable\nprivate fun MyPageMenuDivider")
+
+        assertTrue(
+            "Quick action titles and main menu rows should match the semibold profile name weight.",
+            quickActionSection.contains("fontWeight = FontWeight.SemiBold") &&
+                menuRowSection.contains("fontWeight = FontWeight.SemiBold"),
+        )
+        assertFalse(
+            "Quick action titles and main menu rows should not keep the heavier bold treatment.",
+            quickActionSection.contains("fontWeight = FontWeight.Bold") ||
+                menuRowSection.contains("fontWeight = FontWeight.Bold"),
+        )
+    }
+
+    @Test
     fun `my page content scrolls above footer for small screens and large text`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/mypage/MyPageScreen.kt")

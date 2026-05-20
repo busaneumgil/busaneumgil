@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.core.designsystem.component.feedback.EumLoadingState
 import com.ssafy.e102.eumgil.core.designsystem.component.navigation.EumCenteredTopBar
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumBorderSubtle
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumPrimary200
@@ -200,10 +201,9 @@ private fun ReportHistoryListContent(
                     modifier = Modifier.weight(1f),
                     contentAlignment = Alignment.Center,
                 ) {
-                    ReportHistoryStateCard(
+                    ReportHistoryLoadingState(
                         title = "제보 내역을 불러오는 중입니다",
                         description = "저장된 제보 목록을 확인하고 있어요.",
-                        isLoading = true,
                     )
                 }
 
@@ -502,11 +502,15 @@ private fun ReportHistoryDetailContent(
     ) {
         if (detail == null) {
             item {
-                ReportHistoryStateCard(
-                    title = "제보 상세를 불러오는 중입니다",
-                    description = "선택한 제보의 상세 정보를 확인하고 있어요.",
-                    isLoading = true,
-                )
+                Box(
+                    modifier = Modifier.fillParentMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ReportHistoryLoadingState(
+                        title = "제보 상세를 불러오는 중입니다",
+                        description = "선택한 제보의 상세 정보를 확인하고 있어요.",
+                    )
+                }
             }
         } else {
             item { ReportHistoryDetailSummaryCard(detail = detail) }
@@ -732,6 +736,22 @@ private fun ReportHistoryTimelineDivider() {
                 .width(1.dp)
                 .height(32.dp)
                 .background(EumBorderSubtle),
+    )
+}
+
+@Composable
+private fun ReportHistoryLoadingState(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    EumLoadingState(
+        title = title,
+        description = description,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = EumSpacing.large, vertical = 36.dp),
     )
 }
 

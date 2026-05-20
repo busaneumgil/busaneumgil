@@ -168,7 +168,7 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(detailScreenSection.contains("contentWindowInsets = WindowInsets(0, 0, 0, 0)"))
         assertTrue(routeBottomBarSection.contains(".navigationBarsPadding()"))
         assertTrue(navigationBottomBarSection.contains(".navigationBarsPadding()"))
-        assertTrue(source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp"))
+        assertTrue(source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium"))
         assertTrue(navigationSource.contains("NavigationBottomBarHorizontalPadding = EumSpacing.medium + 50.dp"))
         assertTrue(source.contains("RouteSettingBottomBarBottomGap = 30.dp"))
         assertTrue(navigationSource.contains("NavigationBottomBarBottomGap = 30.dp"))
@@ -283,6 +283,32 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
+    fun `route setting physical back uses the same navigation callbacks as visible back controls`() {
+        val entryRouteSource =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingEntryRoute.kt")
+                .readText()
+        val routeSettingEntry =
+            entryRouteSource
+                .substringAfter("fun RouteSettingEntryRoute(")
+                .substringBefore("@Composable\nfun RouteDetailEntryRoute(")
+        val routeDetailEntry =
+            entryRouteSource
+                .substringAfter("fun RouteDetailEntryRoute(")
+                .substringBefore("@Composable\nprivate fun RouteSettingViewModelFactory")
+
+        assertTrue(
+            "Route setting should intercept Android physical back and run the configured map-home callback.",
+            routeSettingEntry.contains("BackHandler {") &&
+                routeSettingEntry.contains("onNavigateBack()"),
+        )
+        assertTrue(
+            "Route detail should also use the injected back callback for Android physical back.",
+            routeDetailEntry.contains("BackHandler {") &&
+                routeDetailEntry.contains("onNavigateBack()"),
+        )
+    }
+
+    @Test
     fun `route loading replaces the map so search transitions do not flicker kakao tiles`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
@@ -304,10 +330,20 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "The loading replacement should be a stable non-map surface with progress and route loading copy.",
-            loadingScreen.contains("CircularProgressIndicator(") &&
+            source.contains("private fun RouteSettingLoadingState(") &&
+                loadingScreen.contains("RouteSettingLoadingState(") &&
                 loadingScreen.contains("route_setting_summary_loading_title") &&
                 loadingScreen.contains("route_setting_summary_loading_description") &&
                 loadingScreen.contains("MaterialTheme.colorScheme.background"),
+        )
+        assertTrue(
+            "Route loading should match the shared bookmark loading style without card chrome or custom spinner sizing.",
+            source.contains("LiveRegionMode.Polite") &&
+                source.contains("MaterialTheme.typography.titleMedium") &&
+                source.contains("MaterialTheme.typography.bodyMedium") &&
+                !loadingScreen.contains("headlineSmall") &&
+                !loadingScreen.contains("Modifier.size(44.dp)") &&
+                !loadingScreen.contains("strokeWidth = 4.dp"),
         )
     }
 
@@ -338,6 +374,15 @@ class RouteSettingLayoutPolicyTest {
                 unsupportedScreen.contains("route_setting_unsupported_area_action") &&
                 screenSection.contains("uiState.unsupportedArea?.editingTarget ?: RouteEditingTarget.DESTINATION") &&
                 !unsupportedScreen.contains("route_setting_duribal_call_prompt_call"),
+        )
+        assertTrue(
+            "Unsupported area empty state should use the same centered illustration, text, and inline CTA structure as the route failure state.",
+            unsupportedScreen.contains(".fillMaxSize()") &&
+                unsupportedScreen.contains(".padding(horizontal = EumSpacing.large, vertical = EumSpacing.xLarge)") &&
+                unsupportedScreen.contains("verticalArrangement = Arrangement.Center") &&
+                unsupportedScreen.contains("RouteFailureScreenIllustrationSize") &&
+                !unsupportedScreen.contains(".align(Alignment.BottomCenter)") &&
+                !unsupportedScreen.contains(".navigationBarsPadding()"),
         )
     }
 
@@ -376,8 +421,15 @@ class RouteSettingLayoutPolicyTest {
 
     @Test
     fun `route search header policy keeps compact kakao geometry and shared tokens`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
+                .readText()
         val headerPolicy = routeSearchHeaderPolicy(showModeTabs = true)
         val modeTabs = routeSearchHeaderModeTabPolicies()
+        val headerModeTabSection =
+            source
+                .substringAfter("private fun RouteSearchHeaderModeTab(")
+                .substringBefore("@Composable\nprivate fun RouteSearchHeaderWaypointLine")
 
         assertEquals(R.string.route_setting_screen_title, headerPolicy.titleResId)
         assertEquals(EumPrimary600, headerPolicy.containerColor)
@@ -398,6 +450,12 @@ class RouteSettingLayoutPolicyTest {
         assertTrue(headerPolicy.usesCompactWaypointTitle)
         assertFalse(headerPolicy.showsCloseAction)
         assertFalse(headerPolicy.showsMoreAction)
+        assertTrue(
+            "Mode tabs should keep the walk/transit icon and label centered as one group.",
+            headerModeTabSection.contains("Icon(") &&
+                headerModeTabSection.contains("modifier = Modifier.size(iconSize)") &&
+                headerModeTabSection.contains("horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall, Alignment.CenterHorizontally)"),
+        )
     }
 
     @Test
@@ -778,7 +836,7 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "The full failure screen should show image and text, with Duribal limited to transit failures.",
-            failureScreen.contains("R.drawable.ic_status_warning") &&
+            failureScreen.contains("RouteNoRouteIllustration(") &&
                 failureScreen.contains("route_setting_no_route_result_title") &&
                 failureScreen.contains("route_setting_no_route_result_description") &&
                 failureScreen.contains("selectedTravelMode == RouteTravelMode.TRANSIT") &&
@@ -787,11 +845,13 @@ class RouteSettingLayoutPolicyTest {
                 failureScreen.contains("onClick = onDuribalCallClick"),
         )
         assertTrue(
-            "Transit loading should use a full-screen centered modal instead of a local result-list spinner.",
-            screenSection.contains("RouteSearchFullscreenLoadingOverlay(") &&
-                source.contains("private fun RouteSearchFullscreenLoadingOverlay(") &&
-                source.contains("contentAlignment = Alignment.Center") &&
-                routeOptionSection.contains("uiState.isLoading && uiState.optionCards.isEmpty() -> Unit"),
+            "Transit loading should stay in the empty result area instead of stacking a full-screen overlay.",
+            !screenSection.contains("RouteSearchFullscreenLoadingOverlay(") &&
+                !source.contains("private fun RouteSearchFullscreenLoadingOverlay(") &&
+                source.contains("private fun RouteSearchLoadingState()") &&
+                routeOptionSection.contains(
+                    "uiState.isLoading && uiState.optionCards.isEmpty() -> RouteSearchLoadingState()",
+                ),
         )
     }
 
@@ -1010,7 +1070,8 @@ class RouteSettingLayoutPolicyTest {
         )
         assertTrue(
             "Route start CTA should tint the button icon white on the primary background.",
-            source.contains("tint = MaterialTheme.colorScheme.onPrimary"),
+            source.contains("tint = routeSettingCtaContentColor(enabled = enabled)") &&
+                source.contains("MaterialTheme.colorScheme.onPrimary"),
         )
         assertTrue("Route start CTA PNG icon should exist in drawable.", asset.exists())
     }
@@ -1582,7 +1643,7 @@ class RouteSettingLayoutPolicyTest {
     }
 
     @Test
-    fun `route CTAs use narrower horizontal insets across search and detail`() {
+    fun `route CTAs use shared screen horizontal insets across search and detail`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
@@ -1592,15 +1653,15 @@ class RouteSettingLayoutPolicyTest {
                 .substringBefore("@Composable\nprivate fun RouteSettingCtaContent")
 
         assertTrue(
-            "Route start CTA should subtract 50dp from each side compared with the old screen-wide button.",
-            source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium + 50.dp") &&
+            "Route start CTA should span the available screen width while preserving the shared page margin.",
+            source.contains("RouteSettingBottomBarHorizontalPadding = EumSpacing.medium") &&
                 bottomBarSection.contains("start = RouteSettingBottomBarHorizontalPadding") &&
                 bottomBarSection.contains("end = RouteSettingBottomBarHorizontalPadding"),
         )
     }
 
     @Test
-    fun `route setting refresh action floats diagonally above the start cta`() {
+    fun `route setting does not render a floating route refresh action above the start cta`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/feature/route/RouteSettingScreen.kt")
                 .readText()
@@ -1611,30 +1672,12 @@ class RouteSettingLayoutPolicyTest {
         val bottomBarSection =
             source
                 .substringAfter("private fun RouteSettingBottomBar(")
-                .substringBefore("@Composable\nprivate fun RouteRefreshFloatingButton")
-        val refreshButtonSection =
-            source
-                .substringAfter("private fun RouteRefreshFloatingButton(")
                 .substringBefore("@Composable\nprivate fun RouteSettingCtaContent")
 
-        assertTrue(
-            "Route selection should expose manual refresh whenever a route is selected.",
-            screenSection.contains("showRefreshAction = uiState.selectedRoute != null") &&
-                screenSection.contains("RouteSettingUiAction.RouteRefreshClicked"),
-        )
-        assertTrue(
-            "The refresh action should sit at the CTA top end and offset upward as a diagonal floating button.",
-            bottomBarSection.contains("RouteRefreshFloatingButton(") &&
-                bottomBarSection.contains(".align(Alignment.TopEnd)") &&
-                bottomBarSection.contains(".offset(y = -RouteTransitRefreshButtonDiagonalOffset)"),
-        )
-        assertTrue(
-            "The refresh action should be a circular icon button with a progress state.",
-            refreshButtonSection.contains("CircleShape") &&
-                refreshButtonSection.contains("R.drawable.ic_status_refresh") &&
-                refreshButtonSection.contains("CircularProgressIndicator(") &&
-                source.contains("RouteTransitRefreshButtonSize = 44.dp"),
-        )
+        assertFalse("Route selection should not pass a floating refresh action into the bottom bar.", screenSection.contains("showRefreshAction ="))
+        assertFalse("Route selection should not dispatch route refresh from a floating CTA-adjacent button.", screenSection.contains("RouteSettingUiAction.RouteRefreshClicked"))
+        assertFalse("The bottom bar should not render a floating refresh button over the start CTA.", bottomBarSection.contains("RouteRefreshFloatingButton("))
+        assertFalse("The floating refresh composable should be removed from the route selection screen.", source.contains("private fun RouteRefreshFloatingButton("))
     }
 
     @Test
@@ -1681,9 +1724,12 @@ class RouteSettingLayoutPolicyTest {
 
         assertTrue(
             "Route start CTA should wrap the icon and label in a single row so the combined content stays centered inside the full-width button.",
-            ctaSection.contains(
-                "Row(\n                horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall),\n                verticalAlignment = Alignment.CenterVertically,\n            )",
-            ),
+            ctaSection.contains("Row(") &&
+                ctaSection.contains(".fillMaxSize()") &&
+                ctaSection.contains(
+                    "horizontalArrangement = Arrangement.spacedBy(EumSpacing.xSmall, Alignment.CenterHorizontally)",
+                ) &&
+                ctaSection.contains("verticalAlignment = Alignment.CenterVertically"),
         )
         assertTrue(
             "Route start CTA should keep the navigation-start icon and labelLarge text together in that centered content row.",

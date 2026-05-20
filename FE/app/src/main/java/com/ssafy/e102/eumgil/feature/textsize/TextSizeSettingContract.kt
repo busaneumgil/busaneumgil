@@ -25,8 +25,6 @@ sealed interface TextSizeSettingUiAction {
 
 sealed interface TextSizeSettingUiEvent {
     data object NavigateBack : TextSizeSettingUiEvent
-
-    data object ShowSavedMessage : TextSizeSettingUiEvent
 }
 
 val TextSizeSettingOptions: List<TextSizeSettingOption> =

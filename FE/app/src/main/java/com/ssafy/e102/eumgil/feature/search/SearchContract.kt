@@ -89,6 +89,7 @@ sealed interface SearchUiAction {
 
     data class ResultsRouteEntered(
         val query: String,
+        val editingTarget: RouteEditingTarget = RouteEditingTarget.DESTINATION,
         val selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     ) : SearchUiAction
 

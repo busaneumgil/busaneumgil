@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -56,6 +57,10 @@ fun RouteSettingEntryRoute(
     var isDuribalConfirmDialogVisible by rememberSaveable { mutableStateOf(false) }
     var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
     var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
+
+    BackHandler {
+        onNavigateBack()
+    }
 
     fun showRouteSnackbar(message: String) {
         coroutineScope.launch {
@@ -174,6 +179,10 @@ fun RouteDetailEntryRoute(
     val coroutineScope = rememberCoroutineScope()
     var pendingLowFloorReservation by remember { mutableStateOf<LowFloorBusReservation?>(null) }
     var isLowFloorReservationRequesting by rememberSaveable { mutableStateOf(false) }
+
+    BackHandler {
+        onNavigateBack()
+    }
 
     LaunchedEffect(viewModel, navigationViewModel, routeOption, hydrateFromNavigation) {
         val detailRequest =

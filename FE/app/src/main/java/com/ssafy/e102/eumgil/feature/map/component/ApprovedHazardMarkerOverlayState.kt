@@ -91,6 +91,7 @@ internal class ApprovedHazardMarkerOverlayState(
                     isSelected = marker.reportId == selectedMarker?.reportId,
                     includeInProjection = false,
                     clickTargetId = marker.clickTargetId,
+                    reportTypeApiValue = marker.reportType,
                 )
             }
 

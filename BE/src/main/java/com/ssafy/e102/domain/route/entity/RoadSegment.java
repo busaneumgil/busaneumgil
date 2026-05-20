@@ -15,6 +15,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -78,6 +79,10 @@ public class RoadSegment {
 	@Enumerated(EnumType.STRING)
 	@Column(name = "segment_type", nullable = false, length = 30, columnDefinition = "varchar(30) default 'SIDE_LINE'")
 	private SegmentType segmentType = SegmentType.SIDE_LINE;
+
+	@Version
+	@Column(name = "version", nullable = false)
+	private Long version;
 
 	public static RoadSegment create(
 		Long edgeId,

@@ -1471,7 +1471,7 @@ function AdminApp() {
               <section className="panel-section">
                 <h3>편집 기준</h3>
                 <p className="muted">
-                  보행 네트워크 탭은 segment 추가, 삭제, DB 반영에만 사용합니다. 통행, 계단, 보도 폭 같은 segment 속성 검수는 경로 검수 탭에서 진행합니다.
+                  보행 네트워크 탭은 segment 추가, 삭제, DB 저장에만 사용합니다. 통행, 계단, 보도 폭 같은 segment 속성 검수는 경로 검수 탭에서 진행합니다.
                 </p>
               </section>
               <section className="panel-section">
@@ -1484,7 +1484,7 @@ function AdminApp() {
                   <Metric label="endpoints" value={bridgeQuery.data?.summary?.endpointCount ?? "-"} />
                   <Metric label="bridges" value={bridgeQuery.data?.summary?.visibleBridgeCandidateCount ?? "-"} />
                 </div>
-                <p className="muted">Undo / Clear는 지도 상단 toolbar에서 처리합니다. 상세 목록은 DB 반영 전 최종 확인이 필요할 때만 별도 검토합니다.</p>
+                <p className="muted">Undo / Clear는 지도 상단 toolbar에서 처리합니다. 상세 목록은 DB 저장 전 최종 확인이 필요할 때만 별도 검토합니다.</p>
               </section>
               <section className="panel-section">
                 <h3>검수 흐름</h3>
@@ -1500,7 +1500,7 @@ function AdminApp() {
                   onClick={() => applyRoadNetworkMutation.mutate()}
                   disabled={!draftEdits.length || !canEditSelectedArea || applyRoadNetworkMutation.isPending || isRoadEditJobRunning}
                 >
-                  {applyRoadNetworkMutation.isPending || isRoadEditJobRunning ? "DB 반영 중" : "DB 반영"}
+                  {applyRoadNetworkMutation.isPending || isRoadEditJobRunning ? "DB 저장 중" : "DB 저장"}
                 </button>
                 {activeRoadEditJob && (
                   <p className="muted">

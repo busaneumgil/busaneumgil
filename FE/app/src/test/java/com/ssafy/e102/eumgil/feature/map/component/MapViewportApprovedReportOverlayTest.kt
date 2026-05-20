@@ -40,5 +40,6 @@ class MapViewportApprovedReportOverlayTest {
         assertEquals("approved-report:42", approvedPoint.overlayId)
         assertEquals("approved-report:42", approvedPoint.clickTargetId)
         assertFalse(approvedPoint.includeInProjection)
+        assertEquals("OBSTACLE", approvedPoint.reportTypeApiValue)
     }
 }

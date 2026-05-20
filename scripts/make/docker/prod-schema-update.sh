@@ -76,6 +76,51 @@ with psycopg2.connect(
         cursor.execute("ALTER TABLE routing_segment_overrides ADD COLUMN IF NOT EXISTS stairs_state VARCHAR(30)")
         cursor.execute("ALTER TABLE routing_segment_overrides ADD COLUMN IF NOT EXISTS width_state VARCHAR(30)")
         cursor.execute("ALTER TABLE routing_segment_overrides ADD COLUMN IF NOT EXISTS braille_block_state VARCHAR(30)")
+        cursor.execute("ALTER TABLE routing_segment_overrides ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0")
+        cursor.execute("ALTER TABLE road_segments ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0")
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS routing_apply_states (
+                state_key VARCHAR(100) PRIMARY KEY,
+                dirty BOOLEAN NOT NULL DEFAULT FALSE,
+                applying BOOLEAN NOT NULL DEFAULT FALSE,
+                applying_started_at TIMESTAMP NULL,
+                dirty_marked_at TIMESTAMP NULL,
+                last_applied_at TIMESTAMP NULL,
+                last_result_status VARCHAR(30) NOT NULL DEFAULT 'SKIPPED',
+                last_result_message TEXT NULL,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute("ALTER TABLE routing_apply_states ADD COLUMN IF NOT EXISTS applying_started_at TIMESTAMP NULL")
+        cursor.execute(
+            """
+            INSERT INTO routing_apply_states (
+                state_key,
+                dirty,
+                applying,
+                applying_started_at,
+                dirty_marked_at,
+                last_applied_at,
+                last_result_status,
+                last_result_message,
+                updated_at
+            )
+            VALUES (
+                'ROUTING_OVERRIDES',
+                FALSE,
+                FALSE,
+                NULL,
+                NULL,
+                NULL,
+                'SKIPPED',
+                NULL,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (state_key) DO NOTHING
+            """
+        )
         print("routing_segment_overrides current-state schema ready")
 PY
 }
@@ -220,7 +265,7 @@ url = os.environ["DB_URL"].replace("jdbc:postgresql://", "")
 host_port, db_name = url.split("/", 1)
 host, port = host_port.split(":", 1)
 
-required_tables = ("road_nodes", "road_segments", "segment_features", "source_features", "routing_segment_overrides")
+required_tables = ("road_nodes", "road_segments", "segment_features", "source_features", "routing_segment_overrides", "routing_apply_states")
 required_columns = {
     "road_nodes": ("vertex_id", "source_node_key", "point"),
     "road_segments": (
@@ -239,6 +284,7 @@ required_columns = {
         "stairs_state",
         "signal_state",
         "segment_type",
+        "version",
     ),
     "segment_features": (
         "feature_id",
@@ -262,6 +308,18 @@ required_columns = {
         "stairs_state",
         "width_state",
         "braille_block_state",
+        "version",
+    ),
+    "routing_apply_states": (
+        "state_key",
+        "dirty",
+        "applying",
+        "applying_started_at",
+        "dirty_marked_at",
+        "last_applied_at",
+        "last_result_status",
+        "last_result_message",
+        "updated_at",
     ),
 }
 
@@ -279,7 +337,8 @@ with psycopg2.connect(
             "to_regclass('public.road_segments'), "
             "to_regclass('public.segment_features'), "
             "to_regclass('public.source_features'), "
-            "to_regclass('public.routing_segment_overrides')"
+            "to_regclass('public.routing_segment_overrides'), "
+            "to_regclass('public.routing_apply_states')"
         )
         existing = cursor.fetchone()
         missing_tables = [table for table, regclass in zip(required_tables, existing) if regclass is None]
@@ -318,6 +377,21 @@ with psycopg2.connect(
             cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
             count = cursor.fetchone()[0]
             print(f"{table} ready: rows={count}")
+
+        cursor.execute(
+            """
+            SELECT state_key, dirty, applying, last_result_status
+            FROM routing_apply_states
+            WHERE state_key = 'ROUTING_OVERRIDES'
+            """
+        )
+        state_row = cursor.fetchone()
+        if state_row is None:
+            raise SystemExit("routing_apply_states singleton row ROUTING_OVERRIDES is missing")
+        print(
+            "routing_apply_states singleton ready: "
+            f"state_key={state_row[0]}, dirty={state_row[1]}, applying={state_row[2]}, last_result_status={state_row[3]}"
+        )
 PY
 }
 

@@ -1,6 +1,7 @@
 package com.ssafy.e102.global.external.graphhopper;
 
 import java.net.SocketTimeoutException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,9 +27,12 @@ public class GraphHopperAdminClient {
 
 	private static final Logger log = LoggerFactory.getLogger(GraphHopperAdminClient.class);
 	private static final int MAX_SINGLE_ENDPOINT_ATTEMPTS = 2;
+	private static final int MAX_RELOAD_ENDPOINTS = 2;
+	private static final Duration RELOAD_STALE_LOCK_BUFFER = Duration.ofSeconds(30);
 
 	private final RestTemplate restTemplate;
 	private final GraphHopperEndpointProvider endpointProvider;
+	private final Duration staleLockRecoveryThreshold;
 
 	@Autowired
 	public GraphHopperAdminClient(
@@ -37,16 +41,28 @@ public class GraphHopperAdminClient {
 		GraphHopperEndpointProvider endpointProvider) {
 		this(
 			builder.connectTimeout(properties.connectTimeout()).readTimeout(properties.readTimeout()).build(),
+			properties,
 			endpointProvider);
 	}
 
 	GraphHopperAdminClient(RestTemplate restTemplate, GraphHopperProperties properties) {
-		this(restTemplate, () -> GraphHopperEndpointSelection.fallback(properties.baseUrl()));
+		this(restTemplate, properties, () -> GraphHopperEndpointSelection.fallback(properties.baseUrl()));
 	}
 
-	GraphHopperAdminClient(RestTemplate restTemplate, GraphHopperEndpointProvider endpointProvider) {
+	GraphHopperAdminClient(
+		RestTemplate restTemplate,
+		GraphHopperProperties properties,
+		GraphHopperEndpointProvider endpointProvider) {
 		this.restTemplate = restTemplate;
+		this.staleLockRecoveryThreshold = properties.connectTimeout()
+			.plus(properties.readTimeout())
+			.multipliedBy(MAX_SINGLE_ENDPOINT_ATTEMPTS * MAX_RELOAD_ENDPOINTS)
+			.plus(RELOAD_STALE_LOCK_BUFFER);
 		this.endpointProvider = endpointProvider;
+	}
+
+	public Duration staleLockRecoveryThreshold() {
+		return staleLockRecoveryThreshold;
 	}
 
 	public GraphHopperReloadResult reloadRoutingOverrides() {

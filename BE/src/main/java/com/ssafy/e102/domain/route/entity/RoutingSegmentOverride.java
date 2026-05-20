@@ -9,6 +9,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -39,6 +40,10 @@ public class RoutingSegmentOverride {
 	@Column(name = "braille_block_state", length = 30)
 	private AccessibilityState brailleBlockState;
 
+	@Version
+	@Column(name = "version", nullable = false)
+	private Long version;
+
 	public static RoutingSegmentOverride of(
 		Long edgeId,
 		AccessibilityState walkAccess,
@@ -52,6 +57,17 @@ public class RoutingSegmentOverride {
 		override.widthState = widthState;
 		override.brailleBlockState = brailleBlockState;
 		return override;
+	}
+
+	public void update(
+		AccessibilityState walkAccess,
+		AccessibilityState stairsState,
+		WidthState widthState,
+		AccessibilityState brailleBlockState) {
+		this.walkAccess = walkAccess;
+		this.stairsState = stairsState;
+		this.widthState = widthState;
+		this.brailleBlockState = brailleBlockState;
 	}
 
 	public boolean hasAnyOverride() {

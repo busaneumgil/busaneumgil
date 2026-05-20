@@ -15,6 +15,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapMarkerFilterUiState
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterKey
 import com.ssafy.e102.eumgil.feature.map.model.MapShortcutFilterRowState
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 
 data class MapUiState(
     val cameraTarget: MapCameraTarget = MapCameraTarget.DefaultBusan,
@@ -160,6 +161,7 @@ sealed interface MapUiAction {
 sealed interface MapUiEvent {
     data class NavigateToSearch(
         val editingTarget: RouteEditingTarget,
+        val selectionMode: SearchSelectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
     ) : MapUiEvent
 
     data class NavigateToRouteSetting(

@@ -864,6 +864,7 @@ class SearchViewModelTest {
             assertEquals(null, destinationSelectionRepository.selectedDestination.value)
             val preview = destinationPreviewRepository.pendingPreview.value
             assertEquals(result.toPlaceDestination(), preview?.destination)
+            assertEquals(null, preview?.routeEndpointTarget)
             assertEquals(listOf<String>(), preview?.accessibilityTagKeys)
             assertEquals(SearchUiEvent.NavigateToMapPreview, uiEvent.await())
         }

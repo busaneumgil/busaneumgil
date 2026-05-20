@@ -136,7 +136,7 @@ class MainNavGraphTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun `map search entry opens destination assignment search flow`() {
+    fun `map search entry opens place preview search flow`() {
         val source =
             File("src/main/java/com/ssafy/e102/eumgil/app/navigation/MainNavGraph.kt")
                 .readText()
@@ -146,15 +146,15 @@ class MainNavGraphTopLevelNavigationPolicyTest {
                 .substringBefore("composable(route = TopLevelRoute.SavedRoute.route)")
 
         assertTrue(
-            "Home map search should enter the route endpoint assignment search flow so entry-only destination shortcuts are interactive.",
+            "Home map search should use the selection mode carried by the map event instead of forcing route endpoint assignment.",
             mapDestination.contains(
-                "SearchRoute.Entry.createRoute(editingTarget, SearchSelectionMode.APPLY_TO_ROUTE)",
+                "SearchRoute.Entry.createRoute(editingTarget, selectionMode)",
             ),
         )
         assertTrue(
-            "Home map voice/search result navigation should preserve destination assignment mode instead of falling back to preview-only results.",
+            "Home map voice/search result navigation should open preview-only results so result taps show the place detail sheet first.",
             mapDestination.contains(
-                "SearchRoute.Results.createRoute(query, editingTarget, SearchSelectionMode.APPLY_TO_ROUTE)",
+                "SearchRoute.Results.createRoute(query, editingTarget, SearchSelectionMode.PREVIEW_ON_MAP)",
             ),
         )
     }

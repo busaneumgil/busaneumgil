@@ -32,7 +32,6 @@ import com.ssafy.e102.domain.report.type.HazardRouteReviewIntent;
 import com.ssafy.e102.domain.report.type.HazardRouteReviewStage;
 import com.ssafy.e102.domain.report.type.ReportStatus;
 import com.ssafy.e102.domain.route.repository.RoadSegmentRepository;
-import com.ssafy.e102.global.external.graphhopper.GraphHopperAdminClient.GraphHopperReloadResult;
 
 @Service
 @Transactional(readOnly = true)
@@ -167,9 +166,12 @@ public class AdminHazardRouteReviewService {
 		if (completion == null) {
 			throw new HazardReportException(HazardReportErrorCode.HAZARD_ROUTE_REVIEW_NOT_FOUND);
 		}
-		GraphHopperReloadResult routingApplyResult = adminMapService.resolveRouteReviewRoutingApplyResult(
-			completion.routingOverlayReloadRequired());
-		AdminHazardRouteReviewResponse after = attachRoutingApplyResult(completion.after(), routingApplyResult);
+		AdminHazardRouteReviewResponse after = withRoutingApplyStatus(
+			completion.after(),
+			completion.routingOverlayReloadRequired() ? AdminRoutingApplyStatus.PENDING : AdminRoutingApplyStatus.SKIPPED,
+			completion.routingOverlayReloadRequired()
+				? "DB 저장이 완료되었습니다. 경로 반영이 필요합니다."
+				: "경로 반영 대상 변경이 없습니다.");
 
 		adminAuditLogService.record(
 			userId,
@@ -318,9 +320,10 @@ public class AdminHazardRouteReviewService {
 		return value;
 	}
 
-	private AdminHazardRouteReviewResponse attachRoutingApplyResult(
+	private AdminHazardRouteReviewResponse withRoutingApplyStatus(
 		AdminHazardRouteReviewResponse response,
-		GraphHopperReloadResult routingApplyResult) {
+		AdminRoutingApplyStatus routingApplyStatus,
+		String routingApplyMessage) {
 		return new AdminHazardRouteReviewResponse(
 			response.reviewId(),
 			response.reportId(),
@@ -335,20 +338,8 @@ public class AdminHazardRouteReviewService {
 			response.updatedAt(),
 			response.completedAt(),
 			response.segmentDrafts(),
-			toAdminRoutingApplyStatus(routingApplyResult),
-			routingApplyResult == null ? null : routingApplyResult.message());
-	}
-
-	private AdminRoutingApplyStatus toAdminRoutingApplyStatus(GraphHopperReloadResult routingApplyResult) {
-		if (routingApplyResult == null) {
-			return AdminRoutingApplyStatus.SKIPPED;
-		}
-		return switch (routingApplyResult.status()) {
-			case SKIPPED -> AdminRoutingApplyStatus.SKIPPED;
-			case APPLIED -> AdminRoutingApplyStatus.APPLIED;
-			case APPLIED_WITH_WARNING -> AdminRoutingApplyStatus.APPLIED_WITH_WARNING;
-			case FAILED -> AdminRoutingApplyStatus.FAILED;
-		};
+			routingApplyStatus,
+			routingApplyMessage);
 	}
 
 	private record RouteReviewCompletion(

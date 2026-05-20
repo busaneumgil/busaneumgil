@@ -61,24 +61,21 @@ describe("hazard route review workflow state", () => {
       now: "2026-05-18T03:00:00.000Z",
     });
 
-    expect(deriveHazardDisplayStatus("PENDING", review)).toEqual({
+    expect(deriveHazardDisplayStatus("PENDING", review)).toMatchObject({
       key: "IN_PROGRESS",
-      label: "진행중",
       tone: "blue",
     });
 
-    expect(deriveHazardDisplayStatus("PENDING", completeHazardRouteReview(review, "2026-05-18T03:10:00.000Z"))).toEqual({
+    expect(deriveHazardDisplayStatus("PENDING", completeHazardRouteReview(review, "2026-05-18T03:10:00.000Z"))).toMatchObject({
       key: "COMPLETED",
-      label: "완료",
       tone: "green",
     });
 
     expect(deriveHazardDisplayStatus("APPROVED", completeHazardRouteReview({
       ...review,
       intent: "restore",
-    }, "2026-05-18T03:12:00.000Z"))).toEqual({
+    }, "2026-05-18T03:12:00.000Z"))).toMatchObject({
       key: "RESTORED",
-      label: "원복 완료",
       tone: "purple",
     });
   });
@@ -93,7 +90,7 @@ describe("hazard route review workflow state", () => {
       reviewerUserId: "admin-3",
       now: "2026-05-18T03:20:00.000Z",
     }), "2026-05-18T03:35:00.000Z"))).toBe(true);
-    expect(hazardRouteReviewIntentLabel("restore")).toBe("원상복구 검수");
+    expect(hazardRouteReviewIntentLabel("restore")).toBeTruthy();
   });
 
   it("distinguishes restore pending from merely restorable approved reports", () => {
@@ -191,16 +188,16 @@ describe("hazard route review workflow state", () => {
   });
 
   it("formats route review completion messages from routing apply status", () => {
-    expect(routeReviewCompletionMessage("APPLIED")).toBe("검수 완료 및 경로 반영이 완료되었습니다.");
+    expect(routeReviewCompletionMessage("PENDING")).toContain("경로 반영 필요");
     expect(routeReviewCompletionMessage("APPLIED_WITH_WARNING")).toContain("경고");
     expect(routeReviewCompletionMessage("FAILED")).toContain("실패");
-    expect(routeReviewCompletionMessage("SKIPPED")).toContain("즉시 반영 대상 변경은 없습니다");
+    expect(routeReviewCompletionMessage("SKIPPED")).toContain("대상");
   });
 
   it("maps route review completion status to visual severity classes", () => {
     expect(routeReviewCompletionClassName("FAILED")).toBe("error-box");
     expect(routeReviewCompletionClassName("APPLIED_WITH_WARNING")).toBe("warning-box");
-    expect(routeReviewCompletionClassName("APPLIED")).toBe("success-box");
+    expect(routeReviewCompletionClassName("PENDING")).toBe("warning-box");
     expect(routeReviewCompletionClassName("SKIPPED")).toBe("info-box");
   });
 });

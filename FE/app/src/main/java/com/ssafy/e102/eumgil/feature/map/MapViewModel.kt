@@ -59,6 +59,7 @@ import com.ssafy.e102.eumgil.feature.map.model.shouldShowApprovedReportMarkers
 import com.ssafy.e102.eumgil.feature.map.model.toApprovedReportMarkerDataOrNull
 import com.ssafy.e102.eumgil.feature.map.model.toApprovedReportSheetState
 import com.ssafy.e102.eumgil.feature.map.model.toMapCoordinate
+import com.ssafy.e102.eumgil.feature.search.SearchSelectionMode
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -275,7 +276,13 @@ class MapViewModel(
             is MapUiAction.RecentDestinationPreviewClicked -> handleRecentDestinationPreviewClicked(action.placeId)
             is MapUiAction.RecentDestinationRouteClicked -> handleRecentDestinationRouteClicked(action.placeId)
             MapUiAction.SearchHereClicked -> handleSearchHereClicked()
-            MapUiAction.SearchEntryClicked -> emitUiEvent(MapUiEvent.NavigateToSearch(RouteEditingTarget.DESTINATION))
+            MapUiAction.SearchEntryClicked ->
+                emitUiEvent(
+                    MapUiEvent.NavigateToSearch(
+                        editingTarget = RouteEditingTarget.DESTINATION,
+                        selectionMode = SearchSelectionMode.PREVIEW_ON_MAP,
+                    ),
+                )
             is MapUiAction.RouteEndpointStatusClicked -> handleRouteEndpointStatusClicked(action.editingTarget)
         }
     }
@@ -788,7 +795,12 @@ class MapViewModel(
         mutableUiState.update { state ->
             state.copy(routeEditingTarget = editingTarget)
         }
-        emitUiEvent(MapUiEvent.NavigateToSearch(editingTarget))
+        emitUiEvent(
+            MapUiEvent.NavigateToSearch(
+                editingTarget = editingTarget,
+                selectionMode = SearchSelectionMode.APPLY_TO_ROUTE,
+            ),
+        )
     }
 
     private fun handleRecentDestinationRouteClicked(placeId: String) {

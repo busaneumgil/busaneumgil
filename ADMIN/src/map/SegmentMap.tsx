@@ -68,7 +68,7 @@ export interface RoadviewDockState {
 const ROADVIEW_DEFAULT_MESSAGE = "Roadview 도구를 누른 뒤 지도를 클릭하면 Kakao Roadview를 엽니다.";
 const DETAIL_SEGMENT_MAX_LEVEL = 4;
 const FORCED_DETAIL_SEGMENT_MAX_COUNT = 1500;
-const DETAIL_SEGMENT_RENDER_MAX_COUNT = 500;
+const DETAIL_SEGMENT_RENDER_MAX_COUNT = 1500;
 const DETAIL_SEGMENT_VIEWPORT_PADDING_RATIO = 0.35;
 const segmentFeatureTypes: SegmentFeatureType[] = ["CROSSWALK", "AUDIO_SIGNAL", "BRAILLE_BLOCK", "STAIRS"];
 const segmentFeatureLabels: Record<SegmentFeatureType, string> = {
@@ -1052,7 +1052,9 @@ export function SegmentMap({
                   ? `세그먼트 ${visibleSegmentCount}건이 선택되어 상세 렌더링을 제한했습니다. 제보 주변 범위를 더 좁히거나 확대해서 확인해 주세요.`
                   : `확대하면 보행 네트워크 segment가 표시됩니다. 현재 level ${mapLevel}, 표시 기준 ${DETAIL_SEGMENT_MAX_LEVEL} 이하`
                 : detailRenderStatus.capped
-                  ? `${detailRenderStatus.features.length}/${detailRenderStatus.scopedCount} segments 렌더링 · 화면 보호를 위해 일부만 표시 중`
+                  ? `${detailRenderStatus.features.length}/${detailRenderStatus.scopedCount} segments 렌더링 · 중요 속성과 화면 중심 우선 표시 중`
+                : detailRenderStatus.scopedCount < visibleSegmentCount
+                  ? `${detailRenderStatus.features.length}/${visibleSegmentCount} segments 렌더링 · 현재 화면 ${detailRenderStatus.scopedCount}건`
                 : `${visibleSegmentCount} segments · ${bridgePayload?.summary?.visibleBridgeCandidateCount ?? bridgePayload?.bridges.features.length ?? 0} bridges · ${mode}${pendingAddCount ? ` · add ${pendingAddCount}` : ""}${polygonDeleteActive ? ` · 영역 ${polygonPointCount}/5점` : ""}${snapMessage ? ` · ${snapMessage}` : ""}`}
       </div>
     </section>
@@ -1078,16 +1080,62 @@ function LegendItem({
   );
 }
 
-function detailSegmentRenderScope(features: SegmentFeature[], viewportBounds: ViewportBounds | null) {
+export function detailSegmentRenderScope(features: SegmentFeature[], viewportBounds: ViewportBounds | null) {
   const expandedBounds = viewportBounds ? expandViewportBounds(viewportBounds, DETAIL_SEGMENT_VIEWPORT_PADDING_RATIO) : null;
   const scopedFeatures = expandedBounds
     ? features.filter((feature) => segmentIntersectsBounds(feature, expandedBounds))
     : features;
+  const orderedFeatures = scopedFeatures.length > DETAIL_SEGMENT_RENDER_MAX_COUNT
+    ? orderDetailSegmentFeatures(scopedFeatures, viewportBounds)
+    : scopedFeatures;
   return {
-    features: scopedFeatures.slice(0, DETAIL_SEGMENT_RENDER_MAX_COUNT),
+    features: orderedFeatures.slice(0, DETAIL_SEGMENT_RENDER_MAX_COUNT),
     scopedCount: scopedFeatures.length,
     capped: scopedFeatures.length > DETAIL_SEGMENT_RENDER_MAX_COUNT,
   };
+}
+
+function orderDetailSegmentFeatures(features: SegmentFeature[], viewportBounds: ViewportBounds | null) {
+  const center = viewportBounds ? viewportBoundsCenter(viewportBounds) : null;
+  return [...features].sort((left, right) => {
+    const priorityDelta = detailSegmentPriority(left) - detailSegmentPriority(right);
+    if (priorityDelta !== 0) return priorityDelta;
+    if (center) {
+      const distanceDelta = segmentCenterDistanceSquared(left, center) - segmentCenterDistanceSquared(right, center);
+      if (distanceDelta !== 0) return distanceDelta;
+    }
+    return String(left.properties.edgeId).localeCompare(String(right.properties.edgeId), undefined, { numeric: true });
+  });
+}
+
+function viewportBoundsCenter(bounds: ViewportBounds): Coord {
+  return [
+    (bounds.minLng + bounds.maxLng) / 2,
+    (bounds.minLat + bounds.maxLat) / 2,
+  ];
+}
+
+function segmentCenterDistanceSquared(feature: SegmentFeature, center: Coord) {
+  const [lng, lat] = midpointCoord(feature.geometry.coordinates);
+  const lngScale = Math.max(Math.cos((center[1] * Math.PI) / 180), 0.2);
+  const lngDelta = (lng - center[0]) * lngScale;
+  const latDelta = lat - center[1];
+  return lngDelta * lngDelta + latDelta * latDelta;
+}
+
+function detailSegmentPriority(feature: SegmentFeature) {
+  const properties = feature.properties;
+  if (isYesState(properties.stairsState) || properties.featureTypes?.includes("STAIRS") === true) return 0;
+  if (isNoState(properties.walkAccess)) return 1;
+  const slope = numberOrNull(properties.avgSlopePercent);
+  if (slope !== null && Math.abs(slope) >= 8) return 2;
+  if (isNarrowWidth(properties.widthState, properties.widthMeter)) return 3;
+  if (isUnpavedSurface(properties.surfaceState)) return 4;
+  if (isYesState(properties.audioSignalState) || properties.featureTypes?.includes("AUDIO_SIGNAL") === true) return 5;
+  if (isYesState(properties.brailleBlockState) || properties.featureTypes?.includes("BRAILLE_BLOCK") === true) return 6;
+  if (isYesState(properties.signalState)) return 7;
+  if (properties.segmentType === "CROSS_WALK" || properties.featureTypes?.includes("CROSSWALK") === true) return 8;
+  return 9;
 }
 
 function readViewportBounds(map: KakaoMap | null): ViewportBounds | null {
@@ -1427,6 +1475,18 @@ function numberOrNull(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function isNarrowWidth(widthState: unknown, widthMeter: unknown) {
+  const state = String(widthState ?? "").toUpperCase();
+  if (state.includes("NARROW")) return true;
+  const meter = numberOrNull(widthMeter);
+  return meter !== null && meter < 1.2;
+}
+
+function isUnpavedSurface(surfaceState: unknown) {
+  const state = String(surfaceState ?? "").toUpperCase();
+  return state.includes("UNPAVED") || state.includes("BAD");
 }
 
 function slopeColor(slopePercent: number) {

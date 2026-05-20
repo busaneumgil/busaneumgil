@@ -3,7 +3,7 @@ import { detailSegmentRenderScope } from "./SegmentMap";
 import type { SegmentFeature } from "../types";
 
 describe("detailSegmentRenderScope", () => {
-  it("keeps route-critical segments before ordinary segments when rendering is capped", () => {
+  it("keeps route-critical segments before ordinary segments without dropping scoped features", () => {
     const ordinaryFeatures = Array.from({ length: 1505 }, (_, index) =>
       segmentFeature(index, 129 + index * 0.00001, 35),
     );
@@ -11,12 +11,13 @@ describe("detailSegmentRenderScope", () => {
 
     const result = detailSegmentRenderScope([...ordinaryFeatures, stairsFeature], null);
 
-    expect(result.capped).toBe(true);
-    expect(result.features).toHaveLength(1500);
+    expect(result.capped).toBe(false);
+    expect(result.scopedCount).toBe(1506);
+    expect(result.features).toHaveLength(1506);
     expect(result.features[0].properties.edgeId).toBe("stairs");
   });
 
-  it("keeps segments closest to the current viewport center when ordinary segments exceed the cap", () => {
+  it("keeps segments closest to the current viewport center first within the scoped viewport set", () => {
     const farFeatures = Array.from({ length: 1505 }, (_, index) =>
       segmentFeature(index, 129.007 + index * 0.000001, 35.007),
     );
@@ -29,8 +30,10 @@ describe("detailSegmentRenderScope", () => {
       maxLat: 35.005,
     });
 
-    expect(result.capped).toBe(true);
-    expect(result.features.map((feature) => feature.properties.edgeId)).toContain("centered");
+    expect(result.capped).toBe(false);
+    expect(result.scopedCount).toBe(1502);
+    expect(result.features).toHaveLength(1502);
+    expect(result.features[0].properties.edgeId).toBe("centered");
   });
 });
 

@@ -68,7 +68,7 @@ export interface RoadviewDockState {
 const ROADVIEW_DEFAULT_MESSAGE = "";
 const DETAIL_SEGMENT_MAX_LEVEL = 4;
 const FORCED_DETAIL_SEGMENT_MAX_COUNT = 1500;
-const DETAIL_SEGMENT_RENDER_MAX_COUNT = 1500;
+const DETAIL_SEGMENT_RENDER_BATCH_SIZE = 250;
 const DETAIL_SEGMENT_VIEWPORT_PADDING_RATIO = 0.35;
 const segmentFeatureTypes: SegmentFeatureType[] = ["CROSSWALK", "AUDIO_SIGNAL", "BRAILLE_BLOCK", "STAIRS"];
 const segmentFeatureLabels: Record<SegmentFeatureType, string> = {
@@ -169,6 +169,8 @@ export function SegmentMap({
   const selectedSegmentOverlayRef = useRef<KakaoOverlay | null>(null);
   const roadAttributeTooltipRef = useRef<KakaoOverlay | null>(null);
   const segmentOverlayByEdgeRef = useRef<Map<string, KakaoOverlay[]>>(new Map());
+  const segmentRenderFrameRef = useRef<number | null>(null);
+  const segmentFeatureRenderFrameRef = useRef<number | null>(null);
   const polygonShapeRef = useRef<KakaoOverlay | null>(null);
   const centeredPayloadKeyRef = useRef<string | null>(null);
   const draftEditsRef = useRef<EditAction[]>(draftEdits);
@@ -189,6 +191,7 @@ export function SegmentMap({
   const [mapReady, setMapReady] = useState(false);
   const [mapLevel, setMapLevel] = useState(6);
   const [viewportBounds, setViewportBounds] = useState<ViewportBounds | null>(null);
+  const [detailOverlayRenderProgress, setDetailOverlayRenderProgress] = useState({ total: 0, rendered: 0, active: false });
   const [snapMessage, setSnapMessage] = useState<string | null>(null);
   const [polygonDeleteActive, setPolygonDeleteActive] = useState(false);
   const [polygonPointCount, setPolygonPointCount] = useState(0);
@@ -266,6 +269,8 @@ export function SegmentMap({
 
     return () => {
       disposed = true;
+      cancelScheduledFrame(segmentRenderFrameRef);
+      cancelScheduledFrame(segmentFeatureRenderFrameRef);
       detachWheelZoomRef.current?.();
       detachWheelZoomRef.current = null;
     };
@@ -274,6 +279,7 @@ export function SegmentMap({
   useEffect(() => {
     if (!mapReady || !mapRef.current || !window.kakao?.maps) return;
 
+    cancelScheduledFrame(segmentRenderFrameRef);
     overlaysRef.current.forEach((overlay) => overlay.setMap(null));
     overlaysRef.current = [];
     segmentOverlayByEdgeRef.current.clear();
@@ -285,39 +291,58 @@ export function SegmentMap({
     const segmentFeatures = canRenderDetails
       ? detailSegmentRenderScope(allSegmentFeatures.filter(shouldShowRoadSegmentLayer), viewportBounds).features
       : [];
-    segmentFeatures.forEach((feature) => {
-      const routeAttributeStyleOverride = toolbarMode === "routeAttributeLegend" ? routeAttributeSegmentStyle(feature, routeAttributeLayers) : undefined;
-      const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, (coord, latLng) => {
-        if (routePointPickModeRef.current) {
-          handleMapCoordinate(coord, latLng);
-          return;
-        }
-        if (toolbarMode !== "editor") {
-          onSelectSegmentRef.current(feature);
-          drawSelectedSegment(feature);
-          return;
-        }
-        if (isCoordinatePickMode()) {
-          preventMapClickPropagation();
-          handleMapCoordinate(coord, latLng);
-          return;
-        }
-        if (modeRef.current !== "delete") {
-          handleMapCoordinate(coord, latLng);
-          return;
-        }
-        onDraftEditRef.current({
-          action: "delete_segment",
-          edgeId: feature.properties.edgeId,
-          segmentType: feature.properties.segmentType,
-          reason: "ADMIN_click_delete",
-        } as EditAction);
-      }, { hitArea: useHitArea, style: routeAttributeStyleOverride });
-      if (segmentOverlays) {
-        overlaysRef.current.push(...segmentOverlays);
-        segmentOverlayByEdgeRef.current.set(String(feature.properties.edgeId), segmentOverlays);
-      }
+    setDetailOverlayRenderProgress({
+      total: segmentFeatures.length,
+      rendered: segmentFeatures.length && canRenderDetails ? 0 : 0,
+      active: canRenderDetails && segmentFeatures.length > DETAIL_SEGMENT_RENDER_BATCH_SIZE,
     });
+    scheduleOverlayRenderBatches(
+      segmentFeatures,
+      segmentRenderFrameRef,
+      (feature) => {
+        const routeAttributeStyleOverride = toolbarMode === "routeAttributeLegend"
+          ? routeAttributeSegmentStyle(feature, routeAttributeLayers)
+          : undefined;
+        const segmentOverlays = createSegmentOverlay(feature, mapRef.current!, (coord, latLng) => {
+          if (routePointPickModeRef.current) {
+            handleMapCoordinate(coord, latLng);
+            return;
+          }
+          if (toolbarMode !== "editor") {
+            onSelectSegmentRef.current(feature);
+            drawSelectedSegment(feature);
+            return;
+          }
+          if (isCoordinatePickMode()) {
+            preventMapClickPropagation();
+            handleMapCoordinate(coord, latLng);
+            return;
+          }
+          if (modeRef.current !== "delete") {
+            handleMapCoordinate(coord, latLng);
+            return;
+          }
+          onDraftEditRef.current({
+            action: "delete_segment",
+            edgeId: feature.properties.edgeId,
+            segmentType: feature.properties.segmentType,
+            reason: "ADMIN_click_delete",
+          } as EditAction);
+        }, { hitArea: useHitArea, style: routeAttributeStyleOverride });
+        if (segmentOverlays) {
+          overlaysRef.current.push(...segmentOverlays);
+          segmentOverlayByEdgeRef.current.set(String(feature.properties.edgeId), segmentOverlays);
+        }
+      },
+      (renderedCount) => {
+        setDetailOverlayRenderProgress({
+          total: segmentFeatures.length,
+          rendered: renderedCount,
+          active: renderedCount < segmentFeatures.length,
+        });
+      },
+      syncDeletedSegmentOverlays,
+    );
 
     const bridgeFeatures = showBridgeGuides ? bridgePayload?.bridges.features ?? [] : [];
     bridgeFeatures.forEach((feature) => {
@@ -333,7 +358,6 @@ export function SegmentMap({
     }
     renderReferenceOverlays();
     renderSegmentFeatureOverlays();
-    syncDeletedSegmentOverlays();
   }, [bridgePayload, detailedSegmentsVisible, focusMarker, mapReady, mode, payload, polygonDeleteActive, preferredView, roadSegmentLayers, routeAttributeLayers, showBridgeGuides, toolbarMode, viewportBounds]);
 
   useEffect(() => {
@@ -496,6 +520,45 @@ export function SegmentMap({
     return circle;
   }
 
+  function cancelScheduledFrame(frameRef: RefObject<number | null>) {
+    if (frameRef.current === null) return;
+    window.cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+  }
+
+  function scheduleOverlayRenderBatches<T>(
+    items: T[],
+    frameRef: RefObject<number | null>,
+    renderItem: (item: T) => void,
+    onProgress?: (renderedCount: number) => void,
+    onComplete?: () => void,
+  ) {
+    cancelScheduledFrame(frameRef);
+    if (!items.length) {
+      onProgress?.(0);
+      onComplete?.();
+      return;
+    }
+
+    let renderedCount = 0;
+    const renderBatch = () => {
+      const batchEnd = Math.min(renderedCount + DETAIL_SEGMENT_RENDER_BATCH_SIZE, items.length);
+      while (renderedCount < batchEnd) {
+        renderItem(items[renderedCount]!);
+        renderedCount += 1;
+      }
+      onProgress?.(renderedCount);
+      if (renderedCount >= items.length) {
+        frameRef.current = null;
+        onComplete?.();
+        return;
+      }
+      frameRef.current = window.requestAnimationFrame(renderBatch);
+    };
+
+    renderBatch();
+  }
+
   function renderPendingEditOverlays() {
     if (!window.kakao?.maps || !mapRef.current) return;
     clearPendingEditOverlays();
@@ -612,6 +675,7 @@ export function SegmentMap({
   function renderSegmentFeatureOverlays() {
     if (!window.kakao?.maps || !mapRef.current) return;
     const map = mapRef.current;
+    cancelScheduledFrame(segmentFeatureRenderFrameRef);
     segmentFeatureOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     segmentFeatureOverlaysRef.current = [];
     if (!shouldRenderDetailedSegments()) return;
@@ -622,7 +686,7 @@ export function SegmentMap({
         visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current).filter(shouldShowRoadSegmentLayer),
         viewportBounds,
       ).features;
-      segmentFeatures.forEach((feature) => {
+      scheduleOverlayRenderBatches(segmentFeatures, segmentFeatureRenderFrameRef, (feature) => {
         const overlay = createRouteAttributeEventOverlay(feature, activeLayers);
         if (!overlay) return;
         overlay.setMap(map);
@@ -637,7 +701,7 @@ export function SegmentMap({
       visibleSegmentFeatures(payload?.segments.features ?? [], draftEditsRef.current),
       viewportBounds,
     ).features;
-    segmentFeatures.forEach((feature) => {
+    scheduleOverlayRenderBatches(segmentFeatures, segmentFeatureRenderFrameRef, (feature) => {
       const overlays = createSegmentFeatureOverlays(feature, activeTypes);
       overlays.forEach((overlay) => {
         overlay.setMap(map);
@@ -1051,6 +1115,8 @@ export function SegmentMap({
                 ? forceDetailedSegmentsBlocked
                   ? `세그먼트 ${visibleSegmentCount}건이 선택되어 상세 렌더링을 제한했습니다. 제보 주변 범위를 더 좁히거나 확대해서 확인해 주세요.`
                   : `확대하면 보행 네트워크 segment가 표시됩니다. 현재 level ${mapLevel}, 표시 기준 ${DETAIL_SEGMENT_MAX_LEVEL} 이하`
+                : detailOverlayRenderProgress.active
+                  ? `${detailOverlayRenderProgress.rendered}/${detailOverlayRenderProgress.total} segments rendering`
                 : detailRenderStatus.capped
                   ? `${detailRenderStatus.features.length}/${detailRenderStatus.scopedCount} segments 렌더링 · 중요 속성과 화면 중심 우선 표시 중`
                 : detailRenderStatus.scopedCount < visibleSegmentCount
@@ -1085,13 +1151,11 @@ export function detailSegmentRenderScope(features: SegmentFeature[], viewportBou
   const scopedFeatures = expandedBounds
     ? features.filter((feature) => segmentIntersectsBounds(feature, expandedBounds))
     : features;
-  const orderedFeatures = scopedFeatures.length > DETAIL_SEGMENT_RENDER_MAX_COUNT
-    ? orderDetailSegmentFeatures(scopedFeatures, viewportBounds)
-    : scopedFeatures;
+  const orderedFeatures = orderDetailSegmentFeatures(scopedFeatures, viewportBounds);
   return {
-    features: orderedFeatures.slice(0, DETAIL_SEGMENT_RENDER_MAX_COUNT),
+    features: orderedFeatures,
     scopedCount: scopedFeatures.length,
-    capped: scopedFeatures.length > DETAIL_SEGMENT_RENDER_MAX_COUNT,
+    capped: false,
   };
 }
 

@@ -4,6 +4,7 @@ import {
   fetchAdminDashboardBottlenecks,
   fetchAdminDashboardSummary,
   fetchAdminHazardReportDetail,
+  fetchAdminRoadNetworkPayload,
   fetchAdminRoadSegment,
   startAdminHazardRouteReview,
   updateAdminHazardRouteReview,
@@ -238,5 +239,47 @@ describe("admin hazard route review API", () => {
         }),
       }),
     );
+  });
+
+  it("requests full road-network payload for the selected area without review clipping params", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "OK",
+        message: "ok",
+        data: {
+          summary: {
+            segmentCount: 0,
+            visibleSegmentCount: 0,
+            roadNodeCount: 0,
+            visibleRoadNodeCount: 0,
+          },
+          bbox: null,
+          segments: { type: "FeatureCollection", features: [] },
+          roadNodes: { type: "FeatureCollection", features: [] },
+          areaBoundary: null,
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchAdminRoadNetworkPayload({
+      gu: "강서구",
+      dong: "명지동",
+      accessToken: "token",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/road-network/segments?gu=%EA%B0%95%EC%84%9C%EA%B5%AC&dong=%EB%AA%85%EC%A7%80%EB%8F%99"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token",
+        }),
+      }),
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).not.toContain("limit=");
+    expect(fetchMock.mock.calls[0]?.[0]).not.toContain("centerLat=");
+    expect(fetchMock.mock.calls[0]?.[0]).not.toContain("centerLng=");
+    expect(fetchMock.mock.calls[0]?.[0]).not.toContain("radiusMeter=");
   });
 });

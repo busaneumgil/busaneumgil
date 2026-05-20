@@ -83,9 +83,6 @@ const percentFormatter = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 1,
 });
 
-const HAZARD_ROUTE_REVIEW_RADIUS_METER = 150;
-const HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT = 500;
-
 type PreviewHazardRecord = {
   summary: AdminHazardReportSummary;
   detail: AdminHazardReportDetail;
@@ -583,6 +580,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       });
       void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
       void queryClient.refetchQueries({ queryKey: ["admin-routing-apply-state"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-hazard-route-review-network"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-reports"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-hazard-report-detail", response.reportId] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] });
@@ -639,18 +637,12 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       "admin-hazard-route-review-network",
       routeReviewAreaScope?.gu,
       routeReviewAreaScope?.dong,
-      reportPoint?.lat,
-      reportPoint?.lng,
       accessToken,
     ],
     queryFn: () => fetchAdminRoadNetworkPayload({
       gu: routeReviewAreaScope?.gu,
       dong: routeReviewAreaScope?.dong,
-      centerLat: reportPoint?.lat,
-      centerLng: reportPoint?.lng,
-      radiusMeter: HAZARD_ROUTE_REVIEW_RADIUS_METER,
       accessToken,
-      limit: HAZARD_ROUTE_REVIEW_SEGMENT_LIMIT,
     }),
     enabled: !preview
       && hasToken

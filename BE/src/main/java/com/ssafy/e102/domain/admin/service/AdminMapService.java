@@ -91,6 +91,8 @@ public class AdminMapService {
 	private static final Sort PLACE_SORT = Sort.by(Sort.Direction.ASC, "placeId");
 	private static final double BRIDGE_MAX_DISTANCE_METER = 50.0;
 	private static final double BRIDGE_AUTO_DISTANCE_METER = 12.0;
+	private static final int SEGMENT_FEATURE_QUERY_BATCH_SIZE = 1000;
+	private static final int ROAD_NODE_QUERY_BATCH_SIZE = 1000;
 	private static final String ALL_DONG = AdminService.ALL_DONG;
 
 	private final AdminAreaRepository adminAreaRepository;
@@ -162,32 +164,11 @@ public class AdminMapService {
 	}
 
 	public AdminRoadNetworkResponse getRoadNetwork(String gu, String dong, int limit) {
-		return getRoadNetwork(gu, dong, limit, null, null, null);
-	}
-
-	public AdminRoadNetworkResponse getRoadNetwork(
-		String gu,
-		String dong,
-		int limit,
-		Double centerLat,
-		Double centerLng,
-		Integer radiusMeter) {
 		List<RoadSegment> roadSegments;
 		long segmentCount;
 		if (hasAreaScope(gu, dong)) {
-			if (hasClip(centerLat, centerLng, radiusMeter)) {
-				roadSegments = roadSegmentRepository.findAllIntersectingAreaWithinRadius(
-					gu,
-					dong,
-					centerLng,
-					centerLat,
-					radiusMeter,
-					limit);
-				segmentCount = roadSegments.size();
-			} else {
-				roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong, limit);
-				segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
-			}
+			roadSegments = roadSegmentRepository.findAllIntersectingArea(gu, dong);
+			segmentCount = roadSegmentRepository.countIntersectingArea(gu, dong);
 		} else if (hasGu(gu)) {
 			roadSegments = roadSegmentRepository.findAllIntersectingGu(gu, limit);
 			segmentCount = roadSegmentRepository.countIntersectingGu(gu);
@@ -197,10 +178,38 @@ public class AdminMapService {
 			segmentCount = roadSegmentRepository.count();
 		}
 
-		Map<Long, List<SegmentFeatureType>> featureTypesByEdgeId = segmentFeatureRepository
-			.findByEdgeIdIn(roadSegments.stream()
-				.map(RoadSegment::getEdgeId)
-				.toList())
+		return toRoadNetworkResponse(gu, dong, roadSegments, segmentCount);
+	}
+
+	public AdminRoadNetworkResponse getRoadNetwork(
+		String gu,
+		String dong,
+		int limit,
+		Double centerLat,
+		Double centerLng,
+		Integer radiusMeter) {
+		if (hasAreaScope(gu, dong) && hasClip(centerLat, centerLng, radiusMeter)) {
+			List<RoadSegment> roadSegments = roadSegmentRepository.findAllIntersectingAreaWithinRadius(
+				gu,
+				dong,
+				centerLng,
+				centerLat,
+				radiusMeter,
+				limit);
+			return toRoadNetworkResponse(gu, dong, roadSegments, roadSegments.size());
+		}
+		return getRoadNetwork(gu, dong, limit);
+	}
+
+	private AdminRoadNetworkResponse toRoadNetworkResponse(
+		String gu,
+		String dong,
+		List<RoadSegment> roadSegments,
+		long segmentCount) {
+		List<Long> edgeIds = roadSegments.stream()
+			.map(RoadSegment::getEdgeId)
+			.toList();
+		Map<Long, List<SegmentFeatureType>> featureTypesByEdgeId = loadSegmentFeatures(edgeIds)
 			.stream()
 			.collect(Collectors.groupingBy(
 				SegmentFeature::getEdgeId,
@@ -210,11 +219,12 @@ public class AdminMapService {
 			.stream()
 			.map(roadSegment -> toRoadSegmentFeature(roadSegment, featureTypesByEdgeId))
 			.toList();
-		Set<Long> visibleNodeIds = roadSegments.stream()
+		List<Long> visibleNodeIds = roadSegments.stream()
 			.flatMap(roadSegment -> List.of(roadSegment.getFromNodeId(), roadSegment.getToNodeId()).stream())
-			.collect(Collectors.toCollection(TreeSet::new));
-		List<AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminRoadNodePropertiesResponse>> nodeFeatures = roadNodeRepository
-			.findAllById(visibleNodeIds)
+			.collect(Collectors.toCollection(TreeSet::new))
+			.stream()
+			.toList();
+		List<AdminGeoJsonFeatureResponse<AdminPointGeometryResponse, AdminRoadNodePropertiesResponse>> nodeFeatures = loadRoadNodes(visibleNodeIds)
 			.stream()
 			.sorted(Comparator.comparing(RoadNode::getVertexId))
 			.map(this::toRoadNodeFeature)
@@ -230,6 +240,28 @@ public class AdminMapService {
 			AdminGeoJsonFeatureCollectionResponse.of(features),
 			AdminGeoJsonFeatureCollectionResponse.of(nodeFeatures),
 			toAreaBoundaryFeature(gu, dong));
+	}
+
+	private List<SegmentFeature> loadSegmentFeatures(List<Long> edgeIds) {
+		if (edgeIds.isEmpty()) {
+			return List.of();
+		}
+		List<SegmentFeature> features = new ArrayList<>();
+		for (List<Long> batch : chunkedLongValues(edgeIds, SEGMENT_FEATURE_QUERY_BATCH_SIZE)) {
+			features.addAll(segmentFeatureRepository.findByEdgeIdIn(batch));
+		}
+		return features;
+	}
+
+	private List<RoadNode> loadRoadNodes(List<Long> nodeIds) {
+		if (nodeIds.isEmpty()) {
+			return List.of();
+		}
+		List<RoadNode> nodes = new ArrayList<>();
+		for (List<Long> batch : chunkedLongValues(nodeIds, ROAD_NODE_QUERY_BATCH_SIZE)) {
+			roadNodeRepository.findAllById(batch).forEach(nodes::add);
+		}
+		return nodes;
 	}
 
 	public AdminGeoJsonFeatureResponse<AdminLineStringGeometryResponse, AdminRoadSegmentPropertiesResponse> getRoadSegment(
@@ -700,6 +732,14 @@ public class AdminMapService {
 			throw new BusinessException(CommonErrorCode.INVALID_INPUT, "반경은 1m 이상이어야 합니다.");
 		}
 		return true;
+	}
+
+	private List<List<Long>> chunkedLongValues(List<Long> values, int chunkSize) {
+		List<List<Long>> batches = new ArrayList<>();
+		for (int start = 0; start < values.size(); start += chunkSize) {
+			batches.add(values.subList(start, Math.min(start + chunkSize, values.size())));
+		}
+		return batches;
 	}
 
 	private Place requirePlace(Long placeId) {

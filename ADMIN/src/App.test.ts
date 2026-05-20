@@ -48,4 +48,9 @@ describe("Admin dashboard navigation wiring", () => {
     expect(appSource).toContain("공지사항 관리 기능은 준비중입니다.");
     expect(appSource).toContain("현재 공지 등록, 수정, 삭제 기능은 제공되지 않습니다.");
   });
+  it("refreshes both network tabs after road-network edits complete", () => {
+    expect(appSource).toContain('invalidateQueries({ queryKey: ["admin-road-network"] })');
+    expect(appSource).toContain('invalidateQueries({ queryKey: ["admin-road-network-bridges"] })');
+    expect(appSource).toContain('invalidateQueries({ queryKey: ["admin-hazard-route-review-network"] })');
+  });
 });

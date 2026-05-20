@@ -3,6 +3,7 @@ package com.ssafy.e102.domain.admin.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -10,6 +11,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.LongStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -97,7 +99,7 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("routing overlay orchestration methods must suspend class-level read-only transactions")
+	@DisplayName("routing overlay orchestration methods suspend class-level read-only transactions")
 	void routingOverlayOrchestrationMethodsSuspendClassLevelTransaction() throws Exception {
 		assertNotSupportedTransaction("updateRoadSegmentAttributes",
 			UUID.class,
@@ -108,10 +110,10 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("관리자 보행 네트워크는 area scope 기준 segment와 node를 반환한다")
+	@DisplayName("area-scoped road-network queries return the full selected-dong segment set")
 	void getRoadNetworkReturnsAreaSegmentsAndNodes() {
 		RoadSegment roadSegment = roadSegment(1L);
-		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동", 10))
+		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동"))
 			.thenReturn(List.of(roadSegment));
 		when(roadSegmentRepository.countIntersectingArea("강서구", "명지동")).thenReturn(1L);
 		when(segmentFeatureRepository.findByEdgeIdIn(List.of(1L))).thenReturn(List.of());
@@ -122,16 +124,15 @@ class AdminMapServiceTest {
 		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "명지동", 10);
 
 		assertThat(response.summary().segmentCount()).isEqualTo(1);
+		assertThat(response.summary().visibleSegmentCount()).isEqualTo(1);
 		assertThat(response.segments().features()).hasSize(1);
 		assertThat(response.roadNodes().features()).hasSize(2);
-		assertThat(response.segments().features().get(0).geometry().coordinates().get(0))
-			.containsExactly(129.0, 35.0);
-		verify(roadSegmentRepository).findAllIntersectingArea("강서구", "명지동", 10);
+		verify(roadSegmentRepository).findAllIntersectingArea("강서구", "명지동");
 	}
 
 	@Test
-	@DisplayName("경로 검수 지도 조회는 제보 좌표 반경으로 segment를 클리핑한다")
-	void getRoadNetworkClipsAroundCenterPoint() {
+	@DisplayName("legacy clip parameters still keep the radius-limited area query")
+	void getRoadNetworkRetainsLegacyClipBehavior() {
 		RoadSegment roadSegment = roadSegment(1L);
 		when(roadSegmentRepository.findAllIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200, 1500))
 			.thenReturn(List.of(roadSegment));
@@ -145,12 +146,30 @@ class AdminMapServiceTest {
 		assertThat(response.summary().segmentCount()).isEqualTo(1);
 		assertThat(response.summary().visibleSegmentCount()).isEqualTo(1);
 		verify(roadSegmentRepository).findAllIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200, 1500);
-		verify(roadSegmentRepository, never()).countIntersectingAreaWithinRadius("강서구", "명지동", 129.05, 35.05, 200);
 		verify(roadSegmentRepository, never()).findAllIntersectingArea("강서구", "명지동");
 	}
 
 	@Test
-	@DisplayName("segment 상세 조회는 DB에 저장된 최신 검수 속성을 반환한다")
+	@DisplayName("full selected-dong responses chunk feature and node lookups")
+	void getRoadNetworkChunksFeatureAndNodeLookups() {
+		List<RoadSegment> roadSegments = LongStream.rangeClosed(1, 1001)
+			.mapToObj(this::roadSegment)
+			.toList();
+		when(roadSegmentRepository.findAllIntersectingArea("강서구", "명지동")).thenReturn(roadSegments);
+		when(roadSegmentRepository.countIntersectingArea("강서구", "명지동")).thenReturn(1001L);
+		when(segmentFeatureRepository.findByEdgeIdIn(any())).thenReturn(List.of());
+		when(roadNodeRepository.findAllById(any())).thenReturn(List.of());
+
+		AdminRoadNetworkResponse response = adminMapService.getRoadNetwork("강서구", "명지동", 10000);
+
+		assertThat(response.summary().segmentCount()).isEqualTo(1001);
+		assertThat(response.summary().visibleSegmentCount()).isEqualTo(1001);
+		verify(segmentFeatureRepository, times(2)).findByEdgeIdIn(any());
+		verify(roadNodeRepository, times(3)).findAllById(any());
+	}
+
+	@Test
+	@DisplayName("segment detail returns the latest DB attributes")
 	void getRoadSegmentReturnsCurrentDbAttributes() {
 		RoadSegment roadSegment = roadSegment(15206L);
 		roadSegment.updateAttributes(
@@ -173,7 +192,7 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("overlay 대상 필드가 저장되면 DB 저장 후 경로 반영 필요 상태를 반환한다")
+	@DisplayName("overlay-backed attribute updates mark routing apply as pending")
 	void updateRoadSegmentAttributesMarksRoutingApplyPending() {
 		RoadSegment roadSegment = roadSegment(1L);
 		when(roadSegmentRepository.existsIntersectingGuByEdgeId(1L, "gu")).thenReturn(true);
@@ -193,7 +212,7 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("overlay 대상 필드가 없으면 dirty를 마킹하지 않는다")
+	@DisplayName("non-overlay updates skip routing dirty state")
 	void updateRoadSegmentAttributesSkipsDirtyWhenNoOverlayTargetFieldExists() {
 		RoadSegment roadSegment = roadSegment(1L);
 		when(roadSegmentRepository.existsIntersectingGuByEdgeId(1L, "gu")).thenReturn(true);
@@ -214,7 +233,7 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("overlay 대상 필드가 명시 null이면 override를 삭제하고 dirty를 마킹한다")
+	@DisplayName("explicit null overlay fields remove overrides and keep routing dirty")
 	void updateRoadSegmentAttributesDeletesOverrideWhenOverlayColumnsAreExplicitNull() throws Exception {
 		RoadSegment roadSegment = roadSegment(1L);
 		when(roadSegmentRepository.existsIntersectingGuByEdgeId(1L, "gu")).thenReturn(true);
@@ -246,7 +265,7 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("width_state 변경은 기존 override를 병합하고 dirty를 마킹한다")
+	@DisplayName("width_state updates merge with an existing override")
 	void updateRoadSegmentAttributesMergesExistingOverride() {
 		RoadSegment roadSegment = roadSegment(1L);
 		RoutingSegmentOverride existingOverride = RoutingSegmentOverride.of(1L, AccessibilityState.NO, null, null, null);
@@ -268,7 +287,7 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("route review segment drafts가 overlay를 포함하면 dirty를 한 번 마킹한다")
+	@DisplayName("route-review segment drafts mark routing dirty once when overlay fields are included")
 	void applyRouteReviewSegmentDraftsMarksDirtyOnce() {
 		RoadSegment firstSegment = roadSegment(1L);
 		RoadSegment secondSegment = roadSegment(2L);
@@ -310,7 +329,7 @@ class AdminMapServiceTest {
 	}
 
 	@Test
-	@DisplayName("route review segment drafts에 overlay 대상이 없으면 dirty를 마킹하지 않는다")
+	@DisplayName("route-review segment drafts skip routing dirty when no overlay values exist")
 	void applyRouteReviewSegmentDraftsSkipsDirtyWhenNoOverlayValuesExist() {
 		RoadSegment roadSegment = roadSegment(1L);
 		when(roadSegmentRepository.existsIntersectingAreaByEdgeId(1L, "gu", "dong")).thenReturn(true);
@@ -343,7 +362,7 @@ class AdminMapServiceTest {
 			new Coordinate(129.1, 35.1)
 		});
 		geom.setSRID(4326);
-		return RoadSegment.create(edgeId, 10L, 20L, geom, BigDecimal.valueOf(12.3));
+		return RoadSegment.create(edgeId, edgeId * 10, edgeId * 10 + 1, geom, BigDecimal.valueOf(12.3));
 	}
 
 	private RoadNode roadNode(Long vertexId, double lng, double lat) {

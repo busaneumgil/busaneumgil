@@ -21,31 +21,43 @@ class MapScreenApprovedReportPolicyTest {
     }
 
     @Test
-    fun `approved report sheet is mutually exclusive with recent destination and facility sheets`() {
+    fun `approved hazard marker sheet takes precedence over recent destination and facility sheets`() {
         assertTrue(
-            "Recent destination sheet should be hidden while approved report sheet is visible.",
+            "MapScreen should define a dedicated visibility flag for the approved hazard marker bottom sheet.",
+            source.contains("val isApprovedHazardMarkerSheetVisible = hazardMarkerState.selectedMarker != null"),
+        )
+        assertTrue(
+            "Recent destination sheet should be hidden while the approved hazard marker sheet is visible.",
             Regex(
                 "recentDestinationSheetState\\.isVisible\\s*&&\\s*" +
-                    "uiState\\.approvedReportSheetState\\.isVisible\\.not\\(\\)\\s*&&\\s*" +
+                    "isApprovedHazardMarkerSheetVisible\\.not\\(\\)\\s*&&\\s*" +
+                    "isLegacyApprovedReportSheetVisible\\.not\\(\\)\\s*&&\\s*" +
                     "facilityDetailSheetUiState\\.isVisible\\.not\\(\\)",
             ).containsMatchIn(source),
         )
         assertTrue(
-            "Facility detail sheet should be hidden while approved report sheet is visible.",
+            "Facility detail sheet should be hidden while the approved hazard marker sheet is visible.",
             Regex(
                 "facilityDetailSheetUiState\\.isVisible\\s*&&\\s*" +
-                    "uiState\\.approvedReportSheetState\\.isVisible\\.not\\(\\)\\s*&&\\s*" +
+                    "isApprovedHazardMarkerSheetVisible\\.not\\(\\)\\s*&&\\s*" +
+                    "isLegacyApprovedReportSheetVisible\\.not\\(\\)\\s*&&\\s*" +
                     "uiState\\.isVoiceSearchVisible\\.not\\(\\)",
             ).containsMatchIn(source),
         )
         assertTrue(
-            "Approved report sheet should not be shown over route endpoint picker or voice search.",
+            "Approved hazard marker bottom sheet should stay mounted while selected and should only yield to higher-priority shells.",
+            source.contains("ApprovedHazardMarkerBottomSheet(") &&
+                source.contains("isFacilityDetailSheetVisible ||") &&
+                source.contains("isLegacyApprovedReportSheetVisible ||") &&
+                source.contains("uiState.routeEndpointMapPickerState != null ||") &&
+                source.contains("hazardMarkerState.selectedMarker"),
+        )
+        assertTrue(
+            "Legacy approved report sheet should not render on top of the new approved hazard marker bottom sheet.",
             Regex(
                 "ApprovedReportBottomSheetShell\\([\\s\\S]*" +
-                    "if \\(uiState\\.approvedReportSheetState\\.isVisible\\s*&&\\s*" +
-                    "uiState\\.routeEndpointMapPickerState == null\\s*&&\\s*" +
-                    "uiState\\.isVoiceSearchVisible\\.not\\(\\)\\)[\\s\\S]*" +
-                    "MapUiAction\\.ApprovedReportSheetDismissed",
+                    "if \\(isLegacyApprovedReportSheetVisible\\s*&&\\s*" +
+                    "isApprovedHazardMarkerSheetVisible\\.not\\(\\)",
             ).containsMatchIn(source),
         )
     }

@@ -123,6 +123,20 @@ fun MapScreen(
     val facilityDetailSheetUiState = mapFacilityDetailBottomSheetState(uiState = uiState)
     val recentDestinationSheetState = mapRecentDestinationBottomSheetState(uiState = uiState)
     val routeEndpointPickerState = uiState.routeEndpointMapPickerState
+    val isApprovedHazardMarkerSheetVisible = hazardMarkerState.selectedMarker != null
+    val isLegacyApprovedReportSheetVisible = uiState.approvedReportSheetState.isVisible
+    val isRecentDestinationSheetVisible =
+        recentDestinationSheetState.isVisible &&
+            isApprovedHazardMarkerSheetVisible.not() &&
+            isLegacyApprovedReportSheetVisible.not() &&
+            facilityDetailSheetUiState.isVisible.not() &&
+            uiState.routeEndpointMapPickerState == null &&
+            uiState.isVoiceSearchVisible.not()
+    val isFacilityDetailSheetVisible =
+        facilityDetailSheetUiState.isVisible &&
+            isApprovedHazardMarkerSheetVisible.not() &&
+            isLegacyApprovedReportSheetVisible.not() &&
+            uiState.isVoiceSearchVisible.not()
     val mapContent: @Composable () -> Unit = {
         MapViewport(
             state = viewportState,
@@ -221,12 +235,7 @@ fun MapScreen(
                 RecentDestinationBottomSheetShell(
                     state =
                         recentDestinationSheetState.copy(
-                            isVisible =
-                                recentDestinationSheetState.isVisible &&
-                                    uiState.approvedReportSheetState.isVisible.not() &&
-                                    facilityDetailSheetUiState.isVisible.not() &&
-                                    uiState.routeEndpointMapPickerState == null &&
-                                    uiState.isVoiceSearchVisible.not(),
+                            isVisible = isRecentDestinationSheetVisible,
                         ),
                     onPreviewClick = { placeId ->
                         onAction(MapUiAction.RecentDestinationPreviewClicked(placeId))
@@ -240,9 +249,8 @@ fun MapScreen(
                 ApprovedHazardMarkerBottomSheet(
                     marker =
                         if (
-                            facilityDetailSheetUiState.isVisible ||
-                            recentDestinationSheetState.isVisible ||
-                            uiState.approvedReportSheetState.isVisible ||
+                            isFacilityDetailSheetVisible ||
+                            isLegacyApprovedReportSheetVisible ||
                             uiState.routeEndpointMapPickerState != null ||
                             uiState.isVoiceSearchVisible
                         ) {
@@ -257,10 +265,7 @@ fun MapScreen(
                 FacilityDetailBottomSheetShell(
                     state =
                         facilityDetailSheetUiState.toShellState().copy(
-                            isVisible =
-                                facilityDetailSheetUiState.isVisible &&
-                                    uiState.approvedReportSheetState.isVisible.not() &&
-                                    uiState.isVoiceSearchVisible.not(),
+                            isVisible = isFacilityDetailSheetVisible,
                         ),
                     modifier = Modifier.fillMaxSize(),
                     onPhoneClick =
@@ -379,7 +384,8 @@ fun MapScreen(
 
                 ApprovedReportBottomSheetShell(
                     state =
-                        if (uiState.approvedReportSheetState.isVisible &&
+                        if (isLegacyApprovedReportSheetVisible &&
+                            isApprovedHazardMarkerSheetVisible.not() &&
                             uiState.routeEndpointMapPickerState == null &&
                             uiState.isVoiceSearchVisible.not()) {
                             uiState.approvedReportSheetState

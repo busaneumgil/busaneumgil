@@ -83,12 +83,12 @@ fun NavGraphBuilder.mainNavGraph(
             onNavigateToRouteSetting = { locationPermissionPrechecked ->
                 navController.navigateToRouteSettingAfterSearch(locationPermissionPrechecked)
             },
-            onNavigateToSearch = { editingTarget ->
-                navController.navigate(SearchRoute.Entry.createRoute(editingTarget, SearchSelectionMode.APPLY_TO_ROUTE))
+            onNavigateToSearch = { editingTarget, selectionMode ->
+                navController.navigate(SearchRoute.Entry.createRoute(editingTarget, selectionMode))
             },
             onNavigateToSearchResults = { query, editingTarget ->
                 navController.navigate(
-                    SearchRoute.Results.createRoute(query, editingTarget, SearchSelectionMode.APPLY_TO_ROUTE),
+                    SearchRoute.Results.createRoute(query, editingTarget, SearchSelectionMode.PREVIEW_ON_MAP),
                 ) {
                     launchSingleTop = true
                 }

@@ -119,7 +119,7 @@ fun MapScreen(
             uiState = uiState,
             additionalOverlayPoints = hazardMarkerState.overlayPoints,
         )
-    val searchBarState = mapSearchBarState(uiState = uiState)
+    val searchBarState = mapSearchBarState()
     val facilityDetailSheetUiState = mapFacilityDetailBottomSheetState(uiState = uiState)
     val recentDestinationSheetState = mapRecentDestinationBottomSheetState(uiState = uiState)
     val routeEndpointPickerState = uiState.routeEndpointMapPickerState
@@ -1327,7 +1327,7 @@ private fun mapLocationPanelState(uiState: MapUiState): MapLocationPanelState {
 }
 
 @Composable
-private fun mapSearchBarState(uiState: MapUiState): MapSearchBarState {
+private fun mapSearchBarState(): MapSearchBarState {
     return MapSearchBarState(
         title = stringResource(id = R.string.map_shell_search_title),
         subtitle = null,
@@ -1391,7 +1391,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
                 isBookmarkEnabled = true,
                 isRouteActionEnabled = mapTapDetail.hasValidCoordinate(),
                 routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
-                previewRouteEndpointTarget = sheetState.destinationPreview?.editingTarget,
+                previewRouteEndpointTarget = sheetState.destinationPreview?.routeEndpointTarget,
                 bookmarkErrorMessage = sheetState.bookmarkErrorMessage,
             )
 
@@ -1488,7 +1488,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             isBookmarkEnabled = true,
             isRouteActionEnabled = mapTapDetail.hasValidCoordinate(),
             routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
-            previewRouteEndpointTarget = uiState.facilityDetailSheetState.destinationPreview?.editingTarget,
+            previewRouteEndpointTarget = uiState.facilityDetailSheetState.destinationPreview?.routeEndpointTarget,
             bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage,
         )
     } else if (uiState.facilityDetailSheetState.isMapTapDetailLoading) {
@@ -1551,7 +1551,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
             isBookmarkEnabled = true,
             isRouteActionEnabled = true,
             routeEndpointPickerTarget = uiState.routeEndpointMapPickerState?.editingTarget,
-            previewRouteEndpointTarget = uiState.facilityDetailSheetState.destinationPreview?.editingTarget,
+            previewRouteEndpointTarget = uiState.facilityDetailSheetState.destinationPreview?.routeEndpointTarget,
             bookmarkErrorMessage = uiState.facilityDetailSheetState.bookmarkErrorMessage,
         )
     }

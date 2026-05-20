@@ -18,6 +18,7 @@ import type {
   AdminHazardReportDetail,
   AdminHazardReportSummary,
   AdminMeResponse,
+  AdminRoutingApplyStateResponse,
   GeoPoint,
   HazardReportStatus,
   HazardReportType,
@@ -45,6 +46,7 @@ import {
   canStartHazardRestore,
   clearStoredHazardRouteReview,
   completeHazardRouteReview,
+  deriveHazardDbSyncStatus,
   deriveHazardDisplayStatus,
   hydrateHazardRouteReviewRecord,
   isHazardReviewActive,
@@ -786,6 +788,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   }
 
   const reportSummary = preview ? previewSummary.reports : summaryQuery.data?.reports;
+  const routingApplyState = preview ? null : routingApplyStateQuery.data ?? null;
   const totalCount = reportSummary?.totalReports ?? reportListData?.content.length ?? 0;
   const pendingCount = reportSummary?.pendingReports ?? countReportsByStatus(reportListData?.content, "PENDING");
   const approvedCount = reportSummary?.approvedReports ?? countReportsByStatus(reportListData?.content, "APPROVED");
@@ -793,7 +796,9 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
   const restorePendingCount = preview
     ? countRestorableReports(reportListData?.content, routeReviewDrafts)
     : Math.max(approvedCount - countCompletedRestoreReviews(routeReviewDrafts), 0);
-  const dbSyncPendingCount = preview ? previewSummary.dbSyncPendingCount : approvedCount;
+  const dbSyncPendingCount = preview
+    ? previewSummary.dbSyncPendingCount
+    : (routingApplyState?.dirty || routingApplyState?.applying) ? approvedCount : 0;
   const totalSyncPendingCount = dbSyncPendingCount + restorePendingCount;
   const currentPage = cursorStack.length;
   const paginationItems = buildVisiblePageNumbers(currentPage, Boolean(reportListData?.hasNext));
@@ -806,7 +811,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
       ?? reportListData?.content[0]?.createdAt
       ?? summaryQuery.data?.period.to
       ?? "";
-  const operationSnapshot = activeReport ? buildOperationSnapshot(activeReport.status, activeReviewDraft) : null;
+  const operationSnapshot = activeReport ? buildOperationSnapshot(activeReport.status, activeReviewDraft, routingApplyState) : null;
   const activeSessionMeta = activeReport ? reportSessionMeta[activeReport.reportId] : undefined;
   const processedAt = activeSessionMeta?.handledAt
     ?? activeReviewDraft?.completedAt
@@ -918,6 +923,7 @@ export function HazardReportsPage({ accessToken, adminPrincipal, onLogout, previ
                 preview={preview}
                 previewAddress={previewHazardRecords.find((record) => record.summary.reportId === report.reportId)?.address}
                 reviewDraft={routeReviewDrafts[report.reportId] ?? null}
+                routingApplyState={routingApplyState}
                 seen={Boolean(reportSessionMeta[report.reportId]?.viewedAt)}
                 selected={report.reportId === selectedReportId}
                 onClick={() => handleSelectReport(report.reportId)}
@@ -1405,6 +1411,7 @@ function HazardReportRow({
   preview,
   previewAddress,
   reviewDraft,
+  routingApplyState,
   seen,
   selected,
   onClick,
@@ -1414,11 +1421,12 @@ function HazardReportRow({
   preview: boolean;
   previewAddress?: string;
   reviewDraft?: HazardRouteReviewRecord | null;
+  routingApplyState?: AdminRoutingApplyStateResponse | null;
   seen: boolean;
   selected: boolean;
   onClick: () => void;
 }) {
-  const dbStatus = summarizeDbSyncStatus(report.status, reviewDraft);
+  const dbStatus = deriveHazardDbSyncStatus(report.status, reviewDraft, routingApplyState);
   const displayStatus = deriveHazardDisplayStatus(report.status, reviewDraft);
 
   return (
@@ -1814,32 +1822,17 @@ function buildHazardTimeline(
   ];
 }
 
-function buildOperationSnapshot(status: HazardReportStatus, review?: HazardRouteReviewRecord | null) {
+function buildOperationSnapshot(
+  status: HazardReportStatus,
+  review?: HazardRouteReviewRecord | null,
+  routingApplyState?: AdminRoutingApplyStateResponse | null,
+) {
   return {
     mapSync: summarizeMapSyncStatus(status, review),
     routeExclusion: summarizeRouteExclusionStatus(status, review),
-    dbSync: summarizeDbSyncStatus(status, review),
+    dbSync: deriveHazardDbSyncStatus(status, review, routingApplyState),
     recovery: summarizeRecoveryStatus(status, review),
   };
-}
-
-function summarizeDbSyncStatus(status: HazardReportStatus, review?: HazardRouteReviewRecord | null) {
-  if (review?.stage === "IN_PROGRESS") {
-    return { label: review.intent === "restore" ? "복구 검수" : "검수중", tone: "blue" as HazardBadgeTone };
-  }
-  if (review?.stage === "COMPLETED" && review.intent === "restore") {
-    return { label: "복구 완료", tone: "purple" as HazardBadgeTone };
-  }
-  if (review?.stage === "COMPLETED" && review.intent === "approve") {
-    return { label: "DB 대기", tone: "orange" as HazardBadgeTone };
-  }
-  if (status === "APPROVED") {
-    return { label: "DB 대기", tone: "orange" as HazardBadgeTone };
-  }
-  if (status === "REJECTED") {
-    return { label: "-", tone: "gray" as HazardBadgeTone };
-  }
-  return { label: "-", tone: "gray" as HazardBadgeTone };
 }
 
 function summarizeMapSyncStatus(status: HazardReportStatus, review?: HazardRouteReviewRecord | null) {

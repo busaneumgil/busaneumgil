@@ -4,6 +4,7 @@ import {
   canStartHazardApprove,
   canStartHazardRestore,
   completeHazardRouteReview,
+  deriveHazardDbSyncStatus,
   deriveHazardDisplayStatus,
   hazardRouteReviewIntentLabel,
   hydrateHazardRouteReviewRecord,
@@ -220,6 +221,34 @@ describe("hazard route review workflow state", () => {
     expect(routeReviewCompletionMessage("APPLIED_WITH_WARNING")).toContain("경고");
     expect(routeReviewCompletionMessage("FAILED")).toContain("실패");
     expect(routeReviewCompletionMessage("SKIPPED")).toContain("대상");
+  });
+
+  it("marks approved reports as applied after the bulk routing apply succeeds", () => {
+    const review = {
+      ...completeHazardRouteReview(startHazardRouteReview({
+        reportId: 58,
+        intent: "approve",
+        reviewerUserId: "admin-apply",
+        now: "2026-05-20T08:30:00.000Z",
+      }), "2026-05-20T08:36:00.000Z"),
+      routingApplyStatus: "PENDING" as const,
+    };
+
+    expect(deriveHazardDbSyncStatus("APPROVED", review, {
+      routingApplyStatus: "PENDING",
+      message: "DB 저장이 완료되었습니다. 경로 반영이 필요합니다.",
+      dirty: true,
+      applying: false,
+      lastAppliedAt: null,
+    })).toEqual({ label: "DB 대기", tone: "orange" });
+
+    expect(deriveHazardDbSyncStatus("APPROVED", review, {
+      routingApplyStatus: "APPLIED",
+      message: "reloaded",
+      dirty: false,
+      applying: false,
+      lastAppliedAt: "2026-05-20T08:40:00",
+    })).toEqual({ label: "반영완료", tone: "green" });
   });
 
   it("maps route review completion status to visual severity classes", () => {

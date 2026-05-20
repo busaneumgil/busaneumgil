@@ -2,6 +2,7 @@ import type {
   AdminHazardRouteReview,
   AdminHazardRouteReviewIntent,
   AdminRoadSegmentAttributesUpdateRequest,
+  AdminRoutingApplyStateResponse,
   AdminRoutingApplyStatus,
   HazardReportStatus,
   UpdateAdminHazardRouteReviewRequest,
@@ -32,6 +33,11 @@ export interface HazardRouteReviewRecord {
 
 export interface HazardDisplayStatus {
   key: HazardDisplayStatusKey;
+  label: string;
+  tone: HazardRouteReviewTone;
+}
+
+export interface HazardOperationStatus {
   label: string;
   tone: HazardRouteReviewTone;
 }
@@ -265,6 +271,36 @@ export function deriveHazardDisplayStatus(
   return { key: "PENDING", label: "대기", tone: "orange" };
 }
 
+export function deriveHazardDbSyncStatus(
+  baseStatus: HazardReportStatus,
+  review?: HazardRouteReviewRecord | null,
+  routingApplyState?: AdminRoutingApplyStateResponse | null,
+): HazardOperationStatus {
+  if (review?.stage === "IN_PROGRESS") {
+    return { label: review.intent === "restore" ? "복구 검수" : "검수중", tone: "blue" };
+  }
+  if (review?.stage === "COMPLETED" && review.intent === "restore") {
+    return { label: "복구 완료", tone: "purple" };
+  }
+  if (isRoutingApplyCompleted(routingApplyState)
+    && (baseStatus === "APPROVED" || (review?.stage === "COMPLETED" && review.intent === "approve"))) {
+    return {
+      label: "반영완료",
+      tone: routingApplyState?.routingApplyStatus === "APPLIED_WITH_WARNING" ? "orange" : "green",
+    };
+  }
+  if (review?.stage === "COMPLETED" && review.intent === "approve") {
+    return { label: "DB 대기", tone: "orange" };
+  }
+  if (baseStatus === "APPROVED") {
+    return { label: "DB 대기", tone: "orange" };
+  }
+  if (baseStatus === "REJECTED") {
+    return { label: "-", tone: "gray" };
+  }
+  return { label: "-", tone: "gray" };
+}
+
 export function canStartHazardApprove(
   baseStatus: HazardReportStatus,
   review?: HazardRouteReviewRecord | null,
@@ -339,4 +375,11 @@ function isAdminRoutingApplyStatus(value: unknown): value is AdminRoutingApplySt
     || value === "APPLIED"
     || value === "APPLIED_WITH_WARNING"
     || value === "FAILED";
+}
+
+function isRoutingApplyCompleted(state?: AdminRoutingApplyStateResponse | null) {
+  if (!state || state.dirty || state.applying) {
+    return false;
+  }
+  return state.routingApplyStatus === "APPLIED" || state.routingApplyStatus === "APPLIED_WITH_WARNING";
 }

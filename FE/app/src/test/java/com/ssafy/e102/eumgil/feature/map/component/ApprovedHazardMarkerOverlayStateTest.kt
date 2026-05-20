@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -65,6 +66,7 @@ class ApprovedHazardMarkerOverlayStateTest {
         assertEquals(1, state.markers.size)
         assertEquals(12L, state.markers.single().reportId)
         assertEquals(MapViewportPointKind.APPROVED_REPORT, state.overlayPoints.single().kind)
+        assertEquals("RAMP", state.overlayPoints.single().reportTypeApiValue)
     }
 
     @Test
@@ -170,6 +172,44 @@ class ApprovedHazardMarkerOverlayStateTest {
         assertEquals(true, state.onMarkerClick("hazard-report-12"))
         assertEquals(12L, state.selectedMarker?.reportId)
         assertEquals(true, state.overlayPoints.single().isSelected)
+    }
+
+    @Test
+    fun `unknown report type is still preserved on overlay point for fallback rendering`() = runTest {
+        val repository =
+            FakeReportRepository(
+                markersToReturn =
+                    listOf(
+                        ApprovedHazardMarker(
+                            reportId = 55L,
+                            reportType = "UNKNOWN_TYPE",
+                            coordinate = GeoCoordinate(latitude = 35.1, longitude = 129.1),
+                            imageUrls = emptyList(),
+                        ),
+                    ),
+            )
+        val state =
+            ApprovedHazardMarkerOverlayState(
+                reportRepository = repository,
+                coroutineScope = backgroundScope,
+            )
+        runCurrent()
+
+        state.onViewportBoundsChanged(
+            MapViewportBounds(
+                swLat = 35.099,
+                swLng = 129.099,
+                neLat = 35.101,
+                neLng = 129.101,
+            ),
+        )
+
+        runCurrent()
+        advanceTimeBy(401L)
+        runCurrent()
+
+        assertTrue(state.overlayPoints.isNotEmpty())
+        assertEquals("UNKNOWN_TYPE", state.overlayPoints.single().reportTypeApiValue)
     }
 }
 

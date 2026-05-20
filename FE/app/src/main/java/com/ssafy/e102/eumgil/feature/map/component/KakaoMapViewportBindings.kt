@@ -12,6 +12,7 @@ import com.ssafy.e102.eumgil.feature.map.model.MapCoordinate
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerCategoryType
 import com.ssafy.e102.eumgil.feature.map.model.MapMarkerOverlayState
 import com.ssafy.e102.eumgil.feature.map.model.resolvedZoomLevel
+import com.ssafy.e102.eumgil.feature.report.reportTypeMarkerIconRes
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -167,12 +168,14 @@ internal data class KakaoOverlayMarkerRenderState(
     val markerId: String,
     val coordinate: MapCoordinate,
     val kind: KakaoOverlayMarkerKind,
+    @DrawableRes val iconResId: Int? = null,
     val anchorPointX: Float,
     val anchorPointY: Float,
     val sizeDp: Int,
     val zIndex: Float,
     val fillColorArgb: Int,
     val strokeColorArgb: Int,
+    val isSelected: Boolean = false,
     val rotationDegrees: Float = 0f,
     val label: String? = null,
     val secondaryLabel: String? = null,
@@ -1020,12 +1023,14 @@ private fun MapViewportPointOverlay.toOverlayMarkerRenderState(): KakaoOverlayMa
                 markerId = overlayId,
                 coordinate = coordinate,
                 kind = KakaoOverlayMarkerKind.APPROVED_REPORT,
+                iconResId = reportTypeMarkerIconRes(reportTypeApiValue),
                 anchorPointX = 0.5f,
                 anchorPointY = 0.5f,
-                sizeDp = 28,
+                sizeDp = 32,
                 zIndex = 4.2f,
                 fillColorArgb = KAKAO_APPROVED_REPORT_MARKER_FILL,
                 strokeColorArgb = KAKAO_APPROVED_REPORT_MARKER_STROKE,
+                isSelected = isSelected,
                 clickTargetId = clickTargetId,
             )
 

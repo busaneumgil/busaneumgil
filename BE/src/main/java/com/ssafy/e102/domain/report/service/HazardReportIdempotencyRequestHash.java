@@ -18,6 +18,24 @@ final class HazardReportIdempotencyRequestHash {
 	private static final String HASH_ALGORITHM = "SHA-256";
 
 	static String from(CreateHazardReportRequest request) {
+		return sha256(canonicalize(request, true));
+	}
+
+	static boolean matchesStoredHash(String storedHash, CreateHazardReportRequest request) {
+		if (storedHash == null || storedHash.isBlank()) {
+			return false;
+		}
+		if (storedHash.equals(from(request))) {
+			return true;
+		}
+		return storedHash.equals(legacyFrom(request));
+	}
+
+	static String legacyFrom(CreateHazardReportRequest request) {
+		return sha256(canonicalize(request, false));
+	}
+
+	private static String canonicalize(CreateHazardReportRequest request, boolean includeThumbnailObjectKeys) {
 		StringBuilder canonical = new StringBuilder();
 		appendPart(canonical, request.reportType() == null ? null : request.reportType().name());
 		appendPart(canonical, normalizeDescription(request.description()));
@@ -29,12 +47,14 @@ final class HazardReportIdempotencyRequestHash {
 		for (String imageObjectKey : imageObjectKeys) {
 			appendPart(canonical, imageObjectKey);
 		}
-		List<String> thumbnailObjectKeys = request.thumbnailObjectKeys() == null ? List.of() : request.thumbnailObjectKeys();
-		canonical.append(thumbnailObjectKeys.size()).append('|');
-		for (String thumbnailObjectKey : thumbnailObjectKeys) {
-			appendPart(canonical, thumbnailObjectKey);
+		if (includeThumbnailObjectKeys) {
+			List<String> thumbnailObjectKeys = request.thumbnailObjectKeys() == null ? List.of() : request.thumbnailObjectKeys();
+			canonical.append(thumbnailObjectKeys.size()).append('|');
+			for (String thumbnailObjectKey : thumbnailObjectKeys) {
+				appendPart(canonical, thumbnailObjectKey);
+			}
 		}
-		return sha256(canonical.toString());
+		return canonical.toString();
 	}
 
 	private static String normalizeDescription(String description) {

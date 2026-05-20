@@ -121,6 +121,7 @@ public class HazardReportService {
 			HazardReportIdResponse existingResponse = findExistingIdempotentResponse(
 				userId,
 				normalizedIdempotencyKey,
+				request,
 				requestHash,
 				now);
 			if (existingResponse != null) {
@@ -155,6 +156,7 @@ public class HazardReportService {
 			HazardReportIdResponse existingResponse = findExistingIdempotentResponse(
 				userId,
 				normalizedIdempotencyKey,
+				request,
 				requestHash,
 				now);
 			if (existingResponse != null) {
@@ -328,6 +330,7 @@ public class HazardReportService {
 	private HazardReportIdResponse findExistingIdempotentResponse(
 		UUID userId,
 		String idempotencyKey,
+		CreateHazardReportRequest request,
 		String requestHash,
 		LocalDateTime now) {
 		return hazardReportRepository.findByUser_UserIdAndIdempotencyKey(userId, idempotencyKey)
@@ -335,7 +338,7 @@ public class HazardReportService {
 				if (!existingReport.hasActiveIdempotency(now)) {
 					return null;
 				}
-				if (!existingReport.hasSameIdempotencyRequestHash(requestHash)) {
+				if (!HazardReportIdempotencyRequestHash.matchesStoredHash(existingReport.getIdempotencyRequestHash(), request)) {
 					throw new HazardReportException(HazardReportErrorCode.HAZARD_REPORT_IDEMPOTENCY_CONFLICT);
 				}
 				return new HazardReportIdResponse(existingReport.getReportId());

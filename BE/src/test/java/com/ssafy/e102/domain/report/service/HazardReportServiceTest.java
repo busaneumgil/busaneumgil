@@ -195,6 +195,32 @@ class HazardReportServiceTest {
 	}
 
 	@Test
+	@DisplayName("legacy idempotency hash로 저장된 기존 제보도 동일 요청 재시도를 허용한다")
+	void createHazardReportReturnsExistingReportForLegacyIdempotencyRequest() {
+		UUID userId = UUID.randomUUID();
+		CreateHazardReportRequest request = defaultCreateRequest();
+		User user = user(userId);
+		HazardReport existingReport = hazardReport(user, 9L, List.of("hazard-reports/user-1/20260514/image-1.jpg"));
+		ReflectionTestUtils.setField(existingReport, "idempotencyKey", "outbox-report-legacy");
+		ReflectionTestUtils.setField(existingReport, "idempotencyRequestHash", legacyIdempotencyRequestHash(request));
+		ReflectionTestUtils.setField(existingReport, "idempotencyExpiresAt", NOW.plusHours(1));
+		when(hazardReportRepository.findByUser_UserIdAndIdempotencyKey(userId, "outbox-report-legacy"))
+			.thenReturn(Optional.of(existingReport));
+
+		HazardReportIdResponse response = hazardReportService.createHazardReport(
+			userId,
+			request,
+			"outbox-report-legacy");
+
+		assertThat(response.reportId()).isEqualTo(9L);
+		verify(userRepository, never()).findByIdForUpdate(userId);
+		verify(hazardReportRepository, never()).clearExpiredIdempotencyMetadata(NOW);
+		verify(hazardReportImageUploadService, never()).validateImageObjectKeys(any(), any());
+		verify(kakaoLocalClient, never()).reverseGeocode(anyDouble(), anyDouble());
+		verify(hazardReportRepository, never()).save(any(HazardReport.class));
+	}
+
+	@Test
 	@DisplayName("동일 Idempotency-Key와 다른 요청은 충돌로 거부한다")
 	void rejectDifferentRequestWithSameIdempotencyKey() {
 		UUID userId = UUID.randomUUID();
@@ -613,6 +639,10 @@ class HazardReportServiceTest {
 	}
 
 	private String idempotencyRequestHash(CreateHazardReportRequest request) {
+		return HazardReportIdempotencyRequestHash.from(request);
+	}
+
+	private String legacyIdempotencyRequestHash(CreateHazardReportRequest request) {
 		StringBuilder canonical = new StringBuilder();
 		appendPart(canonical, request.reportType().name());
 		appendPart(canonical, request.description().trim());

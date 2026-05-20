@@ -99,7 +99,7 @@
 - `Docs/기획/2026-04-10 최종_프로젝트_기획서.md`
 - `Docs/PRD/2026-04-09_부산이음길_PRD.md`
 - `Docs/PRD/2026-04-14_기능명세서.md`
-- `Docs/PRD/2026-04-20_MON-01_연계_요구사항_정리.md`
+- `Docs/PRD/archive/2026-04_requirement_sources/2026-04-20_MON-01_연계_요구사항_정리.md`
 
 ### FE primary documents
 

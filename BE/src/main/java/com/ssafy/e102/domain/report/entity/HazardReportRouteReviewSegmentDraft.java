@@ -88,6 +88,16 @@ public class HazardReportRouteReviewSegmentDraft {
 		return draft;
 	}
 
+	void updateAttributesFrom(HazardReportRouteReviewSegmentDraft draft) {
+		this.walkAccess = draft.walkAccess;
+		this.brailleBlockState = draft.brailleBlockState;
+		this.audioSignalState = draft.audioSignalState;
+		this.widthState = draft.widthState;
+		this.surfaceState = draft.surfaceState;
+		this.stairsState = draft.stairsState;
+		this.signalState = draft.signalState;
+	}
+
 	void attach(HazardReportRouteReview review) {
 		this.review = review;
 	}

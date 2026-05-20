@@ -2,7 +2,9 @@ package com.ssafy.e102.domain.report.entity;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.ssafy.e102.domain.report.exception.HazardReportErrorCode;
@@ -108,11 +110,22 @@ public class HazardReportRouteReview extends BaseEntity {
 	}
 
 	public void replaceSegmentDrafts(List<HazardReportRouteReviewSegmentDraft> drafts) {
-		segmentDrafts.clear();
 		if (drafts == null || drafts.isEmpty()) {
+			segmentDrafts.clear();
 			return;
 		}
-		drafts.forEach(this::addSegmentDraft);
+		Map<Long, HazardReportRouteReviewSegmentDraft> draftsByEdgeId = toDraftsByEdgeId(drafts);
+		Map<Long, HazardReportRouteReviewSegmentDraft> existingDraftsByEdgeId = toDraftsByEdgeId(segmentDrafts);
+
+		segmentDrafts.removeIf(draft -> !draftsByEdgeId.containsKey(draft.getEdgeId()));
+		for (HazardReportRouteReviewSegmentDraft draft : draftsByEdgeId.values()) {
+			HazardReportRouteReviewSegmentDraft existingDraft = existingDraftsByEdgeId.get(draft.getEdgeId());
+			if (existingDraft != null) {
+				existingDraft.updateAttributesFrom(draft);
+				continue;
+			}
+			addSegmentDraft(draft);
+		}
 	}
 
 	public void complete(LocalDateTime now) {
@@ -175,15 +188,36 @@ public class HazardReportRouteReview extends BaseEntity {
 
 	private static LocalDateTime requireTimestamp(LocalDateTime value) {
 		if (value == null) {
-			throw new HazardReportException(HazardReportErrorCode.INVALID_HAZARD_ROUTE_REVIEW_REQUEST, "검수 시각이 올바르지 않습니다.");
+			throw new HazardReportException(
+				HazardReportErrorCode.INVALID_HAZARD_ROUTE_REVIEW_REQUEST,
+				"검수 시각이 올바르지 않습니다.");
 		}
 		return value;
 	}
 
 	private static HazardReportRouteReviewSegmentDraft requireDraft(HazardReportRouteReviewSegmentDraft draft) {
 		if (draft == null) {
-			throw new HazardReportException(HazardReportErrorCode.INVALID_HAZARD_ROUTE_REVIEW_REQUEST, "세그먼트 draft가 올바르지 않습니다.");
+			throw new HazardReportException(
+				HazardReportErrorCode.INVALID_HAZARD_ROUTE_REVIEW_REQUEST,
+				"세그먼트 draft가 올바르지 않습니다.");
 		}
 		return draft;
+	}
+
+	private static Map<Long, HazardReportRouteReviewSegmentDraft> toDraftsByEdgeId(
+		List<HazardReportRouteReviewSegmentDraft> drafts) {
+		Map<Long, HazardReportRouteReviewSegmentDraft> draftsByEdgeId = new LinkedHashMap<>();
+		for (HazardReportRouteReviewSegmentDraft draft : drafts) {
+			HazardReportRouteReviewSegmentDraft requiredDraft = requireDraft(draft);
+			HazardReportRouteReviewSegmentDraft previousDraft = draftsByEdgeId.putIfAbsent(
+				requiredDraft.getEdgeId(),
+				requiredDraft);
+			if (previousDraft != null) {
+				throw new HazardReportException(
+					HazardReportErrorCode.INVALID_HAZARD_ROUTE_REVIEW_REQUEST,
+					"같은 세그먼트 draft를 중복 저장할 수 없습니다.");
+			}
+		}
+		return draftsByEdgeId;
 	}
 }

@@ -1,11 +1,18 @@
 import { type RefObject, useEffect, useState } from "react";
-import { previewAdminRoute, updateAdminRoadSegmentAttributes } from "../api/adminApi";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  applyAdminRoutingOverrides,
+  fetchAdminRoutingApplyState,
+  previewAdminRoute,
+  updateAdminRoadSegmentAttributes,
+} from "../api/adminApi";
 import { SegmentMap, type RoadviewDockState } from "../map/SegmentMap";
 import type {
   AccessibilityState,
   AdminRoutePreviewResponse,
   AdminRouteProfileGroup,
   AdminRoadSegmentAttributesUpdateRequest,
+  AdminRoutingApplyStateResponse,
   GeoPoint,
   SegmentFeature,
   SegmentPayload,
@@ -29,6 +36,7 @@ const profileGroups: Array<{ value: AdminRouteProfileGroup; label: string }> = [
 const accessibilityOptions: AccessibilityState[] = ["YES", "NO", "UNKNOWN"];
 const widthOptions: WidthState[] = ["ADEQUATE_150", "ADEQUATE_120", "NARROW", "UNKNOWN"];
 const surfaceOptions: SurfaceState[] = ["PAVED", "UNPAVED", "UNKNOWN"];
+
 export function RouteTuningPage({
   accessToken,
   gu,
@@ -58,19 +66,38 @@ export function RouteTuningPage({
   onRoadviewChange: (state: RoadviewDockState) => void;
   onSegmentUpdated: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [pointMode, setPointMode] = useState<PointMode>("start");
   const [routePickEnabled, setRoutePickEnabled] = useState(false);
   const [startPoint, setStartPoint] = useState<GeoPoint | null>(null);
   const [endPoint, setEndPoint] = useState<GeoPoint | null>(null);
   const [profileGroup, setProfileGroup] = useState<AdminRouteProfileGroup>("WHEELCHAIR_MANUAL");
   const [preview, setPreview] = useState<AdminRoutePreviewResponse | null>(null);
-  const [message, setMessage] = useState("시작점과 도착점을 지도에서 선택하세요.");
+  const [message, setMessage] = useState("시작점과 도착점을 지도에서 선택해 주세요.");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [savingAttributes, setSavingAttributes] = useState(false);
   const [attributeDraft, setAttributeDraft] = useState<AdminRoadSegmentAttributesUpdateRequest>({});
   const [routeLineVisibility, setRouteLineVisibility] = useState<RouteLineVisibility>({
     safe: true,
     fast: true,
+  });
+
+  const routingApplyStateQuery = useQuery({
+    queryKey: ["admin-routing-apply-state", accessToken],
+    queryFn: () => fetchAdminRoutingApplyState(accessToken),
+    enabled: Boolean(accessToken),
+    retry: false,
+  });
+
+  const applyRoutingMutation = useMutation({
+    mutationFn: () => applyAdminRoutingOverrides(accessToken),
+    onSuccess: (response) => {
+      setMessage(resolveRoutingApplyMessage(response));
+      void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
+    },
+    onError: (error) => {
+      setMessage(error instanceof Error ? error.message : "경로 반영에 실패했습니다.");
+    },
   });
 
   useEffect(() => {
@@ -95,7 +122,7 @@ export function RouteTuningPage({
     if (pointMode === "start") {
       setStartPoint(point);
       setPointMode("end");
-      setMessage("도착점을 선택하세요.");
+      setMessage("도착점을 선택해 주세요.");
       return;
     }
     setEndPoint(point);
@@ -105,23 +132,23 @@ export function RouteTuningPage({
 
   async function previewRoute() {
     if (!startPoint || !endPoint) {
-      setMessage("시작점과 도착점을 먼저 선택하세요.");
+      setMessage("시작점과 도착점을 먼저 선택해 주세요.");
       return;
     }
     setPreviewLoading(true);
-    setMessage("DB 보행 네트워크 기준 안전/빠른 경로를 계산하는 중입니다.");
+    setMessage("DB 기준 안전/빠른 경로를 계산하는 중입니다.");
     try {
       const result = await previewAdminRoute({ gu, dong, startPoint, endPoint, profileGroup }, accessToken);
       setPreview(result);
       setMessage("빨간선은 안전 경로, 파란선은 빠른 경로입니다.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "경로 미리보기 실패");
+      setMessage(error instanceof Error ? error.message : "경로 미리보기에 실패했습니다.");
     } finally {
       setPreviewLoading(false);
     }
   }
 
-  async function saveSegmentAttributes(applyRoutingImmediately: boolean) {
+  async function saveSegmentAttributes() {
     if (!selectedSegment) return;
     setSavingAttributes(true);
     try {
@@ -131,30 +158,15 @@ export function RouteTuningPage({
         dong,
         {
           ...attributeDraft,
-          applyRoutingImmediately,
+          applyRoutingImmediately: false,
         },
         accessToken,
       );
-      if (response.routingApplyStatus === "FAILED") {
-        setMessage("저장은 완료되었지만 경로 탐색 반영에는 실패했습니다. 운영 상태를 확인해 주세요.");
-      } else if (response.routingApplyStatus === "APPLIED_WITH_WARNING") {
-        setMessage("저장은 완료되었습니다. active 경로 반영은 성공했지만 fallback slot 반영에는 실패했습니다. 운영 상태를 확인해 주세요.");
-      } else if (response.routingApplyStatus === "SKIPPED") {
-        setMessage(
-          applyRoutingImmediately
-            ? "저장은 완료되었습니다. 즉시 반영 대상 overlay 변경이 없어 경로 반영은 생략했습니다."
-            : "저장은 완료되었습니다. DB에만 반영되었습니다.",
-        );
-      } else {
-        setMessage(
-          applyRoutingImmediately
-            ? "저장은 완료되었습니다. 현재 라우팅 overlay를 갱신했습니다. 사용자 재탐색부터 변경 경로가 반영됩니다."
-            : "저장은 완료되었습니다. DB에만 반영되었습니다.",
-        );
-      }
+      setMessage(response.routingApplyMessage ?? resolveSegmentSaveMessage(response.routingApplyStatus));
       onSegmentUpdated();
+      void queryClient.invalidateQueries({ queryKey: ["admin-routing-apply-state"] });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "segment 속성 저장 실패");
+      setMessage(error instanceof Error ? error.message : "segment 속성 저장에 실패했습니다.");
     } finally {
       setSavingAttributes(false);
     }
@@ -166,7 +178,7 @@ export function RouteTuningPage({
     setPreview(null);
     setPointMode("start");
     setRoutePickEnabled(false);
-    setMessage("시작점과 도착점을 지도에서 선택하세요.");
+    setMessage("시작점과 도착점을 지도에서 선택해 주세요.");
   }
 
   return (
@@ -269,7 +281,7 @@ export function RouteTuningPage({
                 <AttributeRow label="edge" value={String(selectedSegment.properties.edgeId)} />
                 <AttributeRow label="type" value={String(selectedSegment.properties.segmentType ?? "-")} />
                 <AttributeRow label="length" value={`${formatNumber(Number(selectedSegment.properties.lengthMeter))}m`} />
-                <AttributeRow label="실측 폭" value={formatMeter(selectedSegment.properties.widthMeter)} />
+                <AttributeRow label="보도 폭" value={formatMeter(selectedSegment.properties.widthMeter)} />
                 <AttributeRow label="평균 경사도" value={formatPercent(selectedSegment.properties.avgSlopePercent)} />
               </dl>
               <div className="admin-form-grid">
@@ -278,16 +290,25 @@ export function RouteTuningPage({
                 <StateSelect label="신호등" value={attributeDraft.signalState ?? "UNKNOWN"} options={accessibilityOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, signalState: value as AccessibilityState }))} />
                 <StateSelect label="음향신호기" value={attributeDraft.audioSignalState ?? "UNKNOWN"} options={accessibilityOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, audioSignalState: value as AccessibilityState }))} />
                 <StateSelect label="점자블록" value={attributeDraft.brailleBlockState ?? "UNKNOWN"} options={accessibilityOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, brailleBlockState: value as AccessibilityState }))} />
-                <StateSelect label="보도 폭" value={attributeDraft.widthState ?? "UNKNOWN"} options={widthOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, widthState: value as WidthState }))} />
+                <StateSelect label="보도 폭 상태" value={attributeDraft.widthState ?? "UNKNOWN"} options={widthOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, widthState: value as WidthState }))} />
                 <StateSelect label="노면" value={attributeDraft.surfaceState ?? "UNKNOWN"} options={surfaceOptions} disabled={!canEdit} onChange={(value) => setAttributeDraft((draft) => ({ ...draft, surfaceState: value as SurfaceState }))} />
               </div>
-              <p className="muted">저장된 값은 DB에 반영됩니다. 저장 + 즉시 경로 반영을 선택하면 현재 라우팅 overlay를 다시 불러오고, 사용자 재탐색부터 변경 경로가 반영됩니다.</p>
+              <RoutingApplyStatePanel
+                state={routingApplyStateQuery.data}
+                loading={routingApplyStateQuery.isLoading}
+              />
+              <p className="muted">저장된 값은 DB에 저장됩니다. DB 저장 후 경로 반영 버튼을 눌러야 사용자 경로 탐색에 적용됩니다.</p>
               <div className="button-row">
-                <button className="primary" type="button" onClick={() => saveSegmentAttributes(false)} disabled={!canEdit || savingAttributes}>
-                  {savingAttributes ? "저장 중" : "segment 속성 저장"}
+                <button className="primary" type="button" onClick={() => saveSegmentAttributes()} disabled={!canEdit || savingAttributes}>
+                  {savingAttributes ? "저장 중" : "DB 저장"}
                 </button>
-                <button className="primary" type="button" onClick={() => saveSegmentAttributes(true)} disabled={!canEdit || savingAttributes}>
-                  {savingAttributes ? "저장 중" : "저장 + 즉시 경로 반영"}
+                <button
+                  className="primary"
+                  type="button"
+                  onClick={() => applyRoutingMutation.mutate()}
+                  disabled={applyRoutingMutation.isPending || routingApplyStateQuery.data?.applying || !routingApplyStateQuery.data?.dirty}
+                >
+                  {applyRoutingMutation.isPending || routingApplyStateQuery.data?.applying ? "경로 반영 중" : "경로 반영"}
                 </button>
               </div>
             </>
@@ -372,6 +393,28 @@ function AttributeRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function RoutingApplyStatePanel({
+  state,
+  loading,
+}: {
+  state?: AdminRoutingApplyStateResponse;
+  loading: boolean;
+}) {
+  if (loading) {
+    return <p className="muted">경로 반영 상태를 불러오는 중입니다.</p>;
+  }
+  if (!state) {
+    return null;
+  }
+  return (
+    <div className={routingApplyStatusTone(state)}>
+      <strong>{routingApplyStatusLabel(state)}</strong>
+      {state.message && <p>{state.message}</p>}
+      {state.lastAppliedAt && <p>마지막 반영: {formatRoutingApplyTime(state.lastAppliedAt)}</p>}
+    </div>
+  );
+}
+
 function normalizeAccessibility(value: unknown): AccessibilityState {
   return value === "YES" || value === "NO" ? value : "UNKNOWN";
 }
@@ -406,4 +449,50 @@ function formatPercent(value?: number | string | null) {
   const numberValue = Number(value);
   if (!Number.isFinite(numberValue)) return "-";
   return `${numberValue.toFixed(2)}%`;
+}
+
+function resolveSegmentSaveMessage(status: AdminRoutingApplyStateResponse["routingApplyStatus"]) {
+  if (status === "PENDING") {
+    return "DB 저장이 완료되었습니다. 경로 반영이 필요합니다.";
+  }
+  if (status === "SKIPPED") {
+    return "DB 저장이 완료되었습니다. 경로 반영 대상 변경이 없습니다.";
+  }
+  return "DB 저장이 완료되었습니다.";
+}
+
+function resolveRoutingApplyMessage(response: AdminRoutingApplyStateResponse) {
+  return response.message ?? routingApplyStatusLabel(response);
+}
+
+function routingApplyStatusLabel(state: AdminRoutingApplyStateResponse) {
+  if (state.applying) {
+    return "경로 반영 중";
+  }
+  if (state.dirty) {
+    return state.routingApplyStatus === "FAILED" ? "경로 반영 실패" : "경로 반영 필요";
+  }
+  if (state.routingApplyStatus === "FAILED") {
+    return "경로 반영 실패";
+  }
+  if (state.routingApplyStatus === "SKIPPED") {
+    return "경로 반영 대상 없음";
+  }
+  return "경로 반영 완료";
+}
+
+function routingApplyStatusTone(state: AdminRoutingApplyStateResponse) {
+  if (state.applying) return "warning-box";
+  if (state.dirty && state.routingApplyStatus === "FAILED") return "error-box";
+  if (state.dirty) return "warning-box";
+  if (state.routingApplyStatus === "FAILED") return "error-box";
+  return "success-box";
+}
+
+function formatRoutingApplyTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("ko-KR");
 }

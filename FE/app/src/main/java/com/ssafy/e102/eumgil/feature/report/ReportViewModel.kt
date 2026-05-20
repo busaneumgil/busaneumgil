@@ -102,7 +102,7 @@ class ReportViewModel(
 
     fun onAction(action: ReportUiAction) {
         when (action) {
-            is ReportUiAction.RouteEntered -> handleRouteEntered(action.entryPoint)
+            is ReportUiAction.RouteEntered -> handleRouteEntered(action.entryPoint, action.startNew)
             ReportUiAction.BackClicked -> handleBackClicked()
             ReportUiAction.DraftDiscardClicked -> discardDraft()
             ReportUiAction.DraftResumeClicked -> resumeDraft()
@@ -137,15 +137,10 @@ class ReportViewModel(
                 emitUiEvent(ReportUiEvent.NavigateToReportHistory(action.historyId))
             }
             ReportUiAction.StartNewReportClicked -> {
-                if (mutableUiState.value.screenState is ReportScreenState.Completed) {
-                    resetForm()
-                }
-                mutableUiState.update { state ->
-                    state.copy(
-                        screenState = ReportScreenState.Editing,
-                        currentStep = ReportStep.TypeSelection,
-                    )
-                }
+                resetForm(
+                    currentStep = ReportStep.TypeSelection,
+                    preserveDraftAffordance = false,
+                )
             }
             ReportUiAction.BackToMapClicked -> {
                 if (mutableUiState.value.screenState is ReportScreenState.Completed) {
@@ -160,21 +155,18 @@ class ReportViewModel(
     }
 
     private fun handleTabReentered() {
-        // 완료 화면에서 머무르지 않고 다른 탭으로 떠난 뒤 다시 진입한 경우에만 새 제보로 초기화.
-        // Editing/Submitting/Failure 상태는 사용자가 작성·재시도 중이므로 보존한다.
-        if (mutableUiState.value.screenState is ReportScreenState.Completed) {
-            resetForm()
-        }
+        resetForm()
     }
 
-    private fun handleRouteEntered(entryPoint: ReportEntryPoint) {
-        mutableUiState.update { state ->
-            if (state.entryPoint == entryPoint) {
-                state
-            } else {
-                state.copy(entryPoint = entryPoint)
-            }
-        }
+    private fun handleRouteEntered(
+        entryPoint: ReportEntryPoint,
+        startNew: Boolean,
+    ) {
+        resetForm(
+            entryPoint = entryPoint,
+            currentStep = if (startNew) ReportStep.TypeSelection else ReportStep.Home,
+            preserveDraftAffordance = !startNew,
+        )
     }
 
     private fun handleBackClicked() {
@@ -839,11 +831,25 @@ class ReportViewModel(
         emitUiEvent(ReportUiEvent.ScrollToFirstError)
     }
 
-    private fun resetForm() {
+    private fun resetForm(
+        entryPoint: ReportEntryPoint = mutableUiState.value.entryPoint,
+        currentStep: ReportStep = ReportStep.Home,
+        preserveDraftAffordance: Boolean = true,
+    ) {
         val currentState = mutableUiState.value
+        pendingCurrentLocationRequest = false
+        currentLocationJob?.cancel()
+        currentLocationJob = null
+        cancelPermissionPendingTimeout()
+        reverseGeocodeJob?.cancel()
+        reverseGeocodeJob = null
+        val draft = latestDraft.takeIf { preserveDraftAffordance }
         mutableUiState.value =
             ReportUiState(
-                entryPoint = currentState.entryPoint,
+                currentStep = currentStep,
+                entryPoint = entryPoint,
+                draftId = draft?.draftId,
+                hasExistingDraft = draft != null,
                 processingCounts = currentState.processingCounts,
                 recentReports = currentState.recentReports,
                 isOnline = currentState.isOnline,

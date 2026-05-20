@@ -624,8 +624,12 @@ class ReportViewModelTest {
             val viewModel = createReportViewModel(repository)
             val event = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.first() }
 
-            viewModel.onAction(ReportUiAction.RouteEntered(ReportEntryPoint.NavigationGuidance))
-            viewModel.onAction(ReportUiAction.StartNewReportClicked)
+            viewModel.onAction(
+                ReportUiAction.RouteEntered(
+                    entryPoint = ReportEntryPoint.NavigationGuidance,
+                    startNew = true,
+                ),
+            )
             advanceUntilIdle()
 
             assertEquals(ReportEntryPoint.NavigationGuidance, viewModel.uiState.value.entryPoint)
@@ -636,6 +640,55 @@ class ReportViewModelTest {
 
             assertEquals(ReportUiEvent.NavigateBack, event.await())
             assertEquals(ReportStep.TypeSelection, viewModel.uiState.value.currentStep)
+        }
+
+    @Test
+    fun `guidance report entry clears stale failed submit state for a fresh report`() =
+        runTest {
+            val repository =
+                FakeReportRepository(
+                    submitResultFactory = { outboxId ->
+                        ReportSubmitResult.Failure(
+                            outboxId = outboxId,
+                            reason = ReportSubmitFailureReason.Network,
+                        )
+                    },
+                )
+            val viewModel = createReportViewModel(repository)
+
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(ReportType.OTHER_OBSTACLE))
+            viewModel.onAction(
+                ReportUiAction.LocationSelected(
+                    location =
+                        ReportLocation(
+                            latitude = 35.1796,
+                            longitude = 129.0756,
+                            address = "부산시청 인근",
+                        ),
+                    source = ReportLocationSource.MapPin,
+                ),
+            )
+            viewModel.onAction(ReportUiAction.SubmitClicked)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.screenState is ReportScreenState.Failure)
+
+            viewModel.onAction(
+                ReportUiAction.RouteEntered(
+                    entryPoint = ReportEntryPoint.NavigationGuidance,
+                    startNew = true,
+                ),
+            )
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(ReportEntryPoint.NavigationGuidance, state.entryPoint)
+            assertEquals(ReportStep.TypeSelection, state.currentStep)
+            assertTrue(state.screenState is ReportScreenState.Editing)
+            assertTrue(state.submitState is ReportSubmitState.Idle)
+            assertTrue(state.outboxState is ReportOutboxState.NotSaved)
+            assertNull(state.reportType.value)
+            assertNull(state.location.value)
         }
 
     @Test
@@ -1105,7 +1158,7 @@ class ReportViewModelTest {
         }
 
     @Test
-    fun `tab reentered while editing preserves in progress form input`() =
+    fun `tab reentered while editing resets in progress form input`() =
         runTest {
             val repository = FakeReportRepository()
             val viewModel = createReportViewModel(repository)
@@ -1119,9 +1172,11 @@ class ReportViewModelTest {
             viewModel.onAction(ReportUiAction.TabReentered)
             advanceUntilIdle()
 
-            val preservedState = viewModel.uiState.value
-            assertEquals(ReportType.RAMP, preservedState.reportType.value)
-            assertEquals("작성 중인 설명", preservedState.description.value)
+            val resetState = viewModel.uiState.value
+            assertEquals(ReportStep.Home, resetState.currentStep)
+            assertEquals(null, resetState.reportType.value)
+            assertEquals("", resetState.description.value)
+            assertTrue(resetState.screenState is ReportScreenState.Editing)
         }
 
     @Test
@@ -1150,7 +1205,7 @@ class ReportViewModelTest {
             assertTrue(viewModel.uiState.value.hasExistingDraft)
             assertEquals("draft-1", viewModel.uiState.value.draftId)
 
-            // 다른 탭을 다녀온 뒤 재진입했을 때 작성 중 상태(폼은 빈 상태)는 그대로 유지된다.
+            // 다른 탭을 다녀온 뒤 재진입해도 폼은 새로 시작하되 draft 이어쓰기 affordance는 유지한다.
             viewModel.onAction(ReportUiAction.TabReentered)
             advanceUntilIdle()
 
@@ -1162,7 +1217,7 @@ class ReportViewModelTest {
         }
 
     @Test
-    fun `tab reentered after submit failure preserves recoverable state`() =
+    fun `tab reentered after submit failure resets stale failure state`() =
         runTest {
             val repository =
                 FakeReportRepository(
@@ -1196,9 +1251,11 @@ class ReportViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertTrue(state.screenState is ReportScreenState.Failure)
-            assertEquals(ReportType.OTHER_OBSTACLE, state.reportType.value)
-            assertTrue(state.outboxState is ReportOutboxState.Saved)
+            assertTrue(state.screenState is ReportScreenState.Editing)
+            assertEquals(ReportStep.Home, state.currentStep)
+            assertEquals(null, state.reportType.value)
+            assertTrue(state.outboxState is ReportOutboxState.NotSaved)
+            assertTrue(state.submitState is ReportSubmitState.Idle)
         }
 
     @Test

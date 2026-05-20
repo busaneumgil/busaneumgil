@@ -101,19 +101,14 @@ fun ReportRoute(
             )
         }
 
-    LaunchedEffect(entryPoint, viewModel) {
-        viewModel.onAction(ReportUiAction.RouteEntered(entryPoint))
-    }
-
-    LaunchedEffect(viewModel) {
-        // 탭 재진입 시 완료 화면이면 자동으로 새 제보 시작 상태로 초기화 (T10).
-        // 작성 중·실패 상태는 보존되어야 하므로 ViewModel에서 분기 처리한다.
-        viewModel.onAction(ReportUiAction.TabReentered)
-    }
-
-    LaunchedEffect(startNewRequest, viewModel) {
+    LaunchedEffect(entryPoint, startNewRequest, viewModel) {
+        viewModel.onAction(
+            ReportUiAction.RouteEntered(
+                entryPoint = entryPoint,
+                startNew = startNewRequest,
+            ),
+        )
         if (startNewRequest) {
-            viewModel.onAction(ReportUiAction.StartNewReportClicked)
             onStartNewRequestConsumed()
         }
     }

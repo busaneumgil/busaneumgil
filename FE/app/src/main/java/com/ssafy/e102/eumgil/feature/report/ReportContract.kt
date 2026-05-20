@@ -206,6 +206,7 @@ sealed interface ReportSubmitState {
 sealed interface ReportUiAction {
     data class RouteEntered(
         val entryPoint: ReportEntryPoint,
+        val startNew: Boolean = false,
     ) : ReportUiAction
 
     data object BackClicked : ReportUiAction

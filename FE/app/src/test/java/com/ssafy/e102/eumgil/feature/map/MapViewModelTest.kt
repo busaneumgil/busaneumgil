@@ -232,6 +232,7 @@ class MapViewModelTest {
                     center = tappedCoordinate,
                     zoomLevel = 4,
                     isUserGesture = true,
+                    isSelectedMapPinVisibleInViewport = false,
                 ),
             )
             advanceUntilIdle()
@@ -410,6 +411,7 @@ class MapViewModelTest {
             assertEquals(destination.longitude, viewModel.uiState.value.selectedMapPinCoordinate?.longitude ?: 0.0, 0.0)
             val sheetState = viewModel.uiState.value.facilityDetailSheetState
             assertTrue(sheetState.isVisible)
+            assertEquals(MapFacilityDetailSheetPresentation.EXPANDED, sheetState.presentation)
             assertEquals(destination, sheetState.destinationPreview?.destination)
             assertEquals("Busan Tower", sheetState.mapTapDetail?.name)
             assertEquals(listOf("elevator"), sheetState.mapTapDetail?.accessibilityTags)
@@ -697,7 +699,7 @@ class MapViewModelTest {
         }
 
     @Test
-    fun `search preview clears map pin state when user moves selected pin offscreen`() =
+    fun `search preview keeps map pin state and compacts sheet when user moves selected pin offscreen`() =
         runTest {
             val permissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied)
             val locationManager = FakeCurrentLocationManager()
@@ -738,8 +740,98 @@ class MapViewModelTest {
             )
             advanceUntilIdle()
 
+            assertEquals(destination.latitude, viewModel.uiState.value.selectedMapPinCoordinate?.latitude ?: 0.0, 0.0)
+            assertEquals(destination.longitude, viewModel.uiState.value.selectedMapPinCoordinate?.longitude ?: 0.0, 0.0)
+            assertEquals(destination, viewModel.uiState.value.facilityDetailSheetState.destinationPreview?.destination)
+            assertTrue(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertEquals(
+                MapFacilityDetailSheetPresentation.COMPACT,
+                viewModel.uiState.value.facilityDetailSheetState.presentation,
+            )
+        }
+
+    @Test
+    fun `background map tap clears selected preview state`() =
+        runTest {
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-background-clear",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            destinationPreviewRepository.requestPreview(destination = destination)
+            advanceUntilIdle()
+
+            viewModel.onAction(MapUiAction.BackgroundMapTapped)
+            advanceUntilIdle()
+
             assertNull(viewModel.uiState.value.selectedMapPinCoordinate)
             assertFalse(viewModel.uiState.value.facilityDetailSheetState.isVisible)
+            assertEquals(
+                MapFacilityDetailSheetPresentation.EXPANDED,
+                viewModel.uiState.value.facilityDetailSheetState.presentation,
+            )
+        }
+
+    @Test
+    fun `compact facility detail expansion returns sheet to expanded without moving camera`() =
+        runTest {
+            val destinationPreviewRepository = InMemoryDestinationPreviewRepository()
+            val viewModel =
+                MapViewModel(
+                    locationPermissionManager = FakeLocationPermissionManager(initialState = LocationPermissionState.Denied),
+                    currentLocationManager = FakeCurrentLocationManager(),
+                    destinationSelectionRepository = InMemoryDestinationSelectionRepository(),
+                    destinationPreviewRepository = destinationPreviewRepository,
+                    facilitySeedRepository = testFacilitySeedRepository(),
+                    bookmarkRepository = FakeBookmarkRepository(),
+                )
+            val destination =
+                PlaceDestination(
+                    placeId = "preview-compact-expand",
+                    name = "Busan Tower",
+                    address = "1 Yongdusan-gil, Busan",
+                    latitude = 35.1000,
+                    longitude = 129.0320,
+                    category = PlaceCategory.TOURIST_SPOT,
+                )
+
+            destinationPreviewRepository.requestPreview(destination = destination)
+            advanceUntilIdle()
+            viewModel.onAction(
+                MapUiAction.ViewportCameraChanged(
+                    center = MapCoordinate(latitude = 35.1796, longitude = 129.0756),
+                    zoomLevel = viewModel.uiState.value.cameraTarget.resolvedZoomLevel(),
+                    isUserGesture = true,
+                    isSelectedMapPinVisibleInViewport = false,
+                ),
+            )
+            advanceUntilIdle()
+            val cameraBeforeExpand = viewModel.uiState.value.cameraTarget
+
+            viewModel.onAction(MapUiAction.FacilityDetailExpanded)
+            advanceUntilIdle()
+
+            assertEquals(
+                MapFacilityDetailSheetPresentation.EXPANDED,
+                viewModel.uiState.value.facilityDetailSheetState.presentation,
+            )
+            assertEquals(cameraBeforeExpand, viewModel.uiState.value.cameraTarget)
+            assertEquals(destination.latitude, viewModel.uiState.value.selectedMapPinCoordinate?.latitude ?: 0.0, 0.0)
         }
 
     @Test

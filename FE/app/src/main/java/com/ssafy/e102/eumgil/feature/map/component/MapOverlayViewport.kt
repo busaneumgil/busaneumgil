@@ -96,6 +96,7 @@ internal fun MapOverlayViewport(
                     }
                 },
                 onViewportBoundsChanged = onViewportBoundsChanged,
+                onBackgroundClick = {},
                 onMapClick = {},
                 modifier = describedModifier,
             )

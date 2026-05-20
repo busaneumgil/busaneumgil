@@ -88,6 +88,7 @@ internal fun KakaoMapViewport(
     onMarkerClick: (String) -> Unit,
     onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
     onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
+    onBackgroundClick: () -> Unit,
     onMapClick: (MapTapPayload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -198,6 +199,7 @@ internal fun KakaoMapViewport(
                         onMarkerClick = onMarkerClick,
                         onCameraMoveEnd = onCameraMoveEnd,
                         onViewportBoundsChanged = onViewportBoundsChanged,
+                        onBackgroundClick = onBackgroundClick,
                         onMapClick = onMapClick,
                     )
                 },
@@ -208,6 +210,7 @@ internal fun KakaoMapViewport(
                         onMarkerClick = onMarkerClick,
                         onCameraMoveEnd = onCameraMoveEnd,
                         onViewportBoundsChanged = onViewportBoundsChanged,
+                        onBackgroundClick = onBackgroundClick,
                         onMapClick = onMapClick,
                     )
                 },
@@ -304,6 +307,7 @@ private class KakaoMapViewportController {
     private var markerClickHandler: ((String) -> Unit)? = null
     private var cameraMoveEndHandler: ((MapCoordinate, Int, Boolean, Boolean?) -> Unit)? = null
     private var viewportBoundsChangedHandler: ((MapViewportBounds?) -> Unit)? = null
+    private var backgroundClickHandler: (() -> Unit)? = null
     private var mapClickHandler: ((MapTapPayload) -> Unit)? = null
     private var facilityMarkerStyleCache: KakaoFacilityMarkerStyleCache? = null
     private var overlayMarkerStyleCache: KakaoOverlayMarkerStyleCache? = null
@@ -363,12 +367,14 @@ private class KakaoMapViewportController {
         onMarkerClick: (String) -> Unit,
         onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
         onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
+        onBackgroundClick: () -> Unit,
         onMapClick: (MapTapPayload) -> Unit,
     ): MapView {
         latestState = initialState
         markerClickHandler = onMarkerClick
         cameraMoveEndHandler = onCameraMoveEnd
         viewportBoundsChangedHandler = onViewportBoundsChanged
+        backgroundClickHandler = onBackgroundClick
         mapClickHandler = onMapClick
 
         return mapView ?: MapView(context).also { createdMapView ->
@@ -389,12 +395,14 @@ private class KakaoMapViewportController {
         onMarkerClick: (String) -> Unit,
         onCameraMoveEnd: (MapCoordinate, Int, Boolean, Boolean?) -> Unit,
         onViewportBoundsChanged: (MapViewportBounds?) -> Unit,
+        onBackgroundClick: () -> Unit,
         onMapClick: (MapTapPayload) -> Unit,
     ) {
         latestState = state
         markerClickHandler = onMarkerClick
         cameraMoveEndHandler = onCameraMoveEnd
         viewportBoundsChangedHandler = onViewportBoundsChanged
+        backgroundClickHandler = onBackgroundClick
         mapClickHandler = onMapClick
         renderIntoMapIfReady()
     }
@@ -428,6 +436,7 @@ private class KakaoMapViewportController {
         rendererFailure = null
         projectedMarkerOverlays = emptyList()
         viewportBoundsChangedHandler = null
+        backgroundClickHandler = null
         facilityMarkerStyleCache?.clear()
         facilityMarkerStyleCache = null
         overlayMarkerStyleCache?.clear()
@@ -567,7 +576,7 @@ private class KakaoMapViewportController {
                         }
                     }
                     readyMap.setOnTerrainClickListener { _, position, _ ->
-                        ignoreBackgroundSingleTap(
+                        dispatchBackgroundMapTap(
                             source = "terrain",
                             position = position,
                         )
@@ -585,7 +594,7 @@ private class KakaoMapViewportController {
                                 nameHint = poi.name,
                             )
                         } else if (poi == null) {
-                            ignoreBackgroundSingleTap(
+                            dispatchBackgroundMapTap(
                                 source = "map",
                                 position = position,
                             )
@@ -1419,14 +1428,23 @@ private class KakaoMapViewportController {
         )
     }
 
-    private fun ignoreBackgroundSingleTap(
+    private fun dispatchBackgroundMapTap(
         source: String,
         position: LatLng,
     ) {
+        val coordinate =
+            MapCoordinate(
+                latitude = position.latitude,
+                longitude = position.longitude,
+            )
+        val now = SystemClock.elapsedRealtime()
+        if (isSuppressedByRecentMarkerTap(coordinate = coordinate, now = now)) return
+
         Log.d(
             KAKAO_MAP_LOG_TAG,
-            "Ignoring background single tap source=$source lat=${position.latitude.toLogCoordinate()} lng=${position.longitude.toLogCoordinate()}",
+            "Dispatching background single tap source=$source lat=${position.latitude.toLogCoordinate()} lng=${position.longitude.toLogCoordinate()}",
         )
+        backgroundClickHandler?.invoke()
     }
 
     private fun dispatchExternalPoiTap(

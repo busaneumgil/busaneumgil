@@ -144,6 +144,12 @@ fun MapScreen(
                 )
             },
             onViewportBoundsChanged = hazardMarkerState::onViewportBoundsChanged,
+            onBackgroundClick = {
+                hazardMarkerState.dismissSelection()
+                if (routeEndpointPickerState == null) {
+                    onAction(MapUiAction.BackgroundMapTapped)
+                }
+            },
             onMapClick = { payload ->
                 hazardMarkerState.dismissSelection()
                 if (routeEndpointPickerState == null) {
@@ -267,6 +273,7 @@ fun MapScreen(
                         facilityDetailSheetUiState.phoneNumber?.let {
                             { onAction(MapUiAction.FacilityPhoneClicked) }
                         },
+                    onExpandRequest = { onAction(MapUiAction.FacilityDetailExpanded) },
                     detailContent = {
                         FacilityDetailExtraSection(
                             transitArrivals = facilityDetailSheetUiState.transitArrivals,
@@ -427,6 +434,7 @@ private data class MapLocationPanelState(
 @Immutable
 private data class MapFacilityDetailSheetUiState(
     val isVisible: Boolean,
+    val presentation: MapFacilityDetailSheetPresentation = MapFacilityDetailSheetPresentation.EXPANDED,
     @DrawableRes val placeIconRes: Int,
     val metaLabel: String,
     val title: String,
@@ -450,6 +458,7 @@ private data class MapFacilityDetailSheetUiState(
             title = title,
             address = address,
             phoneNumber = phoneNumber,
+            presentation = presentation,
             hasDetailContent = accessibilityTags.isNotEmpty() || transitArrivals.isNotEmpty(),
         )
 }
@@ -1371,6 +1380,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
         mapTapDetail != null ->
             MapFacilityDetailSheetUiState(
                 isVisible = true,
+                presentation = sheetState.presentation,
                 placeIconRes = mapTapDetailPlaceIconRes(mapTapDetail),
                 metaLabel =
                     mapTapDetailMetaLabel(
@@ -1400,6 +1410,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
         sheetState.isMapTapDetailLoading ->
             MapFacilityDetailSheetUiState(
                 isVisible = true,
+                presentation = sheetState.presentation,
                 placeIconRes = R.drawable.ic_nav_facility,
                 metaLabel = stringResource(id = R.string.map_facility_detail_location_meta),
                 title = loadingTitle,
@@ -1418,6 +1429,7 @@ private fun mapTapFacilityDetailSheetState(uiState: MapUiState): MapFacilityDeta
         sheetState.mapTapDetailErrorMessage != null ->
             MapFacilityDetailSheetUiState(
                 isVisible = true,
+                presentation = sheetState.presentation,
                 placeIconRes = R.drawable.ic_nav_facility,
                 metaLabel = stringResource(id = R.string.map_facility_detail_location_meta),
                 title = errorTitle,
@@ -1450,6 +1462,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
     return if (detail == null) {
         MapFacilityDetailSheetUiState(
             isVisible = false,
+            presentation = uiState.facilityDetailSheetState.presentation,
             placeIconRes = R.drawable.ic_nav_facility,
             metaLabel = "",
             title = "",
@@ -1468,6 +1481,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
         val mapTapDetail = uiState.facilityDetailSheetState.mapTapDetail
         MapFacilityDetailSheetUiState(
             isVisible = true,
+            presentation = uiState.facilityDetailSheetState.presentation,
             placeIconRes = mapTapDetailPlaceIconRes(mapTapDetail),
             metaLabel =
                 mapTapDetailMetaLabel(
@@ -1494,6 +1508,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
     } else if (uiState.facilityDetailSheetState.isMapTapDetailLoading) {
         MapFacilityDetailSheetUiState(
             isVisible = true,
+            presentation = uiState.facilityDetailSheetState.presentation,
             placeIconRes = R.drawable.ic_nav_facility,
             metaLabel = "위치 상세",
             title = stringResource(id = R.string.map_facility_detail_loading_guide),
@@ -1511,6 +1526,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
     } else if (uiState.facilityDetailSheetState.mapTapDetailErrorMessage != null) {
         MapFacilityDetailSheetUiState(
             isVisible = true,
+            presentation = uiState.facilityDetailSheetState.presentation,
             placeIconRes = R.drawable.ic_nav_facility,
             metaLabel = "위치 상세",
             title = "상세 정보를 불러오지 못했습니다",
@@ -1531,6 +1547,7 @@ private fun mapFacilityDetailBottomSheetState(uiState: MapUiState): MapFacilityD
     } else {
         MapFacilityDetailSheetUiState(
             isVisible = uiState.facilityDetailSheetState.isVisible,
+            presentation = uiState.facilityDetailSheetState.presentation,
             placeIconRes = facilityDetailPlaceIconRes(detail.category),
             metaLabel =
                 facilityDetailMetaLabel(

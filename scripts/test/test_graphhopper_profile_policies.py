@@ -54,6 +54,22 @@ class GraphhopperProfilePolicyTest(unittest.TestCase):
             with self.subTest(profile=profile_name):
                 self.assertEqual(priority_multiplier(models[profile_name], "stairs_state == YES"), "0.00")
 
+    def test_manual_wheelchair_width_policy(self):
+        models = load_custom_models()
+
+        self.assertEqual(
+            priority_multiplier(models["wheelchair_manual_safe"], "width_state == ADEQUATE_120"),
+            "0",
+        )
+        self.assertEqual(
+            priority_multiplier(models["wheelchair_manual_safe"], "width_state == NARROW"),
+            "0",
+        )
+        self.assertEqual(
+            priority_multiplier(models["wheelchair_manual_fast"], "width_state == ADEQUATE_120"),
+            "1.0",
+        )
+
     def test_safe_profiles_avoid_accessibility_risks_more_than_fast_profiles(self):
         # priority multiplier가 낮을수록 GraphHopper가 해당 edge를 더 강하게 회피한다.
         # 따라서 safe profile은 같은 사용자군의 fast profile보다 값이 낮아야 한다.

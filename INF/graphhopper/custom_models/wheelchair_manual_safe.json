@@ -38,7 +38,7 @@
     },
     {
       "if": "width_state == NARROW",
-      "multiply_by": "0.12"
+      "multiply_by": "0"
     },
     {
       "if": "width_state == UNKNOWN",

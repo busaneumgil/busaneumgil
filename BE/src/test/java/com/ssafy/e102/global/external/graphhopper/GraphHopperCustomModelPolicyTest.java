@@ -21,7 +21,7 @@ class GraphHopperCustomModelPolicyTest {
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@Test
-	@DisplayName("manual wheelchair SAFE는 ADEQUATE_120 폭 상태를 통과시키지 않는다")
+	@DisplayName("manual wheelchair SAFE blocks ADEQUATE_120 width")
 	void manualWheelchairSafeBlocksAdequate120() throws IOException {
 		JsonNode modelJson = objectMapper.readTree(Files.readString(MANUAL_SAFE_MODEL));
 
@@ -29,11 +29,19 @@ class GraphHopperCustomModelPolicyTest {
 	}
 
 	@Test
-	@DisplayName("manual wheelchair FAST는 ADEQUATE_120 폭 상태를 패널티로만 처리한다")
-	void manualWheelchairFastStillUsesPenaltyForAdequate120() throws IOException {
+	@DisplayName("manual wheelchair SAFE blocks NARROW width")
+	void manualWheelchairSafeBlocksNarrow() throws IOException {
+		JsonNode modelJson = objectMapper.readTree(Files.readString(MANUAL_SAFE_MODEL));
+
+		assertThat(multiplyByFor(modelJson, "width_state == NARROW")).isEqualTo("0");
+	}
+
+	@Test
+	@DisplayName("manual wheelchair FAST does not penalize ADEQUATE_120 width")
+	void manualWheelchairFastDoesNotPenalizeAdequate120() throws IOException {
 		JsonNode modelJson = objectMapper.readTree(Files.readString(MANUAL_FAST_MODEL));
 
-		assertThat(multiplyByFor(modelJson, "width_state == ADEQUATE_120")).isEqualTo("0.80");
+		assertThat(multiplyByFor(modelJson, "width_state == ADEQUATE_120")).isEqualTo("1.0");
 	}
 
 	private String multiplyByFor(JsonNode modelJson, String condition) {

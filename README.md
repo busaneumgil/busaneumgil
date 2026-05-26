@@ -124,7 +124,6 @@
 
 ## | 기술 스택
 
-![부산이음길 아키텍처](<부산이음길.drawio (2).png>)
 
 <table>
   <tr>
@@ -193,18 +192,7 @@
 
 ## | 시스템 아키텍처
 
-```text
-Android App        Admin Web
-     |                 |
-     +-------> Spring Boot API
-                 |
-                 +-> PostgreSQL/PostGIS
-                 +-> Redis
-                 +-> GraphHopper Runtime
-                 +-> S3 또는 MinIO
-                 +-> Kakao Local / ODsay / Busan BIMS
-                 +-> AI Flask Intent Server
-```
+![부산이음길 아키텍처](<부산이음길.drawio (2).png>)
 
 | 구성 요소 | 설명 |
 |-----------|------|

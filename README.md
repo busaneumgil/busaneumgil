@@ -1,319 +1,336 @@
 <div align="center">
 
-# 부산이음길
+# 부산이음길 (Busan EumGil)
 
-### Busan EumGil
+<img src="Docs/img/busan-eumgil-wordmark.png" width="520" alt="부산이음길 워드마크" />
 
-**부산 지역 이동 약자를 위한 무장애 길찾기 서비스**
+<br/><br/>
 
-<br>
+**부산의 경사, 계단, 단차, 보도 폭, 장애물 정보를 함께 보고**  
+**이동 약자가 실제로 지나갈 수 있는 길을 찾도록 돕는 인클루시브 무장애 길찾기 서비스**
 
-[![Android](https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Spring Boot](https://img.shields.io/badge/Spring_Boot_3-6DB33F?style=flat-square&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
-[![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org)
-[![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
-[![Jenkins](https://img.shields.io/badge/Jenkins-D24939?style=flat-square&logo=jenkins&logoColor=white)](https://www.jenkins.io)
-[![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
+<br/>
+
+![Android](https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
+![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)
+![Java 21](https://img.shields.io/badge/Java_21-437291?style=flat-square&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot_3.5-6DB33F?style=flat-square&logo=springboot&logoColor=white)
+![PostGIS](https://img.shields.io/badge/PostgreSQL%2FPostGIS-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-D82C20?style=flat-square&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat-square&logo=amazonaws&logoColor=white)
 
 </div>
 
 ---
 
-## 프로젝트 소개
+## | 서비스 소개
 
-**부산이음길**은 부산 지역 이동 약자를 위한 **무장애 길찾기 모바일 서비스**입니다.
+부산은 산복도로, 언덕, 계단, 좁은 보도, 보도 단절 구간이 많은 도시입니다. 일반 보행자에게는 돌아가면 되는 길도 휠체어 사용자에게는 막힌 길이 되고, 저시력자에게는 위험한 길이 될 수 있습니다.
 
-부산은 언덕, 계단, 급경사, 단차가 많은 도시 구조를 가지고 있어 휠체어 이용자, 고령자, 유아차 동반 보호자, 시각장애인에게 일반 보행자용 길찾기 서비스가 그대로 통하지 않습니다.
+**부산이음길**은 최단거리보다 실제 이동 가능성과 안전성을 우선합니다. 저시력자와 보행약자의 정보 접근 방식이 다르다는 점을 전제로, 사용자 유형에 따라 다른 화면 흐름과 안내 방식을 제공합니다.
 
-부산이음길은 이런 문제를 해결하기 위해 다음을 목표로 합니다.
+<br/>
 
-- 이동 약자 맞춤 경로 탐색
-- 경사, 계단, 엘리베이터, 점자블록 같은 접근성 정보 제공
-- 시민 참여형 장애물 제보
-- 부산 지역 중심의 무장애 이동 데이터 축적
+| 핵심 관점 | 설명 |
+|----------|------|
+| **Inclusive Design** | 사용자가 서비스에 맞추는 것이 아니라, 서비스가 사용자의 이동 조건과 정보 접근 방식에 맞춰집니다. |
+| **Barrier-Free Route** | 경사, 계단, 보도 폭, 노면, 접근성 시설을 경로 판단에 반영합니다. |
+| **Community Report** | 공사, 장애물, 점자블록 손상 같은 현장 변화를 시민 제보와 관리자 검토로 보강합니다. |
+| **Busan Context** | 부산의 지형과 생활권 특성을 고려한 지역 특화 길찾기를 목표로 합니다. |
 
-### 핵심 사용자
+---
 
-- 시각장애인
-- 휠체어 이용자
-- 고령자
-- 유아차 동반 보호자
-- 일시적 이동 불편자
+## | 팀 소개
 
-### 핵심 기능
+## 이길,지도
 
-- **무장애 경로 탐색**: 경사로, 엘리베이터, 자동문 중심 경로 우선
-- **접근성 지도 정보 제공**: 장애인 화장실, 충전소, 점자블록, 베리어프리 시설 표시
-- **인증 기반 사용 흐름**: 소셜 로그인, 사용자 유형, 온보딩 상태에 따라 앱 진입 분기
-- **TTS 기반 길안내**: 시각장애인 사용자를 고려한 음성 안내
-- **장애물 제보**: 공사, 점자블록 손상, 보행 장애물 제보
+<table>
+  <tr>
+    <td align="center">
+      <b>김지윤</b><br/>
+      <sub>팀장</sub><br/><br/>
+      <img src="https://img.shields.io/badge/총괄-555555?style=flat-square" />
+      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" />
+            <img src="https://img.shields.io/badge/디자인-E91E63?style=flat-square" />
+      <img src="https://img.shields.io/badge/발표-9C27B0?style=flat-square" />
+    </td>
+    <td align="center">
+      <b>김응서</b><br/>
+      <sub>팀원</sub><br/><br/>
+      <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" />
+      <img src="https://img.shields.io/badge/Infra-FF9900?style=flat-square" />
+    </td>
+    <td align="center">
+      <b>박세홍</b><br/>
+      <sub>팀원</sub><br/><br/>
+      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" />
+    </td>
+    <td align="center">
+      <b>백수연</b><br/>
+      <sub>팀원</sub><br/><br/>
+      <img src="https://img.shields.io/badge/AI-3776AB?style=flat-square" />
+            <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" />
+    </td>
+    <td align="center">
+      <b>유준호</b><br/>
+      <sub>팀원</sub><br/><br/>
+                  <img src="https://img.shields.io/badge/Infra-FF9900?style=flat-square" />
+                        <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" />
+    </td>
+        <td align="center">
+      <b>이재호</b><br/>
+      <sub>팀원</sub><br/><br/>
+      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" />
+            <img src="https://img.shields.io/badge/Docs-437291?style=flat-square" />
+    </td>
+        </td>
+        <td align="center">
+      <b>장주윤</b><br/>
+      <sub>팀원</sub><br/><br/>
+            <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" />
+      <img src="https://img.shields.io/badge/AI-3776AB?style=flat-square" />
+    </td>
+  </tr>
+</table>
 
-### 핵심 흐름
+---
+
+## | 인클루시브 디자인
+
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <strong>처음부터 포함</strong><br/><br/>
+      <sub>온보딩에서 저시력자와 보행약자를 분리하고, 보행약자 세부 유형을 선택합니다.</sub>
+    </td>
+    <td align="center" width="25%">
+      <strong>같은 목적, 다른 접근</strong><br/><br/>
+      <sub>보행약자는 지도 중심, 저시력자는 큰 버튼과 음성 중심의 별도 화면군을 사용합니다.</sub>
+    </td>
+    <td align="center" width="25%">
+      <strong>여러 감각으로 전달</strong><br/><br/>
+      <sub>색상만 쓰지 않고 텍스트, 아이콘, 배지, 음성, TalkBack 라벨로 상태를 전달합니다.</sub>
+    </td>
+    <td align="center" width="25%">
+      <strong>안전 우선</strong><br/><br/>
+      <sub>최단거리 외에 경사와 장애물을 고려한 안전한 길을 제공합니다.</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
+## | 기술 스택
+
+![부산이음길 아키텍처](<부산이음길.drawio (2).png>)
+
+<table>
+  <tr>
+    <th align="center">Category</th>
+    <th align="center">Stack</th>
+  </tr>
+  <tr>
+    <td align="center"><strong>Android</strong></td>
+    <td align="center">
+      <img src="https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin" />
+      <img src="https://img.shields.io/badge/Jetpack_Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
+      <img src="https://img.shields.io/badge/Material_3-757575?style=for-the-badge&logo=materialdesign&logoColor=white" alt="Material 3" />
+      <img src="https://img.shields.io/badge/Kakao_Map-FFCD00?style=for-the-badge&logo=kakao&logoColor=000000" alt="Kakao Map" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Backend</strong></td>
+    <td align="center">
+      <img src="https://img.shields.io/badge/Java_21-437291?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java 21" />
+      <img src="https://img.shields.io/badge/Spring_Boot_3.5-6DB33F?style=for-the-badge&logo=springboot&logoColor=white" alt="Spring Boot" />
+      <img src="https://img.shields.io/badge/Spring_Security-3A8D3A?style=for-the-badge&logo=springsecurity&logoColor=white" alt="Spring Security" />
+      <img src="https://img.shields.io/badge/JPA-59666C?style=for-the-badge" alt="JPA" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Data / Routing</strong></td>
+    <td align="center">
+      <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+      <img src="https://img.shields.io/badge/PostGIS-336791?style=for-the-badge" alt="PostGIS" />
+      <img src="https://img.shields.io/badge/Redis-D82C20?style=for-the-badge&logo=redis&logoColor=white" alt="Redis" />
+      <img src="https://img.shields.io/badge/GraphHopper-77B829?style=for-the-badge" alt="GraphHopper" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><strong>External</strong></td>
+    <td align="center">
+      <img src="https://img.shields.io/badge/Kakao_Local-FFCD00?style=for-the-badge&logo=kakao&logoColor=000000" alt="Kakao Local" />
+      <img src="https://img.shields.io/badge/ODsay-1E88E5?style=for-the-badge" alt="ODsay" />
+      <img src="https://img.shields.io/badge/Busan_BIMS-005BAC?style=for-the-badge" alt="Busan BIMS" />
+      <img src="https://img.shields.io/badge/S3%2FMinIO-C72E49?style=for-the-badge&logo=minio&logoColor=white" alt="S3 MinIO" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Admin / AI</strong></td>
+    <td align="center">
+      <img src="https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=000000" alt="React" />
+      <img src="https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
+      <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+      <img src="https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white" alt="Flask" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Infra</strong></td>
+    <td align="center">
+      <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+      <img src="https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white" alt="Nginx" />
+      <img src="https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white" alt="Jenkins" />
+      <img src="https://img.shields.io/badge/AWS_EC2-FF9900?style=for-the-badge&logo=amazonec2&logoColor=white" alt="AWS EC2" />
+    </td>
+  </tr>
+</table>
+
+<br/>
+
+---
+
+## | 시스템 아키텍처
 
 ```text
-현재 위치 / 목적지 입력
-  -> 접근성 데이터 조회
-  -> 무장애 경로 계산
-  -> 지도 표시 + 음성 안내
-  -> 사용자 이동 / 제보 데이터 축적
+Android App        Admin Web
+     |                 |
+     +-------> Spring Boot API
+                 |
+                 +-> PostgreSQL/PostGIS
+                 +-> Redis
+                 +-> GraphHopper Runtime
+                 +-> S3 또는 MinIO
+                 +-> Kakao Local / ODsay / Busan BIMS
+                 +-> AI Flask Intent Server
+```
+
+| 구성 요소 | 설명 |
+|-----------|------|
+| **Android App** | 사용자 유형별 홈, 접근성 지도, 경로 탐색, 제보, 북마크 흐름을 제공합니다. |
+| **Backend** | 인증, 장소, 경로, 제보, 관리자 API를 담당하고 외부 API와 공간 데이터를 조합합니다. |
+| **Routing / Data** | PostGIS 공간 데이터와 GraphHopper 라우팅 그래프를 사용해 이동 가능성을 판단합니다. |
+| **Admin Web** | 도로/시설 편집, 제보 검토, GraphHopper 반영 흐름을 운영합니다. |
+| **Infra** | EC2 2대 구조, RDS, ElastiCache, Jenkins, Docker Compose, Nginx 기반으로 운영합니다. |
+
+---
+
+## | MVP 기능
+
+<table>
+  <tr>
+    <td align="center" width="33%" valign="top">
+      <video src="Docs/media/onboarding.mp4" width="220" height="390" controls muted playsinline></video><br/><br/>
+      <strong>사용자 유형 온보딩</strong><br/><br/>
+      <sub>저시력자와 보행약자를 구분하고 이동 특성에 맞는 앱 흐름으로 진입합니다.</sub>
+    </td>
+    <td align="center" width="33%" valign="top">
+      <video src="Docs/media/low-vision.mp4" width="220" height="390" controls muted playsinline></video><br/><br/>
+      <strong>저시력자 전용 흐름</strong><br/><br/>
+      <sub>큰 버튼, 단순한 선택지, 음성 중심 안내로 저시력자에게 맞는 흐름을 제공합니다.</sub>
+    </td>
+    <td align="center" width="33%" valign="top">
+      <video src="Docs/media/font-size.mp4" width="220" height="390" controls muted playsinline></video><br/><br/>
+      <strong>글씨 크기 설정</strong><br/><br/>
+      <sub>사용자의 시야와 읽기 편의에 맞춰 앱의 텍스트 크기를 조절합니다.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%" valign="top">
+      <video src="Docs/media/route-search.mp4" width="220" height="390" controls muted playsinline></video><br/><br/>
+      <strong>무장애 경로 안내</strong><br/><br/>
+      <sub>안전한 길과 최단거리를 비교하고 경사, 계단, 방향 안내를 제공합니다.</sub>
+    </td>
+    <td align="center" width="33%" valign="top">
+      <video src="Docs/media/bookmark.mp4" width="220" height="390" controls muted playsinline></video><br/><br/>
+      <strong>장소·경로 북마크</strong><br/><br/>
+      <sub>자주 가는 장소와 경로를 저장하고 다시 길찾기로 연결합니다.</sub>
+    </td>
+    <td align="center" width="33%" valign="top">
+      <video src="Docs/media/report.mp4" width="220" height="390" controls muted playsinline></video><br/><br/>
+      <strong>장애물 제보</strong><br/><br/>
+      <sub>공사, 계단, 점자블록 손상 등 현장 정보를 제보하고 검토 후 지도에 반영합니다.</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
+## | 저장소 구조
+
+```text
+.
+├── FE/                         # Android 앱
+│   ├── app/                    # 앱 코드 및 리소스
+│   ├── docs/                   # FE 설계, QA, 디버깅 문서
+│   └── mockup/                 # 화면 시안 및 목업
+├── BE/                         # Spring Boot 백엔드
+│   ├── src/main/java/          # 도메인별 API, 서비스, 공통 설정
+│   ├── src/main/resources/     # application.yml, profile 설정
+│   └── docs/                   # BE 기술 문서
+├── ADMIN/                      # React/Vite 관리자 웹
+├── AI/                         # Flask intent server와 음성/모델 실험 자산
+├── Docs/                       # PRD, 요구사항, API, ERD, 인프라, 기획 문서
+├── INF/                        # AWS, Jenkins, monitoring, Terraform 운영 설정
+├── exec/                       # 제출/포팅 산출물
+├── scripts/                    # 자동화 스크립트
+├── docker-compose.*.yml        # local / dev / prod 실행 구성
+└── Makefile                    # 실행 진입점
 ```
 
 ---
 
-## 주요 문서
+## | 문서 바로가기
 
-- PRD: [Docs/PRD/2026-04-09_부산이음길_PRD.md](Docs/PRD/2026-04-09_부산이음길_PRD.md)
-- 프로젝트 기획서: [Docs/기획/2026-04-10 최종_프로젝트_기획서.md](<Docs/기획/2026-04-10 최종_프로젝트_기획서.md>)
-- Frontend README: [FE/README.md](FE/README.md)
-- 인프라 설계안: [Docs/인프라/2026-04-20_AWS_인프라_설계안.md](<Docs/인프라/2026-04-20_AWS_인프라_설계안.md>)
-- 인프라 현재 상태: [Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md](Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md)
-- INF 기준: [INF/README.md](INF/README.md)
+### Overview
 
+<table>
+  <tr>
+    <th align="left" bgcolor="#f0f0f0">문서</th>
+    <th align="left" bgcolor="#f0f0f0">경로</th>
+  </tr>
+  <tr bgcolor="#f8f8f8">
+    <td>Frontend README</td>
+    <td><a href="FE/README.md">FE/README.md</a></td>
+  </tr>
+  <tr>
+    <td>Backend README</td>
+    <td><a href="BE/README.md">BE/README.md</a></td>
+  </tr>
+  <tr bgcolor="#f8f8f8">
+    <td>Infra README</td>
+    <td><a href="INF/README.md">INF/README.md</a></td>
+  </tr>
+  <tr>
+    <td>포팅 매뉴얼</td>
+    <td><a href="exec/부산이음길__포팅매뉴얼.md">exec/부산이음길__포팅매뉴얼.md</a></td>
+  </tr>
+</table>
 
-## 기술 스택
+### Service
 
-| 분류 | 기술 |
-|---|---|
-| Mobile App | Kotlin, Android, Jetpack Compose |
-| Backend API | Spring Boot 3, Spring Data JPA |
-| Data / AI | Python |
-| Route Engine | GraphHopper |
-| DB | PostgreSQL/PostGIS |
-| Cache | Redis / ElastiCache |
-| Infra | AWS, Docker, Docker Compose |
-| CI/CD | Jenkins |
-| Monitoring | PLG, CloudWatch |
+| 문서 | 경로 |
+|------|------|
+| 프로젝트 기획서 | [Docs/기획/2026-04-10 최종_프로젝트_기획서.md](<Docs/기획/2026-04-10 최종_프로젝트_기획서.md>) |
+| PRD | [Docs/PRD/2026-04-09_부산이음길_PRD.md](Docs/PRD/2026-04-09_부산이음길_PRD.md) |
+| 요구사항명세서 | [Docs/PRD/2026-05-20_요구사항명세서.md](Docs/PRD/2026-05-20_요구사항명세서.md) |
 
-[E102_기술스택](Docs/img/E102_기술스택.jpg)
----
+### Architecture / API
 
-## 저장소 구조
-
-```text
-S14P31E102/
-├── FE/                    # Android 앱, 상세는 FE/README.md 참고
-├── BE/                    # Spring Boot API
-├── AI/                    # Python 실험 코드, 데이터 가공, 인식 관련 작업
-├── Docs/                  # 기획, PRD, API, 인프라, 회의록 등 설명 문서
-├── INF/                   # 운영 설정 자산
-├── scripts/               # make에서 호출하는 자동화 스크립트
-├── Makefile
-└── README.md
-```
-
-### 디렉토리 책임
-
-- `FE/`
-  - Android 클라이언트 코드
-- `BE/`
-  - Spring Boot 서버 코드
-- `AI/`
-  - Python 기반 실험/검증/데이터 처리 코드
-- `Docs/`
-  - 설명 문서, 설계안, runbook, 운영 가이드
-- `INF/`
-  - 운영 설정 자산
-  - AWS, Jenkins, monitoring 관련 기준 파일
-- `scripts/`
-  - `make`가 호출하는 스크립트
-  - 배포, 초기화, QA, GIS 작업 자동화
-
-### 운영 파일 배치 원칙
-
-- 루트 디렉토리는 실행 진입점으로 사용한다.
-- 앞으로 환경별 compose 파일은 루트에서 관리한다.
-  - `docker-compose.local.yml`
-  - `docker-compose.dev.yml`
-  - `docker-compose.prod.yml`
-- 환경 변수 파일도 루트에서 관리한다.
-  - `.env.local`
-  - `.env.dev`
-  - `.env.prod`
-- 환경 변수 key 목록과 템플릿은 노션에서 관리하며, 저장소에는 env example 파일을 두지 않는다.
-- `INF/`에는 설명 문서보다 **운영 설정 자산**을 둔다.
-- 정식 설계안, 장애 대응 절차, 운영 설명은 `Docs/인프라`에서 관리한다.
-
+| 문서 | 경로 |
+|------|------|
+| ERD | [Docs/ERD/ERD_v4.md](Docs/ERD/ERD_v4.md) |
+| API 전체 목록 | [Docs/API/2026-04-12_API_전체_목록.md](Docs/API/2026-04-12_API_전체_목록.md) |
+| 경로 API 명세 | [Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md](Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md) |
 
 ---
 
-## 현재 아키텍처 결정
+## | 실행 및 상세 안내
 
-이 저장소는 현재 **EC2 2대 운영 구조**를 기준으로 인프라 계약을 맞춰가는 단계입니다.
-
-2026-05-20 실서버 확인 기준 최신 런타임 스냅샷은 [Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md](Docs/인프라/2026-05-20_인프라_현재상태_및_운영_기준.md)를 기준으로 합니다.
-
-### 현재 운영 기준
-
-- `S1 = dev + Jenkins + build runner + 운영도구`
-- `S2 = primary prod runtime`
-- `RDS = PostgreSQL managed service`
-- `ElastiCache = 필요 시 운영`
-- EC2 shell 접속은 `SSH`를 기본으로 사용하되, 관리자 고정 IP에서만 허용
-- `RDS`, `ElastiCache` 같은 private managed resource 접근은 `SSM Session Manager` 포트 포워딩 기준
-- `SSM Session Manager`는 SSH 장애 시 복구 채널로도 유지
-- 1차 알람은 AWS 관리 평면 기준으로 운영
-- 보조 모니터링은 `PLG`를 사용
-- 서비스 API와 필요한 관리자 UI는 각 서버의 `Nginx` `80/443` host-based routing으로 접근한다.
-- EC2에서 외부에 직접 여는 포트는 `80/443`과 `22`만 두며, `22`는 관리자 고정 IP에서만 허용한다.
-
-### 서버 역할
-
-- `S1`
-  - `dev` 상시 실행
-  - `Jenkins` 상시 실행
-  - `GraphHopper runtime`은 dev serve 용도로 실행
-  - `Grafana`, `Portainer`, `SonarQube`, `PLG` 운영도구 실행
-- `S2`
-  - `primary prod` 실행
-  - 운영 WAS, AI Flask intent server, 관리자 웹 실행
-  - prod GraphHopper runtime은 S2 내부 `blue/green` slot으로 실행
-
-### 운영 원칙
-
-- 현재 운영은 **2대 기반 현실형 운영안**이다.
-- 현재는 `S2 primary prod + S1 dev/Jenkins/운영도구` 구조이며, ALB 기반 Blue/Green은 같은 VPC 또는 private routing 정리 이후 확장 옵션으로 둔다.
-- 현재 prod blue/green은 EC2 서버 단위가 아니라 S2 내부 GraphHopper `blue/green` runtime slot 전환을 의미한다.
-- prod와 dev의 역할 경계는 문서와 설정에서 명확해야 한다.
-- GraphHopper의 무거운 build/import 작업은 prod 서버에서 직접 돌리지 않는다.
-- Jenkins, Grafana, SonarQube, PLG 같은 관리자 UI는 원 포트를 공개하지 않고 `Nginx`의 `443` host routing으로만 접근한다.
-- Portainer는 외부 공개하지 않고 `make portainer-tunnel` 기반 SSH 터널로만 접근한다.
-- 관리자 UI 라우팅은 OAuth, source IP 제한, VPN, SSH 터널 같은 접근 제한을 전제로 한다.
-- 관리자 UI의 웹 접근은 초기 편의 운영안이며, 운영 안정화 후에는 VPN 또는 SSM 터널 기반 접근으로 축소할 수 있다.
-
-### 현재 저장소 상태
-
-- 현재 저장소는 최종 운영 구조를 향해 정리 중이다.
-- 일부 설정 자산과 디렉토리 구조는 먼저 잡고, 실제 런타임 파일은 이후 맞춰갈 수 있다.
-- 따라서 이 README는 "완성된 배포 가이드"보다 **현재 기준 운영 계약과 저장소 기준**을 설명하는 문서로 읽는 것이 맞다.
-
----
-
-## 시작하기
-
-### 1. 클론
-
-```bash
-git clone <repository-url>
-cd S14P31E102
-```
-
-### 2. 초기 세팅
-
-```bash
-make init
-```
-
-정상 설치되면 `세팅 완료`가 출력된다.
-
-### 3. 환경 변수 준비
-
-현재 기준 환경 변수 파일은 루트에서 관리한다.
-
-- 개발용: `.env.dev`
-- 운영용: `.env.prod`
-
-필요 시 노션의 env 기준을 확인해 환경별 파일을 준비한다.
-
-### 4. 문서 먼저 확인
-
-구조를 빠르게 이해하려면 아래 순서가 좋다.
-
-1. `README.md`
-2. `Docs/PRD`
-3. `Docs/인프라`
-4. `INF/README.md`
-
----
-
-## Git / Jira 컨벤션
-
-### 커밋 메시지
-
-```text
-{gitmoji} {type}[#{이슈번호}]: {내용}
-```
-
-예시:
-
-```bash
-✨ Feat[#31]: 로그인 API 추가
-🐛 Fix[#32]: RDS 커넥션 타임아웃 수정
-♻️ Refactor[#33]: 경로 탐색 서비스 구조 정리
-🔧 Chore[#41]: docker-compose 설정 정리
-📝 Docs[#42]: 인프라 설계안 갱신
-```
-
-`make init` 실행 후 `[#31]`은 자동으로 `[S14P31E102-31]`로 변환되어 Jira에 연결된다.
-
-브랜치에 Jira ticket이 이미 포함되어 있으면 아래 형식도 자동 보정된다.
-
-```bash
-git commit -m "✨ Feat: 로그인 API 추가"
-```
-
-예시:
-
-```text
-✨ Feat[S14P31E102-31]: 로그인 API 추가
-```
-
-### 타입
-
-| gitmoji | type | 용도 |
-|---|---|---|
-| `✨` | `Feat` | 새 기능 |
-| `🐛` | `Fix` | 버그 수정 |
-| `🚑` | `Hotfix` | 긴급 수정 |
-| `♻️` | `Refactor` | 리팩토링 |
-| `🔧` | `Chore` | 설정, 기타 |
-| `✅` | `Test` | 테스트 |
-| `📝` | `Docs` | 문서 |
-
-### 브랜치 컨벤션
-
-브랜치는 `git br`로 생성한다.
-
-```text
-feat/{설명}-{이슈번호}      예: feat/server-init-31
-fix/{설명}-{이슈번호}       예: fix/rds-timeout-32
-be/feat/{설명}-{이슈번호}   예: be/feat/login-31
-fe/fix/{설명}-{이슈번호}    예: fe/fix/header-32
-```
-
-예:
-
-```bash
-git br be/feat/login-31
-```
-
-실제 생성 결과:
-
-```text
-be/feat/login-S14P31E102-31
-```
-
-브랜치 규칙은 마지막이 반드시 `-숫자`여야 한다.
-
-비허용 예:
-
-```bash
-git br be/feat/login-31-ryuwon
-git br be/feat/login-S14P31E102-31-ryuwon
-```
-
-### MR 컨벤션
-
-- 제목에 Jira 이슈 키 포함: `S14P31E102-32 Prod AWS 서비스 연결`
-- 본문에 `Closes S14P31E102-32` 포함 시 머지 후 Jira 이슈 자동 완료
-
-### 자주 쓰는 명령
-
-```bash
-make init
-git br be/feat/login-31
-git add .
-git commit -m "✨ Feat[#31]: 로그인 API 추가"
-make test-git-jira
-```
+| 구분 | 안내 | 경로 |
+|------|------|------|
+| Frontend | Android 앱 실행 및 빌드 가이드 | [FE/README.md](FE/README.md) |
+| Backend | 백엔드 실행 및 환경 변수 가이드 | [BE/README.md](BE/README.md) |
+| Infra | 운영 설정 자산 기준 | [INF/README.md](INF/README.md) |
+| Porting | 제출/포팅 운영 매뉴얼 | [exec/부산이음길__포팅매뉴얼.md](exec/부산이음길__포팅매뉴얼.md) |

@@ -39,18 +39,22 @@
 <table>
   <tr>
     <td align="center" width="25%">
+    <b>인클루시브 디자인</b><br/>
       <img src="https://img.shields.io/badge/Inclusive_Design-4285F4?style=for-the-badge" /><br/><br/>
       <sub>서비스가 사용자의 이동 조건과 정보 접근 방식에 맞춰집니다.</sub>
     </td>
     <td align="center" width="25%">
+    <b>배리어프리 경로</b><br/>
       <img src="https://img.shields.io/badge/Barrier--Free_Route-2E7D32?style=for-the-badge" /><br/><br/>
       <sub>경사, 계단, 보도 폭, 노면, 접근성 시설을 경로 판단에 반영합니다.</sub>
     </td>
     <td align="center" width="25%">
+    <b>참여형 보강 구조</b><br/>
       <img src="https://img.shields.io/badge/Community_Report-F57C00?style=for-the-badge" /><br/><br/>
       <sub>공사, 장애물, 점자블록 손상 등 현장 변화를 시민 제보로 보강합니다.</sub>
     </td>
     <td align="center" width="25%">
+    <b>부산 특화</b><br/>
       <img src="https://img.shields.io/badge/Busan_Context-005BAC?style=for-the-badge" /><br/><br/>
       <sub>부산의 지형과 생활권 특성을 고려한 지역 특화 길찾기를 목표로 합니다.</sub>
     </td>
@@ -61,7 +65,60 @@
 
 ---
 
+## 팀 소개 — 이길,지도
+
 <br/>
+
+<table>
+  <tr>
+    <td align="center" width="14%">
+      <b>김지윤</b><br/>
+      <sub>팀장</sub><br/><br/>
+      <img src="https://img.shields.io/badge/총괄-555555?style=flat-square" /><br/>
+      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" /><br/>
+      <img src="https://img.shields.io/badge/디자인-E91E63?style=flat-square" /><br/>
+      <img src="https://img.shields.io/badge/발표-9C27B0?style=flat-square" />
+    </td>
+    <td align="center" width="14%">
+      <b>김응서</b><br/>
+      <sub>팀원</sub><br/><br/>
+      <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" /><br/>
+      <img src="https://img.shields.io/badge/Infra-FF9900?style=flat-square" />
+    </td>
+    <td align="center" width="14%">
+      <b>박세홍</b><br/>
+      <sub>팀원</sub><br/><br/>
+      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" />
+    </td>
+    <td align="center" width="14%">
+      <b>백수연</b><br/>
+      <sub>팀원</sub><br/><br/>
+      <img src="https://img.shields.io/badge/AI-3776AB?style=flat-square" /><br/>
+      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" />
+    </td>
+    <td align="center" width="14%">
+      <b>유준호</b><br/>
+      <sub>팀원</sub><br/><br/>
+      <img src="https://img.shields.io/badge/Infra-FF9900?style=flat-square" /><br/>
+      <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" />
+    </td>
+    <td align="center" width="14%">
+      <b>이재호</b><br/>
+      <sub>팀원</sub><br/><br/>
+      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" /><br/>
+      <img src="https://img.shields.io/badge/Docs-437291?style=flat-square" />
+    </td>
+    <td align="center" width="14%">
+      <b>장주윤</b><br/>
+      <sub>팀원</sub><br/><br/>
+      <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" /><br/>
+      <img src="https://img.shields.io/badge/AI-3776AB?style=flat-square" />
+    </td>
+  </tr>
+</table>
+
+<br/>
+---
 
 ## 주요 기능
 
@@ -265,63 +322,6 @@
 
 <br/>
 
----
-
-<br/>
-
-## 팀 소개 — 이길,지도
-
-<br/>
-
-<table>
-  <tr>
-    <td align="center" width="14%">
-      <b>김지윤</b><br/>
-      <sub>팀장</sub><br/><br/>
-      <img src="https://img.shields.io/badge/총괄-555555?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/디자인-E91E63?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/발표-9C27B0?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>김응서</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/Infra-FF9900?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>박세홍</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>백수연</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/AI-3776AB?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>유준호</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/Infra-FF9900?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>이재호</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/Docs-437291?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>장주윤</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/AI-3776AB?style=flat-square" />
-    </td>
-  </tr>
-</table>
-
-<br/>
 
 ---
 

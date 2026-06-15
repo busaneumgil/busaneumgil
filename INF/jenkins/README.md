@@ -38,16 +38,18 @@ Jenkins OAuth secret은 노션의 운영 env 기준을 확인한 뒤 로컬 루�
 Mattermost 배포 알림 webhook도 같은 흐름으로 관리한다.
 
 ```text
-MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
+MATTERMOST_WEBHOOK_URL=<INTERNAL_CHAT_WEBHOOK_URL>
 ```
 
 시간별 로그 분석 브리프는 dev/prod 분리 webhook을 사용한다.
 
 ```text
-LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
-DEV_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
-PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL=https://meeting.ssafy.com/hooks/...
+LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL=<INTERNAL_CHAT_WEBHOOK_URL>
+DEV_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL=<INTERNAL_DEV_CHAT_WEBHOOK_URL>
+PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL=<INTERNAL_PROD_CHAT_WEBHOOK_URL>
 ```
+
+Git repository URL is injected through the `e102-repo-url` Secret text credential in pipeline jobs, and through the `E102_REPO_URL` environment variable while init groovy creates jobs. Observability LLM gateway URL is injected through the `e102-llm-gateway-base-url` Secret text credential.
 
 Jenkins container는 `.env.jenkins` 값을 환경변수로 읽고, init groovy가 `e102-s2-host`, `e102-s2-ssh-key`, `e102-mattermost-webhook-url` 같은 운영 보조 credential을 동기화한다. 배포용 `.env.dev`와 `.env.prod`는 Jenkins Secret file credential이 원본이며, host 파일 mount로 동기화하지 않는다.
 시간별 observability brief는 `e102-dev-log-analysis-webhook-url`, `e102-prod-log-analysis-webhook-url` credential을 통해 `E102_로그분석채널`용 dev/prod 분리 webhook을 사용한다.
@@ -232,7 +234,7 @@ Redis key 계약:
 - candidate import나 smoke가 실패하면 Redis active slot은 바꾸지 않는다.
 - publish 전 target slot cache를 snapshot하고, target slot 검증 전 publish 단계가 실패하면 snapshot restore 후 Redis previous fallback을 원복한다.
 - GraphHopper overlay reload admin endpoint `/ieum/admin/**`는 BE 내부 호출 전용이다. S1 nginx는 `/api/ieum/admin/**`, `api.dev.busaneumgil.com/ieum/admin/**`를 모두 `404`로 차단하고, 외부 LB/ALB에도 동일 정책을 유지한다.
-- 운영 smoke / 배포 checklist에는 `curl -i https://api.dev.busaneumgil.com/ieum/admin/overrides/reload`와 `curl -i https://k14e102.p.ssafy.io/api/ieum/admin/overrides/reload`가 외부에서 차단되는지 확인 절차를 포함한다.
+- 운영 smoke / 배포 checklist에는 `curl -i https://api.dev.busaneumgil.com/ieum/admin/overrides/reload`와 `curl -i https://<INTERNAL_S1_HOST>/api/ieum/admin/overrides/reload`가 외부에서 차단되는지 확인 절차를 포함한다.
 - target restore 또는 Redis 원복이 실패할 때만 임시 candidate runtime을 previous fallback으로 남겨 active slot 장애 시 fallback을 유지한다.
 - rollback Redis write 후에는 active slot을 다시 읽어 rollback 성공 여부를 검증한다.
 - 전환 후 backend smoke는 기본적으로 `/health/graphhopper`를 호출해 Redis active slot 기준 GraphHopper 연결을 확인하고, 실패하면 active slot을 previous로 되돌린다.
@@ -284,7 +286,7 @@ dev/prod warning/error와 health를 1시간 단위로 요약해 Mattermost에 �
 기본 LLM 요약 경로:
 
 - source secret: Jenkins `e102-prod-env-file` 안의 `GMS_KEY`
-- provider: Anthropic Messages API via `https://gms.ssafy.io/gmsapi/api.anthropic.com/v1/messages`
+- provider: Anthropic Messages API via `<INTERNAL_LLM_GATEWAY_BASE_URL>/v1/messages`
 - model: `claude-opus-4-5-20251101`
 - fallback: `GMS_KEY`가 없거나 호출 실패 시 deterministic summary만 전송
 

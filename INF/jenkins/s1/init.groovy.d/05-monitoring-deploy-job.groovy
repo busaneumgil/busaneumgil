@@ -6,7 +6,7 @@ import org.jenkinsci.plugins.workflow.job.WorkflowJob
 import org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition
 
 String jobName = 'e102-monitoring-deploy'
-String repoUrl = 'https://lab.ssafy.com/s14-final/S14P31E102.git'
+String repoUrl = System.getenv('E102_REPO_URL') ?: 'https://git.example.com/group/project.git'
 String credentialsId = 'gitlab-pat'
 String branchSpec = '*/master'
 String scriptPath = 'INF/jenkins/pipelines/e102-monitoring-deploy.Jenkinsfile'

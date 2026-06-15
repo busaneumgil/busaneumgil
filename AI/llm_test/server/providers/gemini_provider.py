@@ -7,8 +7,8 @@ from providers.utils import clean_text
 
 class GeminiProvider(BaseProvider):
     BASE_URL = (
-        "https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com"
-        "/v1beta/models/gemini-2.5-flash:generateContent"
+        os.getenv("GMS_BASE_URL", "https://generativelanguage.googleapis.com").rstrip("/")
+        + "/v1beta/models/gemini-2.5-flash:generateContent"
     )
 
     SYSTEM_PROMPT_MOBILITY_FC = """

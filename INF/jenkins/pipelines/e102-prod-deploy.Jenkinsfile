@@ -96,7 +96,7 @@ pipeline {
   }
 
   environment {
-    REPO_URL = 'https://lab.ssafy.com/s14-final/S14P31E102.git'
+    REPO_URL = credentials('e102-repo-url')
     REMOTE_DIR = '/home/ubuntu/e102/prod'
     S2_HOST = credentials('e102-s2-host')
     RUNTIME_STATE_DIR = '/opt/e102-server/runtime-state'

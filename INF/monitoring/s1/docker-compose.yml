@@ -29,9 +29,9 @@ services:
       GF_AUTH_GITLAB_CLIENT_ID: ${GRAFANA_GITLAB_OAUTH_CLIENT_ID}
       GF_AUTH_GITLAB_CLIENT_SECRET: ${GRAFANA_GITLAB_OAUTH_CLIENT_SECRET}
       GF_AUTH_GITLAB_SCOPES: openid email profile read_user api
-      GF_AUTH_GITLAB_AUTH_URL: ${GITLAB_BASE_URL:-https://lab.ssafy.com}/oauth/authorize
-      GF_AUTH_GITLAB_TOKEN_URL: ${GITLAB_BASE_URL:-https://lab.ssafy.com}/oauth/token
-      GF_AUTH_GITLAB_API_URL: ${GITLAB_BASE_URL:-https://lab.ssafy.com}/api/v4
+      GF_AUTH_GITLAB_AUTH_URL: ${GITLAB_BASE_URL:-https://git.example.com}/oauth/authorize
+      GF_AUTH_GITLAB_TOKEN_URL: ${GITLAB_BASE_URL:-https://git.example.com}/oauth/token
+      GF_AUTH_GITLAB_API_URL: ${GITLAB_BASE_URL:-https://git.example.com}/api/v4
       GF_AUTH_GITLAB_ALLOWED_GROUPS: ${GITLAB_ALLOWED_GROUPS}
       GF_AUTH_GITLAB_USE_PKCE: "true"
       GF_AUTH_GITLAB_USE_REFRESH_TOKEN: "true"

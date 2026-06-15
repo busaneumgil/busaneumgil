@@ -29,7 +29,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
 SSH tunnel 기반으로 실행하는 경우:
 
 ```bash
-ssh -i K14E102T.pem -N -L 15432:127.0.0.1:5432 ubuntu@k14e102.p.ssafy.io
+ssh -i K14E102T.pem -N -L 15432:127.0.0.1:5432 ubuntu@<INTERNAL_S1_HOST>
 
 DATABASE_URL='postgresql://<user>:<password>@127.0.0.1:15432/e102' \
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \

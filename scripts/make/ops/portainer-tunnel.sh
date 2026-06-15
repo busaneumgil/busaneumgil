@@ -2,7 +2,7 @@
 set -euo pipefail
 
 S1_SSH_USER="${S1_SSH_USER:-ubuntu}"
-S1_SSH_HOST="${S1_SSH_HOST:-k14e102.p.ssafy.io}"
+S1_SSH_HOST="${S1_SSH_HOST:-s1.internal.example.com}"
 S1_SSH_KEY="${S1_SSH_KEY:-K14E102T.pem}"
 LOCAL_PORT="${PORTAINER_LOCAL_PORT:-19000}"
 REMOTE_HOST="${PORTAINER_REMOTE_HOST:-127.0.0.1}"

@@ -60,7 +60,7 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
                     kind="mr",
                     ref="!206",
                     title="monitoring 로그 정제",
-                    web_url="https://lab.ssafy.com/s14-final/S14P31E102/-/merge_requests/206",
+                    web_url="https://git.example.com/s14-final/S14P31E102/-/merge_requests/206",
                     merged_or_created_at="2026-05-13T13:15:00+09:00",
                 )
             ],
@@ -192,7 +192,7 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
             return_value="abcdef123456\tabcdef1\t운영 브리프 ✨ 개선\t2026-05-14T11:30:00+09:00",
         ) as mocked_check_output:
             items = MODULE.fetch_local_commits(
-                gitlab_base_url="https://lab.ssafy.com",
+                gitlab_base_url="https://git.example.com",
                 project_path="s14-final/S14P31E102",
                 branch="develop",
                 since=MODULE.utcnow(),
@@ -401,7 +401,7 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
                 enabled=True,
                 api_key="test-key",
                 provider="anthropic-gms",
-                base_url="https://gms.ssafy.io/gmsapi/api.anthropic.com",
+                base_url="https://internal-llm-gateway.example.com/gmsapi/api.anthropic.com",
                 model="claude-opus-4-5-20251101",
                 max_tokens=700,
                 context={"prod": {"current_count": 12}},
@@ -414,7 +414,7 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
         called_url = mocked_request.call_args.args[0]
         called_headers = mocked_request.call_args.kwargs["headers"]
         called_payload = mocked_request.call_args.kwargs["payload"]
-        self.assertEqual("https://gms.ssafy.io/gmsapi/api.anthropic.com/v1/messages", called_url)
+        self.assertEqual("https://internal-llm-gateway.example.com/gmsapi/api.anthropic.com/v1/messages", called_url)
         self.assertEqual("test-key", called_headers["x-api-key"])
         self.assertEqual("claude-opus-4-5-20251101", called_payload["model"])
         self.assertIsInstance(called_payload["messages"][0]["content"], str)
@@ -440,7 +440,7 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
                 enabled=True,
                 api_key="test-key",
                 provider="anthropic-gms",
-                base_url="https://gms.ssafy.io/gmsapi/api.anthropic.com",
+                base_url="https://internal-llm-gateway.example.com/gmsapi/api.anthropic.com",
                 model="claude-opus-4-5-20251101",
                 max_tokens=700,
                 context={"target_environment": "prod"},
@@ -466,7 +466,7 @@ class HourlyObservabilityBriefTest(unittest.TestCase):
                 enabled=True,
                 api_key="test-key",
                 provider="anthropic-gms",
-                base_url="https://gms.ssafy.io/gmsapi/api.anthropic.com",
+                base_url="https://internal-llm-gateway.example.com/gmsapi/api.anthropic.com",
                 model="claude-opus-4-5-20251101",
                 max_tokens=700,
                 context={"target_environment": "prod"},

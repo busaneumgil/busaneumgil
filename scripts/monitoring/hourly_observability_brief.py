@@ -1397,7 +1397,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lookback-minutes", type=int, default=int(os.getenv("OBS_BRIEF_LOOKBACK_MINUTES", "60")))
     parser.add_argument("--loki-url", default=os.getenv("OBS_BRIEF_LOKI_URL", "http://loki:3100"))
     parser.add_argument("--prometheus-url", default=os.getenv("OBS_BRIEF_PROMETHEUS_URL", "http://prometheus:9090"))
-    parser.add_argument("--gitlab-base-url", default=os.getenv("OBS_BRIEF_GITLAB_BASE_URL", "https://lab.ssafy.com"))
+    parser.add_argument("--gitlab-base-url", default=os.getenv("OBS_BRIEF_GITLAB_BASE_URL", "https://git.example.com"))
     parser.add_argument("--gitlab-project-path", default=os.getenv("OBS_BRIEF_GITLAB_PROJECT_PATH", "s14-final/S14P31E102"))
     parser.add_argument("--gitlab-token", default=os.getenv("OBS_BRIEF_GITLAB_TOKEN") or os.getenv("GITLAB_TOKEN"))
     parser.add_argument("--report-json", default=os.getenv("OBS_BRIEF_REPORT_JSON", "reports/observability/hourly-brief.json"))

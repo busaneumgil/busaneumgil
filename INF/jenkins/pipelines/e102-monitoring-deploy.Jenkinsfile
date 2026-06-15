@@ -10,7 +10,7 @@ pipeline {
   }
 
   environment {
-    REPO_URL = 'https://lab.ssafy.com/s14-final/S14P31E102.git'
+    REPO_URL = credentials('e102-repo-url')
   }
 
   stages {

@@ -36,10 +36,11 @@ pipeline {
   }
 
   environment {
-    REPO_URL = 'https://lab.ssafy.com/s14-final/S14P31E102.git'
+    REPO_URL = credentials('e102-repo-url')
     REPORT_JSON = 'reports/observability/hourly-brief.json'
     DEV_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL = credentials('e102-dev-log-analysis-webhook-url')
     PROD_LOG_ANALYSIS_MATTERMOST_WEBHOOK_URL = credentials('e102-prod-log-analysis-webhook-url')
+    OBS_BRIEF_AGENT_BASE_URL = credentials('e102-llm-gateway-base-url')
   }
 
   stages {
@@ -79,7 +80,6 @@ PY
             if [ -n "$GMS_KEY_VALUE" ]; then
               export OBS_BRIEF_AGENT_ENABLED=true
               export OBS_BRIEF_AGENT_PROVIDER=anthropic-gms
-              export OBS_BRIEF_AGENT_BASE_URL=https://gms.ssafy.io/gmsapi/api.anthropic.com
               export OBS_BRIEF_AGENT_MODEL=claude-opus-4-5-20251101
               export OBS_BRIEF_AGENT_MAX_TOKENS=700
               export OBS_BRIEF_AGENT_API_KEY="$GMS_KEY_VALUE"

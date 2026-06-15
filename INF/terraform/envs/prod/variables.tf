@@ -56,9 +56,9 @@ variable "private_subnet_cidrs" {
 }
 
 variable "s1_public_domain" {
-  description = "External SSAFY S1 dev/Jenkins/ops server domain."
+  description = "External S1 dev/Jenkins/ops server domain."
   type        = string
-  default     = "k14e102.p.ssafy.io"
+  default     = "s1.internal.example.com"
 }
 
 variable "s1_public_ip" {

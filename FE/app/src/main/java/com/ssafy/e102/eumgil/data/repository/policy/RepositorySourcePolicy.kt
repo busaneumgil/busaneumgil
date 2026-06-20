@@ -54,9 +54,14 @@ class DefaultRepositorySourcePolicy : RepositorySourcePolicy {
         when (domain) {
             RepositoryDomain.SETTINGS -> RepositoryReadPlan.localOnly()
             RepositoryDomain.PLACES,
-            RepositoryDomain.SEARCH,
-            RepositoryDomain.VOICE_ANALYZE ->
+            RepositoryDomain.SEARCH ->
                 if (AppEnvironment.isMockMode) {
+                    RepositoryReadPlan.mockOnly()
+                } else {
+                    RepositoryReadPlan.remoteLocalOnly()
+                }
+            RepositoryDomain.VOICE_ANALYZE ->
+                if (AppEnvironment.isMockMode && !AppEnvironment.voiceAlwaysRemote) {
                     RepositoryReadPlan.mockOnly()
                 } else {
                     RepositoryReadPlan.remoteLocalOnly()

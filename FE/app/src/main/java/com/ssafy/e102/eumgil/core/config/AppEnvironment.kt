@@ -7,4 +7,5 @@ object AppEnvironment {
     val baseUrl: String = BuildConfig.BASE_URL
     val isMockMode: Boolean = BuildConfig.IS_MOCK_MODE
     val isDemoMode: Boolean = BuildConfig.IS_DEMO_MODE
+    val voiceAlwaysRemote: Boolean = BuildConfig.VOICE_ALWAYS_REMOTE
 }

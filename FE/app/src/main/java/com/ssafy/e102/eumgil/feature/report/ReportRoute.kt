@@ -42,6 +42,8 @@ fun ReportRoute(
     entryPoint: ReportEntryPoint = ReportEntryPoint.TopLevel,
     startNewRequest: Boolean = false,
     onStartNewRequestConsumed: () -> Unit = {},
+    initialReportType: ReportType? = null,
+    onInitialReportTypeConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -121,6 +123,14 @@ fun ReportRoute(
                 ),
             )
             onStartNewRequestConsumed()
+        }
+    }
+
+    // 음성 에이전트 진입 시 reportType 자동 선택 → TypeSelection 단계 스킵
+    LaunchedEffect(initialReportType, viewModel) {
+        if (initialReportType != null) {
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(initialReportType))
+            onInitialReportTypeConsumed()
         }
     }
 

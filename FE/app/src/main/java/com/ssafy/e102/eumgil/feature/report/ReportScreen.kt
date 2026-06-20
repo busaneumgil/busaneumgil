@@ -1713,6 +1713,7 @@ private fun ReportEntryPoint.completeReturnLabelRes(): Int =
     when (this) {
         ReportEntryPoint.TopLevel -> R.string.report_complete_cta_back_to_map
         ReportEntryPoint.NavigationGuidance -> R.string.report_complete_cta_back_to_navigation
+        ReportEntryPoint.VoiceAssistant -> R.string.report_complete_cta_back_to_map
     }
 
 @Composable

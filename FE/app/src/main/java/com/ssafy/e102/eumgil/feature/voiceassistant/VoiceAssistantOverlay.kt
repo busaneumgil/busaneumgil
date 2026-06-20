@@ -1,5 +1,9 @@
 package com.ssafy.e102.eumgil.feature.voiceassistant
 
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
@@ -30,8 +34,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -40,17 +46,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ssafy.e102.eumgil.R
+import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputEvent
+import com.ssafy.e102.eumgil.feature.search.SearchVoiceInputViewModel
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumRadius
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumSpacing
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumStatusDanger
 import com.ssafy.e102.eumgil.core.designsystem.theme.EumStatusWarning
+import com.ssafy.e102.eumgil.core.tts.AndroidTextToSpeechController
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class VoiceAssistantOverlayVisualState {
@@ -125,6 +138,75 @@ fun VoiceAssistantOverlay(
     LaunchedEffect(shouldRender, visible) {
         if (shouldRender && visible && !bottomSheetState.isVisible) {
             bottomSheetState.show()
+        }
+    }
+
+    val context = LocalContext.current
+    val sttViewModel: SearchVoiceInputViewModel = viewModel()
+    val ttsController = remember(context.applicationContext) {
+        AndroidTextToSpeechController(context = context.applicationContext)
+    }
+    val ttsState by ttsController.state.collectAsStateWithLifecycle()
+    val voiceInputPrompt = stringResource(R.string.voice_input_prompt)
+    val lastCompletedCount = remember { mutableIntStateOf(-1) }
+    val playBeep: () -> Unit = remember {
+        {
+            try {
+                val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+                toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
+                Handler(Looper.getMainLooper()).postDelayed({ toneGen.release() }, 300)
+            } catch (e: Exception) {
+                // 비프음 실패해도 계속 진행
+            }
+        }
+    }
+
+    // Listening 상태 진입 시 STT 모델 초기화 시작, 그 외엔 녹음 중단
+    LaunchedEffect(uiState.status) {
+        if (uiState.status == VoiceAssistantStatus.Listening) {
+            sttViewModel.startListening()
+        } else {
+            sttViewModel.stopListening()
+        }
+    }
+
+    // STT 이벤트 수신: ReadyToRecord → TTS, TranscriptReady → VM 전달
+    LaunchedEffect(sttViewModel, ttsController) {
+        sttViewModel.uiEvent.collect { event ->
+            when (event) {
+                SearchVoiceInputEvent.ReadyToRecord -> {
+                    lastCompletedCount.intValue = ttsState.completedUtteranceCount
+                    ttsController.speak(voiceInputPrompt)
+                }
+                is SearchVoiceInputEvent.TranscriptReady ->
+                    currentOnAction(UiAction.TranscriptChanged(event.recognizedText))
+                SearchVoiceInputEvent.TranscriptEmpty ->
+                    currentOnAction(UiAction.Dismissed)
+                is SearchVoiceInputEvent.SpeakError ->
+                    ttsController.speak(event.text)
+            }
+        }
+    }
+
+    // TTS 완료 → 비프음 → STT 녹음 시작
+    LaunchedEffect(ttsState.completedUtteranceCount) {
+        if (
+            lastCompletedCount.intValue >= 0 &&
+            ttsState.completedUtteranceCount > lastCompletedCount.intValue
+        ) {
+            delay(200)
+            playBeep()
+            delay(300)
+            sttViewModel.beginRecording()
+        }
+        lastCompletedCount.intValue = ttsState.completedUtteranceCount
+    }
+
+    DisposableEffect(sttViewModel, ttsController) {
+        onDispose {
+            sttViewModel.stopListening()
+            ttsController.stop()
+            ttsController.shutdown()
         }
     }
 

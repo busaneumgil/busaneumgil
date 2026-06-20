@@ -5,6 +5,7 @@ import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
 import com.ssafy.e102.eumgil.feature.report.ReportEntryPoint
 import com.ssafy.e102.eumgil.feature.report.ReportHistoryRoute
 import com.ssafy.e102.eumgil.feature.report.ReportRoute as ReportScreenRoute
+import com.ssafy.e102.eumgil.feature.report.ReportType
 import com.ssafy.e102.eumgil.feature.route.RouteDetailEntryRoute
 import com.ssafy.e102.eumgil.feature.route.RouteSettingEntryRoute
 import com.ssafy.e102.eumgil.feature.savedroute.SavedRouteRoute
@@ -50,6 +52,7 @@ import com.ssafy.e102.eumgil.feature.tutorial.TutorialEntryPoint
 import kotlinx.coroutines.flow.map
 
 private const val REPORT_START_NEW_REQUEST_KEY = "report_start_new_request"
+internal const val REPORT_VOICE_TYPE_KEY = "report_voice_type"
 
 fun NavGraphBuilder.mainNavGraph(
     navController: NavHostController,
@@ -185,6 +188,7 @@ fun NavGraphBuilder.mainNavGraph(
                 },
             ),
     ) { backStackEntry ->
+        val selectedPrimaryUserType = rememberSelectedPrimaryUserType()
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.Entry.ARG_EDITING_TARGET)
@@ -226,7 +230,7 @@ fun NavGraphBuilder.mainNavGraph(
                 navController.navigateToRouteEndpointMapPicker(editingTarget)
             },
             onNavigateToRouteBriefing = {
-                navController.navigate(resolveSearchResultBriefingRoute()) {
+                navController.navigate(resolveSearchResultBriefingRoute(selectedPrimaryUserType)) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -257,6 +261,7 @@ fun NavGraphBuilder.mainNavGraph(
                 },
             ),
     ) { backStackEntry ->
+        val selectedPrimaryUserType = rememberSelectedPrimaryUserType()
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.Results.ARG_EDITING_TARGET)
@@ -301,7 +306,7 @@ fun NavGraphBuilder.mainNavGraph(
                 navController.navigateToRouteEndpointMapPicker(editingTarget)
             },
             onNavigateToRouteBriefing = {
-                navController.navigate(resolveSearchResultBriefingRoute()) {
+                navController.navigate(resolveSearchResultBriefingRoute(selectedPrimaryUserType)) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -538,6 +543,13 @@ fun NavGraphBuilder.mainNavGraph(
             backStackEntry.savedStateHandle
                 .getStateFlow(REPORT_START_NEW_REQUEST_KEY, false)
                 .collectAsStateWithLifecycle()
+        val voiceReportTypeRaw by
+            backStackEntry.savedStateHandle
+                .getStateFlow<String?>(REPORT_VOICE_TYPE_KEY, null)
+                .collectAsStateWithLifecycle()
+        val voiceReportType = remember(voiceReportTypeRaw) {
+            voiceReportTypeRaw?.let { runCatching { ReportType.valueOf(it) }.getOrNull() }
+        }
         ReportScreenRoute(
             onNavigateBack = {
                 navController.popBackStack()
@@ -551,6 +563,11 @@ fun NavGraphBuilder.mainNavGraph(
             startNewRequest = startNewRequest,
             onStartNewRequestConsumed = {
                 backStackEntry.savedStateHandle[REPORT_START_NEW_REQUEST_KEY] = false
+            },
+            entryPoint = if (voiceReportType != null) ReportEntryPoint.VoiceAssistant else ReportEntryPoint.TopLevel,
+            initialReportType = voiceReportType,
+            onInitialReportTypeConsumed = {
+                backStackEntry.savedStateHandle[REPORT_VOICE_TYPE_KEY] = null
             },
         )
     }
@@ -619,17 +636,7 @@ fun NavGraphBuilder.mainNavGraph(
     }
 
     composable(route = ArrivalRoute.Entry.route) {
-        val context = LocalContext.current
-        val settingsRepository =
-            remember(context) {
-                (context.applicationContext as BusanEumgilApp).appContainer.settingsRepository
-            }
-        val selectedPrimaryUserType by
-            remember(settingsRepository) {
-                settingsRepository
-                    .observeInitSettings()
-                    .map { initSettings -> initSettings.selectedPrimaryUserType }
-            }.collectAsStateWithLifecycle(initialValue = null)
+        val selectedPrimaryUserType = rememberSelectedPrimaryUserType()
         ArrivalScreenRoute(
             onNavigateToMap = {
                 navController.navigateToArrivalHome(selectedPrimaryUserType)
@@ -646,17 +653,7 @@ fun NavGraphBuilder.mainNavGraph(
     }
 
     composable(route = NavigationRoute.Guidance.route) { backStackEntry ->
-        val context = LocalContext.current
-        val settingsRepository =
-            remember(context) {
-                (context.applicationContext as BusanEumgilApp).appContainer.settingsRepository
-            }
-        val selectedPrimaryUserType by
-            remember(settingsRepository) {
-                settingsRepository
-                    .observeInitSettings()
-                    .map { initSettings -> initSettings.selectedPrimaryUserType }
-            }.collectAsStateWithLifecycle(initialValue = null)
+        val selectedPrimaryUserType = rememberSelectedPrimaryUserType()
         val submittedHazardReportId by
             backStackEntry.savedStateHandle
                 .getStateFlow<Long?>(NAVIGATION_HAZARD_REPORT_SUBMITTED_REPORT_ID_KEY, null)
@@ -707,6 +704,22 @@ fun NavGraphBuilder.mainNavGraph(
     }
 }
 
+@Composable
+private fun rememberSelectedPrimaryUserType(): String? {
+    val context = LocalContext.current
+    val settingsRepository =
+        remember(context) {
+            (context.applicationContext as BusanEumgilApp).appContainer.settingsRepository
+        }
+    val selectedPrimaryUserType by
+        remember(settingsRepository) {
+            settingsRepository
+                .observeInitSettings()
+                .map { initSettings -> initSettings.selectedPrimaryUserType }
+        }.collectAsStateWithLifecycle(initialValue = null)
+    return selectedPrimaryUserType
+}
+
 internal fun resolveNavigationSavedRoute(selectedPrimaryUserType: String?): String =
     if (shouldUseLowVisionNavigationUi(selectedPrimaryUserType)) {
         LowVisionRoute.Bookmark.route
@@ -721,7 +734,12 @@ internal fun resolveArrivalHomeRoute(selectedPrimaryUserType: String?): String =
         TopLevelRoute.Map.route
     }
 
-internal fun resolveSearchResultBriefingRoute(): String = LowVisionRoute.RouteBriefing.route
+internal fun resolveSearchResultBriefingRoute(selectedPrimaryUserType: String?): String =
+    if (shouldUseLowVisionNavigationUi(selectedPrimaryUserType)) {
+        LowVisionRoute.RouteBriefing.route
+    } else {
+        TopLevelRoute.Map.route
+    }
 
 internal fun resolveMyPageGuideRoute(): String = TutorialRoute.Guide.route
 

@@ -1,7 +1,9 @@
 package com.ssafy.e102.eumgil.feature.voiceassistant
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -14,13 +16,12 @@ import kotlinx.coroutines.launch
 data object ConfirmClicked : UiAction
 
 data object CloseOverlay : UiEvent
-
 data class DispatchAction(
     val action: VoiceAssistantAction,
 ) : UiEvent
 
 class VoiceAssistantViewModel(
-    private val interpreter: VoiceAssistantInterpreter = RuleBasedVoiceAssistantInterpreter(),
+    private val interpreter: VoiceAssistantInterpreter,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = mutableUiState.asStateFlow()
@@ -78,10 +79,31 @@ class VoiceAssistantViewModel(
                 errorMessage = null,
             )
         }
-        resolveAction(interpreter.interpret(transcript = transcript, context = context))
+        viewModelScope.launch {
+            try {
+                val action = interpreter.interpret(transcript = transcript, context = context)
+                resolveAction(action)
+            } catch (e: Exception) {
+                mutableUiState.update { state ->
+                    state.copy(
+                        status = VoiceAssistantStatus.Error,
+                        errorMessage = e.message,
+                    )
+                }
+            }
+        }
     }
 
     private fun resolveAction(action: VoiceAssistantAction) {
+        // Ask 처리 — TTS 출력 후 재녹음
+        if (action is VoiceAssistantAction.Ask) {
+            emitUiEvent(UiEvent.ShowMessage(action.message))
+            mutableUiState.update { state ->
+                state.copy(status = VoiceAssistantStatus.Listening)
+            }
+            return
+        }
+
         if (action.requiresConfirmation) {
             mutableUiState.update { state ->
                 state.copy(
@@ -132,5 +154,19 @@ class VoiceAssistantViewModel(
         viewModelScope.launch {
             mutableUiEvent.emit(event)
         }
+    }
+
+    companion object {
+        fun provideFactory(
+            voiceAnalyzeRepository: VoiceAnalyzeRepository,
+        ): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    @Suppress("UNCHECKED_CAST")
+                    return VoiceAssistantViewModel(
+                        interpreter = AiVoiceAssistantInterpreter(voiceAnalyzeRepository),
+                    ) as T
+                }
+            }
     }
 }

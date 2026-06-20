@@ -89,6 +89,22 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
+    fun `search result briefing uses low vision route only for low vision user`() {
+        assertEquals(
+            LowVisionRoute.RouteBriefing.route,
+            resolveSearchResultBriefingRoute(selectedPrimaryUserType = "low_vision"),
+        )
+        assertEquals(
+            TopLevelRoute.Map.route,
+            resolveSearchResultBriefingRoute(selectedPrimaryUserType = "mobility_impaired"),
+        )
+        assertEquals(
+            TopLevelRoute.Map.route,
+            resolveSearchResultBriefingRoute(selectedPrimaryUserType = null),
+        )
+    }
+
+    @Test
     fun `current location action stays in low vision home until routing is wired`() {
         assertNull(resolveLowVisionCurrentLocationRoute())
     }
@@ -175,6 +191,35 @@ class LowVisionNavGraphRoutingTest {
     }
 
     @Test
+    fun `low vision kws stays disabled on initial graph entry until voice input is explicitly opened`() {
+        assertEquals(
+            false,
+            shouldAutoResumeLowVisionKws(
+                autoResumeEnabled = false,
+                currentRoute = LowVisionRoute.Home.route,
+            ),
+        )
+    }
+
+    @Test
+    fun `low vision kws resumes after activation on non recording routes only`() {
+        assertEquals(
+            true,
+            shouldAutoResumeLowVisionKws(
+                autoResumeEnabled = true,
+                currentRoute = LowVisionRoute.Home.route,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldAutoResumeLowVisionKws(
+                autoResumeEnabled = true,
+                currentRoute = LowVisionRoute.VoiceInput.route,
+            ),
+        )
+    }
+
+    @Test
     fun `low vision my page actions resolve to concrete destinations`() {
         assertEquals(
             OnboardingRoute.ProfileUserTypePrimary.route,
@@ -205,5 +250,21 @@ class LowVisionNavGraphRoutingTest {
         assertTrue(source.contains("lowVisionComposable(route = LowVisionRoute.TextSize.route)"))
         assertTrue(source.contains("TextSizeSettingRoute("))
         assertTrue(source.contains("selectedTab = LowVisionBottomTab.MY_PAGE"))
+    }
+
+    @Test
+    fun `low vision home voice input action enables future kws auto resume before navigation`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/LowVisionNavGraph.kt")
+                .readText()
+        val homeRouteSource =
+            source
+                .substringAfter("LowVisionHomeRoute(")
+                .substringBefore("onCurrentLocationClick = {")
+
+        assertTrue(
+            "LowVision home should arm future KWS resumes before opening the manual voice input flow.",
+            homeRouteSource.contains("viewModel.enableAutoResume()"),
+        )
     }
 }

@@ -44,6 +44,7 @@ sealed interface LowVisionVoiceInputEvent {
     data object ShowBookmarksCompleted : LowVisionVoiceInputEvent
     data object ShowFavoriteRoutesCompleted : LowVisionVoiceInputEvent
     data object LogoutCompleted : LowVisionVoiceInputEvent
+    data object NavigationEndCompleted : LowVisionVoiceInputEvent
 }
 
 /**
@@ -305,6 +306,8 @@ class LowVisionVoiceInputViewModel(application: Application) : AndroidViewModel(
                             _uiEvent.send(LowVisionVoiceInputEvent.ShowFavoriteRoutesCompleted)
                         VoiceAnalyzeIntent.LOGOUT ->
                             _uiEvent.send(LowVisionVoiceInputEvent.LogoutCompleted)
+                        VoiceAnalyzeIntent.NAVIGATION_END ->
+                            _uiEvent.send(LowVisionVoiceInputEvent.NavigationEndCompleted)
                         else -> {
                             Log.d(TAG, "=== confirmed=true 미처리 intent → 히스토리 초기화 후 재녹음 ===")
                             conversationHistory.clear()

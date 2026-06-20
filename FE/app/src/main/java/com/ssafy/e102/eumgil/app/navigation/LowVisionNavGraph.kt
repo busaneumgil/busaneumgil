@@ -31,6 +31,7 @@ import com.ssafy.e102.eumgil.core.permission.MICROPHONE_PERMISSION
 import com.ssafy.e102.eumgil.core.permission.MicrophonePermissionState
 import com.ssafy.e102.eumgil.core.permission.resolveMicrophonePermissionState
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBottomTab
+import com.ssafy.e102.eumgil.feature.navigation.NavigationUiAction
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionAppInfoRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionBookmarkRoute
 import com.ssafy.e102.eumgil.feature.lowvision.LowVisionCategoryRoute
@@ -60,6 +61,10 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         startDestination = LowVisionRoute.Home.route,
     ) {
         lowVisionComposable(route = LowVisionRoute.Home.route) { backStackEntry ->
+            val graphEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(LOW_VISION_GRAPH_ROUTE)
+            }
+            val viewModel: LowVisionViewModel = viewModel(graphEntry)
             // 공유 ViewModel — 탭 전환 시에도 동일 인스턴스 (KWS 1개만 실행)
             LowVisionKwsNavEffect(
                 navController = navController,
@@ -70,14 +75,19 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
             val micPermissionLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.RequestPermission(),
             ) { isGranted ->
-                if (isGranted) navController.navigate(LowVisionRoute.VoiceInput.route)
+                if (isGranted) {
+                    viewModel.enableAutoResume()
+                    navController.navigate(LowVisionRoute.VoiceInput.route)
+                }
             }
 
             LowVisionHomeRoute(
                 onVoiceInputClick = {
                     when (context.resolveMicrophonePermissionState()) {
-                        MicrophonePermissionState.GRANTED ->
+                        MicrophonePermissionState.GRANTED -> {
+                            viewModel.enableAutoResume()
                             navController.navigate(LowVisionRoute.VoiceInput.route)
+                        }
 
                         MicrophonePermissionState.DENIED ->
                             micPermissionLauncher.launch(MICROPHONE_PERMISSION)
@@ -95,6 +105,7 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
         // VoiceInput — KWS 제외 (STT AudioRecorder가 마이크 점유)
         lowVisionComposable(route = LowVisionRoute.VoiceInput.route) {
             val currentRoute = navController.previousBackStackEntry?.destination?.route
+            val navigationViewModel = rememberNavigationGuidanceViewModel()
 
             LowVisionVoiceInputRoute(
                 onCancelRecording = {
@@ -138,6 +149,9 @@ fun NavGraphBuilder.lowVisionNavGraph(navController: NavHostController) {
                 onLogoutCompleted = {
                     // TODO: LowVisionMyPageViewModel.onLogoutClick()과 동일한 로직 연결
                     navController.popBackStack()
+                },
+                onNavigationEndCompleted = {
+                    navigationViewModel.onAction(NavigationUiAction.ConfirmExitNavigationClicked)
                 },
                 currentRoute = currentRoute,
             )
@@ -396,7 +410,9 @@ private fun LowVisionKwsNavEffect(
     LaunchedEffect(backStackEntry) {
         delay(500) // STT AudioRecorder 해제 완료 대기
         // 탭 화면 진입 시마다 KWS 재시작 (저시력 음성 입력 화면 사용 후 복귀 포함)
-        viewModel.resumeSpotting()
+        if (shouldAutoResumeLowVisionKws(viewModel.isAutoResumeEnabled(), backStackEntry.destination.route)) {
+            viewModel.resumeSpotting()
+        }
         viewModel.uiEvent.collect { event ->
             when (event) {
                 LowVisionEvent.NavigateToVoiceInput -> {
@@ -532,6 +548,11 @@ internal fun shouldNavigateLowVisionBottomTab(
 ): Boolean = resolveLowVisionSelectedBottomTab(currentRoute) != selectedTab
 
 internal fun shouldUseInstantLowVisionDestinationTransitions(): Boolean = true
+
+internal fun shouldAutoResumeLowVisionKws(
+    autoResumeEnabled: Boolean,
+    currentRoute: String?,
+): Boolean = autoResumeEnabled && currentRoute != LowVisionRoute.VoiceInput.route
 
 private fun NavGraphBuilder.lowVisionComposable(
     route: String,

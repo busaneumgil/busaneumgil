@@ -205,8 +205,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             navController.navigateByVoiceAssistantAction(action)
                             // savedStateHandle 패턴 — navigateToTopLevel 이후 진입점 데이터 전달
                             runCatching {
-                                navController.getBackStackEntry(ReportRoute.Report.route)
-                                    .savedStateHandle[REPORT_VOICE_TYPE_KEY] = action.reportType
+                                val reportEntry = navController.getBackStackEntry(ReportRoute.Report.route)
+                                reportEntry.savedStateHandle[REPORT_VOICE_TYPE_KEY] = action.reportType
+                                reportEntry.savedStateHandle[REPORT_VOICE_DESC_KEY] = action.description
                             }
                         }
                         else -> navController.navigateByVoiceAssistantAction(action)

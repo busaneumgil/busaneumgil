@@ -44,6 +44,8 @@ fun ReportRoute(
     onStartNewRequestConsumed: () -> Unit = {},
     initialReportType: ReportType? = null,
     onInitialReportTypeConsumed: () -> Unit = {},
+    initialDescription: String? = null,
+    onInitialDescriptionConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -131,6 +133,14 @@ fun ReportRoute(
         if (initialReportType != null) {
             viewModel.onAction(ReportUiAction.ReportTypeSelected(initialReportType))
             onInitialReportTypeConsumed()
+        }
+    }
+
+    // 음성 에이전트 진입 시 description 자동 채움 → DetailInput 도달 시 미리 노출 (스텝 무변)
+    LaunchedEffect(initialDescription, viewModel) {
+        if (initialDescription != null) {
+            viewModel.onAction(ReportUiAction.DescriptionChanged(initialDescription))
+            onInitialDescriptionConsumed()
         }
     }
 

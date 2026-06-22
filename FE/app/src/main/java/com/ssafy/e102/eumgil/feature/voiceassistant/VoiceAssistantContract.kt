@@ -82,6 +82,7 @@ sealed interface VoiceAssistantAction {
 
     data class OpenReport(
         val reportType: String? = null,
+        val description: String? = null,
         override val requiresConfirmation: Boolean = false,
     ) : VoiceAssistantAction
 

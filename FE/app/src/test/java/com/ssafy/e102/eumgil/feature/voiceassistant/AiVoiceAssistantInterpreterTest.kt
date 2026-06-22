@@ -168,7 +168,7 @@ class AiVoiceAssistantInterpreterTest {
 
         val action = interpreter.interpret("제보할게요", VoiceAssistantContext())
 
-        assertEquals(VoiceAssistantAction.OpenReport(), action)
+        assertEquals(VoiceAssistantAction.OpenReport(reportType = "STAIRS_STEP"), action)
     }
 
     @Test

@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.map
 
 private const val REPORT_START_NEW_REQUEST_KEY = "report_start_new_request"
 internal const val REPORT_VOICE_TYPE_KEY = "report_voice_type"
+internal const val REPORT_VOICE_DESC_KEY = "report_voice_desc"
 
 fun NavGraphBuilder.mainNavGraph(
     navController: NavHostController,
@@ -550,6 +551,10 @@ fun NavGraphBuilder.mainNavGraph(
         val voiceReportType = remember(voiceReportTypeRaw) {
             voiceReportTypeRaw?.let { runCatching { ReportType.valueOf(it) }.getOrNull() }
         }
+        val voiceDescription by
+            backStackEntry.savedStateHandle
+                .getStateFlow<String?>(REPORT_VOICE_DESC_KEY, null)
+                .collectAsStateWithLifecycle()
         ReportScreenRoute(
             onNavigateBack = {
                 navController.popBackStack()
@@ -568,6 +573,10 @@ fun NavGraphBuilder.mainNavGraph(
             initialReportType = voiceReportType,
             onInitialReportTypeConsumed = {
                 backStackEntry.savedStateHandle[REPORT_VOICE_TYPE_KEY] = null
+            },
+            initialDescription = voiceDescription,
+            onInitialDescriptionConsumed = {
+                backStackEntry.savedStateHandle[REPORT_VOICE_DESC_KEY] = null
             },
         )
     }

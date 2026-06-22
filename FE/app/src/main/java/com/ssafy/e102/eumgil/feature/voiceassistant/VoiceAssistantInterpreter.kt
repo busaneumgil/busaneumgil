@@ -113,7 +113,7 @@ class AiVoiceAssistantInterpreter(
             VoiceAnalyzeIntent.REPORT -> {
                 conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
                 conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
-                VoiceAssistantAction.OpenReport(reportType = result.reportType)
+                VoiceAssistantAction.OpenReport(reportType = result.reportType, description = result.description)
             }
             VoiceAnalyzeIntent.NAVIGATION_END -> {
                 conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))

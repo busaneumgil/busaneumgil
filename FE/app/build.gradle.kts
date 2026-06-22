@@ -1,3 +1,5 @@
+import java.io.File
+import java.net.URL
 import java.util.Properties
 
 plugins {
@@ -167,4 +169,45 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     debugImplementation("androidx.compose.ui:ui-tooling")
+}
+
+// ── STT 모델 자동 다운로드 (HuggingFace: stonebed/SenseVoice_busan_finetuning) ──────────
+// 대용량 모델은 git 제외(.gitignore). 빌드 전(preBuild) assets로 자동 다운로드한다.
+// 멱등: 파일이 있고 크기>0이면 skip. 실패/빈파일이면 잔여 삭제 후 GradleException으로 빌드 실패.
+val sttModelDir = file("src/main/assets/models/sense_voice")
+val sttModelBaseUrl = "https://huggingface.co/stonebed/SenseVoice_busan_finetuning/resolve/main"
+val sttModelFiles = listOf("model.int8.onnx", "tokens.txt")
+
+tasks.register("downloadSttModels") {
+    group = "build setup"
+    description = "SenseVoice STT 모델(model.int8.onnx, tokens.txt)을 HuggingFace에서 assets로 다운로드(없을 때만)."
+    doLast {
+        sttModelDir.mkdirs()
+        sttModelFiles.forEach { fileName ->
+            val dest = File(sttModelDir, fileName)
+            if (dest.exists() && dest.length() > 0L) {
+                logger.lifecycle("downloadSttModels: skip $fileName (존재, ${dest.length()} bytes)")
+                return@forEach
+            }
+            val url = "$sttModelBaseUrl/$fileName"
+            logger.lifecycle("downloadSttModels: $fileName 다운로드 — $url")
+            try {
+                URL(url).openStream().use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+            } catch (e: Exception) {
+                if (dest.exists()) dest.delete()
+                throw GradleException("downloadSttModels: $fileName 다운로드 실패 ($url): ${e.message}", e)
+            }
+            if (!dest.exists() || dest.length() == 0L) {
+                if (dest.exists()) dest.delete()
+                throw GradleException("downloadSttModels: $fileName 다운로드 결과가 빈 파일 ($url)")
+            }
+            logger.lifecycle("downloadSttModels: 완료 $fileName (${dest.length()} bytes)")
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn("downloadSttModels")
 }

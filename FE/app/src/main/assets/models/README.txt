@@ -3,9 +3,11 @@
 다음 파일들을 아래 경로에 배치하세요.
 
 === SenseVoice Small int8 ===
-다운로드: https://huggingface.co/k2-fsa/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09
+gradle이 빌드 전(preBuild)에 자동 다운로드합니다 — 수동 배치 불필요.
+출처: https://huggingface.co/stonebed/SenseVoice_busan_finetuning (model.int8.onnx, tokens.txt)
+task: ./gradlew :app:downloadSttModels (없을 때만 받음, 멱등)
 
-배치 위치:
+배치 위치(자동):
   assets/models/sense_voice/model.int8.onnx
   assets/models/sense_voice/tokens.txt
 

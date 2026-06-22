@@ -18,3 +18,8 @@ captures/
 .externalNativeBuild/
 .cxx/
 **/build/
+
+# STT 모델 (대용량, HuggingFace에서 gradle이 다운로드 — git 제외)
+# stonebed/SenseVoice_busan_finetuning
+/app/src/main/assets/models/sense_voice/model.int8.onnx
+/app/src/main/assets/models/sense_voice/tokens.txt

@@ -189,7 +189,6 @@ fun NavGraphBuilder.mainNavGraph(
                 },
             ),
     ) { backStackEntry ->
-        val selectedPrimaryUserType = rememberSelectedPrimaryUserType()
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.Entry.ARG_EDITING_TARGET)
@@ -231,7 +230,7 @@ fun NavGraphBuilder.mainNavGraph(
                 navController.navigateToRouteEndpointMapPicker(editingTarget)
             },
             onNavigateToRouteBriefing = {
-                navController.navigate(resolveSearchResultBriefingRoute(selectedPrimaryUserType)) {
+                navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -262,7 +261,6 @@ fun NavGraphBuilder.mainNavGraph(
                 },
             ),
     ) { backStackEntry ->
-        val selectedPrimaryUserType = rememberSelectedPrimaryUserType()
         val initialEditingTarget =
             backStackEntry.arguments
                 ?.getString(SearchRoute.Results.ARG_EDITING_TARGET)
@@ -307,7 +305,7 @@ fun NavGraphBuilder.mainNavGraph(
                 navController.navigateToRouteEndpointMapPicker(editingTarget)
             },
             onNavigateToRouteBriefing = {
-                navController.navigate(resolveSearchResultBriefingRoute(selectedPrimaryUserType)) {
+                navController.navigate(resolveSearchResultBriefingRoute()) {
                     popUpTo(SearchRoute.Entry.route) {
                         inclusive = true
                     }
@@ -743,12 +741,7 @@ internal fun resolveArrivalHomeRoute(selectedPrimaryUserType: String?): String =
         TopLevelRoute.Map.route
     }
 
-internal fun resolveSearchResultBriefingRoute(selectedPrimaryUserType: String?): String =
-    if (shouldUseLowVisionNavigationUi(selectedPrimaryUserType)) {
-        LowVisionRoute.RouteBriefing.route
-    } else {
-        TopLevelRoute.Map.route
-    }
+internal fun resolveSearchResultBriefingRoute(): String = LowVisionRoute.RouteBriefing.route
 
 internal fun resolveMyPageGuideRoute(): String = TutorialRoute.Guide.route
 

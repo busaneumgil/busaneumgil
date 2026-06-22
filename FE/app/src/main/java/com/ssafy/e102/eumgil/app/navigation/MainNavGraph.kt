@@ -564,7 +564,7 @@ fun NavGraphBuilder.mainNavGraph(
             onStartNewRequestConsumed = {
                 backStackEntry.savedStateHandle[REPORT_START_NEW_REQUEST_KEY] = false
             },
-            entryPoint = if (voiceReportType != null) ReportEntryPoint.VoiceAssistant else ReportEntryPoint.TopLevel,
+            entryPoint = ReportEntryPoint.TopLevel,
             initialReportType = voiceReportType,
             onInitialReportTypeConsumed = {
                 backStackEntry.savedStateHandle[REPORT_VOICE_TYPE_KEY] = null

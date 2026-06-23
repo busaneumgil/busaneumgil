@@ -56,6 +56,28 @@ class AppNavHostPolicyTest {
     }
 
     @Test
+    fun `mobility kws pauses on low vision voice input route`() {
+        assertTrue(
+            shouldPauseMapKws(
+                currentRoute = LowVisionRoute.VoiceInput.route,
+                shouldPauseForMapVoiceInput = false,
+                voiceAssistantVisible = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `mobility kws pauses on low vision route briefing route`() {
+        assertTrue(
+            shouldPauseMapKws(
+                currentRoute = LowVisionRoute.RouteBriefing.route,
+                shouldPauseForMapVoiceInput = false,
+                voiceAssistantVisible = false,
+            ),
+        )
+    }
+
+    @Test
     fun `legacy search voice route remains a map alias only for compatibility`() {
         assertEquals(TopLevelRoute.Map.route, SearchRoute.VoiceInput.route.toCurrentTopLevelRoute())
     }
@@ -110,6 +132,67 @@ class AppNavHostPolicyTest {
                 shouldPauseForMapVoiceInput = false,
                 voiceAssistantVisible = false,
             ),
+        )
+    }
+
+    @Test
+    fun `mobility kws stays disabled on cold start until the user activates a voice experience`() {
+        assertFalse(
+            shouldAutoResumeMobilityKws(
+                autoResumeEnabled = false,
+                currentRoute = TopLevelRoute.Map.route,
+                shouldPauseForMapVoiceInput = false,
+                voiceAssistantVisible = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `mobility kws resumes after activation when no voice ui is active`() {
+        assertTrue(
+            shouldAutoResumeMobilityKws(
+                autoResumeEnabled = true,
+                currentRoute = TopLevelRoute.Map.route,
+                shouldPauseForMapVoiceInput = false,
+                voiceAssistantVisible = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `mobility kws does not auto resume on low vision route even after explicit activation`() {
+        assertFalse(
+            shouldAutoResumeMobilityKws(
+                autoResumeEnabled = true,
+                currentRoute = LowVisionRoute.Home.route,
+                shouldPauseForMapVoiceInput = false,
+                voiceAssistantVisible = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `low vision route detection matches low vision route prefix only`() {
+        assertTrue(isLowVisionRoute(LowVisionRoute.Home.route))
+        assertTrue(isLowVisionRoute(LowVisionRoute.VoiceInput.route))
+        assertFalse(isLowVisionRoute(TopLevelRoute.Map.route))
+        assertFalse(isLowVisionRoute(SearchRoute.VoiceInput.route))
+        assertFalse(isLowVisionRoute(null))
+    }
+
+    @Test
+    fun `manual global voice assistant open enables future mobility kws auto resume`() {
+        val source =
+            File("src/main/java/com/ssafy/e102/eumgil/app/navigation/AppNavHost.kt")
+                .readText()
+        val showVoiceAssistantSource =
+            source
+                .substringAfter("fun showVoiceAssistant(sourceContext: VoiceAssistantContext) {")
+                .substringBefore("val voiceAssistantPermissionLauncher")
+
+        assertTrue(
+            "showVoiceAssistant should arm future mobility KWS resumes after an explicit voice assistant open.",
+            showVoiceAssistantSource.contains("mobilityKwsViewModel?.enableAutoResume()"),
         )
     }
 }

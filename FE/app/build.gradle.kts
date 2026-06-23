@@ -1,3 +1,6 @@
+import java.io.File
+import java.net.URL
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -26,6 +29,7 @@ val defaultBaseUrl = "https://api.dev.busaneumgil.com/"
 val debugBaseUrl = appProperty("app.debug.baseUrl", defaultBaseUrl)
 val debugMockMode = appProperty("app.debug.mockMode", "false")
 val debugDemoMode = appProperty("app.debug.demoMode", "false")
+val debugVoiceAlwaysRemote = appProperty("app.debug.voiceAlwaysRemote", "false")
 val debugForceLowVisionTermsGuide = appProperty("app.debug.forceLowVisionTermsGuide", "false")
 val debugKakaoNativeAppKey = appProperty("app.debug.kakaoNativeAppKey", "")
 val debugNaverClientId = appProperty("app.debug.naverClientId", "")
@@ -59,6 +63,7 @@ android {
             buildConfigField("String", "BASE_URL", quoted(debugBaseUrl))
             buildConfigField("boolean", "IS_MOCK_MODE", debugMockMode)
             buildConfigField("boolean", "IS_DEMO_MODE", debugDemoMode)
+            buildConfigField("boolean", "VOICE_ALWAYS_REMOTE", debugVoiceAlwaysRemote)
             buildConfigField("boolean", "FORCE_LOW_VISION_TERMS_GUIDE", debugForceLowVisionTermsGuide)
             buildConfigField("String", "KAKAO_NATIVE_APP_KEY", quoted(debugKakaoNativeAppKey))
             buildConfigField("String", "NAVER_CLIENT_ID", quoted(debugNaverClientId))
@@ -73,6 +78,7 @@ android {
             buildConfigField("String", "BASE_URL", quoted(releaseBaseUrl))
             buildConfigField("boolean", "IS_MOCK_MODE", "false")
             buildConfigField("boolean", "IS_DEMO_MODE", "false")
+            buildConfigField("boolean", "VOICE_ALWAYS_REMOTE", "false")
             buildConfigField("boolean", "FORCE_LOW_VISION_TERMS_GUIDE", "false")
             buildConfigField("String", "KAKAO_NATIVE_APP_KEY", quoted(releaseKakaoNativeAppKey))
             buildConfigField("String", "NAVER_CLIENT_ID", quoted(releaseNaverClientId))
@@ -164,4 +170,80 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     debugImplementation("androidx.compose.ui:ui-tooling")
+}
+
+// ── STT 모델 자동 다운로드 (HuggingFace: stonebed/SenseVoice_busan_finetuning) ──────────
+// 대용량 모델은 git 제외(.gitignore, LFS 미사용). 빌드 전(preBuild) assets로 자동 다운로드한다.
+// 멱등+무결성: 기대 sha256이 있는 파일은 해시 일치 시에만 skip(LFS 포인터/손상/잘못된 파일 거름),
+//             기대 해시 없는 파일은 size>0이면 skip. 실패/빈파일/해시불일치면 잔여 삭제 후 GradleException.
+val sttModelDir = file("src/main/assets/models/sense_voice")
+val sttModelBaseUrl = "https://huggingface.co/stonebed/SenseVoice_busan_finetuning/resolve/main"
+val sttModelFiles = listOf("model.int8.onnx", "tokens.txt")
+// HF 파인튜닝 정본 sha256 (실기기 검증본과 동일해야 함). 해시 없는 파일은 size>0 검사만.
+val sttModelSha256 = mapOf(
+    "model.int8.onnx" to "604dbc57ec3b8abffda310b4fc6426714085fa40affc856eb756388b3770630c",
+)
+
+fun sha256Of(target: File): String {
+    val md = MessageDigest.getInstance("SHA-256")
+    target.inputStream().use { input ->
+        val buffer = ByteArray(1 shl 16)
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            md.update(buffer, 0, read)
+        }
+    }
+    return md.digest().joinToString("") { "%02x".format(it) }
+}
+
+tasks.register("downloadSttModels") {
+    group = "build setup"
+    description = "SenseVoice STT 모델(model.int8.onnx, tokens.txt)을 HuggingFace에서 assets로 다운로드(없을 때만, sha256 검증)."
+    doLast {
+        sttModelDir.mkdirs()
+        sttModelFiles.forEach { fileName ->
+            val dest = File(sttModelDir, fileName)
+            val expectedSha = sttModelSha256[fileName]
+            // 멱등: 파일이 있으면 (기대 해시 없으면 size>0 / 기대 해시 있으면 sha256 일치) skip
+            if (dest.exists() && dest.length() > 0L) {
+                if (expectedSha == null) {
+                    logger.lifecycle("downloadSttModels: skip $fileName (존재, ${dest.length()} bytes)")
+                    return@forEach
+                }
+                val actualSha = sha256Of(dest)
+                if (actualSha == expectedSha) {
+                    logger.lifecycle("downloadSttModels: skip $fileName (존재·sha256 일치)")
+                    return@forEach
+                }
+                logger.lifecycle("downloadSttModels: $fileName sha256 불일치(actual=$actualSha) — 재다운로드")
+            }
+            val url = "$sttModelBaseUrl/$fileName"
+            logger.lifecycle("downloadSttModels: $fileName 다운로드 — $url")
+            try {
+                URL(url).openStream().use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+            } catch (e: Exception) {
+                if (dest.exists()) dest.delete()
+                throw GradleException("downloadSttModels: $fileName 다운로드 실패 ($url): ${e.message}", e)
+            }
+            if (!dest.exists() || dest.length() == 0L) {
+                if (dest.exists()) dest.delete()
+                throw GradleException("downloadSttModels: $fileName 다운로드 결과가 빈 파일 ($url)")
+            }
+            if (expectedSha != null) {
+                val actualSha = sha256Of(dest)
+                if (actualSha != expectedSha) {
+                    dest.delete()
+                    throw GradleException("downloadSttModels: $fileName sha256 무결성 실패 (expected=$expectedSha, actual=$actualSha)")
+                }
+            }
+            logger.lifecycle("downloadSttModels: 완료 $fileName (${dest.length()} bytes)")
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn("downloadSttModels")
 }

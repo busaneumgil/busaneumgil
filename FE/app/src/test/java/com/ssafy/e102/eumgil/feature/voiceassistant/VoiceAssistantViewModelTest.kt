@@ -23,7 +23,7 @@ class VoiceAssistantViewModelTest {
     @Test
     fun `transcript changed emits dispatch action when command does not require confirmation`() =
         runTest {
-            val viewModel = VoiceAssistantViewModel()
+            val viewModel = VoiceAssistantViewModel(interpreter = RuleBasedVoiceAssistantInterpreter())
             val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
 
             viewModel.onAction(UiAction.TranscriptChanged("제보해줘"))
@@ -35,7 +35,7 @@ class VoiceAssistantViewModelTest {
     @Test
     fun `transcript changed resolves search action with latest context editing target`() =
         runTest {
-            val viewModel = VoiceAssistantViewModel()
+            val viewModel = VoiceAssistantViewModel(interpreter = RuleBasedVoiceAssistantInterpreter())
             val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
 
             viewModel.onAction(
@@ -69,7 +69,7 @@ class VoiceAssistantViewModelTest {
     @Test
     fun `confirmation required action waits until accepted before dispatch event`() =
         runTest {
-            val viewModel = VoiceAssistantViewModel()
+            val viewModel = VoiceAssistantViewModel(interpreter = RuleBasedVoiceAssistantInterpreter())
             val firstEventDeferred =
                 async(start = CoroutineStart.UNDISPATCHED) {
                     withTimeoutOrNull(100) { viewModel.uiEvent.first() }
@@ -91,7 +91,7 @@ class VoiceAssistantViewModelTest {
     @Test
     fun `dismissed closes overlay and clears pending confirmation state`() =
         runTest {
-            val viewModel = VoiceAssistantViewModel()
+            val viewModel = VoiceAssistantViewModel(interpreter = RuleBasedVoiceAssistantInterpreter())
             val eventsDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEvent.take(1).toList() }
 
             viewModel.onAction(UiAction.AssistantClicked)

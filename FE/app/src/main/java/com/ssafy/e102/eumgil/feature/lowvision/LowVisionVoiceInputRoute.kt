@@ -37,6 +37,7 @@ fun LowVisionVoiceInputRoute(
     onShowBookmarksCompleted: () -> Unit = {},
     onShowFavoriteRoutesCompleted: () -> Unit = {},
     onLogoutCompleted: () -> Unit = {},
+    onNavigationEndCompleted: () -> Unit = {},
     currentRoute: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -114,6 +115,7 @@ fun LowVisionVoiceInputRoute(
                 LowVisionVoiceInputEvent.ShowBookmarksCompleted -> onShowBookmarksCompleted()
                 LowVisionVoiceInputEvent.ShowFavoriteRoutesCompleted -> onShowFavoriteRoutesCompleted()
                 LowVisionVoiceInputEvent.LogoutCompleted -> onLogoutCompleted()
+                LowVisionVoiceInputEvent.NavigationEndCompleted -> onNavigationEndCompleted()
             }
         }
     }

@@ -60,6 +60,7 @@ import com.ssafy.e102.eumgil.data.repository.provideProfileUserTypeUpdateReposit
 import com.ssafy.e102.eumgil.feature.map.MapKwsEvent
 import com.ssafy.e102.eumgil.feature.map.MapKwsViewModel
 import com.ssafy.e102.eumgil.feature.onboarding.PrimaryUserType
+import com.ssafy.e102.eumgil.feature.navigation.NavigationUiAction
 import com.ssafy.e102.eumgil.feature.voiceassistant.CloseOverlay
 import com.ssafy.e102.eumgil.feature.voiceassistant.DispatchAction
 import com.ssafy.e102.eumgil.feature.voiceassistant.UiAction as VoiceAssistantUiAction
@@ -114,7 +115,14 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val initialAuthGateState = bootstrappedAuthGateState ?: return
     val initialInitSettings = bootstrappedInitSettings ?: return
     val navController = rememberNavController()
-    val voiceAssistantViewModel: VoiceAssistantViewModel = viewModel()
+    val voiceAssistantViewModelFactory =
+        remember(appContainer) {
+            VoiceAssistantViewModel.provideFactory(
+                voiceAnalyzeRepository = appContainer.voiceAnalyzeRepository,
+            )
+        }
+    val voiceAssistantViewModel: VoiceAssistantViewModel = viewModel(factory = voiceAssistantViewModelFactory)
+    val navigationViewModel = rememberNavigationGuidanceViewModel()
     val voiceAssistantUiState by voiceAssistantViewModel.uiState.collectAsStateWithLifecycle()
     var voiceAssistantVisible by remember { mutableStateOf(false) }
     var voiceAssistantSourceContext by remember { mutableStateOf(VoiceAssistantContext()) }
@@ -142,6 +150,12 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             ?.collectAsStateWithLifecycle()
             ?: remember { mutableStateOf(false) }
     val selectedPrimaryUserType = initSettings.selectedPrimaryUserType
+    val mobilityKwsViewModel: MapKwsViewModel? =
+        if (selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue) {
+            viewModel()
+        } else {
+            null
+        }
     val currentVoiceAssistantSourceContext =
         VoiceAssistantContext(
             currentRoute = currentRoute,
@@ -153,6 +167,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         if (shouldRequestMapFacilityDetailDismissOnGlobalVoiceAssistantOpen(currentRoute)) {
             navController.currentBackStackEntry?.savedStateHandle?.requestMapFacilityDetailDismiss()
         }
+        mobilityKwsViewModel?.enableAutoResume()
         voiceAssistantSourceContext = sourceContext
         voiceAssistantViewModel.onAction(VoiceAssistantUiAction.ContextChanged(sourceContext))
         voiceAssistantViewModel.onAction(VoiceAssistantUiAction.AssistantClicked)
@@ -183,7 +198,20 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 CloseOverlay -> voiceAssistantVisible = false
                 is DispatchAction -> {
                     voiceAssistantVisible = false
-                    navController.navigateByVoiceAssistantAction(event.action)
+                    when (val action = event.action) {
+                        is VoiceAssistantAction.StopNavigation ->
+                            navigationViewModel.onAction(NavigationUiAction.ConfirmExitNavigationClicked)
+                        is VoiceAssistantAction.OpenReport -> {
+                            navController.navigateByVoiceAssistantAction(action)
+                            // savedStateHandle 패턴 — navigateToTopLevel 이후 진입점 데이터 전달
+                            runCatching {
+                                val reportEntry = navController.getBackStackEntry(ReportRoute.Report.route)
+                                reportEntry.savedStateHandle[REPORT_VOICE_TYPE_KEY] = action.reportType
+                                reportEntry.savedStateHandle[REPORT_VOICE_DESC_KEY] = action.description
+                            }
+                        }
+                        else -> navController.navigateByVoiceAssistantAction(action)
+                    }
                 }
                 else -> Unit
             }
@@ -207,13 +235,22 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         }
     }
 
+    LaunchedEffect(isMapVoiceSearchVisible, mobilityKwsViewModel) {
+        if (isMapVoiceSearchVisible) {
+            mobilityKwsViewModel?.enableAutoResume()
+        }
+    }
+
     if (selectedPrimaryUserType == PrimaryUserType.MOBILITY_IMPAIRED.routeValue) {
-        MobilityKwsEffect(
-            navController = navController,
-            shouldPauseForMapVoiceInput = isMapVoiceSearchVisible,
-            voiceAssistantVisible = voiceAssistantVisible,
-            onOpenVoiceAssistant = { openVoiceAssistant(currentVoiceAssistantSourceContext) },
-        )
+        mobilityKwsViewModel?.let { kwsViewModel ->
+            MobilityKwsEffect(
+                kwsViewModel = kwsViewModel,
+                navController = navController,
+                shouldPauseForMapVoiceInput = isMapVoiceSearchVisible,
+                voiceAssistantVisible = voiceAssistantVisible,
+                onOpenVoiceAssistant = { openVoiceAssistant(currentVoiceAssistantSourceContext) },
+            )
+        }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -345,6 +382,23 @@ internal fun VoiceAssistantAction.toNavigationRequest(): VoiceAssistantNavigatio
         is VoiceAssistantAction.SearchPlace ->
             VoiceAssistantNavigationRequest.Route(SearchRoute.Results.createRoute(query, editingTarget))
 
+        is VoiceAssistantAction.CategorySearch ->
+            // TODO: 이동약자용 카테고리 결과 화면 route 확인 후 연결. 현재 검색 결과 화면으로 임시 처리.
+            VoiceAssistantNavigationRequest.Route(SearchRoute.Results.createRoute(category))
+
+        is VoiceAssistantAction.Navigate ->
+            // TODO: 현재 GPS 위치 기반 경로 안내 구현. departure가 null이면 현재 GPS 사용.
+            // destination으로 GET /places/search → 좌표 → 경로 안내 화면으로 연결 필요.
+            // 현재 검색 결과 화면으로 임시 처리.
+            VoiceAssistantNavigationRequest.Route(SearchRoute.Results.createRoute(destination))
+
+        is VoiceAssistantAction.ShowBookmarks ->
+            VoiceAssistantNavigationRequest.TopLevel(TopLevelDestination.SavedRoute)
+
+        is VoiceAssistantAction.Logout ->
+            VoiceAssistantNavigationRequest.Route(AuthRoute.Login.route)
+
+        is VoiceAssistantAction.Ask,
         is VoiceAssistantAction.ResumeNavigationGuidance,
         is VoiceAssistantAction.StopNavigation,
         is VoiceAssistantAction.UnknownCommand,
@@ -360,6 +414,9 @@ private fun appExitTransition(): ExitTransition = ExitTransition.None
 private const val APP_NAV_HOST_LOG_TAG = "AppNavHost"
 internal const val MAP_FACILITY_DETAIL_VISIBLE_KEY: String = "mapFacilityDetailVisible"
 
+internal fun isLowVisionRoute(currentRoute: String?): Boolean =
+    currentRoute?.startsWith("low_vision/") == true
+
 internal fun shouldPauseMapKws(
     currentRoute: String?,
     shouldPauseForMapVoiceInput: Boolean,
@@ -367,16 +424,30 @@ internal fun shouldPauseMapKws(
 ): Boolean =
     voiceAssistantVisible ||
         currentRoute == SearchRoute.VoiceInput.route ||
+        isLowVisionRoute(currentRoute) ||
         shouldPauseForMapVoiceInput
+
+internal fun shouldAutoResumeMobilityKws(
+    autoResumeEnabled: Boolean,
+    currentRoute: String?,
+    shouldPauseForMapVoiceInput: Boolean,
+    voiceAssistantVisible: Boolean,
+): Boolean =
+    autoResumeEnabled &&
+        !shouldPauseMapKws(
+            currentRoute = currentRoute,
+            shouldPauseForMapVoiceInput = shouldPauseForMapVoiceInput,
+            voiceAssistantVisible = voiceAssistantVisible,
+        )
 
 @Composable
 private fun MobilityKwsEffect(
+    kwsViewModel: MapKwsViewModel,
     navController: NavController,
     shouldPauseForMapVoiceInput: Boolean,
     voiceAssistantVisible: Boolean,
     onOpenVoiceAssistant: () -> Unit,
 ) {
-    val kwsViewModel: MapKwsViewModel = viewModel()
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnOpenVoiceAssistant by rememberUpdatedState(onOpenVoiceAssistant)
     val currentShouldPauseForMapVoiceInput by rememberUpdatedState(shouldPauseForMapVoiceInput)
@@ -387,15 +458,16 @@ private fun MobilityKwsEffect(
             when (event) {
                 Lifecycle.Event.ON_RESUME ->
                     if (
-                        shouldPauseMapKws(
+                        shouldAutoResumeMobilityKws(
+                            autoResumeEnabled = kwsViewModel.isAutoResumeEnabled(),
                             currentRoute = navController.currentBackStackEntry?.destination?.route,
                             shouldPauseForMapVoiceInput = currentShouldPauseForMapVoiceInput,
                             voiceAssistantVisible = currentVoiceAssistantVisible,
                         )
                     ) {
-                        kwsViewModel.pauseSpotting()
-                    } else {
                         kwsViewModel.resumeSpotting()
+                    } else {
+                        kwsViewModel.pauseSpotting()
                     }
 
                 Lifecycle.Event.ON_PAUSE -> kwsViewModel.pauseSpotting()
@@ -408,30 +480,32 @@ private fun MobilityKwsEffect(
 
     LaunchedEffect(navController, kwsViewModel, shouldPauseForMapVoiceInput, voiceAssistantVisible) {
         if (
-            shouldPauseMapKws(
+            shouldAutoResumeMobilityKws(
+                autoResumeEnabled = kwsViewModel.isAutoResumeEnabled(),
                 currentRoute = navController.currentBackStackEntry?.destination?.route,
                 shouldPauseForMapVoiceInput = shouldPauseForMapVoiceInput,
                 voiceAssistantVisible = voiceAssistantVisible,
             )
         ) {
-            kwsViewModel.pauseSpotting()
-        } else {
             kwsViewModel.resumeSpotting()
+        } else {
+            kwsViewModel.pauseSpotting()
         }
     }
 
     LaunchedEffect(navController, shouldPauseForMapVoiceInput, voiceAssistantVisible) {
         navController.currentBackStackEntryFlow.collect { entry ->
             if (
-                shouldPauseMapKws(
+                shouldAutoResumeMobilityKws(
+                    autoResumeEnabled = kwsViewModel.isAutoResumeEnabled(),
                     currentRoute = entry.destination.route,
                     shouldPauseForMapVoiceInput = shouldPauseForMapVoiceInput,
                     voiceAssistantVisible = voiceAssistantVisible,
                 )
             ) {
-                kwsViewModel.pauseSpotting()
-            } else {
                 kwsViewModel.resumeSpotting()
+            } else {
+                kwsViewModel.pauseSpotting()
             }
         }
     }

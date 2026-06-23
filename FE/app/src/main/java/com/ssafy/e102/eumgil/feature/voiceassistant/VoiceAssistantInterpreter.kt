@@ -1,14 +1,20 @@
 package com.ssafy.e102.eumgil.feature.voiceassistant
 
+import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeHistoryItem
+import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeIntent
+import com.ssafy.e102.eumgil.core.model.VoiceAnalyzeMode
+import com.ssafy.e102.eumgil.core.model.toJsonString
+import com.ssafy.e102.eumgil.data.repository.VoiceAnalyzeRepository
+
 interface VoiceAssistantInterpreter {
-    fun interpret(
+    suspend fun interpret(
         transcript: String,
         context: VoiceAssistantContext = VoiceAssistantContext(),
     ): VoiceAssistantAction
 }
 
 class RuleBasedVoiceAssistantInterpreter : VoiceAssistantInterpreter {
-    override fun interpret(
+    override suspend fun interpret(
         transcript: String,
         context: VoiceAssistantContext,
     ): VoiceAssistantAction {
@@ -47,5 +53,100 @@ class RuleBasedVoiceAssistantInterpreter : VoiceAssistantInterpreter {
                 "부산역 찾아줘",
                 "부산역 검색해줘",
             )
+    }
+}
+
+class AiVoiceAssistantInterpreter(
+    private val voiceAnalyzeRepository: VoiceAnalyzeRepository,
+) : VoiceAssistantInterpreter {
+
+    private val conversationHistory = mutableListOf<VoiceAnalyzeHistoryItem>()
+
+    override suspend fun interpret(
+        transcript: String,
+        context: VoiceAssistantContext,
+    ): VoiceAssistantAction {
+        val result = voiceAnalyzeRepository.analyze(
+            text = transcript,
+            mode = VoiceAnalyzeMode.MOBILITY_IMPAIRED,
+            history = conversationHistory.toList(),
+            currentRoute = context.currentRoute,
+        )
+
+        return when (result.intent) {
+            VoiceAnalyzeIntent.PLACE_SEARCH -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.SearchPlace(
+                    query = result.placeName.orEmpty(),
+                    editingTarget = context.editingTarget,
+                )
+            }
+            VoiceAnalyzeIntent.CATEGORY_SEARCH -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.CategorySearch(category = result.category.orEmpty())
+            }
+            VoiceAnalyzeIntent.NAVIGATE -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.Navigate(
+                    departure = result.departure,
+                    destination = result.destination.orEmpty(),
+                )
+            }
+            VoiceAnalyzeIntent.SHOW_BOOKMARKS -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.ShowBookmarks()
+            }
+            VoiceAnalyzeIntent.SHOW_FAVORITE_ROUTES -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.OpenSavedRoutes()
+            }
+            VoiceAnalyzeIntent.LOGOUT -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.Logout()
+            }
+            VoiceAnalyzeIntent.REPORT -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.OpenReport(reportType = result.reportType, description = result.description)
+            }
+            VoiceAnalyzeIntent.NAVIGATION_END -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.StopNavigation()
+            }
+            VoiceAnalyzeIntent.OPEN_MY_PAGE -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.OpenMyPage()
+            }
+            VoiceAnalyzeIntent.OPEN_MAP -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.OpenMap()
+            }
+            VoiceAnalyzeIntent.ASK -> {
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "user", content = transcript))
+                conversationHistory.add(VoiceAnalyzeHistoryItem(role = "assistant", content = result.toJsonString()))
+                VoiceAssistantAction.Ask(message = result.confirmationMessage.orEmpty())
+            }
+            VoiceAnalyzeIntent.UNKNOWN -> {
+                conversationHistory.clear()
+                VoiceAssistantAction.UnknownCommand(rawCommand = transcript)
+            }
+            else -> {
+                conversationHistory.clear()
+                VoiceAssistantAction.UnknownCommand(rawCommand = transcript)
+            }
+        }
+    }
+
+    fun clearHistory() {
+        conversationHistory.clear()
     }
 }

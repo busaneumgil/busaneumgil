@@ -42,6 +42,10 @@ fun ReportRoute(
     entryPoint: ReportEntryPoint = ReportEntryPoint.TopLevel,
     startNewRequest: Boolean = false,
     onStartNewRequestConsumed: () -> Unit = {},
+    initialReportType: ReportType? = null,
+    onInitialReportTypeConsumed: () -> Unit = {},
+    initialDescription: String? = null,
+    onInitialDescriptionConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -121,6 +125,22 @@ fun ReportRoute(
                 ),
             )
             onStartNewRequestConsumed()
+        }
+    }
+
+    // 음성 에이전트 진입 시 reportType 자동 선택 → TypeSelection 단계 스킵
+    LaunchedEffect(initialReportType, viewModel) {
+        if (initialReportType != null) {
+            viewModel.onAction(ReportUiAction.ReportTypeSelected(initialReportType))
+            onInitialReportTypeConsumed()
+        }
+    }
+
+    // 음성 에이전트 진입 시 description 자동 채움 → DetailInput 도달 시 미리 노출 (스텝 무변)
+    LaunchedEffect(initialDescription, viewModel) {
+        if (initialDescription != null) {
+            viewModel.onAction(ReportUiAction.DescriptionChanged(initialDescription))
+            onInitialDescriptionConsumed()
         }
     }
 

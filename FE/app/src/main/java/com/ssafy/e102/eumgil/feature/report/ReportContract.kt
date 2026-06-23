@@ -53,6 +53,7 @@ enum class ReportStep {
 enum class ReportEntryPoint {
     TopLevel,
     NavigationGuidance,
+    VoiceAssistant,
 }
 
 data class ReportRecentUiModel(

@@ -81,6 +81,8 @@ sealed interface VoiceAssistantAction {
     ) : VoiceAssistantAction
 
     data class OpenReport(
+        val reportType: String? = null,
+        val description: String? = null,
         override val requiresConfirmation: Boolean = false,
     ) : VoiceAssistantAction
 
@@ -106,6 +108,30 @@ sealed interface VoiceAssistantAction {
 
     data class UnknownCommand(
         val rawCommand: String? = null,
+        override val requiresConfirmation: Boolean = false,
+    ) : VoiceAssistantAction
+
+    data class CategorySearch(
+        val category: String,
+        override val requiresConfirmation: Boolean = false,
+    ) : VoiceAssistantAction
+
+    data class Navigate(
+        val departure: String?,
+        val destination: String,
+        override val requiresConfirmation: Boolean = false,
+    ) : VoiceAssistantAction
+
+    data class ShowBookmarks(
+        override val requiresConfirmation: Boolean = false,
+    ) : VoiceAssistantAction
+
+    data class Logout(
+        override val requiresConfirmation: Boolean = false,
+    ) : VoiceAssistantAction
+
+    data class Ask(
+        val message: String,
         override val requiresConfirmation: Boolean = false,
     ) : VoiceAssistantAction
 }

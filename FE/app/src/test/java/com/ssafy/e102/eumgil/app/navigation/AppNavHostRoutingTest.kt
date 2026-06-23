@@ -217,7 +217,10 @@ class AppNavHostRoutingTest {
 
     @Test
     fun `search result name tap resolves to route briefing`() {
-        assertEquals(LowVisionRoute.RouteBriefing.route, resolveSearchResultBriefingRoute())
+        assertEquals(
+            LowVisionRoute.RouteBriefing.route,
+            resolveSearchResultBriefingRoute(selectedPrimaryUserType = "low_vision"),
+        )
     }
 
     @Test

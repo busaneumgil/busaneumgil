@@ -1,5 +1,6 @@
 import java.io.File
 import java.net.URL
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -172,22 +173,50 @@ dependencies {
 }
 
 // ── STT 모델 자동 다운로드 (HuggingFace: stonebed/SenseVoice_busan_finetuning) ──────────
-// 대용량 모델은 git 제외(.gitignore). 빌드 전(preBuild) assets로 자동 다운로드한다.
-// 멱등: 파일이 있고 크기>0이면 skip. 실패/빈파일이면 잔여 삭제 후 GradleException으로 빌드 실패.
+// 대용량 모델은 git 제외(.gitignore, LFS 미사용). 빌드 전(preBuild) assets로 자동 다운로드한다.
+// 멱등+무결성: 기대 sha256이 있는 파일은 해시 일치 시에만 skip(LFS 포인터/손상/잘못된 파일 거름),
+//             기대 해시 없는 파일은 size>0이면 skip. 실패/빈파일/해시불일치면 잔여 삭제 후 GradleException.
 val sttModelDir = file("src/main/assets/models/sense_voice")
 val sttModelBaseUrl = "https://huggingface.co/stonebed/SenseVoice_busan_finetuning/resolve/main"
 val sttModelFiles = listOf("model.int8.onnx", "tokens.txt")
+// HF 파인튜닝 정본 sha256 (실기기 검증본과 동일해야 함). 해시 없는 파일은 size>0 검사만.
+val sttModelSha256 = mapOf(
+    "model.int8.onnx" to "604dbc57ec3b8abffda310b4fc6426714085fa40affc856eb756388b3770630c",
+)
+
+fun sha256Of(target: File): String {
+    val md = MessageDigest.getInstance("SHA-256")
+    target.inputStream().use { input ->
+        val buffer = ByteArray(1 shl 16)
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            md.update(buffer, 0, read)
+        }
+    }
+    return md.digest().joinToString("") { "%02x".format(it) }
+}
 
 tasks.register("downloadSttModels") {
     group = "build setup"
-    description = "SenseVoice STT 모델(model.int8.onnx, tokens.txt)을 HuggingFace에서 assets로 다운로드(없을 때만)."
+    description = "SenseVoice STT 모델(model.int8.onnx, tokens.txt)을 HuggingFace에서 assets로 다운로드(없을 때만, sha256 검증)."
     doLast {
         sttModelDir.mkdirs()
         sttModelFiles.forEach { fileName ->
             val dest = File(sttModelDir, fileName)
+            val expectedSha = sttModelSha256[fileName]
+            // 멱등: 파일이 있으면 (기대 해시 없으면 size>0 / 기대 해시 있으면 sha256 일치) skip
             if (dest.exists() && dest.length() > 0L) {
-                logger.lifecycle("downloadSttModels: skip $fileName (존재, ${dest.length()} bytes)")
-                return@forEach
+                if (expectedSha == null) {
+                    logger.lifecycle("downloadSttModels: skip $fileName (존재, ${dest.length()} bytes)")
+                    return@forEach
+                }
+                val actualSha = sha256Of(dest)
+                if (actualSha == expectedSha) {
+                    logger.lifecycle("downloadSttModels: skip $fileName (존재·sha256 일치)")
+                    return@forEach
+                }
+                logger.lifecycle("downloadSttModels: $fileName sha256 불일치(actual=$actualSha) — 재다운로드")
             }
             val url = "$sttModelBaseUrl/$fileName"
             logger.lifecycle("downloadSttModels: $fileName 다운로드 — $url")
@@ -202,6 +231,13 @@ tasks.register("downloadSttModels") {
             if (!dest.exists() || dest.length() == 0L) {
                 if (dest.exists()) dest.delete()
                 throw GradleException("downloadSttModels: $fileName 다운로드 결과가 빈 파일 ($url)")
+            }
+            if (expectedSha != null) {
+                val actualSha = sha256Of(dest)
+                if (actualSha != expectedSha) {
+                    dest.delete()
+                    throw GradleException("downloadSttModels: $fileName sha256 무결성 실패 (expected=$expectedSha, actual=$actualSha)")
+                }
             }
             logger.lifecycle("downloadSttModels: 완료 $fileName (${dest.length()} bytes)")
         }

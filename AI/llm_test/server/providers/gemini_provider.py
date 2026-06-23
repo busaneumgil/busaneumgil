@@ -17,12 +17,7 @@ class GeminiProvider(BaseProvider):
 
 [도구 선택 규칙]
 - 장소명이 명확하면: confirm_place_search 호출
-- 카테고리 언급("카페", "식당", "병원" 등): confirm_category_search 호출
-- "~로 가줘", "~까지 안내해줘": confirm_navigate 호출 (departure 불명확하면 null)
-- "북마크 추가": confirm_bookmark_add 호출
-- "북마크 삭제": confirm_bookmark_delete 호출
-- "북마크 목록": confirm_show_bookmarks 호출
-- "저장된 경로": confirm_show_favorite_routes 호출
+- "북마크 목록" 또는 "저장된 경로"/"즐겨찾는 경로": confirm_show_bookmarks 호출
 - "로그아웃": confirm_logout 호출
 - "제보", "신고" 발화했지만 유형 모름: ask_report_type 호출
 - 제보 유형 확인됨: confirm_report 호출
@@ -38,10 +33,6 @@ ask_ 계열 도구를 호출할 때는 반드시 confirmation_message를 포함�
 사용자가 다음에 무엇을 말해야 하는지 안내하는 문구를 생성하세요.
 예시:
 - ask_place_name → '어떤 장소를 찾으시나요?'
-- ask_category → '음식·카페, 관광지, 숙박, 의료·보건, 복지·돌봄, 공공기관, 기타 중 말씀해 주세요'
-- ask_departure → '출발지를 말씀해 주세요'
-- ask_destination → '도착지를 말씀해 주세요'
-- ask_bookmark_target → '어떤 장소를 북마크에 추가할까요?' 또는 '어떤 장소를 북마크에서 삭제할까요?'
 - ask_report_type → '어떤 문제인가요? 계단·단차, 점자블록, 인도 없음, 경사로, 인도폭, 기타 중 말씀해 주세요'
 대화 히스토리가 있으면 이전 맥락을 참고하세요.
 currentRoute가 제공되면 현재 화면 위치로 활용하세요.
@@ -70,62 +61,6 @@ confirmed 파라미터 없이 confirm_ 도구를 호출할 때는 반드시 conf
         {
             "name": "ask_place_name",
             "description": "장소명을 알 수 없을 때 사용자에게 장소명을 물어봅니다.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "confirmation_message": {
-                        "type": "STRING",
-                        "description": "사용자에게 전달할 질문 문구"
-                    }
-                },
-                "required": ["confirmation_message"]
-            }
-        },
-        {
-            "name": "ask_category",
-            "description": "카테고리를 알 수 없을 때 사용자에게 카테고리를 물어봅니다.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "confirmation_message": {
-                        "type": "STRING",
-                        "description": "사용자에게 전달할 질문 문구"
-                    }
-                },
-                "required": ["confirmation_message"]
-            }
-        },
-        {
-            "name": "ask_departure",
-            "description": "출발지를 알 수 없을 때 사용자에게 출발지를 물어봅니다.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "confirmation_message": {
-                        "type": "STRING",
-                        "description": "사용자에게 전달할 질문 문구"
-                    }
-                },
-                "required": ["confirmation_message"]
-            }
-        },
-        {
-            "name": "ask_destination",
-            "description": "목적지를 알 수 없을 때 사용자에게 목적지를 물어봅니다.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "confirmation_message": {
-                        "type": "STRING",
-                        "description": "사용자에게 전달할 질문 문구"
-                    }
-                },
-                "required": ["confirmation_message"]
-            }
-        },
-        {
-            "name": "ask_bookmark_target",
-            "description": "북마크 대상 장소를 알 수 없을 때 사용자에게 장소를 물어봅니다.",
             "parameters": {
                 "type": "OBJECT",
                 "properties": {
@@ -175,118 +110,8 @@ confirmed 파라미터 없이 confirm_ 도구를 호출할 때는 반드시 conf
             }
         },
         {
-            "name": "confirm_category_search",
-            "description": "카테고리 기반으로 주변 장소를 검색합니다.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "category": {
-                        "type": "STRING",
-                        "description": "카테고리명"
-                    },
-                    "confirmation_message": {
-                        "type": "STRING",
-                        "description": "확인 질문. confirmed 있으면 null"
-                    },
-                    "confirmed": {
-                        "type": "BOOLEAN",
-                        "description": "긍정=true, 부정=false. 확인 요청 단계면 생략"
-                    }
-                },
-                "required": ["category"]
-            }
-        },
-        {
-            "name": "confirm_bookmark_add",
-            "description": "장소를 북마크에 추가합니다.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "place_name": {
-                        "type": "STRING",
-                        "description": "장소명. 한국어 발음 표기는 반드시 로마자로 복원할 것. 예: 지에스이십오→GS25, 씨유→CU, 케이에프씨→KFC, 에이치앤엠→H&M, 이케아→IKEA"
-                    },
-                    "confirmation_message": {
-                        "type": "STRING",
-                        "description": "확인 질문. confirmed 있으면 null"
-                    },
-                    "confirmed": {
-                        "type": "BOOLEAN",
-                        "description": "긍정=true, 부정=false. 확인 요청 단계면 생략"
-                    }
-                },
-                "required": ["place_name"]
-            }
-        },
-        {
-            "name": "confirm_bookmark_delete",
-            "description": "장소를 북마크에서 삭제합니다.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "place_name": {
-                        "type": "STRING",
-                        "description": "장소명. 한국어 발음 표기는 반드시 로마자로 복원할 것. 예: 지에스이십오→GS25, 씨유→CU, 케이에프씨→KFC, 에이치앤엠→H&M, 이케아→IKEA"
-                    },
-                    "confirmation_message": {
-                        "type": "STRING",
-                        "description": "확인 질문. confirmed 있으면 null"
-                    },
-                    "confirmed": {
-                        "type": "BOOLEAN",
-                        "description": "긍정=true, 부정=false. 확인 요청 단계면 생략"
-                    }
-                },
-                "required": ["place_name"]
-            }
-        },
-        {
-            "name": "confirm_navigate",
-            "description": "목적지까지 경로 안내를 시작합니다.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "destination": {
-                        "type": "STRING",
-                        "description": "목적지"
-                    },
-                    "departure": {
-                        "type": "STRING",
-                        "description": "출발지. null이면 FE가 현재 GPS 사용"
-                    },
-                    "confirmation_message": {
-                        "type": "STRING",
-                        "description": "확인 질문. confirmed 있으면 null"
-                    },
-                    "confirmed": {
-                        "type": "BOOLEAN",
-                        "description": "긍정=true, 부정=false. 확인 요청 단계면 생략"
-                    }
-                },
-                "required": ["destination"]
-            }
-        },
-        {
             "name": "confirm_show_bookmarks",
-            "description": "북마크 목록을 표시합니다.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "confirmation_message": {
-                        "type": "STRING",
-                        "description": "확인 질문. confirmed 있으면 null"
-                    },
-                    "confirmed": {
-                        "type": "BOOLEAN",
-                        "description": "긍정=true, 부정=false. 확인 요청 단계면 생략"
-                    }
-                },
-                "required": []
-            }
-        },
-        {
-            "name": "confirm_show_favorite_routes",
-            "description": "저장된 경로 목록을 표시합니다.",
+            "description": "북마크 및 저장된(즐겨찾는) 경로 목록을 표시합니다.",
             "parameters": {
                 "type": "OBJECT",
                 "properties": {
@@ -427,18 +252,9 @@ confirmed 파라미터 없이 confirm_ 도구를 호출할 때는 반드시 conf
     def _parse_function_call(self, fn_name: str, args: dict) -> dict:
         mapping = {
             "ask_place_name":               {"intent": "ASK"},
-            "ask_category":                 {"intent": "ASK"},
-            "ask_departure":                {"intent": "ASK"},
-            "ask_destination":              {"intent": "ASK"},
-            "ask_bookmark_target":          {"intent": "ASK"},
             "ask_report_type":              {"intent": "ASK"},
             "confirm_place_search":         {"intent": "PLACE_SEARCH",           "confirmed": args.get("confirmed")},
-            "confirm_category_search":      {"intent": "CATEGORY_SEARCH",        "confirmed": args.get("confirmed")},
-            "confirm_bookmark_add":         {"intent": "BOOKMARK_ADD",           "confirmed": args.get("confirmed"), "bookmark_action": "add"},
-            "confirm_bookmark_delete":      {"intent": "BOOKMARK_DELETE",        "confirmed": args.get("confirmed"), "bookmark_action": "delete"},
-            "confirm_navigate":             {"intent": "NAVIGATE",               "confirmed": args.get("confirmed")},
             "confirm_show_bookmarks":       {"intent": "SHOW_BOOKMARKS",         "confirmed": args.get("confirmed")},
-            "confirm_show_favorite_routes": {"intent": "SHOW_FAVORITE_ROUTES",   "confirmed": args.get("confirmed")},
             "confirm_logout":               {"intent": "LOGOUT",                 "confirmed": args.get("confirmed")},
             "confirm_report":               {"intent": "REPORT",                 "confirmed": args.get("confirmed")},
             "confirm_navigation_end":       {"intent": "NAVIGATION_END",         "confirmed": args.get("confirmed")},

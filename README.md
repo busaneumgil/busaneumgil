@@ -1,398 +1,116 @@
-<div align="center">
+# 부산이음길 (Busan EumGil)
 
-<br/>
+<p align="center">
+  <img src="Docs/img/busan-eumgil-wordmark.png" width="420" alt="부산이음길 워드마크" />
+</p>
 
-<img src="Docs/img/busan-eumgil-wordmark.png" width="480" alt="부산이음길 워드마크" />
+부산의 보행약자와 저시력자가 이동 조건에 맞는 경로와 접근성 정보를 확인하도록 돕는 Android 길안내 서비스입니다.
 
-<br/><br/>
+## 먼저 볼 자료
 
-> **부산의 경사, 계단, 단차, 보도 폭, 장애물 정보를 함께 보고**
-> **이동 약자가 실제로 지나갈 수 있는 길을 찾도록 돕는 인클루시브 무장애 길찾기 서비스**
+- [온보딩 시연](Docs/media/onboarding.mp4): 사용자 유형과 보행 조건을 선택해 다른 앱 흐름으로 진입하는 장면입니다.
+- [개인 기여와 근거](Docs/2026-09-14_이재호_기여와_근거.md): 이재호의 문서·Android 작업과 팀의 경로·공간 데이터 작업을 구분했습니다.
+- [요구사항명세서](Docs/PRD/2026-05-20_요구사항명세서.md): 제출 전 구현 상태와 추가 확인 항목을 구분한 기준 문서입니다.
+- [화면 인벤토리와 라우트 맵](FE/docs/2026-04-22_부산이음길_FE_화면_인벤토리_및_라우트_맵.md): 사용자 유형별 화면과 현재 Android 경로를 확인할 수 있습니다.
+- [PM 포트폴리오 사례](https://ficstory.dev/pm/busan-eumgil/): 문제, 개인 역할, 구현 제약을 읽기 쉽게 정리한 사례 페이지입니다.
 
-<br/>
+## 한눈에 보기
 
-[![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Spring Boot](https://img.shields.io/badge/Spring_Boot_3.5-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
-[![PostGIS](https://img.shields.io/badge/PostgreSQL%2FPostGIS-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgis.net)
-[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com)
-[![AWS](https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
+- **사용자 문제:** 경사·계단·단차·보도 단절과 같은 장벽은 범용 최단 경로만으로 판단하기 어렵습니다.
+- **핵심 흐름:** 사용자 유형 선택 → 유형별 홈 → 목적지·경로 비교 → 길안내 → 장애물 제보·승인 정보 확인
+- **프로젝트:** 2026.04–05, 7인 팀 `이길,지도`
+- **이재호 역할:** 팀원, Frontend·문서 담당
+- **현재 확인 상태:** Android MVP와 시연 자료가 남아 있습니다. 운영 데이터 범위와 현장 통행 안전성은 별도 검증이 필요합니다.
 
-<br/>
+> 화면의 `안전한 길`은 제품의 경로 옵션 이름입니다. 이동약자 대상 사용성 시험이나 실제 현장 통행 안전성을 완료 검증했다는 뜻으로 사용하지 않습니다.
 
-</div>
+## 문제와 핵심 사용자 흐름
 
----
+부산은 언덕과 산복도로, 계단, 좁거나 끊긴 보도가 많습니다. 팀은 이동 조건과 화면을 읽는 조건이 다른 사용자를 하나의 화면에 맞추지 않고, 온보딩 이후의 흐름을 나누었습니다.
 
-<br/>
+1. 사용자가 `저시력자` 또는 `보행약자`를 선택합니다.
+2. 보행약자는 전동휠체어, 수동휠체어, 기타 보행약자 중 이동 조건을 추가로 고릅니다.
+3. 보행약자는 지도 중심 홈, 저시력자는 큰 버튼과 음성 중심의 별도 화면군으로 진입합니다.
+4. 목적지를 찾고 경로 후보의 정보와 접근성 시설을 비교합니다.
+5. 장애물을 제보하면 처리 상태는 제보 이력에서 확인하고, 공개 지도에는 승인된 제보만 별도 마커로 표시합니다.
 
-## 🗺 서비스 소개
+<p align="center">
+  <a href="Docs/media/onboarding.mp4">
+    <img src="Docs/media/onboarding_thumb.png" width="280" alt="저시력자와 보행약자를 구분하는 부산이음길 온보딩 시연 썸네일" />
+  </a>
+</p>
 
-부산은 산복도로, 언덕, 계단, 좁은 보도, 보도 단절 구간이 많은 도시입니다.  
-일반 보행자에게는 돌아가면 되는 길도 휠체어 사용자에게는 막힌 길이 되고, 저시력자에게는 위험한 길이 될 수 있습니다.
+## 주요 판단과 범위
 
-**부산이음길**은 최단거리보다 실제 이동 가능성과 안전성을 우선합니다.  
-사용자 유형에 따라 다른 화면 흐름과 안내 방식을 제공합니다.
+- **사용자 유형별 흐름 분리:** 저시력자와 보행약자에게 같은 화면의 스타일만 바꾸지 않고 별도 진입과 화면군을 제공합니다. 근거는 [PRD의 타겟 사용자와 용어](Docs/PRD/2026-04-09_부산이음길_PRD.md#2-타겟-사용자와-용어)와 [FE 라우트 맵](FE/docs/2026-04-22_부산이음길_FE_화면_인벤토리_및_라우트_맵.md)에서 확인할 수 있습니다.
+- **제보와 공개 지도의 상태 분리:** 사진은 선택 입력으로 받고 처리 상태는 제보 이력에 표시하며, 승인된 공개 제보만 지도에 노출합니다. [기능명세서의 제보 공통 규칙](Docs/PRD/2026-04-14_기능명세서.md#51-제보-공통-규칙)에서 조건을 확인할 수 있습니다.
+- **구현과 검증 대상을 분리:** 2026-05-20 요구사항명세서는 경로 UI, 제보 승인 정책, 운영 데이터 범위를 완료·부분 구현·추가 확인으로 나눕니다. [요구사항명세서](Docs/PRD/2026-05-20_요구사항명세서.md)를 기준으로 현재 범위를 읽어야 합니다.
+- **현장 안전을 성과로 주장하지 않음:** 경로 계산과 공간 데이터 구축은 Backend·AI·Data 팀 작업이며, 현장 통행 안전성과 이동약자 사용성 시험 완료 근거는 확인하지 못했습니다.
 
-<br/>
+## 팀과 역할
 
-<table>
-  <tr>
-    <td align="center" width="25%">
-    <b>인클루시브 디자인</b><br/>
-      <img src="https://img.shields.io/badge/Inclusive_Design-4285F4?style=for-the-badge" /><br/><br/>
-      <sub>서비스가 사용자의 이동 조건과 정보 접근 방식에 맞춰집니다.</sub>
-    </td>
-    <td align="center" width="25%">
-    <b>배리어프리 경로</b><br/>
-      <img src="https://img.shields.io/badge/Barrier--Free_Route-2E7D32?style=for-the-badge" /><br/><br/>
-      <sub>경사, 계단, 보도 폭, 노면, 접근성 시설을 경로 판단에 반영합니다.</sub>
-    </td>
-    <td align="center" width="25%">
-    <b>참여형 보강 구조</b><br/>
-      <img src="https://img.shields.io/badge/Community_Report-F57C00?style=for-the-badge" /><br/><br/>
-      <sub>공사, 장애물, 점자블록 손상 등 현장 변화를 시민 제보로 보강합니다.</sub>
-    </td>
-    <td align="center" width="25%">
-    <b>부산 특화</b><br/>
-      <img src="https://img.shields.io/badge/Busan_Context-005BAC?style=for-the-badge" /><br/><br/>
-      <sub>부산의 지형과 생활권 특성을 고려한 지역 특화 길찾기를 목표로 합니다.</sub>
-    </td>
-  </tr>
-</table>
+부산이음길은 7인 팀 프로젝트이며 김지윤이 팀장을 맡았습니다.
 
-<br/>
+- 김지윤: 팀장, Frontend, 디자인, 발표
+- 김응서: Backend, Infra
+- 박세홍: Frontend
+- 백수연: AI, Frontend
+- 유준호: Infra, Backend
+- 이재호: Frontend, 문서
+- 장주윤: Backend, AI
 
----
+이재호는 문서의 화면·데이터·API 상태를 맞추고, 글자 크기 설정과 승인 제보 지도 표시를 구현했습니다. 경로 계산, 공간 데이터 구축, 관리자 승인 정책과 운영 데이터 품질은 팀의 다른 작업과 연결됩니다. 개인 작업의 공개 파일과 커밋은 [기여와 근거 문서](Docs/2026-09-14_이재호_기여와_근거.md)에서 확인할 수 있습니다.
 
-## 팀 소개 — 이길,지도
+## 구현 결과와 확인 한계
 
-<br/>
+- 사용자 유형과 프로필 완료 상태에 따른 시작 분기, 보행약자·저시력자 별도 화면군이 Android 코드에 반영되어 있습니다.
+- 글자 크기 선택·저장·전역 적용과 마이페이지 재진입 흐름이 구현되어 있습니다.
+- 승인 제보 마커를 시설 마커와 구분하고, 제보 내용을 여는 전용 하단 패널이 구현되어 있습니다.
+- 요구사항·기능·화면 문서에 제보 사진 업로드, 처리 상태, 승인 제보 공개 조건과 추가 확인 항목이 남아 있습니다.
+- 시연 영상은 앱 흐름을 보여 주며, 실제 현장 통행 안전성이나 이동약자 사용성 시험 결과를 대신하지 않습니다.
 
-<table>
-  <tr>
-    <td align="center" width="14%">
-      <b>김지윤</b><br/>
-      <sub>팀장</sub><br/><br/>
-      <img src="https://img.shields.io/badge/총괄-555555?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/디자인-E91E63?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/발표-9C27B0?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>김응서</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/Infra-FF9900?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>박세홍</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>백수연</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/AI-3776AB?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>유준호</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/Infra-FF9900?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>이재호</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/FrontEnd-4285F4?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/Docs-437291?style=flat-square" />
-    </td>
-    <td align="center" width="14%">
-      <b>장주윤</b><br/>
-      <sub>팀원</sub><br/><br/>
-      <img src="https://img.shields.io/badge/Backend-6DB33F?style=flat-square" /><br/>
-      <img src="https://img.shields.io/badge/AI-3776AB?style=flat-square" />
-    </td>
-  </tr>
-</table>
+## 시연 영상
 
-<br/>
----
+- [사용자 유형 온보딩](Docs/media/onboarding.mp4): 사용자 유형과 이동 조건 선택
+- [저시력자 전용 흐름](Docs/media/low-vision.mp4): 큰 버튼과 음성 중심 화면군
+- [글자 크기 설정](Docs/media/font-size.mp4): 기본·크게·아주 크게 선택과 적용
+- [경로 탐색](Docs/media/route-search.mp4): 경로 후보 비교와 길안내 진입
+- [장소·경로 북마크](Docs/media/bookmark.mp4): 저장 후 다시 길찾기로 연결
+- [장애물 제보](Docs/media/report.mp4): 제보 작성과 제출 흐름
 
-## 주요 기능
+## 기술 구성과 아키텍처
 
-<table>
-  <tr>
-    <td align="center" width="33%" valign="top">
-      <a href="Docs/media/onboarding.mp4">
-        <img src="Docs/media/onboarding_thumb.png" width="200" alt="사용자 유형 온보딩" /><br/>
-        <img src="https://img.shields.io/badge/▶_영상_보기-555555?style=flat-square" />
-      </a>
-      <br/><br/>
-      <strong>사용자 유형 온보딩</strong><br/><br/>
-      <sub>저시력자와 보행약자를 구분하고<br/>이동 특성에 맞는 앱 흐름으로 진입합니다.</sub>
-    </td>
-    <td align="center" width="33%" valign="top">
-      <a href="Docs/media/low-vision.mp4">
-        <img src="Docs/media/low-vision_thumb.png" width="200" alt="저시력자 전용 흐름" /><br/>
-        <img src="https://img.shields.io/badge/▶_영상_보기-555555?style=flat-square" />
-      </a>
-      <br/><br/>
-      <strong>저시력자 전용 흐름</strong><br/><br/>
-      <sub>큰 버튼, 단순한 선택지, 음성 중심 안내로<br/>저시력자에게 맞는 흐름을 제공합니다.</sub>
-    </td>
-    <td align="center" width="33%" valign="top">
-      <a href="Docs/media/font-size.mp4">
-        <img src="Docs/media/font-size_thumb.png" width="200" alt="글씨 크기 설정" /><br/>
-        <img src="https://img.shields.io/badge/▶_영상_보기-555555?style=flat-square" />
-      </a>
-      <br/><br/>
-      <strong>글씨 크기 설정</strong><br/><br/>
-      <sub>사용자의 시야와 읽기 편의에 맞춰<br/>앱의 텍스트 크기를 조절합니다.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="33%" valign="top">
-      <a href="Docs/media/route-search.mp4">
-        <img src="Docs/media/route-search_thumb.png" width="200" alt="무장애 경로 안내" /><br/>
-        <img src="https://img.shields.io/badge/▶_영상_보기-555555?style=flat-square" />
-      </a>
-      <br/><br/>
-      <strong>무장애 경로 안내</strong><br/><br/>
-      <sub>안전한 길과 최단거리를 비교하고<br/>경사, 계단, 방향 안내를 제공합니다.</sub>
-    </td>
-    <td align="center" width="33%" valign="top">
-      <a href="Docs/media/bookmark.mp4">
-        <img src="Docs/media/bookmark_thumb.png" width="200" alt="장소·경로 북마크" /><br/>
-        <img src="https://img.shields.io/badge/▶_영상_보기-555555?style=flat-square" />
-      </a>
-      <br/><br/>
-      <strong>장소·경로 북마크</strong><br/><br/>
-      <sub>자주 가는 장소와 경로를 저장하고<br/>다시 길찾기로 연결합니다.</sub>
-    </td>
-    <td align="center" width="33%" valign="top">
-      <a href="Docs/media/report.mp4">
-        <img src="Docs/media/report_thumb.png" width="200" alt="장애물 제보" /><br/>
-        <img src="https://img.shields.io/badge/▶_영상_보기-555555?style=flat-square" />
-      </a>
-      <br/><br/>
-      <strong>장애물 제보</strong><br/><br/>
-      <sub>공사, 계단, 점자블록 손상 등 현장 정보를<br/>제보하고 검토 후 지도에 반영합니다.</sub>
-    </td>
-  </tr>
-</table>
+| 영역 | 주요 기술과 역할 |
+| --- | --- |
+| Android | Kotlin, Jetpack Compose, Material 3, Kakao Map SDK |
+| Backend | Java 21, Spring Boot 3.5, Spring Security, JPA |
+| Data / Routing | PostgreSQL, PostGIS, Redis, GraphHopper |
+| External | Kakao Local, ODsay, 부산 BIMS, S3/MinIO |
+| Admin / AI | React, Vite, Python, Flask |
+| Infra | AWS EC2, Docker, Nginx, Jenkins |
 
-<br/>
-
----
-
-<br/>
-
-## 인클루시브 디자인
-
-<table>
-  <tr>
-    <td align="center" width="25%">
-      <h3>처음부터 포함</h3>
-      <sub>온보딩에서 저시력자와 보행약자를 분리하고, 보행약자 세부 유형을 선택합니다.</sub>
-    </td>
-    <td align="center" width="25%">
-      <h3>같은 목적, 다른 접근</h3>
-      <sub>보행약자는 지도 중심, 저시력자는 큰 버튼과 음성 중심의 별도 화면군을 사용합니다.</sub>
-    </td>
-    <td align="center" width="25%">
-      <h3>여러 감각으로 전달</h3>
-      <sub>색상만 쓰지 않고 텍스트, 아이콘, 배지, 음성, TalkBack 라벨로 상태를 전달합니다.</sub>
-    </td>
-    <td align="center" width="25%">
-      <h3>안전 우선</h3>
-      <sub>최단거리 외에 경사와 장애물을 고려한 안전한 길을 제공합니다.</sub>
-    </td>
-  </tr>
-</table>
-
-<br/>
-
----
-
-<br/>
-
-## 시스템 아키텍처
-
-<div align="center">
-
-![부산이음길 아키텍처](<부산이음길.drawio (2).png>)
-
-</div>
-
-<br/>
-
-<table>
-  <tr>
-    <td width="20%"><strong>Android App</strong></td>
-    <td>사용자 유형별 홈, 접근성 지도, 경로 탐색, 제보, 북마크 흐름을 제공합니다.</td>
-  </tr>
-  <tr>
-    <td width="20%"><strong>Backend</strong></td>
-    <td>인증, 장소, 경로, 제보, 관리자 API를 담당하고 외부 API와 공간 데이터를 조합합니다.</td>
-  </tr>
-  <tr>
-    <td width="20%"><strong>Routing / Data</strong></td>
-    <td>PostGIS 공간 데이터와 GraphHopper 라우팅 그래프를 사용해 이동 가능성을 판단합니다.</td>
-  </tr>
-  <tr>
-    <td width="20%"><strong>Admin Web</strong></td>
-    <td>도로/시설 편집, 제보 검토, GraphHopper 반영 흐름을 운영합니다.</td>
-  </tr>
-  <tr>
-    <td width="20%"><strong>Infra</strong></td>
-    <td>EC2 2대 구조, RDS, ElastiCache, Jenkins, Docker Compose, Nginx 기반으로 운영합니다.</td>
-  </tr>
-</table>
-
-<br/>
-
----
-
-<br/>
-
-## 기술 스택
-
-<table>
-  <tr>
-    <th align="center" width="20%">Category</th>
-    <th align="center">Stack</th>
-  </tr>
-  <tr>
-    <td align="center"><strong>Android</strong></td>
-    <td>
-      <img src="https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" />
-      <img src="https://img.shields.io/badge/Jetpack_Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" />
-      <img src="https://img.shields.io/badge/Material_3-757575?style=for-the-badge&logo=materialdesign&logoColor=white" />
-      <img src="https://img.shields.io/badge/Kakao_Map-FFCD00?style=for-the-badge&logo=kakao&logoColor=000000" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Backend</strong></td>
-    <td>
-      <img src="https://img.shields.io/badge/Java_21-437291?style=for-the-badge&logo=openjdk&logoColor=white" />
-      <img src="https://img.shields.io/badge/Spring_Boot_3.5-6DB33F?style=for-the-badge&logo=springboot&logoColor=white" />
-      <img src="https://img.shields.io/badge/Spring_Security-3A8D3A?style=for-the-badge&logo=springsecurity&logoColor=white" />
-      <img src="https://img.shields.io/badge/JPA-59666C?style=for-the-badge" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Data / Routing</strong></td>
-    <td>
-      <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
-      <img src="https://img.shields.io/badge/PostGIS-336791?style=for-the-badge" />
-      <img src="https://img.shields.io/badge/Redis-D82C20?style=for-the-badge&logo=redis&logoColor=white" />
-      <img src="https://img.shields.io/badge/GraphHopper-77B829?style=for-the-badge" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center"><strong>External</strong></td>
-    <td>
-      <img src="https://img.shields.io/badge/Kakao_Local-FFCD00?style=for-the-badge&logo=kakao&logoColor=000000" />
-      <img src="https://img.shields.io/badge/ODsay-1E88E5?style=for-the-badge" />
-      <img src="https://img.shields.io/badge/Busan_BIMS-005BAC?style=for-the-badge" />
-      <img src="https://img.shields.io/badge/S3%2FMinIO-C72E49?style=for-the-badge&logo=minio&logoColor=white" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Admin / AI</strong></td>
-    <td>
-      <img src="https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=000000" />
-      <img src="https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white" />
-      <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" />
-      <img src="https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Infra</strong></td>
-    <td>
-      <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" />
-      <img src="https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white" />
-      <img src="https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white" />
-      <img src="https://img.shields.io/badge/AWS_EC2-FF9900?style=for-the-badge&logo=amazonec2&logoColor=white" />
-    </td>
-  </tr>
-</table>
-
-<br/>
-
-
----
-
-<br/>
-
-## 저장소 구조
+![부산이음길 시스템 아키텍처](<부산이음길.drawio (2).png>)
 
 ```text
 .
-├── FE/                         # Android 앱
-│   ├── app/                    # 앱 코드 및 리소스
-│   ├── docs/                   # FE 설계, QA, 디버깅 문서
-│   └── mockup/                 # 화면 시안 및 목업
-├── BE/                         # Spring Boot 백엔드
-│   ├── src/main/java/          # 도메인별 API, 서비스, 공통 설정
-│   ├── src/main/resources/     # application.yml, profile 설정
-│   └── docs/                   # BE 기술 문서
-├── ADMIN/                      # React/Vite 관리자 웹
-├── AI/                         # Flask intent server와 음성/모델 실험 자산
-├── Docs/                       # PRD, 요구사항, API, ERD, 인프라, 기획 문서
-├── INF/                        # AWS, Jenkins, monitoring, Terraform 운영 설정
-├── exec/                       # 제출/포팅 산출물
-├── scripts/                    # 자동화 스크립트
-├── docker-compose.*.yml        # local / dev / prod 실행 구성
-└── Makefile                    # 실행 진입점
+├── FE/       # Android 앱, FE 설계·QA·디버깅 문서
+├── BE/       # Spring Boot API와 도메인 구현
+├── ADMIN/    # 제보·공간 데이터 운영 도구
+├── AI/       # 음성·모델 실험 자산
+├── Docs/     # PRD, 요구사항, API, ERD, 기획 문서
+├── INF/      # 배포·모니터링·Terraform 설정
+└── exec/     # 포팅 매뉴얼
 ```
 
-<br/>
+## 문서와 실행 안내
 
----
-
-<br/>
-
-## 문서 바로가기
-
-### Overview
-
-| 문서 | 경로 |
-|------|------|
-| Frontend README | [FE/README.md](FE/README.md) |
-| Backend README | [BE/README.md](BE/README.md) |
-| Infra README | [INF/README.md](INF/README.md) |
-| 포팅 매뉴얼 | [exec/부산이음길__포팅매뉴얼.md](exec/부산이음길__포팅매뉴얼.md) |
-
-### Service
-
-| 문서 | 경로 |
-|------|------|
-| 프로젝트 기획서 | [Docs/기획/2026-04-10 최종_프로젝트_기획서.md](<Docs/기획/2026-04-10 최종_프로젝트_기획서.md>) |
-| PRD | [Docs/PRD/2026-04-09_부산이음길_PRD.md](Docs/PRD/2026-04-09_부산이음길_PRD.md) |
-| 요구사항명세서 | [Docs/PRD/2026-05-20_요구사항명세서.md](Docs/PRD/2026-05-20_요구사항명세서.md) |
-
-### Architecture / API
-
-| 문서 | 경로 |
-|------|------|
-| ERD | [Docs/ERD/ERD_v4.md](Docs/ERD/ERD_v4.md) |
-| API 전체 목록 | [Docs/API/2026-04-12_API_전체_목록.md](Docs/API/2026-04-12_API_전체_목록.md) |
-| 경로 API 명세 | [Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md](Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md) |
-
-<br/>
-
----
-
-<br/>
-
-## 실행 및 상세 안내
-
-| 구분 | 안내 | 경로 |
-|------|------|------|
-| Frontend | Android 앱 실행 및 빌드 가이드 | [FE/README.md](FE/README.md) |
-| Backend | 백엔드 실행 및 환경 변수 가이드 | [BE/README.md](BE/README.md) |
-| Infra | 운영 설정 자산 기준 | [INF/README.md](INF/README.md) |
-| Porting | 제출/포팅 운영 매뉴얼 | [exec/부산이음길__포팅매뉴얼.md](exec/부산이음길__포팅매뉴얼.md) |
+| 확인 목적 | 문서 |
+| --- | --- |
+| 문서 전체 탐색 | [Docs/README.md](Docs/README.md) |
+| 프로젝트 기획·PRD | [프로젝트 기획서](<Docs/기획/2026-04-10 최종_프로젝트_기획서.md>), [PRD](Docs/PRD/2026-04-09_부산이음길_PRD.md) |
+| API·데이터 | [API 전체 목록](Docs/API/2026-04-12_API_전체_목록.md), [ERD](Docs/ERD/ERD_v4.md) |
+| 경로·공간 데이터 | [경사도·OSM PoC](Docs/PoC/2026-04-21_부산_경사도_추출_정제_OSM_연계_통합_PoC.md), [경로 API](Docs/API/길안내_도메인/2026-05-06_경로_API_명세.md) |
+| Android 실행 | [FE/README.md](FE/README.md) |
+| Backend 실행 | [BE/README.md](BE/README.md) |
+| Infra 운영 기준 | [INF/README.md](INF/README.md) |
+| 전체 포팅 | [exec/부산이음길__포팅매뉴얼.md](exec/부산이음길__포팅매뉴얼.md) |
